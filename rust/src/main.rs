@@ -1,14 +1,52 @@
+use futures::future;
 use redis;
 use std::{os::raw::c_char, ffi::{c_void, CString, CStr}, mem::ManuallyDrop};
 use redis::{AsyncCommands, RedisError};
 use redis::aio::MultiplexedConnection;
 use tokio::runtime::Runtime;
 use tokio::runtime::Builder;
+use futures::{future, prelude::*};
+use redis::{aio::MultiplexedConnection, RedisResult};
 
-fn main() {
-    println!("Hello, world!");
+async fn test_cmd(con: &MultiplexedConnection, i: i32) -> RedisResult<()> {
+    let mut con = con.clone();
+
+    let key = format!("key{}", i);
+    let key2 = format!("key{}_2", i);
+    let value = format!("foo{}", i);
+
+    redis::cmd("SET")
+        .arg(&key[..])
+        .arg(&value)
+        .query_async(&mut con)
+        .await?;
+
+    redis::cmd("SET")
+        .arg(&[&key2, "bar"])
+        .query_async(&mut con)
+        .await?;
+
+    redis::cmd("MGET")
+        .arg(&[&key, &key2])
+        .query_async(&mut con)
+        .map(|result| {
+            assert_eq!(Ok((value, b"bar".to_vec())), result);
+            Ok(())
+        })
+        .await
 }
 
+#[tokio::main]
+async fn main() {
+    let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+
+    let con = client.get_multiplexed_tokio_connection().await.unwrap();
+
+    let cmds = (0..100).map(|i| test_cmd(&con, i));
+    let result = future::try_join_all(cmds).await.unwrap();
+
+    assert_eq!(100, result.len());
+}
 pub struct MyConnection {
     #[allow(dead_code)]
     client: redis::Client,
@@ -19,6 +57,7 @@ pub struct MyConnection {
 fn create_connection_internal() -> MyConnection {
         let client = redis::Client::open("redis://localhost:6379").unwrap();
         let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
             .enable_io()        
             .thread_name("my-custom-name")
             .build()
@@ -133,7 +172,7 @@ mod tests {
     //     });
     // }
 
-    #[test]
+    //#[test]
     fn internal_works() {
         let connection = create_connection() as usize;
         let runtime = Builder::new_multi_thread()
@@ -178,7 +217,7 @@ mod tests {
         close_connection(connection as *const c_void);
     }
 
-    #[test]
+    //#[test]
     fn internal_empty_works() {
         let connection = create_connection() as usize;
         let runtime = Builder::new_multi_thread()
@@ -253,7 +292,7 @@ mod tests {
                         return;
                     }
                     let (sender, receiver) = oneshot::channel();
-                    if result % 5 == 0 {
+                    if result % 1 == 0 {
                         let value = CString::new(sample_gaussian(&rng).to_string()).unwrap();
                         let callback = move || {sender.send(ManuallyDrop::new(CString::new("").unwrap()).as_ptr() as usize).unwrap();};
                         set_internal(key_str.as_ptr(), value.as_ptr(), connection as *mut MyConnection, callback);
@@ -275,10 +314,10 @@ mod tests {
     #[test]
     fn benchmark() {
         println!("starting testing!");
-        benchmark_internal(1, 150000);
-        benchmark_internal(10, 1500000);
-        benchmark_internal(100, 3000000);
-        benchmark_internal(1000, 3000000);
+        //benchmark_internal(1, 150000);
+        // benchmark_internal(10, 1500000);
+        // benchmark_internal(100, 3000000);
+        // benchmark_internal(1000, 3000000);
         benchmark_internal(10000, 3000000);
     }
 }
