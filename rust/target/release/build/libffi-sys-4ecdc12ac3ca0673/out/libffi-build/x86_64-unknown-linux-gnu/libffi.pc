@@ -1,0 +1,11 @@
+prefix=/home/ec2-user/babushka/rust/target/release/build/libffi-sys-4ecdc12ac3ca0673/out/libffi-root
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+toolexeclibdir=${libdir}/../lib64
+includedir=${prefix}/include
+
+Name: libffi
+Description: Library supporting Foreign Function Interfaces
+Version: 3.4.2
+Libs: -L${toolexeclibdir} -lffi
+Cflags: -I${includedir}
