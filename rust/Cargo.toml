@@ -1,0 +1,16 @@
+[package]
+name = "rust_client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+redis = { path="/home/ec2-user/babushka/redis-rs", features = ["aio", "tokio-comp"]  }
+futures = "0.3.21"
+tokio-util = { version = "0.7", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+stopwatch = "0.0.7"
+timer = "0.2.0"
+rand = "0.8.5"
+libffi = "3.0.0"
