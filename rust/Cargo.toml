@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-redis = { path="/home/ec2-user/babushka/redis-rs", features = ["aio", "tokio-comp"]  }
+redis = { path="../redis-rs", features = ["aio", "tokio-comp"]  }
 futures = "0.3.21"
 tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
