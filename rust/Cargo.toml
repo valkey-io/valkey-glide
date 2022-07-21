@@ -14,3 +14,6 @@ stopwatch = "0.0.7"
 timer = "0.2.0"
 rand = "0.8.5"
 libffi = "3.0.0"
+
+[profile.release]
+debug = true
