@@ -48,7 +48,6 @@ async fn run_tests(concurrent_cmds: i64, num_cmds: i64, data_size: usize) -> Vec
     return result;
 }
 
-//#[tokio::main]
 fn main() {
     let concurrent_tasks = 100;
     let total_cmds = 5000000;

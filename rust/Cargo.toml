@@ -15,5 +15,6 @@ timer = "0.2.0"
 rand = "0.8.5"
 libffi = "3.0.0"
 
-[profile.release]
+[profile.release-with-debug]
+inherits = "release"
 debug = true
