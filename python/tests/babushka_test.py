@@ -33,3 +33,15 @@ async def test_set_get_pipeline_chained_requests():
     time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
     result = await pipeline.set("pipeline_key", time_str).get("pipeline_key").execute()
     assert result == ["OK", time_str]
+
+
+async def test_set_with_ignored_result():
+    client = await babushka.AsyncClient.new(
+        "redis://localhost:6379"
+    )  # replace weith your Redis server
+    pipeline = client.create_pipeline()
+    time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+    result = (
+        await pipeline.set("pipeline_key", time_str, True).get("pipeline_key").execute()
+    )
+    assert result == [time_str]

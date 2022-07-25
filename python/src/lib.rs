@@ -63,9 +63,13 @@ impl AsyncPipeline {
         this
     }
 
-    fn set<'a>(this: &'a PyCell<Self>, key: String, value: String) -> &'a PyCell<Self> {
+    #[args(ignore_result=false)]
+    fn set<'a>(this: &'a PyCell<Self>, key: String, value: String, ignore_result: bool) -> &'a PyCell<Self> {
         let mut pipeline = this.borrow_mut();
         pipeline.internal_pipeline.set(key, value);
+        if ignore_result { 
+          pipeline.internal_pipeline.ignore();
+        }
         this
     }
 
