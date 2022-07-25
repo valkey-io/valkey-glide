@@ -1,6 +1,7 @@
 import pytest
 
-from src.client import RedisAsyncClient
+from src.async_client import RedisAsyncClient
+from src.config import ClusterClientConfiguration
 
 default_host = "localhost"
 default_port = 6379
@@ -27,5 +28,7 @@ async def async_client(request):
     "Get async client for tests"
     host = request.config.getoption("--host")
     port = request.config.getoption("--port")
-    client = RedisAsyncClient(host, port)
-    return await client.create_multiplexed_conn()
+    config = ClusterClientConfiguration(host=host, port=port)
+    client = RedisAsyncClient(config)
+    await client.create_multiplexed_conn()
+    return client

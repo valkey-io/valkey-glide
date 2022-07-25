@@ -18,5 +18,6 @@ setup(
         "packaging>=20.4",
         'typing-extensions; python_version<"3.8"',
         "async-timeout>=4.0.2",
+        "setuptools==45",
     ],
 )

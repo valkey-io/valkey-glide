@@ -1,7 +1,6 @@
-import pytest
 from datetime import datetime
 
-from src.client import RedisAsyncClient
+import pytest
 
 
 @pytest.mark.asyncio
