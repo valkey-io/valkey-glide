@@ -5,6 +5,7 @@ use redis::{RedisResult};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use stopwatch::Stopwatch;
+use tokio::runtime;
 
 async fn test_cmd(con: &MultiplexedConnection, i: i64, num_cmds: i64, data_size: usize) -> RedisResult<()> {
     let mut con = con.clone();
@@ -47,7 +48,13 @@ async fn run_tests(concurrent_cmds: i64, num_cmds: i64, data_size: usize) -> Vec
     return result;
 }
 
-#[tokio::main]
-async fn main() {
-    run_tests(100, 10000000, 1000).await;
+fn main() {
+    let concurrent_tasks = 100;
+    let total_cmds = 5000000;
+    let data_size = 1000;
+    let rt = runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+    rt.block_on(run_tests(concurrent_tasks, total_cmds, data_size));
 }
