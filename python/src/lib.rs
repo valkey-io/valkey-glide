@@ -4,18 +4,18 @@ use redis::aio::{MultiplexedConnection};
 use redis::AsyncCommands;
 
 #[pyclass]
-struct Client {
+struct AsyncClient {
     multiplexer: MultiplexedConnection
 }
 
 #[pymethods]
-impl Client {
+impl AsyncClient {
     #[staticmethod]
     fn new<'a>(address: String, py: Python<'a>) -> PyResult<&'a PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let client = redis::Client::open(address).unwrap();
             let multiplexer = client.get_multiplexed_async_connection().await.unwrap();
-            let client = Client {
+            let client = AsyncClient {
                 multiplexer
             };
             Ok(Python::with_gil(|py| client.into_py(py)))
@@ -38,25 +38,25 @@ impl Client {
         })
     }
 
-    fn create_pipeline(&self) -> Pipeline{
-        Pipeline::new(self.multiplexer.clone())
+    fn create_pipeline(&self) -> AsyncPipeline{
+        AsyncPipeline::new(self.multiplexer.clone())
     }
 }
 
 #[pyclass]
-struct Pipeline {
+struct AsyncPipeline {
     internal_pipeline: redis::Pipeline,
     multiplexer: MultiplexedConnection
 }
 
-impl Pipeline {
+impl AsyncPipeline {
     fn new(multiplexer: MultiplexedConnection) -> Self {
-        Pipeline { internal_pipeline: redis::Pipeline::new(), multiplexer }
+        AsyncPipeline { internal_pipeline: redis::Pipeline::new(), multiplexer }
     }
 }
 
 #[pymethods]
-impl Pipeline {
+impl AsyncPipeline {
     fn get<'a>(this: &'a PyCell<Self>, key:String) -> &'a PyCell<Self> {
         let mut pipeline = this.borrow_mut();
         pipeline.internal_pipeline.get(key);
@@ -85,6 +85,6 @@ impl Pipeline {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn babushka(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<Client>()?;
+    m.add_class::<AsyncClient>()?;
     Ok(())
 }

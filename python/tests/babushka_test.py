@@ -4,7 +4,7 @@ import babushka
 
 
 async def test_set_get():
-    client = await babushka.Client.new(
+    client = await babushka.AsyncClient.new(
         "redis://localhost:6379"
     )  # replace with your Redis server
     time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -14,7 +14,7 @@ async def test_set_get():
 
 
 async def test_set_get_pipeline():
-    client = await babushka.Client.new(
+    client = await babushka.AsyncClient.new(
         "redis://localhost:6379"
     )  # replace weith your Redis server
     pipeline = client.create_pipeline()
@@ -26,7 +26,7 @@ async def test_set_get_pipeline():
 
 
 async def test_set_get_pipeline_chained_requests():
-    client = await babushka.Client.new(
+    client = await babushka.AsyncClient.new(
         "redis://localhost:6379"
     )  # replace weith your Redis server
     pipeline = client.create_pipeline()
