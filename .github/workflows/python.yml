@@ -7,9 +7,6 @@ on:
       - python/**
       - redis-rs/**
   pull_request:
-    paths:
-      - python/**
-      - redis-rs/**
 
 permissions:
   contents: read
