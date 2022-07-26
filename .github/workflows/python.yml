@@ -4,11 +4,11 @@ on:
   push:
     branches: ["main"]
     paths:
-      - python
+      - python/**
       - redis-rs/**
   pull_request:
     paths:
-      - python
+      - python/**
       - redis-rs/**
 
 permissions:
