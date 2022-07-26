@@ -1,4 +1,4 @@
-from babushka import Client
+from babushka import AsyncClient
 
 from src.commands.core import CoreCommands
 from src.config import ClientConfiguration
@@ -16,8 +16,11 @@ class RedisAsyncClient(CoreCommands):
         return self
 
     async def _create_multiplexed_conn(self):
-        return await Client.new(to_url(**self.config.config_args))
+        return await AsyncClient.new(to_url(**self.config.config_args))
 
     async def execute_command(self, command, *args, **kwargs):
         conn_rust_func = getattr(self.connection, command)
         return await conn_rust_func(*args, **kwargs)
+
+    def create_pipeline(self):
+        return self.connection.create_pipeline()

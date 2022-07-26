@@ -1,6 +1,6 @@
-from babushka import Client
+from babushka import AsyncClient
 
 from src.async_client import RedisAsyncClient
 from src.config import ClientConfiguration
 
-__all__ = ["RedisAsyncClient", "Client", "ClientConfiguration"]
+__all__ = ["RedisAsyncClient", "AsyncClient", "ClientConfiguration"]
