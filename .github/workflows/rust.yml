@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - ./redis-rs
+      - redis-rs
   pull_request:
     branches: [main]
     paths:
-      - ./redis-rs
+      - redis-rs
 
 env:
   CARGO_TERM_COLOR: always
