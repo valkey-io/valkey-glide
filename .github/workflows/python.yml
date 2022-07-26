@@ -3,9 +3,6 @@ name: Python application
 on:
   push:
     branches: ["main"]
-    paths:
-      - python/**
-      - redis-rs/**
   pull_request:
 
 permissions:
