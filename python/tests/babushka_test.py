@@ -37,7 +37,7 @@ async def test_set_get_pipeline_chained_requests():
 
 async def test_set_with_ignored_result():
     client = await babushka.AsyncClient.new(
-        "redis://locallolololohost:6379"
+        "redis://locallolololohcost:6379"
     )  # replace weith your Redis server
     pipeline = client.create_pipeline()
     time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
