@@ -1,12 +1,4 @@
-from src.config import (DEFAULT_HOST, DEFAULT_PORT, ClientConfiguration,
-                        ClusterClientConfiguration)
-
-
-def test_default_cluster_config():
-    config = ClusterClientConfiguration.get_default_config()
-    assert config.config_args["host"] == DEFAULT_HOST
-    assert config.config_args["port"] == DEFAULT_PORT
-    assert config.config_args["read_from_replicas"] is False
+from src.config import DEFAULT_HOST, DEFAULT_PORT, ClientConfiguration
 
 
 def test_default_client_config():

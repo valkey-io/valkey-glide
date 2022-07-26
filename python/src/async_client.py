@@ -6,16 +6,17 @@ from src.utils import to_url
 
 
 class RedisAsyncClient(CoreCommands):
-    def __init__(
-        self,
-        config: ClientConfiguration = ClientConfiguration.get_default_config(),
+    @classmethod
+    async def create(
+        cls, config: ClientConfiguration = ClientConfiguration.get_default_config()
     ):
+        self = RedisAsyncClient()
         self.config = config
-        self.connection = None
+        self.connection = await self._create_multiplexed_conn()
+        return self
 
-    async def create_multiplexed_conn(self):
-        self.connection = await Client.new(to_url(**self.config.config_args))
-        return self.connection
+    async def _create_multiplexed_conn(self):
+        return await Client.new(to_url(**self.config.config_args))
 
     async def execute_command(self, command, *args, **kwargs):
         conn_rust_func = getattr(self.connection, command)

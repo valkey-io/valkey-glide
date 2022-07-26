@@ -41,24 +41,3 @@ class ClientConfiguration(BaseClientConfiguration):
         return ClientConfiguration(
             host=DEFAULT_HOST, port=DEFAULT_PORT, db=0, tls_enabled=False
         )
-
-
-class ClusterClientConfiguration(BaseClientConfiguration):
-    CLUSTER_SPECIFIC_KEYS = {"read_from_replicas"}
-
-    def __init__(self, **kwargs):
-        allowed_keys = ClusterClientConfiguration.CLUSTER_SPECIFIC_KEYS.copy().union(
-            BASE_ALLOWED_KEYS
-        )
-        super(ClusterClientConfiguration, self).__init__(
-            allowed_keys=allowed_keys, **kwargs
-        )
-
-    @staticmethod
-    def get_default_config():
-        return ClusterClientConfiguration(
-            host=DEFAULT_HOST,
-            port=DEFAULT_PORT,
-            tls_enabled=False,
-            read_from_replicas=False,
-        )
