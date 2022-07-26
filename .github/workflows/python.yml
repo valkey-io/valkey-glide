@@ -6,7 +6,6 @@ on:
     paths:
       - python
   pull_request:
-    branches: ["main"]
     paths:
       - python
 
