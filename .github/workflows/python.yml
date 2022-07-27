@@ -1,16 +1,15 @@
-name: Python application
+name: Python tests
 
 on:
   push:
     branches: ["main"]
     paths:
-      - ./redis-rs
-      - ./python
+      - python/**
+      - redis-rs/**
   pull_request:
-    branches: ["main"]
     paths:
-      - ./redis-rs
-      - ./python
+      - python/**
+      - redis-rs/**
 
 permissions:
   contents: read
