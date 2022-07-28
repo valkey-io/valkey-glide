@@ -1,10 +1,8 @@
-from typing import ClassVar, List
+from .babushkapy import AsyncClient
 
-from babushka import AsyncClient
-
-from src.commands.core import CoreCommands
-from src.config import ClientConfiguration
-from src.utils import to_url
+from babushkapy.commands.core import CoreCommands
+from babushkapy.config import ClientConfiguration
+from babushkapy.utils import to_url
 
 
 class RedisAsyncClient(CoreCommands):

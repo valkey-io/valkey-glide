@@ -97,7 +97,7 @@ impl AsyncPipeline {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn babushka(_py: Python, m: &PyModule) -> PyResult<()> {
+fn babushkapy(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AsyncClient>()?;
     Ok(())
 }
