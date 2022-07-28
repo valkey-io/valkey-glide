@@ -18,13 +18,13 @@ runs:
 
     - uses: actions/checkout@v3
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       id: cache-redis
       with:
         path: |
           ~/redis-binaries/redis-cli
           ~/redis-binaries/redis-server
-        key: ${{ runner.os }}-redis
+        key: ${{ runner.os }}-install-redis
 
     - name: Install redis
       shell: bash
@@ -37,4 +37,4 @@ runs:
 
     - name: Copy executable to place
       shell: bash
-      run: sudo mv ~/redis-binaries/redis-server ~/redis-binaries/redis-cli /usr/bin/
+      run: sudo cp ~/redis-binaries/redis-server ~/redis-binaries/redis-cli /usr/bin/
