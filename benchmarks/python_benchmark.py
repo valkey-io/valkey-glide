@@ -1,12 +1,13 @@
 import asyncio
 import functools
+import json
 import random
 import time
 
 import aioredis
+import numpy as np
 import redis.asyncio as redispy
 import uvloop
-
 from babushkapy import ClientConfiguration, RedisAsyncClient
 
 HOST = "localhost"
@@ -16,8 +17,10 @@ SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
 counter = 0
 running_tasks = set()
-bench_results_dict = dict()
 bench_str_results = []
+bench_json_results = []
+get_latecny = dict()
+set_latecny = dict()
 
 
 def generate_value(size):
@@ -34,6 +37,10 @@ def generate_key_get():
 
 def should_get():
     return random.random() < PROB_GET
+
+
+def calculate_latency(latency_list, percentile):
+    return round(np.percentile(np.array(latency_list), percentile), 4)
 
 
 def print_results():
@@ -54,23 +61,37 @@ def timer(func):
     return wrapper
 
 
-async def redis_benchmark(client, total_commands, data):
+async def redis_benchmark(client, client_name, total_commands, data):
     global counter
     while counter < total_commands:
         if should_get():
+            tic = time.perf_counter()
             await client.get(generate_key_get())
+            toc = time.perf_counter()
+            get_latecny.get(client_name).append(toc - tic)
         else:
+            tic = time.perf_counter()
             await client.set(generate_key_set(), data)
+            toc = time.perf_counter()
+            set_latecny.get(client_name).append(toc - tic)
         counter += 1
     return True
 
 
 @timer
-async def create_bench_tasks(client, total_commands, num_of_concurrent_tasks, data):
+async def create_bench_tasks(
+    client, client_name, total_commands, num_of_concurrent_tasks, data
+):
     global counter
+    global get_latecny
+    global set_latecny
     counter = 0
+    get_latecny.setdefault(client_name, list()).clear()
+    set_latecny.setdefault(client_name, list()).clear()
     for _ in range(num_of_concurrent_tasks):
-        task = asyncio.create_task(redis_benchmark(client, total_commands, data))
+        task = asyncio.create_task(
+            redis_benchmark(client, client_name, total_commands, data)
+        )
         running_tasks.add(task)
         task.add_done_callback(running_tasks.discard)
     await asyncio.gather(*(list(running_tasks)))
@@ -85,22 +106,38 @@ async def run_client(
     data_size,
     data,
 ):
-    global bench_results_dict
     global bench_str_results
     time = await create_bench_tasks(
-        client, total_commands, num_of_concurrent_tasks, data
+        client, client_name, total_commands, num_of_concurrent_tasks, data
     )
     tps = int(counter / time)
-    loop_datasize_results = (
-        bench_results_dict.setdefault(client_name, dict())
-        .setdefault(event_loop_name, dict())
-        .setdefault(num_of_concurrent_tasks, dict())
-        .setdefault(data_size, list())
-    )
-    loop_datasize_results.append(tps)
+    get_50 = calculate_latency(get_latecny[client_name], 50)
+    get_90 = calculate_latency(get_latecny[client_name], 90)
+    get_99 = calculate_latency(get_latecny[client_name], 99)
+    set_50 = calculate_latency(set_latecny[client_name], 50)
+    set_90 = calculate_latency(set_latecny[client_name], 90)
+    set_99 = calculate_latency(set_latecny[client_name], 99)
+    json_res = {
+        "client": client_name,
+        "loop": event_loop_name,
+        "num_of_tasks": num_of_concurrent_tasks,
+        "data_size": data_size,
+        "tps": tps,
+        "latency": {
+            "get_50": get_50,
+            "get_90": get_90,
+            "get_99": get_99,
+            "set_50": set_50,
+            "set_90": set_90,
+            "set_99": set_99,
+        },
+    }
+
+    bench_json_results.append(json.dumps(json_res))
     bench_str_results.append(
-        f"client:{client_name}, event_loop:{event_loop_name}, total_commands:{total_commands}, "
-        f"num_of_concurrent_tasks:{num_of_concurrent_tasks}, data_size:{data_size} TPS: {tps}"
+        f"client: {client_name}, event_loop: {event_loop_name}, concurrent_tasks: {num_of_concurrent_tasks}, "
+        f"data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, "
+        f" set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}"
     )
 
 
