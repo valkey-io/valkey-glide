@@ -26,7 +26,6 @@ impl AsyncClient {
             let result: Result<String, redis::RedisError> = connection.get(key).await;
             match result { 
                 Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
-                Err(err) if err.to_string().contains("response was nil") => Ok(Python::with_gil(|py| py.None())),
                 Err(err) => Err(PyErr::new::<PyString, _>(err.to_string()))
             }
         })

@@ -8,7 +8,7 @@ import aioredis
 import numpy as np
 import redis.asyncio as redispy
 import uvloop
-from babushkapy import ClientConfiguration, RedisAsyncClient
+from babushkapy import AsyncClient, ClientConfiguration, RedisAsyncClient
 
 HOST = "localhost"
 PORT = 6379
@@ -173,6 +173,17 @@ async def main(event_loop_name, total_commands, num_of_concurrent_tasks, data_si
     await run_client(
         babushka_client,
         "babushka",
+        event_loop_name,
+        total_commands,
+        num_of_concurrent_tasks,
+        data_size,
+        data,
+    )
+
+    direct_babushka = await AsyncClient.new(f"redis://{HOST}:{PORT}")
+    await run_client(
+        direct_babushka,
+        "direct_babushka",
         event_loop_name,
         total_commands,
         num_of_concurrent_tasks,
