@@ -449,3 +449,7 @@ mod connection;
 mod parser;
 mod script;
 mod types;
+
+#[cfg(feature = "tokio-comp")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
+pub mod socket_listener;
