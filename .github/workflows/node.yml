@@ -1,0 +1,47 @@
+name: Node
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - redis-rs/**
+      - node/**
+  pull_request:
+    paths:
+      - redis-rs/**
+      - node/**
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        redis:
+          - 6.2.4
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install redis
+        uses: ./.github/workflows/install-redis
+        with:
+          redis-version: ${{ matrix.redis }}
+
+      - name: Use Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+
+      - run: npm install --global yarn
+      - run: npm ci
+        working-directory: ./node
+      - run: yarn install
+        working-directory: ./node
+      - run: yarn build
+        working-directory: ./node
+      - run: npm test
+        working-directory: ./node
