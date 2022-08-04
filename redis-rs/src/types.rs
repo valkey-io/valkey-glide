@@ -65,6 +65,8 @@ pub enum ErrorKind {
     AuthenticationFailed,
     /// Operation failed because of a type mismatch.
     TypeError,
+    /// Operation returned nil and the result was coerced to a type that can't represent nil.
+    CoercedNilError,
     /// A script execution was aborted.
     ExecAbortError,
     /// The server cannot response because it's loading a dump.
@@ -408,6 +410,7 @@ impl RedisError {
             ErrorKind::ExtensionError => "extension error",
             ErrorKind::ClientError => "client error",
             ErrorKind::ReadOnly => "read-only",
+            ErrorKind::CoercedNilError => "coerced nil",
         }
     }
 
@@ -1153,6 +1156,10 @@ impl FromRedisValue for String {
             Value::Data(ref bytes) => Ok(from_utf8(bytes)?.to_string()),
             Value::Okay => Ok("OK".to_string()),
             Value::Status(ref val) => Ok(val.to_string()),
+            Value::Nil => Err(RedisError::from((
+                ErrorKind::CoercedNilError,
+                "Nil coerced to string",
+            ))),
             _ => invalid_type_error!(v, "Response type not string compatible."),
         }
     }
