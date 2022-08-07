@@ -1,11 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::PyString;
-use redis::aio::{MultiplexedConnection};
+use redis::aio::MultiplexedConnection;
 use redis::AsyncCommands;
 
 #[pyclass]
 struct AsyncClient {
-    multiplexer: MultiplexedConnection
+    multiplexer: MultiplexedConnection,
 }
 
 #[pymethods]
@@ -15,14 +15,12 @@ impl AsyncClient {
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let client = redis::Client::open(address).unwrap();
             let multiplexer = client.get_multiplexed_async_connection().await.unwrap();
-            let client = AsyncClient {
-                multiplexer
-            };
+            let client = AsyncClient { multiplexer };
             Ok(Python::with_gil(|py| client.into_py(py)))
         })
     }
 
-    fn get<'a>(&self, key:String, py: Python<'a>) -> PyResult<&'a PyAny> {
+    fn get<'a>(&self, key: String, py: Python<'a>) -> PyResult<&'a PyAny> {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result: String = connection.get(key).await.unwrap();
@@ -33,12 +31,12 @@ impl AsyncClient {
     fn set<'a>(&self, key: String, value: String, py: Python<'a>) -> PyResult<&'a PyAny> {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let _:() = connection.set(key, value).await.unwrap();
+            let _: () = connection.set(key, value).await.unwrap();
             Ok(Python::with_gil(|py| py.None()))
         })
     }
 
-    fn create_pipeline(&self) -> AsyncPipeline{
+    fn create_pipeline(&self) -> AsyncPipeline {
         AsyncPipeline::new(self.multiplexer.clone())
     }
 }
@@ -46,29 +44,37 @@ impl AsyncClient {
 #[pyclass]
 struct AsyncPipeline {
     internal_pipeline: redis::Pipeline,
-    multiplexer: MultiplexedConnection
+    multiplexer: MultiplexedConnection,
 }
 
 impl AsyncPipeline {
     fn new(multiplexer: MultiplexedConnection) -> Self {
-        AsyncPipeline { internal_pipeline: redis::Pipeline::new(), multiplexer }
+        AsyncPipeline {
+            internal_pipeline: redis::Pipeline::new(),
+            multiplexer,
+        }
     }
 }
 
 #[pymethods]
 impl AsyncPipeline {
-    fn get<'a>(this: &'a PyCell<Self>, key:String) -> &'a PyCell<Self> {
+    fn get<'a>(this: &'a PyCell<Self>, key: String) -> &'a PyCell<Self> {
         let mut pipeline = this.borrow_mut();
         pipeline.internal_pipeline.get(key);
         this
     }
 
-    #[args(ignore_result=false)]
-    fn set<'a>(this: &'a PyCell<Self>, key: String, value: String, ignore_result: bool) -> &'a PyCell<Self> {
+    #[args(ignore_result = false)]
+    fn set<'a>(
+        this: &'a PyCell<Self>,
+        key: String,
+        value: String,
+        ignore_result: bool,
+    ) -> &'a PyCell<Self> {
         let mut pipeline = this.borrow_mut();
         pipeline.internal_pipeline.set(key, value);
-        if ignore_result { 
-          pipeline.internal_pipeline.ignore();
+        if ignore_result {
+            pipeline.internal_pipeline.ignore();
         }
         this
     }
@@ -77,7 +83,8 @@ impl AsyncPipeline {
         let mut connection = self.multiplexer.clone();
         let pipeline = self.internal_pipeline.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: Result<Vec<String>, redis::RedisError> = pipeline.query_async(&mut connection).await;
+            let result: Result<Vec<String>, redis::RedisError> =
+                pipeline.query_async(&mut connection).await;
             match result {
                 Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
                 Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
