@@ -45,3 +45,11 @@ jobs:
         working-directory: ./node
       - run: npm test
         working-directory: ./node
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/workflows/lint-rust
+        with:
+          cargo-toml-folder: ./node
