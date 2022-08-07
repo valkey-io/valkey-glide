@@ -16,7 +16,7 @@ class RedisAsyncClient(CoreCommands):
         return self
 
     async def _create_multiplexed_conn(self):
-        return await AsyncClient.new(to_url(**self.config.config_args))
+        return await AsyncClient.create_client(to_url(**self.config.config_args))
 
     async def execute_command(self, command, *args, **kwargs):
         conn_rust_func = getattr(self.connection, command)
