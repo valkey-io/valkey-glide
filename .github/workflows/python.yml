@@ -72,3 +72,11 @@ jobs:
           pip install -r requirements.txt
           maturin develop
           pytest --asyncio-mode=auto
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3    
+      - uses: ./.github/workflows/lint-rust
+        with:
+          cargo-toml-folder: ./python
