@@ -6,6 +6,7 @@ use std::str;
 
 #[napi]
 struct AsyncClient {
+    #[allow(dead_code)]
     connection: MultiplexedConnection,
 }
 
@@ -23,6 +24,7 @@ fn to_js_result<T>(result: RedisResult<T>) -> Result<T> {
 #[napi]
 impl AsyncClient {
     #[napi(js_name = "CreateConnection")]
+    #[allow(dead_code)]
     pub async fn create_connection(connection_address: String) -> Result<AsyncClient> {
         let client = to_js_result(redis::Client::open(connection_address))?;
         let connection = to_js_result(client.get_multiplexed_async_connection().await)?;
@@ -30,6 +32,7 @@ impl AsyncClient {
     }
 
     #[napi]
+    #[allow(dead_code)]
     pub async fn get(&self, key: String) -> Result<Option<String>> {
         let mut connection = self.connection.clone();
         let result = connection.get(key).await;
@@ -40,6 +43,7 @@ impl AsyncClient {
     }
 
     #[napi]
+    #[allow(dead_code)]
     pub async fn set(&self, key: String, value: String) -> Result<()> {
         let mut connection = self.connection.clone();
         to_js_result(connection.set(key, value).await)
