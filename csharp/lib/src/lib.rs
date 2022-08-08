@@ -26,12 +26,9 @@ fn create_connection_internal(
         .enable_all()
         .worker_threads(1)
         .thread_name("Babushka C# thread")
-        .build()
-        .unwrap();
+        .build()?;
     let _runtime_handle = runtime.enter();
-    let connection = runtime
-        .block_on(client.get_multiplexed_async_connection())
-        .unwrap();
+    let connection = runtime.block_on(client.get_multiplexed_async_connection())?; // TODO - log errors
     Ok(Connection {
         connection,
         success_callback,
@@ -60,26 +57,7 @@ pub extern "C" fn close_connection(connection_ptr: *const c_void) {
     drop(connection_ptr);
 }
 
-fn set_internal<F>(
-    connection_ptr: *mut Connection,
-    key: *const c_char,
-    value: *const c_char,
-    callback: F,
-) where
-    F: FnOnce(RedisResult<()>) + Send + 'static,
-{
-    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    let value_cstring = unsafe { CStr::from_ptr(value as *mut c_char) };
-    unsafe {
-        let mut connection_clone = (*connection_ptr).connection.clone();
-        (*connection_ptr).runtime.spawn(async move {
-            let key_bytes = key_cstring.to_bytes();
-            let value_bytes = value_cstring.to_bytes();
-            callback(connection_clone.set(key_bytes, value_bytes).await);
-        });
-    }
-}
-
+/// Expects that key and value will be kept valid until the callback is called.
 #[no_mangle]
 pub extern "C" fn set(
     connection_ptr: *const c_void,
@@ -87,45 +65,47 @@ pub extern "C" fn set(
     key: *const c_char,
     value: *const c_char,
 ) {
-    let connection = connection_ptr as *mut Connection;
+    let connection_ptr = connection_ptr as *mut Connection;
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
     let ptr_as_usize = connection_ptr as usize;
+
+    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
+    let value_cstring = unsafe { CStr::from_ptr(value as *mut c_char) };
     unsafe {
-        set_internal(connection, key, value, move |result| {
+        let mut connection_clone = (*connection_ptr).connection.clone();
+        (*connection_ptr).runtime.spawn(async move {
+            let key_bytes = key_cstring.to_bytes();
+            let value_bytes = value_cstring.to_bytes();
+            let result: RedisResult<()> = connection_clone.set(key_bytes, value_bytes).await;
             let connection = ptr_as_usize as *mut Connection;
             match result {
                 Ok(_) => ((*connection).success_callback)(callback_index, std::ptr::null()),
-                Err(_) => ((*connection).failure_callback)(callback_index),
+                Err(_) => ((*connection).failure_callback)(callback_index), // TODO - report errors
             };
         });
     }
 }
 
-fn get_internal<F>(connection_ptr: *mut Connection, key: *const c_char, callback: F)
-where
-    F: FnOnce(RedisResult<Option<CString>>) + Send + 'static,
-{
-    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    unsafe {
-        let mut connection_clone = (*connection_ptr).connection.clone();
-        (*connection_ptr).runtime.spawn(async move {
-            let key_bytes = key_cstring.to_bytes();
-            callback(connection_clone.get(key_bytes).await);
-        });
-    }
-}
-
+/// Expects that key will be kept valid until the callback is called. If the callback is called with a string pointer, the pointer must
+/// be used synchronously, because the string will be dropped after the callback.
 #[no_mangle]
 pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key: *const c_char) {
     let connection_ptr = connection_ptr as *mut Connection;
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
     let ptr_as_usize = connection_ptr as usize;
-    get_internal(connection_ptr, key, move |result| unsafe {
-        let connection = ptr_as_usize as *mut Connection;
-        match result {
-            Ok(None) => ((*connection).success_callback)(callback_index, std::ptr::null()),
-            Ok(Some(c_str)) => ((*connection).success_callback)(callback_index, c_str.as_ptr()),
-            Err(_) => ((*connection).failure_callback)(callback_index),
-        };
-    });
+
+    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
+    unsafe {
+        let mut connection_clone = (*connection_ptr).connection.clone();
+        (*connection_ptr).runtime.spawn(async move {
+            let key_bytes = key_cstring.to_bytes();
+            let result: RedisResult<Option<CString>> = connection_clone.get(key_bytes).await;
+            let connection = ptr_as_usize as *mut Connection;
+            match result {
+                Ok(None) => ((*connection).success_callback)(callback_index, std::ptr::null()),
+                Ok(Some(c_str)) => ((*connection).success_callback)(callback_index, c_str.as_ptr()),
+                Err(_) => ((*connection).failure_callback)(callback_index), // TODO - report errors
+            };
+        });
+    }
 }
