@@ -3,10 +3,10 @@
 [![Rust](https://github.com/redis-rs/redis-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/redis-rs/redis-rs/actions/workflows/rust.yml)
 [![crates.io](https://img.shields.io/crates/v/redis.svg)](https://crates.io/crates/redis)
 
-Redis-rs is a high level redis library for Rust.  It provides convenient access
-to all Redis functionality through a very flexible but low-level API.  It
+Redis-rs is a high level redis library for Rust. It provides convenient access
+to all Redis functionality through a very flexible but low-level API. It
 uses a customizable type conversion trait so that any operation can return
-results in just the type you are expecting.  This makes for a very pleasant
+results in just the type you are expecting. This makes for a very pleasant
 development experience.
 
 The crate is called `redis` and you can depend on it via cargo:
@@ -24,7 +24,7 @@ Documentation on the library can be found at
 ## Basic Operation
 
 To open a connection you need to create a client and then to fetch a
-connection from it.  In the future there will be a connection pool for
+connection from it. In the future there will be a connection pool for
 those, currently each connection is separate and not pooled.
 
 Many commands are implemented through the `Commands` trait but manual
@@ -112,6 +112,7 @@ To build:
     $ make
 
 To test:
+Make sure you have redis-server version => 6 installed.
 
     $ make test
 
@@ -123,7 +124,7 @@ To build the docs (require nightly compiler, see [rust-lang/rust#43781](https://
 
     $ make docs
 
-We encourage you to run `clippy` prior to seeking a merge for your work.  The lints can be quite strict.  Running this on your own workstation can save you time, since Travis CI will fail any build that doesn't satisfy `clippy`:
+We encourage you to run `clippy` prior to seeking a merge for your work. The lints can be quite strict. Running this on your own workstation can save you time, since Travis CI will fail any build that doesn't satisfy `clippy`:
 
     $ cargo clippy --all-features --all --tests --examples -- -D clippy::all -D warnings
 
