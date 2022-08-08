@@ -1,0 +1,52 @@
+name: C# tests
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - csharp/**
+      - redis-rs/**
+  pull_request:
+    paths:
+      - csharp/**
+      - redis-rs/**
+
+permissions:
+  contents: read
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        redis:
+          - 6.2.4
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install redis
+        uses: ./.github/workflows/install-redis
+        with:
+          redis-version: ${{ matrix.redis }}
+
+      - name: Set up dotnet
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Start redis server
+        run: redis-server &
+
+      - name: Test
+        working-directory: ./csharp
+        run: dotnet test
+
+  lint-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/workflows/lint-rust
+        with:
+          cargo-toml-folder: ./csharp/lib
