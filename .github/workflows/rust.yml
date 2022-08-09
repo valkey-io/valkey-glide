@@ -58,30 +58,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - uses: actions-rs/toolchain@v1
+      - uses: ./.github/workflows/lint-rust
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v1
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --manifest-path ./redis-rs/Cargo.toml --all -- --check
-          working-directory: ./redis-rs
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --manifest-path ./redis-rs/Cargo.toml --all-targets -- -D warnings
-          working-directory: ./redis-rs
-
-      - name: doc
-        working-directory: ./redis-rs
-        run: cargo doc --no-deps --document-private-items
-        env:
-          RUSTDOCFLAGS: -Dwarnings
+          cargo-toml-folder: ./redis-rs
