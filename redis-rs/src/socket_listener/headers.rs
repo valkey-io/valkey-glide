@@ -1,4 +1,5 @@
 use lifeguard::RcRecycled;
+use num_derive::{FromPrimitive, ToPrimitive};
 use std::{ops::Range, rc::Rc};
 
 /// Length of the message field in the request & response.
@@ -25,6 +26,24 @@ pub const CALLBACK_INDEX_END: usize = MESSAGE_LENGTH_END + CALLBACK_INDEX_FIELD_
 pub const TYPE_END: usize = CALLBACK_INDEX_END + TYPE_FIELD_LENGTH;
 /// The length of the header.
 pub const HEADER_END: usize = TYPE_END;
+
+/// An enum representing the values of the request type field.
+#[derive(FromPrimitive)]
+pub enum RequestType {
+    /// Type of a get string request.
+    GetString = 1,
+    /// Type of a set string request.
+    SetString = 2,
+}
+
+/// An enum representing the values of the request type field.
+#[derive(ToPrimitive, FromPrimitive, PartialEq)]
+pub enum ResponseType {
+    /// Type of a response that returns a null.
+    Null = 0,
+    /// Type of a response that returns a string.
+    String = 1,
+}
 
 #[derive(PartialEq, Debug, Clone)]
 pub(super) enum RequestRanges {
