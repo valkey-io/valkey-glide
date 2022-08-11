@@ -7,17 +7,9 @@ use std::{
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use lifeguard::{pool, Pool, StartingSize, Supplier};
-use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::headers::*;
-
-/// An enum representing the values of the request type field.
-#[derive(FromPrimitive)]
-pub(super) enum RequestType {
-    Get = 1,
-    Set = 2,
-}
 
 /// An enum representing a request during the parsing phase.
 pub(super) enum RequestState {
@@ -106,15 +98,16 @@ impl RotatingBuffer {
                 length: header.length,
             });
         }
+        // TODO - use serde for easier deserialization.
         let request = match header.request_type {
-            RequestType::Get => WholeRequest {
+            RequestType::GetString => WholeRequest {
                 callback_index: header.callback_index,
                 request_type: RequestRanges::Get {
                     key: header_end..next,
                 },
                 buffer,
             },
-            RequestType::Set => {
+            RequestType::SetString => {
                 let key_start = header_end + 4;
                 let key_length =
                     (&buffer[header_end..key_start]).read_u32::<LittleEndian>()? as usize;
