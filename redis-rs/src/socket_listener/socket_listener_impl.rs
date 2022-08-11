@@ -171,12 +171,12 @@ async fn send_get_request(
             let mut output_buffer = Vec::with_capacity(length);
             write_response_header_to_vec(&mut output_buffer, callback_index, ResponseType::String);
             output_buffer.extend_from_slice(&result_bytes);
-            write_to_output(&mut output_buffer, &write_socket).await;
+            write_to_output(&output_buffer, &write_socket).await;
         }
         None => {
-            let mut output_buffer = [0 as u8; HEADER_END];
+            let mut output_buffer = [0_u8; HEADER_END];
             write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
-            write_to_output(&mut output_buffer, &write_socket).await;
+            write_to_output(&output_buffer, &write_socket).await;
         }
     };
 }

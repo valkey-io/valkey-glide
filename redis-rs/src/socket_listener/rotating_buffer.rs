@@ -66,8 +66,7 @@ impl RotatingBuffer {
         let length = (&input[..MESSAGE_LENGTH_END]).read_u32::<LittleEndian>()? as usize;
         let callback_index =
             (&input[MESSAGE_LENGTH_END..CALLBACK_INDEX_END]).read_u32::<LittleEndian>()?;
-        let request_type =
-            (&input[CALLBACK_INDEX_END..READ_HEADER_END]).read_u32::<LittleEndian>()?;
+        let request_type = (&input[CALLBACK_INDEX_END..HEADER_END]).read_u32::<LittleEndian>()?;
         let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,
