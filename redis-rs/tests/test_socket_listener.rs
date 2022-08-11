@@ -9,7 +9,7 @@ use rand::{distributions::Standard, thread_rng, Rng};
 use redis::socket_listener::headers::{
     ResponseType, CALLBACK_INDEX_END, HEADER_END, MESSAGE_LENGTH_END,
 };
-use redis::socket_listener::socket_listener::*;
+use redis::socket_listener::*;
 use std::io::{self, prelude::*, ErrorKind};
 use std::{
     mem,
@@ -199,7 +199,7 @@ fn test_socket_get_returns_null() {
         const CALLBACK_INDEX: u32 = 99;
         let key = "hello";
         let mut buffer = Vec::with_capacity(HEADER_END);
-        buffer.write_u32::<LittleEndian>(17 as u32).unwrap();
+        buffer.write_u32::<LittleEndian>(17_u32).unwrap();
         buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
         buffer.write_u32::<LittleEndian>(1).unwrap();
         buffer.write_all(key.as_bytes()).unwrap();

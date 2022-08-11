@@ -37,7 +37,7 @@ pub enum RequestType {
 }
 
 /// An enum representing the values of the request type field.
-#[derive(ToPrimitive, FromPrimitive, PartialEq)]
+#[derive(ToPrimitive, FromPrimitive, PartialEq, Eq)]
 pub enum ResponseType {
     /// Type of a response that returns a null.
     Null = 0,
