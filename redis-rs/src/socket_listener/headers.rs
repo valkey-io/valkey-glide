@@ -1,18 +1,30 @@
 use lifeguard::RcRecycled;
 use std::{ops::Range, rc::Rc};
 
-// language format:
+/// Length of the message field in the request & response.
+pub const MESSAGE_LENGTH_FIELD_LENGTH: usize = 4;
+/// Length of the callback index field in the request & response.
+pub const CALLBACK_INDEX_FIELD_LENGTH: usize = 4;
+/// Length of the type field in the request & response.
+pub const TYPE_FIELD_LENGTH: usize = 4;
+
+// Request format:
 // [0..4] bytes -> message length.
 // [4..8] bytes -> callback index.
-// [8..12] bytes -> type. set or get.
+// [8..12] bytes -> type. RequestType for request, ResponseType for response.
 // if get -  [12..message length] -> key.
 // if set -  [12..16] -> key length
 //       [16..16 + key length] -> key
 //       [16+key length .. message length] -> value
-pub(super) const MESSAGE_LENGTH_END: usize = 4;
-pub(super) const CALLBACK_INDEX_END: usize = MESSAGE_LENGTH_END + 4;
-pub(super) const READ_HEADER_END: usize = CALLBACK_INDEX_END + 4;
-pub(super) const WRITE_HEADER_END: usize = CALLBACK_INDEX_END;
+
+/// The index at the end of the message length field.
+pub const MESSAGE_LENGTH_END: usize = MESSAGE_LENGTH_FIELD_LENGTH;
+/// The index at the end of the callback index length field.
+pub const CALLBACK_INDEX_END: usize = MESSAGE_LENGTH_END + CALLBACK_INDEX_FIELD_LENGTH;
+/// The index at the end of the type field.
+pub const TYPE_END: usize = CALLBACK_INDEX_END + TYPE_FIELD_LENGTH;
+/// The length of the header.
+pub const HEADER_END: usize = TYPE_END;
 
 #[derive(PartialEq, Debug, Clone)]
 pub(super) enum RequestRanges {

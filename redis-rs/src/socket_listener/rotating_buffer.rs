@@ -94,12 +94,12 @@ impl RotatingBuffer {
         request_range: &Range<usize>,
         buffer: SharedBuffer,
     ) -> io::Result<RequestState> {
-        if request_range.len() < READ_HEADER_END {
+        if request_range.len() < HEADER_END {
             return Ok(RequestState::PartialNoHeader);
         }
 
         let header = Self::read_header(&buffer[request_range.start..request_range.end])?;
-        let header_end = request_range.start + READ_HEADER_END;
+        let header_end = request_range.start + HEADER_END;
         let next = request_range.start + header.length;
         if next > request_range.end {
             return Ok(RequestState::PartialWithHeader {
