@@ -1,0 +1,93 @@
+{
+  "name": "babushka-rs-internal",
+  "version": "1.0.0",
+  "description": "Redis client",
+  "main": "index.js",
+  "license": "MIT",
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ],
+  "napi": {
+    "name": "babushka-rs-internal",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-gnu",
+        "i686-pc-windows-msvc",
+        "armv7-unknown-linux-gnueabihf",
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        "x86_64-unknown-freebsd",
+        "aarch64-unknown-linux-musl",
+        "aarch64-pc-windows-msvc",
+        "armv7-linux-androideabi"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "bench": "node -r @swc-node/register benchmark/bench.ts",
+    "build": "napi build --platform --release --pipe \"prettier -w\"",
+    "build:debug": "napi build --platform --pipe \"prettier -w\"",
+    "format": "run-p format:prettier format:rs",
+    "format:prettier": "prettier . -w",
+    "format:rs": "cargo fmt",
+    "lint": "eslint . -c ./.eslintrc.yml",
+    "prepublishOnly": "napi prepublish -t npm",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.7.0",
+    "@swc-node/register": "^1.5.1",
+    "@typescript-eslint/eslint-plugin": "^5.22.0",
+    "@typescript-eslint/parser": "^5.22.0",
+    "benny": "^3.7.1",
+    "chalk": "^5.0.1",
+    "eslint": "^8.14.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "find-free-port": "^2.0.0",
+    "husky": "^7.0.4",
+    "lint-staged": "^12.4.1",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.6.2",
+    "typescript": "^4.6.4",
+    "redis-server": "^1.2.2"
+  },
+  "lint-staged": {
+    "*.@(js|ts|tsx)": [
+      "eslint -c .eslintrc.yml --fix"
+    ],
+    "*.@(js|ts|tsx|yml|yaml|md|json)": [
+      "prettier --write"
+    ]
+  },
+  "ava": {
+    "require": [
+      "@swc-node/register"
+    ],
+    "extensions": [
+      "ts"
+    ],
+    "environmentVariables": {
+      "TS_NODE_PROJECT": "./tsconfig.json"
+    }
+  },
+  "prettier": {
+    "printWidth": 120,
+    "semi": false,
+    "trailingComma": "all",
+    "singleQuote": true,
+    "arrowParens": "always"
+  }
+}

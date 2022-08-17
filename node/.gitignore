@@ -131,3 +131,4 @@ dist
 .yarn/install-state.gz
 .pnp.*
 *babushka*.node
+build-ts/**
