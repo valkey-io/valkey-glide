@@ -61,11 +61,7 @@ impl AsyncClient {
     #[allow(dead_code)]
     pub async fn get(&self, key: String) -> Result<Option<String>> {
         let mut connection = self.connection.clone();
-        let result = connection.get(key).await;
-        match result {
-            Ok(val) => Ok(val),
-            Err(err) => Err(to_js_error(err)),
-        }
+        to_js_result(connection.get(key).await)
     }
 
     #[napi]
