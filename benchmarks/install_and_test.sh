@@ -15,6 +15,14 @@ function runPythonBenchmark(){
   deactivate
 }
 
+unction runNodeBenchmark(){
+  cd ${NODE_FOLDER}
+  yarn build
+  cd ${BENCH_FOLDER}/node
+  npm i
+  npx tsc
+  npm run bench
+}
 
 script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
@@ -24,3 +32,6 @@ export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
 runPythonBenchmark
+
+NODE_FOLDER="${BENCH_FOLDER}/../node"
+runNodeBenchmark
