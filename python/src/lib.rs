@@ -88,8 +88,11 @@ impl AsyncPipeline {
             let result: RedisResult<Vec<String>> = pipeline.query_async(&mut connection).await;
             match result {
                 Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
+                Err(ref err) if err.kind() ==  => Ok(Python::with_gil(|py| py.None())),
+                Err(err) if err.to_string().contains("response was nil") => Ok(Python::with_gil(|py| py.None())),
+                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string()))
             }
+        })
         })
     }
 }
