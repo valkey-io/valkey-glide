@@ -23,8 +23,16 @@ impl AsyncClient {
     fn get<'a>(&self, key: String, py: Python<'a>) -> PyResult<&'a PyAny> {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: String = connection.get(key).await.unwrap();
-            Ok(Python::with_gil(|py| result.into_py(py)))
+            let result: RedisResult<Option<String>> = connection.get(key).await;
+            match result {
+                Ok(result) => {
+                    match result {
+                        Some(result) => Ok(Python::with_gil(|py| result.into_py(py))),
+                        None => Ok(Python::with_gil(|py| py.None()))
+                    }
+                }
+                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
+            }
         })
     }
 
