@@ -180,7 +180,7 @@ async def main(event_loop_name, total_commands, num_of_concurrent_tasks, data_si
         data,
     )
 
-    direct_babushka = await AsyncClient.new(f"redis://{HOST}:{PORT}")
+    direct_babushka = await AsyncClient.create_client(f"redis://{HOST}:{PORT}")
     await run_client(
         direct_babushka,
         "direct_babushka",

@@ -23,10 +23,15 @@ impl AsyncClient {
     fn get<'a>(&self, key: String, py: Python<'a>) -> PyResult<&'a PyAny> {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: Result<String, redis::RedisError> = connection.get(key).await;
-            match result { 
-                Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string()))
+            let result: RedisResult<Option<String>> = connection.get(key).await;
+            match result {
+                Ok(result) => {
+                    match result {
+                        Some(result) => Ok(Python::with_gil(|py| result.into_py(py))),
+                        None => Ok(Python::with_gil(|py| py.None()))
+                    }
+                }
+                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
             }
         })
     }
@@ -42,8 +47,7 @@ impl AsyncClient {
         })
     }
 
-
-    fn create_pipeline(&self) -> AsyncPipeline{
+    fn create_pipeline(&self) -> AsyncPipeline {
         AsyncPipeline::new(self.multiplexer.clone())
     }
 }
@@ -88,11 +92,8 @@ impl AsyncPipeline {
             let result: RedisResult<Vec<String>> = pipeline.query_async(&mut connection).await;
             match result {
                 Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
-                Err(ref err) if err.kind() ==  => Ok(Python::with_gil(|py| py.None())),
-                Err(err) if err.to_string().contains("response was nil") => Ok(Python::with_gil(|py| py.None())),
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string()))
+                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
             }
-        })
         })
     }
 }
