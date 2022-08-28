@@ -1153,7 +1153,6 @@ impl FromRedisValue for String {
             Value::Data(ref bytes) => Ok(from_utf8(bytes)?.to_string()),
             Value::Okay => Ok("OK".to_string()),
             Value::Status(ref val) => Ok(val.to_string()),
-            Value::Nil => Ok("nil".to_string()),
             _ => invalid_type_error!(v, "Response type not string compatible."),
         }
     }
