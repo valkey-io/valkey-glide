@@ -25,12 +25,10 @@ impl AsyncClient {
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result: RedisResult<Option<String>> = connection.get(key).await;
             match result {
-                Ok(result) => {
-                    match result {
-                        Some(result) => Ok(Python::with_gil(|py| result.into_py(py))),
-                        None => Ok(Python::with_gil(|py| py.None()))
-                    }
-                }
+                Ok(result) => match result {
+                    Some(result) => Ok(Python::with_gil(|py| result.into_py(py))),
+                    None => Ok(Python::with_gil(|py| py.None())),
+                },
                 Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
             }
         })
