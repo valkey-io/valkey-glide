@@ -15,3 +15,4 @@ Cargo.lock
 *.pdb
 dump.rdb
 .env
+benchmarks/results

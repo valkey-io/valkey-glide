@@ -1,8 +1,8 @@
-from babushkapy.commands.core import CoreCommands
-from babushkapy.config import ClientConfiguration
-from babushkapy.utils import to_url
+from pybushka.commands.core import CoreCommands
+from pybushka.config import ClientConfiguration
+from pybushka.utils import to_url
 
-from .babushkapy import AsyncClient
+from .pybushka import AsyncClient
 
 
 class RedisAsyncClient(CoreCommands):

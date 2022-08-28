@@ -1,6 +1,6 @@
 import pytest
-from babushkapy.async_client import RedisAsyncClient
-from babushkapy.config import ClientConfiguration
+from pybushka.async_client import RedisAsyncClient
+from pybushka.config import ClientConfiguration
 
 default_host = "localhost"
 default_port = 6379

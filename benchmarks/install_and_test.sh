@@ -17,7 +17,7 @@ function runPythonBenchmark(){
 
 
 script=`pwd`/${BASH_SOURCE[0]}
-HERE=`dirname ${script}`
-BENCH_FOLDER=`realpath ${HERE}`
-PYTHON_FOLDER="${BENCH_FOLDER}/../python"
+RELATIVE_BENCH_PATH=`dirname ${script}`
+export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
+export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
 runPythonBenchmark
