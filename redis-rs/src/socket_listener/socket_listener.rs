@@ -90,7 +90,7 @@ async fn write_to_output(output: &[u8], write_socket: &UnixStream) {
                 continue;
             }
         }
-        if let Err(err) = write_socket.try_write(&output) {
+        if let Err(err) = write_socket.try_write(output) {
             if err.kind() == io::ErrorKind::WouldBlock {
                 task::yield_now().await;
             } else if err.kind() == io::ErrorKind::Interrupted {
@@ -116,7 +116,7 @@ async fn send_set_request(
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
         .await; // TODO - add proper error handling.
-    let mut output_vec = [0 as u8; WRITE_HEADER_END];
+    let mut output_vec = [0_u8; WRITE_HEADER_END];
     (&mut output_vec[..MESSAGE_LENGTH_END])
         .write_u32::<LittleEndian>(WRITE_HEADER_END as u32)
         .unwrap();
@@ -206,8 +206,8 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
-    StartCallback: FnOnce() -> () + Send + 'static,
-    CloseCallback: FnOnce(ClosingReason) -> () + Send + 'static,
+    StartCallback: FnOnce() + Send + 'static,
+    CloseCallback: FnOnce(ClosingReason) + Send + 'static,
 {
     let read_socket = match UnixStream::connect(read_socket_name).await {
         Ok(socket) => socket,
@@ -283,8 +283,8 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
-    StartCallback: FnOnce() -> () + Send + 'static,
-    CloseCallback: FnOnce(ClosingReason) -> () + Send + 'static,
+    StartCallback: FnOnce() + Send + 'static,
+    CloseCallback: FnOnce(ClosingReason) + Send + 'static,
 {
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
