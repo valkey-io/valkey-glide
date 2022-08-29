@@ -138,7 +138,7 @@ fn test_socket_set_and_get() {
         );
 
         buffer.clear();
-        buffer.write_u32::<LittleEndian>(17 as u32).unwrap();
+        buffer.write_u32::<LittleEndian>(17_u32).unwrap();
         buffer.write_u32::<LittleEndian>(CALLBACK2_INDEX).unwrap();
         buffer.write_u32::<LittleEndian>(1).unwrap();
         buffer.write_all(key.as_bytes()).unwrap();

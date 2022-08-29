@@ -65,7 +65,7 @@ impl RotatingBuffer {
     pub(super) fn new(initial_buffers: usize, buffer_size: usize) -> Self {
         let pool = pool()
             .with(StartingSize(initial_buffers))
-            .with(Supplier(move || vec![0 as u8; buffer_size]))
+            .with(Supplier(move || vec![0_u8; buffer_size]))
             .build();
         Self::with_pool(pool)
     }
@@ -76,10 +76,12 @@ impl RotatingBuffer {
             (&input[MESSAGE_LENGTH_END..CALLBACK_INDEX_END]).read_u32::<LittleEndian>()?;
         let request_type =
             (&input[CALLBACK_INDEX_END..READ_HEADER_END]).read_u32::<LittleEndian>()?;
-        let request_type = FromPrimitive::from_u32(request_type).ok_or(Error::new(
-            ErrorKind::InvalidInput,
-            format!("failed to parse request type {}", request_type),
-        ))?;
+        let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!("failed to parse request type {}", request_type),
+            )
+        })?;
         Ok(ReadHeader {
             length,
             callback_index,
@@ -110,7 +112,7 @@ impl RotatingBuffer {
                 request_type: RequestRanges::Get {
                     key: header_end..next,
                 },
-                buffer: buffer.clone(),
+                buffer,
             },
             RequestType::Set => {
                 let key_start = header_end + 4;
@@ -123,7 +125,7 @@ impl RotatingBuffer {
                         key: key_start..key_end,
                         value: key_end..next,
                     },
-                    buffer: buffer.clone(),
+                    buffer,
                 }
             }
         };
@@ -154,10 +156,10 @@ impl RotatingBuffer {
         cursor: usize,
     ) {
         self.next_read_index = message_end - cursor;
-        self.match_capacity(required_length.unwrap_or(self.current_read_buffer.capacity()));
+        self.match_capacity(required_length.unwrap_or_else(|| self.current_read_buffer.capacity()));
 
         let slice = &old_buffer[cursor..message_end];
-        let iter = slice.iter().map(|byte| *byte);
+        let iter = slice.iter().copied();
         self.current_read_buffer
             .splice(..self.next_read_index, iter);
         debug_assert!(&self.current_read_buffer[..self.next_read_index] == slice);
@@ -209,7 +211,7 @@ impl RotatingBuffer {
         let read_buffer_length = self.current_read_buffer.len();
         debug_assert!(read_buffer_length > 0);
         let range = self.next_read_index..read_buffer_length;
-        debug_assert!(range.len() > 0);
+        debug_assert!(!range.is_empty());
         &mut self.current_read_buffer[range]
     }
 }
@@ -246,7 +248,7 @@ mod tests {
             }
         );
         assert_eq!(requests[0].callback_index, 100);
-        assert!(rotating_buffer.current_buffer().len() > 0);
+        assert!(!rotating_buffer.current_buffer().is_empty());
     }
 
     #[test]
