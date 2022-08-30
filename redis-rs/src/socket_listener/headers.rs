@@ -26,9 +26,11 @@ pub const CALLBACK_INDEX_END: usize = MESSAGE_LENGTH_END + CALLBACK_INDEX_FIELD_
 pub const TYPE_END: usize = CALLBACK_INDEX_END + TYPE_FIELD_LENGTH;
 /// The length of the header.
 pub const HEADER_END: usize = TYPE_END;
+/// The length of the header, when it contains a second argument.
+pub const HEADER_WITH_KEY_LENGTH_END: usize = HEADER_END + MESSAGE_LENGTH_FIELD_LENGTH;
 
 /// An enum representing the values of the request type field.
-#[derive(FromPrimitive)]
+#[derive(ToPrimitive, FromPrimitive)]
 pub enum RequestType {
     /// Type of a get string request.
     GetString = 1,
