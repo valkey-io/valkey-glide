@@ -1,3 +1,4 @@
+hiredis
 attrs==21.4.0
 iniconfig==1.1.1
 maturin==0.13.0
@@ -8,3 +9,15 @@ pyparsing==3.0.9
 pytest==7.1.2
 pytest-asyncio==0.19.0
 tomli==2.0.1
+uvloop
+numpy
+
+# aioredis
+aioredis>=1.1.0
+#-e git+https://github.com/aio-libs/aioredis#egg=aioredis
+
+# asyncio_redis
+asyncio_redis>=0.14.3
+
+# redis-py
+redis>=4.0.0
