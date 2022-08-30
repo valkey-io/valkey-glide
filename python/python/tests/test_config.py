@@ -1,4 +1,4 @@
-from src.config import DEFAULT_HOST, DEFAULT_PORT, ClientConfiguration
+from pybushka.config import DEFAULT_HOST, DEFAULT_PORT, ClientConfiguration
 
 
 def test_default_client_config():
