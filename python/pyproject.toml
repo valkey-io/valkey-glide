@@ -2,6 +2,7 @@
 requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
 
+
 [project.option-dependencies]
 test = [
     "hypothesis",
@@ -16,4 +17,3 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-
