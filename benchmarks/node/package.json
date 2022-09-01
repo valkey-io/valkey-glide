@@ -1,0 +1,19 @@
+{
+    "name": "node_benchmark",
+    "version": "1.0.0",
+    "description": "",
+    "main": "node_benchmark.ts",
+    "scripts": {
+        "bench": "node node_benchmark.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "percentile": "^1.6.0",
+        "redis": "^4.2.0"
+    },
+    "devDependencies": {
+        "@types/node": "^18.7.9",
+        "typescript": "^4.7.4"
+    }
+}
