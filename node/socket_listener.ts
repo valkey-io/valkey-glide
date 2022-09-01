@@ -28,6 +28,9 @@ export class SocketConnection {
         const dataArray = this.remainingReadData
             ? this.concatBuffers(this.remainingReadData, data)
             : new Uint8Array(data.buffer, data.byteOffset, data.length);
+        if (dataArray.byteLength % 4 !== 0) {
+            throw new Error("inputs are not aligned to 4.");
+        }
 
         let counter = 0;
         while (counter <= dataArray.byteLength - HEADER_LENGTH_IN_BYTES) {
@@ -63,6 +66,12 @@ export class SocketConnection {
                 resolveFunction(keyBytes.toString("utf8"));
             }
             counter = counter + length;
+            const offset = counter % 4;
+
+            if (offset !== 0) {
+                // align counter to 4.
+                counter += 4 - offset;
+            }
         }
 
         if (counter == dataArray.byteLength) {
