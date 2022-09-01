@@ -24,6 +24,12 @@ unction runNodeBenchmark(){
   npm run bench
 }
 
+function runCSharpBenchmark(){
+  cd ${BENCH_FOLDER}/csharp
+  dotnet run --release
+}
+
+
 script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
@@ -32,6 +38,8 @@ export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
 runPythonBenchmark
+
+runCSharpBenchmark
 
 NODE_FOLDER="${BENCH_FOLDER}/../node"
 runNodeBenchmark
