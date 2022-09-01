@@ -3,5 +3,11 @@
   "editor.tabSize": 4,
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
-  "python.formatting.provider": "black"
+  "python.formatting.provider": "black",
+  "rust-analyzer.linkedProjects": [
+    "redis-rs/Cargo.toml",
+    "python/Cargo.toml",
+    "node/Cargo.toml",
+    "csharp/lib/Cargo.toml"
+  ]
 }
