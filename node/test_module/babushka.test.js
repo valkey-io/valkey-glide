@@ -19,7 +19,8 @@ function OpenServerAndExecute(port, action) {
 
 async function GetAndSetRandomValue(client) {
     const key = uuidv4();
-    const value = uuidv4();
+    // Adding random repetition, to prevent the inputs from always having the same alignment.
+    const value = uuidv4() + "0".repeat(Math.random() * 7);
     await client.set(key, value);
     const result = await client.get(key);
     expect(result).toEqual(value);
@@ -83,7 +84,7 @@ describe("socket client", () => {
     it("can handle non-ASCII unicode", async () => {
         const port = await FreePort(3000).then(([free_port]) => free_port);
         await OpenServerAndExecute(port, async () => {
-            const client = await SocketConnection.CreateConnection(
+            const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
             );
 
@@ -92,8 +93,6 @@ describe("socket client", () => {
             await client.set(key, value);
             const result = await client.get(key);
             expect(result).toEqual(value);
-
-            client.dispose();
         });
     });
 
