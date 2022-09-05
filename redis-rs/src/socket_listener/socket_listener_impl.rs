@@ -1,11 +1,11 @@
+use super::super::{AsyncCommands, RedisResult};
 use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
 use byteorder::{LittleEndian, WriteBytesExt};
+use num_traits::ToPrimitive;
 use std::ops::Range;
 use std::rc::Rc;
 use std::{io, thread};
-
-use super::super::{AsyncCommands, RedisResult};
 use tokio::io::Interest;
 use tokio::net::UnixStream;
 use tokio::runtime::Builder;
@@ -105,6 +105,42 @@ async fn write_to_output(output: &[u8], write_socket: &UnixStream) {
     }
 }
 
+fn write_response_header_to_vec(
+    output_buffer: &mut Vec<u8>,
+    callback_index: u32,
+    response_type: ResponseType,
+) {
+    let length = output_buffer.capacity();
+    // TODO - use serde for easier serialization.
+    output_buffer
+        .write_u32::<LittleEndian>(length as u32)
+        .unwrap();
+    output_buffer
+        .write_u32::<LittleEndian>(callback_index)
+        .unwrap();
+    output_buffer
+        .write_u32::<LittleEndian>(response_type.to_u32().unwrap())
+        .unwrap();
+}
+
+fn write_response_header(
+    output_buffer: &mut [u8],
+    callback_index: u32,
+    response_type: ResponseType,
+) {
+    let length = output_buffer.len();
+    // TODO - use serde for easier serialization.
+    (&mut output_buffer[..MESSAGE_LENGTH_END])
+        .write_u32::<LittleEndian>(length as u32)
+        .unwrap();
+    (&mut output_buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
+        .write_u32::<LittleEndian>(callback_index)
+        .unwrap();
+    (&mut output_buffer[CALLBACK_INDEX_END..HEADER_END])
+        .write_u32::<LittleEndian>(response_type.to_u32().unwrap())
+        .unwrap();
+}
+
 async fn send_set_request(
     buffer: SharedBuffer,
     key_range: Range<usize>,
@@ -116,14 +152,9 @@ async fn send_set_request(
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
         .await; // TODO - add proper error handling.
-    let mut output_vec = [0_u8; WRITE_HEADER_END];
-    (&mut output_vec[..MESSAGE_LENGTH_END])
-        .write_u32::<LittleEndian>(WRITE_HEADER_END as u32)
-        .unwrap();
-    (&mut output_vec[MESSAGE_LENGTH_END..WRITE_HEADER_END])
-        .write_u32::<LittleEndian>(callback_index)
-        .unwrap();
-    write_to_output(&output_vec, &write_socket).await;
+    let mut output_buffer = [0_u8; HEADER_END];
+    write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
+    write_to_output(&output_buffer, &write_socket).await;
 }
 
 async fn send_get_request(
@@ -133,20 +164,21 @@ async fn send_get_request(
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
 ) {
-    let result = connection.get(&vec[key_range]).await; // TODO - add proper error handling.
-    let result_bytes: Vec<u8> = if let Ok(bytes) = result {
-        bytes
-    } else {
-        Vec::new()
+    let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
+    match result {
+        Some(result_bytes) => {
+            let length = HEADER_END + result_bytes.len();
+            let mut output_buffer = Vec::with_capacity(length);
+            write_response_header_to_vec(&mut output_buffer, callback_index, ResponseType::String);
+            output_buffer.extend_from_slice(&result_bytes);
+            write_to_output(&output_buffer, &write_socket).await;
+        }
+        None => {
+            let mut output_buffer = [0_u8; HEADER_END];
+            write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
+            write_to_output(&output_buffer, &write_socket).await;
+        }
     };
-    let length = WRITE_HEADER_END + result_bytes.len();
-    let mut output_vec = Vec::with_capacity(length);
-    output_vec.write_u32::<LittleEndian>(length as u32).unwrap();
-    output_vec
-        .write_u32::<LittleEndian>(callback_index)
-        .unwrap();
-    output_vec.extend_from_slice(&result_bytes);
-    write_to_output(&output_vec, &write_socket).await;
 }
 
 fn handle_request(
@@ -195,7 +227,7 @@ async fn handle_requests(
         let write_socket = write_socket.clone();
         handle_request(request, connection, write_socket)
     }
-    // Yield ro ensure that the subtasks aren't starved.
+    // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
 }
 
