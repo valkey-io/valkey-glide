@@ -171,6 +171,10 @@ async fn send_get_request(
             let mut output_buffer = Vec::with_capacity(length);
             write_response_header_to_vec(&mut output_buffer, callback_index, ResponseType::String);
             output_buffer.extend_from_slice(&result_bytes);
+            let offset = output_buffer.len() % 4;
+            if offset != 0 {
+                output_buffer.resize(length + 4 - offset, 0);
+            }
             write_to_output(&output_buffer, &write_socket).await;
         }
         None => {
