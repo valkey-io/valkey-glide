@@ -7,17 +7,9 @@ use std::{
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use lifeguard::{pool, Pool, StartingSize, Supplier};
-use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::headers::*;
-
-/// An enum representing the values of the request type field.
-#[derive(FromPrimitive)]
-pub(super) enum RequestType {
-    Get = 1,
-    Set = 2,
-}
 
 /// An enum representing a request during the parsing phase.
 pub(super) enum RequestState {
@@ -74,8 +66,7 @@ impl RotatingBuffer {
         let length = (&input[..MESSAGE_LENGTH_END]).read_u32::<LittleEndian>()? as usize;
         let callback_index =
             (&input[MESSAGE_LENGTH_END..CALLBACK_INDEX_END]).read_u32::<LittleEndian>()?;
-        let request_type =
-            (&input[CALLBACK_INDEX_END..READ_HEADER_END]).read_u32::<LittleEndian>()?;
+        let request_type = (&input[CALLBACK_INDEX_END..HEADER_END]).read_u32::<LittleEndian>()?;
         let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,
@@ -94,27 +85,28 @@ impl RotatingBuffer {
         request_range: &Range<usize>,
         buffer: SharedBuffer,
     ) -> io::Result<RequestState> {
-        if request_range.len() < READ_HEADER_END {
+        if request_range.len() < HEADER_END {
             return Ok(RequestState::PartialNoHeader);
         }
 
         let header = Self::read_header(&buffer[request_range.start..request_range.end])?;
-        let header_end = request_range.start + READ_HEADER_END;
+        let header_end = request_range.start + HEADER_END;
         let next = request_range.start + header.length;
         if next > request_range.end {
             return Ok(RequestState::PartialWithHeader {
                 length: header.length,
             });
         }
+        // TODO - use serde for easier deserialization.
         let request = match header.request_type {
-            RequestType::Get => WholeRequest {
+            RequestType::GetString => WholeRequest {
                 callback_index: header.callback_index,
                 request_type: RequestRanges::Get {
                     key: header_end..next,
                 },
                 buffer,
             },
-            RequestType::Set => {
+            RequestType::SetString => {
                 let key_start = header_end + 4;
                 let key_length =
                     (&buffer[header_end..key_start]).read_u32::<LittleEndian>()? as usize;

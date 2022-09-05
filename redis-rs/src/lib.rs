@@ -450,6 +450,7 @@ mod parser;
 mod script;
 mod types;
 
+/// Socket listener module.
 #[cfg(feature = "tokio-comp")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
 pub mod socket_listener;

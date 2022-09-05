@@ -1,9 +1,15 @@
 #![cfg(feature = "tokio-comp")]
 mod support;
+use crate::support::*;
 use crate::ClosingReason::UnhandledError;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use futures::channel::oneshot::{channel, Receiver};
+use num_traits::ToPrimitive;
 use rand::{distributions::Standard, thread_rng, Rng};
+use redis::socket_listener::headers::{
+    ResponseType, CALLBACK_INDEX_END, HEADER_END, MESSAGE_LENGTH_END,
+};
+use redis::socket_listener::*;
 use std::io::{self, prelude::*, ErrorKind};
 use std::{
     mem,
@@ -12,9 +18,6 @@ use std::{
     time::Duration,
 };
 use tempfile::tempdir;
-
-use crate::support::*;
-use redis::socket_listener::socket_listener::*;
 
 struct TestBasics {
     _server: RedisServer,
@@ -130,11 +133,24 @@ fn test_socket_set_and_get() {
         test_basics.read_socket.write_all(&buffer).unwrap();
 
         let size = test_basics.write_socket.read(&mut buffer).unwrap();
-        assert_eq!(size, 8);
-        assert_eq!((&buffer[0..4]).read_u32::<LittleEndian>().unwrap(), 8); // expected length of output is 8 - no value returned
+        assert_eq!(size, HEADER_END);
         assert_eq!(
-            (&buffer[4..8]).read_u32::<LittleEndian>().unwrap(),
+            (&buffer[..MESSAGE_LENGTH_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            HEADER_END as u32
+        );
+        assert_eq!(
+            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
             CALLBACK1_INDEX
+        );
+        assert_eq!(
+            (&buffer[CALLBACK_INDEX_END..HEADER_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            ResponseType::Null.to_u32().unwrap()
         );
 
         buffer.clear();
@@ -144,20 +160,71 @@ fn test_socket_set_and_get() {
         buffer.write_all(key.as_bytes()).unwrap();
         test_basics.read_socket.write_all(&buffer).unwrap();
 
-        let expected_length = VALUE_LENGTH + 8;
+        let expected_length = VALUE_LENGTH + HEADER_END;
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         unsafe { buffer.set_len(message_length) };
         let size = test_basics.write_socket.read(&mut buffer).unwrap();
         assert_eq!(size, expected_length);
         assert_eq!(
-            (&buffer[0..4]).read_u32::<LittleEndian>().unwrap(),
+            (&buffer[..MESSAGE_LENGTH_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
             (expected_length) as u32
         );
         assert_eq!(
-            (&buffer[4..8]).read_u32::<LittleEndian>().unwrap(),
+            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
             CALLBACK2_INDEX
         );
-        assert_eq!(&buffer[8..VALUE_LENGTH + 8], value);
+        assert_eq!(
+            (&buffer[CALLBACK_INDEX_END..HEADER_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            ResponseType::String.to_u32().unwrap()
+        );
+        assert_eq!(&buffer[HEADER_END..VALUE_LENGTH + HEADER_END], value);
+
+        get_receiver(test_basics)
+    };
+
+    wait_for_closing_result(receiver, ClosingReason::ReadSocketClosed);
+}
+
+#[test]
+fn test_socket_get_returns_null() {
+    let receiver = {
+        let mut test_basics = setup_test_basics();
+
+        const CALLBACK_INDEX: u32 = 99;
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(HEADER_END);
+        buffer.write_u32::<LittleEndian>(17_u32).unwrap();
+        buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
+        buffer.write_u32::<LittleEndian>(1).unwrap();
+        buffer.write_all(key.as_bytes()).unwrap();
+        test_basics.read_socket.write_all(&buffer).unwrap();
+
+        let size = test_basics.write_socket.read(&mut buffer).unwrap();
+        assert_eq!(size, HEADER_END);
+        assert_eq!(
+            (&buffer[..MESSAGE_LENGTH_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            HEADER_END as u32
+        );
+        assert_eq!(
+            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            CALLBACK_INDEX
+        );
+        assert_eq!(
+            (&buffer[CALLBACK_INDEX_END..HEADER_END])
+                .read_u32::<LittleEndian>()
+                .unwrap(),
+            ResponseType::Null.to_u32().unwrap()
+        );
 
         get_receiver(test_basics)
     };
