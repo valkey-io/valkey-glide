@@ -7,7 +7,7 @@ use futures::channel::oneshot::{channel, Receiver};
 use num_traits::ToPrimitive;
 use rand::{distributions::Standard, thread_rng, Rng};
 use redis::socket_listener::headers::{
-    ResponseType, CALLBACK_INDEX_END, HEADER_END, MESSAGE_LENGTH_END,
+    ResponseType, CALLBACK_INDEX_END, HEADER_END, MESSAGE_LENGTH_END, MESSAGE_LENGTH_FIELD_LENGTH,
 };
 use redis::socket_listener::*;
 use std::io::{self, prelude::*, ErrorKind};
@@ -120,7 +120,7 @@ fn test_socket_set_and_get() {
         let key = "hello";
         let value = generate_random_bytes(VALUE_LENGTH);
         // Send a set request
-        let message_length = VALUE_LENGTH + key.len() + 16;
+        let message_length = VALUE_LENGTH + key.len() + HEADER_END + MESSAGE_LENGTH_FIELD_LENGTH;
         let mut buffer = Vec::with_capacity(message_length);
         buffer
             .write_u32::<LittleEndian>(message_length as u32)
@@ -154,17 +154,20 @@ fn test_socket_set_and_get() {
         );
 
         buffer.clear();
-        buffer.write_u32::<LittleEndian>(17_u32).unwrap();
+        buffer
+            .write_u32::<LittleEndian>((HEADER_END + key.len()) as u32)
+            .unwrap();
         buffer.write_u32::<LittleEndian>(CALLBACK2_INDEX).unwrap();
         buffer.write_u32::<LittleEndian>(1).unwrap();
         buffer.write_all(key.as_bytes()).unwrap();
         test_basics.read_socket.write_all(&buffer).unwrap();
 
         let expected_length = VALUE_LENGTH + HEADER_END;
+        let expected_aligned_length = expected_length + (4 - expected_length % 4);
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         unsafe { buffer.set_len(message_length) };
         let size = test_basics.write_socket.read(&mut buffer).unwrap();
-        assert_eq!(size, expected_length);
+        assert_eq!(size, expected_aligned_length);
         assert_eq!(
             (&buffer[..MESSAGE_LENGTH_END])
                 .read_u32::<LittleEndian>()
