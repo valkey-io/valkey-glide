@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from pybushka.connection import AsyncFFIConnection, AsyncSocketConnection
+
 BASE_ALLOWED_KEYS = {
     "host",
     "port",
@@ -8,6 +10,7 @@ BASE_ALLOWED_KEYS = {
     "password",
     "retry",
     "timeout",
+    "connection_class",
 }
 
 DEFAULT_HOST = "localhost"
@@ -39,5 +42,9 @@ class ClientConfiguration(BaseClientConfiguration):
     @staticmethod
     def get_default_config():
         return ClientConfiguration(
-            host=DEFAULT_HOST, port=DEFAULT_PORT, db=0, tls_enabled=False
+            host=DEFAULT_HOST,
+            port=DEFAULT_PORT,
+            db=0,
+            tls_enabled=False,
+            connection_class=AsyncFFIConnection,
         )

@@ -7,12 +7,12 @@ from .pybushka import AsyncClient
 
 class RedisAsyncClient(CoreCommands):
     @classmethod
-    async def create(
-        cls, config: ClientConfiguration = ClientConfiguration.get_default_config()
-    ):
+    async def create(cls, config: ClientConfiguration = None):
+        config = config or ClientConfiguration.get_default_config()
         self = RedisAsyncClient()
         self.config = config
-        self.connection = await self._create_multiplexed_conn()
+        self.connection = self.config.connection_class(self.config.config_args)
+        await self.connection.connect()
         self.rust_functions = self._initialize_functions([CoreCommands])
 
         return self
@@ -23,7 +23,7 @@ class RedisAsyncClient(CoreCommands):
             for method in dir(cls):
                 if not method.startswith("__"):
                     try:
-                        func = getattr(self.connection, method)
+                        func = getattr(self.connection.get_connection(), method)
                         funcs[method] = func
                     except AttributeError:
                         # The connection doesn't have this method
@@ -38,4 +38,4 @@ class RedisAsyncClient(CoreCommands):
         return await conn_rust_func(*args, **kwargs)
 
     def create_pipeline(self):
-        return self.connection.create_pipeline()
+        return self.connection.get_connection().create_pipeline()
