@@ -1,5 +1,5 @@
 import pytest
-from pybushka.async_client import RedisAsyncClient
+from pybushka.async_client import RedisAsyncFFIClient, RedisAsyncUDSClient
 from pybushka.config import ClientConfiguration
 from pybushka.connection import AsyncFFIConnection
 
@@ -24,11 +24,23 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture()
-async def async_client(request):
+async def async_ffi_client(request):
+    "Get async client for tests"
+    host = request.config.getoption("--host")
+    port = request.config.getoption("--port")
+    config = ClientConfiguration(host=host, port=port)
+    return await RedisAsyncFFIClient.create(config)
+
+
+@pytest.fixture()
+async def async_uds_client(request):
     "Get async client for tests"
     host = request.config.getoption("--host")
     port = request.config.getoption("--port")
     config = ClientConfiguration(
-        host=host, port=port, connection_class=AsyncFFIConnection
+        host=host,
+        port=port,
+        read_socket_name="./uds_read_socket",
+        write_socket_name="./uds_write_socket",
     )
-    return await RedisAsyncClient.create(config)
+    return await RedisAsyncUDSClient.create(config)

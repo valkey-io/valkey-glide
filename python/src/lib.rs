@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{IntoPyDict, PyString};
 use redis::aio::MultiplexedConnection;
+use redis::socket_listener::{start_socket_listener, ClosingReason};
 use redis::{AsyncCommands, RedisResult};
 
 #[pyclass]
@@ -100,5 +101,49 @@ impl AsyncPipeline {
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AsyncClient>()?;
+
+    #[pyfn(m)]
+    fn start_socket_listener_external(
+        connection_address: String,
+        socket_path: String,
+        start_callback: PyObject,
+        close_callback: PyObject,
+    ) -> PyResult<PyObject> {
+        let client = redis::Client::open(connection_address).unwrap();
+        start_socket_listener(
+            client,
+            socket_path.clone(),
+            socket_path.clone(),
+            move || {
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                let _ = start_callback.call(py, (), None);
+            },
+            move |result| match result {
+                ClosingReason::ReadSocketClosed => {
+                    let gil = Python::acquire_gil();
+                    let py = gil.python();
+                    let _ = close_callback.call(
+                        py,
+                        (),
+                        Some([("err", "ReadSocketClosed")].into_py_dict(py)),
+                    );
+                }
+                ClosingReason::UnhandledError(err) => {
+                    let gil = Python::acquire_gil();
+                    let py = gil.python();
+                    let _ = close_callback.call(py, (), Some([("err", err.to_string())].into_py_dict(py)));
+                }
+                ClosingReason::FailedInitialization(err) => {
+                    // TODO - Do we want to differentiate this from UnhandledError ?
+                    let gil = Python::acquire_gil();
+                    let py = gil.python();
+                    let _ = close_callback.call(py, (), Some([("err", err.to_string())].into_py_dict(py)));
+                }
+            },
+        );
+        Ok(Python::with_gil(|py| "OK".into_py(py)))
+    }
+
     Ok(())
 }

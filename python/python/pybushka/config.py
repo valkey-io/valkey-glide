@@ -10,11 +10,19 @@ BASE_ALLOWED_KEYS = {
     "password",
     "retry",
     "timeout",
-    "connection_class",
+    "read_socket_name",
+    "write_socket_name",
 }
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
+
+DEFAULT_CONFIGS = {
+    "host": DEFAULT_HOST,
+    "port": DEFAULT_PORT,
+    "db": 0,
+    "tls_enabled": False,
+}
 
 
 class BaseClientConfiguration(ABC):
@@ -41,10 +49,12 @@ class ClientConfiguration(BaseClientConfiguration):
 
     @staticmethod
     def get_default_config():
+        return ClientConfiguration(**DEFAULT_CONFIGS)
+
+    @staticmethod
+    def get_default_uds_config():
         return ClientConfiguration(
-            host=DEFAULT_HOST,
-            port=DEFAULT_PORT,
-            db=0,
-            tls_enabled=False,
-            connection_class=AsyncFFIConnection,
+            **DEFAULT_CONFIGS,
+            read_socket_name="./uds_read_socket",
+            write_socket_name="./uds_write_socket",
         )

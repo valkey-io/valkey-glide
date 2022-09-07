@@ -1,3 +1,5 @@
+import socket
+import sys
 from abc import ABC, abstractmethod
 
 from pybushka.utils import to_url
@@ -27,4 +29,25 @@ class AsyncFFIConnection(AsyncConnection):
 
 
 class AsyncSocketConnection(AsyncConnection):
-    pass
+    DEFAULT_SERVER_ADDRESS = "./uds_socket"
+
+    def __init__(self, conn_args, server_address=DEFAULT_SERVER_ADDRESS) -> None:
+        super().__init__(conn_args)
+        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server_address = server_address
+
+    # define method
+    async def connect(self):
+        try:
+            print("Python connecting")
+            self._sock.connect(self.server_address)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 1024 * 1024)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 1024 * 1024)
+        except socket.error as e:
+            print(str(e))
+            self.close()
+            sys.exit(1)
+
+    def close(self):
+        print("Closing socket")
+        self._sock.close()

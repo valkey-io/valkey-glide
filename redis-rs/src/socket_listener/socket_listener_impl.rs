@@ -1,4 +1,5 @@
 use super::super::{AsyncCommands, RedisResult};
+use super::{headers::*, rotating_buffer::RotatingBuffer};
 use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -6,19 +7,18 @@ use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use num_traits::ToPrimitive;
 use std::ops::Range;
 use std::rc::Rc;
+use std::str;
 use std::{io, thread};
 use tokio::io::Interest;
-use tokio::net::UnixStream;
+use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
-
-use super::{headers::*, rotating_buffer::RotatingBuffer};
-
+use std::path::Path;
 struct SocketListener {
-    read_socket: UnixStream,
+    read_socket: Rc<UnixStream>,
     rotating_buffer: RotatingBuffer,
     pool: Rc<Pool<Vec<u8>>>,
 }
@@ -35,7 +35,7 @@ impl From<ClosingReason> for PipeListeningResult {
 }
 
 impl SocketListener {
-    fn new(read_socket: UnixStream) -> Self {
+    fn new(read_socket: Rc<UnixStream>) -> Self {
         let pool = Rc::new(
             pool()
                 .with(StartingSize(2))
@@ -267,6 +267,11 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
+fn close_socket(socket_name: &str) -> Result<(), std::io::Error> {
+    let path = Path::new(socket_name);
+    std::fs::remove_file(path)
+}
+
 async fn listen_on_socket<StartCallback, CloseCallback>(
     client: Client,
     read_socket_name: &str,
@@ -274,56 +279,71 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
-    StartCallback: FnOnce() + Send + 'static,
-    CloseCallback: FnOnce(ClosingReason) + Send + 'static,
+    StartCallback: Fn() + Send + 'static,
+    CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
-    let read_socket = match UnixStream::connect(read_socket_name).await {
-        Ok(socket) => socket,
+    // Bind to socket
+    let listener = match UnixListener::bind(read_socket_name) {
+        Ok(listener) => listener,
         Err(err) => {
             close_callback(FailedInitialization(err.into()));
             return;
         }
     };
-    let write_socket = match UnixStream::connect(write_socket_name).await {
-        Ok(socket) => socket,
-        Err(err) => {
-            close_callback(FailedInitialization(err.into()));
-            return;
-        }
-    };
-    let write_socket = Rc::new(Mutex::new(write_socket));
-    let connection = match client.get_multiplexed_async_connection().await {
-        Ok(socket) => socket,
-        Err(err) => {
-            close_callback(FailedInitialization(err));
-            return;
-        }
-    };
-    let mut listener = SocketListener::new(read_socket);
     let local = task::LocalSet::new();
+    let client_rc = Rc::new(client);
+    let close_callback_rc = Rc::new(close_callback);
     start_callback();
     local
         .run_until(async move {
             loop {
-                let listening_result = listener.next_values().await;
-                match listening_result {
-                    Closed(reason) => {
-                        close_callback(reason);
-                        return;
+                println!("Rust: entering loop");
+                let cloned_close_callback = close_callback_rc.clone();
+                match listener.accept().await {
+                    Ok((stream, _addr)) => {
+                        let cloned_client = client_rc.clone();
+                        println!("Rust: new client!");
+                        task::spawn_local(async move {
+                            let connection =
+                                match cloned_client.get_multiplexed_async_connection().await {
+                                    Ok(socket) => socket,
+                                    Err(err) => {
+                                        cloned_close_callback(FailedInitialization(err));
+                                        return;
+                                    }
+                                };
+                            let rc_stream = Rc::new(stream);
+                            let mut client_listener = SocketListener::new(rc_stream.clone());
+                            let listening_result = client_listener.next_values().await;
+                            match listening_result {
+                                Closed(reason) => {
+                                    println!("Rust: Closing!");
+                                    cloned_close_callback(reason);
+                                    return;
+                                }
+                                ReceivedValues(received_requests) => {
+                                    handle_requests(received_requests, &connection, &rc_stream)
+                                        .await;
+                                }
+                            }
+                        });
                     }
-                    ReceivedValues(received_requests) => {
-                        handle_requests(
-                            received_requests,
-                            &connection,
-                            &write_socket,
-                            listener.pool.clone(),
-                        )
-                        .await;
+                    Err(err) => {
+                        cloned_close_callback(FailedInitialization(err.into()));
                     }
+                }
+                let _ = match close_socket(read_socket_name) {
+                    Ok(()) => { 
+                                println!("Successfully deleted socket file");
+                                return;
+                            },
+                    Err(e) => { println!("Failed to delete socket file: {}", e);
+                                return;}
                 };
             }
         })
         .await;
+    println!("Rust: Bye!");
 }
 
 #[derive(Debug)]
@@ -357,8 +377,8 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
-    StartCallback: FnOnce() + Send + 'static,
-    CloseCallback: FnOnce(ClosingReason) + Send + 'static,
+    StartCallback: Fn() + Send + 'static,
+    CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
@@ -377,7 +397,9 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
                         close_callback,
                     ));
                 }
-                Err(err) => close_callback(FailedInitialization(err.into())),
+                Err(err) => {
+                    close_callback(FailedInitialization(err.into()))
+                }
             };
         })
         .expect("Thread spawn failed. Cannot report error because callback was moved.");
