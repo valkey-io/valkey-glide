@@ -1,4 +1,5 @@
 use redis::aio::MultiplexedConnection;
+use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
@@ -108,5 +109,25 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
                 Err(_) => (connection.failure_callback)(callback_index), // TODO - report errors
             };
         }
+    });
+}
+
+/// Receives a callback function which should be called with a single allocated pointer and a single null pointer.
+/// The first pointer is to a socket name address if startup was succesful, second pointer is to an error message if the process fails.
+#[no_mangle]
+pub extern "C" fn start_socket_listener_wrapper(
+    init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
+) {
+    start_socket_listener(move |result| unsafe {
+        match result {
+            Ok(socket_name) => {
+                let c_str = CString::new(socket_name).unwrap();
+                init_callback(c_str.as_ptr(), std::ptr::null());
+            }
+            Err(error) => {
+                let c_str = CString::new(error.to_string()).unwrap();
+                init_callback(std::ptr::null(), c_str.as_ptr());
+            }
+        };
     });
 }
