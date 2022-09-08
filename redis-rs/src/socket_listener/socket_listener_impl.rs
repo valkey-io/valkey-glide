@@ -56,13 +56,13 @@ impl SocketListener {
 
             let read_result = self
                 .read_socket
-                .try_read(self.rotating_buffer.current_buffer());
+                .try_read_buf(self.rotating_buffer.current_buffer());
             match read_result {
                 Ok(0) => {
                     return ReadSocketClosed.into();
                 }
-                Ok(size) => {
-                    return match self.rotating_buffer.get_requests(size) {
+                Ok(_) => {
+                    return match self.rotating_buffer.get_requests() {
                         Ok(requests) => ReceivedValues(requests),
                         Err(err) => UnhandledError(err.into()).into(),
                     };
