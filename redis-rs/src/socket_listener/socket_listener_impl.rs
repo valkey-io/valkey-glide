@@ -9,6 +9,7 @@ use std::{io, thread};
 use tokio::io::Interest;
 use tokio::net::UnixStream;
 use tokio::runtime::Builder;
+use tokio::sync::Mutex;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
@@ -82,25 +83,28 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(output: &[u8], write_socket: &UnixStream) {
-    loop {
+async fn write_to_output(output: &[u8], write_socket: &Mutex<UnixStream>) {
+    let write_socket = write_socket.lock().await;
+    let mut total_written_bytes = 0;
+    while total_written_bytes < output.len() {
         let ready_result = write_socket.ready(Interest::WRITABLE).await;
         if let Ok(ready) = ready_result {
             if !ready.is_writable() {
                 continue;
             }
         }
-        if let Err(err) = write_socket.try_write(output) {
-            if err.kind() == io::ErrorKind::WouldBlock {
+        match write_socket.try_write(&output[total_written_bytes..]) {
+            Ok(written_bytes) => {
+                total_written_bytes += written_bytes;
+            }
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
                 task::yield_now().await;
-            } else if err.kind() == io::ErrorKind::Interrupted {
-                continue;
-            } else {
+            }
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+            Err(err) => {
                 // TODO - add proper error handling.
                 panic!("received unexpected error {:?}", err);
             }
-        } else {
-            return;
         }
     }
 }
@@ -147,7 +151,7 @@ async fn send_set_request(
     value_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
+    write_socket: Rc<Mutex<UnixStream>>,
 ) {
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
@@ -162,7 +166,7 @@ async fn send_get_request(
     key_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
+    write_socket: Rc<Mutex<UnixStream>>,
 ) {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
     match result {
@@ -188,7 +192,7 @@ async fn send_get_request(
 fn handle_request(
     request: WholeRequest,
     connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
+    write_socket: Rc<Mutex<UnixStream>>,
 ) {
     task::spawn_local(async move {
         match request.request_type {
@@ -223,7 +227,7 @@ fn handle_request(
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
     connection: &MultiplexedConnection,
-    write_socket: &Rc<UnixStream>,
+    write_socket: &Rc<Mutex<UnixStream>>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
@@ -259,7 +263,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
             return;
         }
     };
-    let write_socket = Rc::new(write_socket);
+    let write_socket = Rc::new(Mutex::new(write_socket));
     let connection = match client.get_multiplexed_async_connection().await {
         Ok(socket) => socket,
         Err(err) => {
