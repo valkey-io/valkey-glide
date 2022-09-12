@@ -17,6 +17,9 @@ use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use std::path::Path;
+
+pub const SOCKET_PATH: &'static str = "babushka-socket";
+
 struct SocketListener {
     read_socket: Rc<UnixStream>,
     rotating_buffer: RotatingBuffer,

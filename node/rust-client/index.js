@@ -218,10 +218,12 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { RequestType, ResponseType, HEADER_LENGTH_IN_BYTES, AsyncClient, StartSocketConnection } = nativeBinding
+const { RequestType, ResponseType, HEADER_LENGTH_IN_BYTES, SOCKET_FILE_PATH, AsyncClient, StartSocketConnection } =
+  nativeBinding
 
 module.exports.RequestType = RequestType
 module.exports.ResponseType = ResponseType
 module.exports.HEADER_LENGTH_IN_BYTES = HEADER_LENGTH_IN_BYTES
+module.exports.SOCKET_FILE_PATH = SOCKET_FILE_PATH
 module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection

@@ -4,6 +4,7 @@ use napi::{Env, Error, JsFunction, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
+use redis::socket_listener::SOCKET_PATH;
 use redis::socket_listener::{start_socket_listener, ClosingReason};
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
@@ -30,6 +31,9 @@ pub enum ResponseType {
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]
 pub const HEADER_LENGTH_IN_BYTES: u32 = HEADER_END as u32;
+
+#[napi]
+pub const SOCKET_FILE_PATH: &str = SOCKET_PATH;
 
 #[napi]
 struct AsyncClient {
