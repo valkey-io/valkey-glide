@@ -10,7 +10,8 @@
     "license": "ISC",
     "dependencies": {
         "percentile": "^1.6.0",
-        "redis": "^4.2.0"
+        "redis": "^4.2.0",
+        "babushka-rs": "file:../../node"
     },
     "devDependencies": {
         "@types/node": "^18.7.9",

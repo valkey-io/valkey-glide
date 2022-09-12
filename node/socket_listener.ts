@@ -197,7 +197,7 @@ export class SocketConnection {
         this.writeSocket.end();
     }
 
-    static async CreateConnection(address: string) {
+    static async CreateConnection(address: string): Promise<SocketConnection> {
         return new Promise((resolve, reject) => {
             // TODO - create pipes according to Windows convention:
             // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
