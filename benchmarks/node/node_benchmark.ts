@@ -1,6 +1,6 @@
 import percentile from "percentile";
 import { createClient } from "redis";
-import { AsyncClient } from "../../node/index";
+import { AsyncClient, SocketConnection } from "babushka-rs";
 
 const HOST = "localhost";
 const PORT = 6379;
@@ -151,6 +151,23 @@ async function main(
         data
     );
 
+    const babushka_socket_client = await SocketConnection.CreateConnection(
+        ADDRESS
+    );
+    await run_client(
+        babushka_socket_client,
+        "babushka socket",
+        total_commands,
+        num_of_concurrent_tasks,
+        data_size,
+        data
+    );
+    console.log(
+        `\n\n\nTotal ${total_commands}, concurrent: ${num_of_concurrent_tasks}, data size ${data_size}`
+    );
+    babushka_socket_client.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const node_redis_client = createClient({ url: ADDRESS });
     await node_redis_client.connect();
     await run_client(
@@ -164,10 +181,14 @@ async function main(
 }
 
 Promise.resolve() // just added to clean the indentation of the rest of the calls
+    .then(() => main(100000, 1, 100))
+    .then(() => main(100000, 1, 4000))
     .then(() => main(100000, 10, 100))
     .then(() => main(1000000, 100, 100))
     .then(() => main(100000, 10, 4000))
     .then(() => main(1000000, 100, 4000))
+    .then(() => main(5000000, 1000, 100))
+    .then(() => main(5000000, 1000, 4000))
     .then(() => print_results())
     .then(() => {
         process.exit(0);
