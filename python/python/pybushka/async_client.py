@@ -87,4 +87,10 @@ class RedisAsyncUDSClient(CoreCommands):
         self._sock.close()
 
     async def execute_command(self, command, *args, **kwargs):
+
         pass
+
+    async def write_to_socket(self, command, *args, **kwargs):
+        pass
+        # header = ""
+        # cmd_msg = 

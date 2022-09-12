@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyString};
 use redis::aio::MultiplexedConnection;
+use redis::socket_listener::headers::HEADER_END;
 use redis::socket_listener::{start_socket_listener, ClosingReason};
 use redis::{AsyncCommands, RedisResult};
 
@@ -101,6 +102,7 @@ impl AsyncPipeline {
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AsyncClient>()?;
+    m.add("HEADER_LENGTH_IN_BYTES", HEADER_END).unwrap();
 
     #[pyfn(m)]
     fn start_socket_listener_external(
