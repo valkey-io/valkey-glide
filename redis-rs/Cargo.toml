@@ -64,6 +64,7 @@ byteorder = "1.4.3"
 lifeguard = "0.6.1"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
+ntest = "0.8.1"
 
 [features]
 default = ["acl", "streams", "geospatial", "script"]
