@@ -6,7 +6,7 @@ use std::{
 };
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use lifeguard::{pool, Pool, StartingSize, Supplier};
+use lifeguard::Pool;
 use num_traits::FromPrimitive;
 
 use super::headers::*;
@@ -37,26 +37,18 @@ pub(super) struct ReadHeader {
 /// An object handling a arranging read buffers, and parsing the data in the buffers into requests.
 pub(super) struct RotatingBuffer {
     /// Object pool for the internal buffers.
-    pool: Pool<Vec<u8>>,
+    pool: Rc<Pool<Vec<u8>>>,
     /// Buffer for next read request.
     current_read_buffer: Buffer,
 }
 
 impl RotatingBuffer {
-    fn with_pool(pool: Pool<Vec<u8>>) -> Self {
+    pub(super) fn with_pool(pool: Rc<Pool<Vec<u8>>>) -> Self {
         let next_read = pool.new_rc();
         RotatingBuffer {
             pool,
             current_read_buffer: next_read,
         }
-    }
-
-    pub(super) fn new(initial_buffers: usize, buffer_size: usize) -> Self {
-        let pool = pool()
-            .with(StartingSize(initial_buffers))
-            .with(Supplier(move || Vec::with_capacity(buffer_size)))
-            .build();
-        Self::with_pool(pool)
     }
 
     fn read_header(input: &[u8]) -> io::Result<ReadHeader> {
@@ -104,7 +96,7 @@ impl RotatingBuffer {
                 buffer,
             },
             RequestType::SetString => {
-                let key_start = header_end + 4;
+                let key_start = header_end + MESSAGE_LENGTH_FIELD_LENGTH;
                 let key_length =
                     (&buffer[header_end..key_start]).read_u32::<LittleEndian>()? as usize;
                 let key_end = key_start + key_length;
@@ -197,6 +189,7 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use byteorder::WriteBytesExt;
+    use lifeguard::{pool, StartingSize, Supplier};
     use num_traits::ToPrimitive;
 
     use super::*;
@@ -206,6 +199,16 @@ mod tests {
             self.current_buffer()
                 .write_u32::<LittleEndian>(val)
                 .unwrap();
+        }
+
+        fn new(initial_buffers: usize, buffer_size: usize) -> Self {
+            let pool = Rc::new(
+                pool()
+                    .with(StartingSize(initial_buffers))
+                    .with(Supplier(move || Vec::with_capacity(buffer_size)))
+                    .build(),
+            );
+            Self::with_pool(pool)
         }
     }
 
