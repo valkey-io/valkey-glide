@@ -2,6 +2,7 @@ use super::super::{AsyncCommands, RedisResult};
 use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
 use byteorder::{LittleEndian, WriteBytesExt};
+use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use num_traits::ToPrimitive;
 use std::ops::Range;
 use std::rc::Rc;
@@ -19,6 +20,7 @@ use super::{headers::*, rotating_buffer::RotatingBuffer};
 struct SocketListener {
     read_socket: UnixStream,
     rotating_buffer: RotatingBuffer,
+    pool: Rc<Pool<Vec<u8>>>,
 }
 
 enum PipeListeningResult {
@@ -34,10 +36,17 @@ impl From<ClosingReason> for PipeListeningResult {
 
 impl SocketListener {
     fn new(read_socket: UnixStream) -> Self {
-        let rotating_buffer = RotatingBuffer::new(2, 65_536);
+        let pool = Rc::new(
+            pool()
+                .with(StartingSize(2))
+                .with(Supplier(move || Vec::<u8>::with_capacity(65_536)))
+                .build(),
+        );
+        let rotating_buffer = RotatingBuffer::with_pool(pool.clone());
         SocketListener {
             read_socket,
             rotating_buffer,
+            pool,
         }
     }
 
@@ -113,8 +122,8 @@ fn write_response_header_to_vec(
     output_buffer: &mut Vec<u8>,
     callback_index: u32,
     response_type: ResponseType,
+    length: usize,
 ) {
-    let length = output_buffer.capacity();
     // TODO - use serde for easier serialization.
     output_buffer
         .write_u32::<LittleEndian>(length as u32)
@@ -161,19 +170,35 @@ async fn send_set_request(
     write_to_output(&output_buffer, &write_socket).await;
 }
 
+fn get_vec(pool: &Pool<Vec<u8>>, required_capacity: usize) -> RcRecycled<Vec<u8>> {
+    let mut vec = pool.new_rc();
+    vec.clear();
+    let current_capacity = vec.capacity();
+    if required_capacity > current_capacity {
+        vec.reserve(required_capacity.next_power_of_two() - current_capacity);
+    }
+    vec
+}
+
 async fn send_get_request(
     vec: SharedBuffer,
     key_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
     write_socket: Rc<Mutex<UnixStream>>,
+    pool: &Pool<Vec<u8>>,
 ) {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
     match result {
         Some(result_bytes) => {
             let length = HEADER_END + result_bytes.len();
-            let mut output_buffer = Vec::with_capacity(length);
-            write_response_header_to_vec(&mut output_buffer, callback_index, ResponseType::String);
+            let mut output_buffer = get_vec(pool, length);
+            write_response_header_to_vec(
+                &mut output_buffer,
+                callback_index,
+                ResponseType::String,
+                length,
+            );
             output_buffer.extend_from_slice(&result_bytes);
             let offset = output_buffer.len() % 4;
             if offset != 0 {
@@ -193,6 +218,7 @@ fn handle_request(
     request: WholeRequest,
     connection: MultiplexedConnection,
     write_socket: Rc<Mutex<UnixStream>>,
+    pool: Rc<Pool<Vec<u8>>>,
 ) {
     task::spawn_local(async move {
         match request.request_type {
@@ -203,6 +229,7 @@ fn handle_request(
                     request.callback_index,
                     connection,
                     write_socket,
+                    &pool,
                 )
                 .await;
             }
@@ -228,12 +255,13 @@ async fn handle_requests(
     received_requests: Vec<WholeRequest>,
     connection: &MultiplexedConnection,
     write_socket: &Rc<Mutex<UnixStream>>,
+    pool: Rc<Pool<Vec<u8>>>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
         let connection = connection.clone();
         let write_socket = write_socket.clone();
-        handle_request(request, connection, write_socket)
+        handle_request(request, connection, write_socket, pool.clone())
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -284,7 +312,13 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                         return;
                     }
                     ReceivedValues(received_requests) => {
-                        handle_requests(received_requests, &connection, &write_socket).await;
+                        handle_requests(
+                            received_requests,
+                            &connection,
+                            &write_socket,
+                            listener.pool.clone(),
+                        )
+                        .await;
                     }
                 };
             }
