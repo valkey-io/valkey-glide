@@ -221,6 +221,7 @@ export class SocketConnection {
         // this.readServer.close();
         // this.writeServer.close();
         //this.writeSocket.end();
+        console.info("closing client socket");
         this.socket.end();
     }
 

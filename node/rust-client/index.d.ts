@@ -17,11 +17,12 @@ export const enum ResponseType {
 }
 export const HEADER_LENGTH_IN_BYTES: number
 export const SOCKET_FILE_PATH: string
-export function StartSocketConnection(connectionAddress: string,
-readSocketName: string,
-writeSocketName: string,
-startCallback: (err: null | Error) => void,
-closeCallback: (err: null | Error) => void,
+export function StartSocketConnection(
+  connectionAddress: string,
+  readSocketName: string,
+  writeSocketName: string,
+  startCallback: (err: null | Error) => void,
+  closeCallback: (err: null | Error) => void,
 ): void
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient

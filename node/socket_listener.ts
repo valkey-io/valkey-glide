@@ -112,13 +112,7 @@ export class SocketConnection {
                 resolve("Connected");
             })
             // Messages are buffers. use toString
-            .on("data", (data) =>{ this.handleReadData(data);
-            })
-            .on('error', (data)=> {
-                console.error(`Server not active: ${data}`); 
-                this.socket.end();
-                reject("Failed");
-                process.exit(1);
+            .on('data', (data) =>{ this.handleReadData(data);
             })
             ;
         });
@@ -273,7 +267,15 @@ export class SocketConnection {
         // this.readServer.close();
         // this.writeServer.close();
         //this.writeSocket.end();
+        console.info("closing client socket");
         this.socket.end();
+        this.promiseResolveFunctions.forEach(resolveFunction => {
+            if (resolveFunction != null) {
+                console.log("fount callback");
+                resolveFunction(null);
+            }
+            
+          });
     }
 
     static async CreateConnection(address: string): Promise<SocketConnection> {
@@ -285,13 +287,17 @@ export class SocketConnection {
             );
             const readSocketName = path.join(temporaryFolder, "read");
             const writeSocketName = path.join(temporaryFolder, "write");
-
+            const timer = setTimeout(() => {
+                reject(new Error(`Promise timed out after ${100} ms`));
+            }, 100);
             // const connection = new SocketConnection(
             //     readSocketName,
             //     writeSocketName
             // );
 
             let resolved = false;
+            const connection = new SocketConnection();
+
             const closeCallback = (err: Error | null) => {
                 //connection.dispose();
                 if (!resolved) {
@@ -313,8 +319,12 @@ export class SocketConnection {
                     // }
                     // resolve(connection);
                     
-                    const connection = new SocketConnection();
                     await connection.connect(SOCKET_FILE_PATH);
+                    connection.socket.on('error', (err)=> {
+                        console.error(`Server closed: ${err}`); 
+                        connection.dispose();
+                        reject(err);
+                    })
                     resolve(connection);
                 }
             };

@@ -37,6 +37,13 @@ impl From<ClosingReason> for PipeListeningResult {
     }
 }
 
+
+impl Drop for SocketListener {
+    fn drop(&mut self) {
+        close_socket(SOCKET_PATH);
+    }
+}
+
 impl SocketListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         let pool = Rc::new(
@@ -270,9 +277,15 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-fn close_socket(socket_name: &str) -> Result<(), std::io::Error> {
+fn close_socket(socket_name: &str) {
     let path = Path::new(socket_name);
-    std::fs::remove_file(path)
+    let _ = match std::fs::remove_file(path) {
+        Ok(()) => { 
+            println!("Successfully deleted socket file");
+        },
+        Err(e) => { println!("Failed to delete socket file: {}", e);
+        }
+    };
 }
 
 async fn listen_on_socket<StartCallback, CloseCallback>(
@@ -286,9 +299,10 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
     // Bind to socket
-    let listener = match UnixListener::bind(read_socket_name) {
+    let listener = match UnixListener::bind(SOCKET_PATH) {
         Ok(listener) => listener,
         Err(err) => {
+            println!("{}",err);
             close_callback(FailedInitialization(err.into()));
             return;
         }
@@ -317,36 +331,30 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                 };
                             let rc_stream = Rc::new(stream);
                             let mut client_listener = SocketListener::new(rc_stream.clone());
-                            let listening_result = client_listener.next_values().await;
-                            match listening_result {
-                                Closed(reason) => {
-                                    println!("Rust: Closing!");
-                                    cloned_close_callback(reason);
-                                    return;
+                            loop {
+                                let listening_result = client_listener.next_values().await;
+                                match listening_result {
+                                    Closed(reason) => {
+                                        println!("Rust: Closing!");
+                                        cloned_close_callback(reason);
+                                        return;
+                                    }
+                                    ReceivedValues(received_requests) => {
+                                        handle_requests(received_requests, &connection, &rc_stream)
+                                            .await;
+                                    }
                                 }
-                                ReceivedValues(received_requests) => {
-                                    handle_requests(received_requests, &connection, &rc_stream)
-                                        .await;
-                                }
-                            }
-                        });
+                        }});
                     }
                     Err(err) => {
                         cloned_close_callback(FailedInitialization(err.into()));
                     }
                 }
-                let _ = match close_socket(read_socket_name) {
-                    Ok(()) => { 
-                                println!("Successfully deleted socket file");
-                                return;
-                            },
-                    Err(e) => { println!("Failed to delete socket file: {}", e);
-                                return;}
-                };
             }
         })
         .await;
     println!("Rust: Bye!");
+    close_socket(SOCKET_PATH);
 }
 
 #[derive(Debug)]
