@@ -150,7 +150,7 @@ async def run_client(
         },
     }
 
-    bench_json_results.append(json.dumps(json_res))
+    bench_json_results.append(json_res)
     bench_str_results.append(
         f"client: {client_name}, event_loop: {event_loop_name}, concurrent_tasks: {num_of_concurrent_tasks}, "
         f"data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, "
