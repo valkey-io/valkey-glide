@@ -112,29 +112,27 @@ async function run_client(
         data
     );
     const tps = Math.round(counter / time);
-    const get_50 = calculate_latency(get_latency[client_name], 50);
-    const get_90 = calculate_latency(get_latency[client_name], 90);
-    const get_99 = calculate_latency(get_latency[client_name], 99);
-    const set_50 = calculate_latency(set_latency[client_name], 50);
-    const set_90 = calculate_latency(set_latency[client_name], 90);
-    const set_99 = calculate_latency(set_latency[client_name], 99);
+    const get_p50_latency = calculate_latency(get_latency[client_name], 50);
+    const get_p90_latency = calculate_latency(get_latency[client_name], 90);
+    const get_p99_latency = calculate_latency(get_latency[client_name], 99);
+    const set_p50_latency = calculate_latency(set_latency[client_name], 50);
+    const set_p90_latency = calculate_latency(set_latency[client_name], 90);
+    const set_p99_latency = calculate_latency(set_latency[client_name], 99);
     const json_res = {
         client: client_name,
         num_of_tasks: num_of_concurrent_tasks,
         data_size,
         tps,
-        latency: {
-            get_50,
-            get_90,
-            get_99,
-            set_50,
-            set_90,
-            set_99,
-        },
+        get_p50_latency,
+        get_p90_latency,
+        get_p99_latency,
+        set_p50_latency,
+        set_p90_latency,
+        set_p99_latency,
     };
     bench_json_results.push(json_res);
     bench_str_results.push(
-        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_50}, get_p90: ${get_90}, get_p99: ${get_99}, set_p50: ${set_50}, set_p90: ${set_90}, set_p99: ${set_99}`
+        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_p50_latency}, get_p90: ${get_p90_latency}, get_p99: ${get_p99_latency}, set_p50: ${set_p50_latency}, set_p90: ${set_p90_latency}, set_p99: ${set_p99_latency}`
     );
 }
 
