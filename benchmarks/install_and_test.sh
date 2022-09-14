@@ -31,7 +31,7 @@ function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --release
+  dotnet run --property:Configuration=Release --resultsFile=../$1
 }
 
 
@@ -45,7 +45,8 @@ identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 mkdir -p $BENCH_RESULTS_FOLDER
 runPythonBenchmark
 
-runCSharpBenchmark
+csharpResults=results/csharp-$identifier.json
+runCSharpBenchmark $csharpResults
 
 NODE_FOLDER="${BENCH_FOLDER}/../node"
 nodeResults=results/node-$identifier.json
