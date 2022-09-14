@@ -1,6 +1,8 @@
 import percentile from "percentile";
 import { createClient } from "redis";
 import { AsyncClient, SocketConnection } from "babushka-rs";
+import commandLineArgs from "command-line-args";
+import { writeFileSync } from "fs";
 
 const HOST = "localhost";
 const PORT = 6379;
@@ -44,11 +46,12 @@ function calculate_latency(latency_list: number[], percentile_point: number) {
     return Math.round(percentile_value * 100.0) / 100.0; // round to 2 decimal points
 }
 
-function print_results() {
+function print_results(resultsFile: string) {
     bench_str_results.sort();
     for (const res of bench_str_results) {
         console.log(res);
     }
+    writeFileSync(resultsFile, JSON.stringify(bench_json_results));
 }
 
 async function redis_benchmark(
@@ -129,9 +132,9 @@ async function run_client(
             set_99,
         },
     };
-    bench_json_results.push(JSON.stringify(json_res));
+    bench_json_results.push(json_res);
     bench_str_results.push(
-        `client: ${client_name}, event_loop: node, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_50}, get_p90: ${get_90}, get_p99: ${get_99}, set_p50: ${set_50}, set_p90: ${set_90}, set_p99: ${set_99}`
+        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_50}, get_p90: ${get_90}, get_p99: ${get_99}, set_p50: ${set_50}, set_p90: ${set_90}, set_p99: ${set_99}`
     );
 }
 
@@ -144,7 +147,7 @@ async function main(
     const babushka_client = await AsyncClient.CreateConnection(ADDRESS);
     await run_client(
         babushka_client,
-        "babushka",
+        "babushka FFI",
         total_commands,
         num_of_concurrent_tasks,
         data_size,
@@ -162,9 +165,6 @@ async function main(
         data_size,
         data
     );
-    console.log(
-        `\n\n\nTotal ${total_commands}, concurrent: ${num_of_concurrent_tasks}, data size ${data_size}`
-    );
     babushka_socket_client.dispose();
     await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -180,6 +180,9 @@ async function main(
     );
 }
 
+const optionDefinitions = [{ name: "resultsFile", type: String }];
+const receivedOptions = commandLineArgs(optionDefinitions);
+
 Promise.resolve() // just added to clean the indentation of the rest of the calls
     .then(() => main(100000, 1, 100))
     .then(() => main(100000, 1, 4000))
@@ -189,7 +192,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
     .then(() => main(1000000, 100, 4000))
     .then(() => main(5000000, 1000, 100))
     .then(() => main(5000000, 1000, 4000))
-    .then(() => print_results())
+    .then(() => print_results(receivedOptions.resultsFile))
     .then(() => {
         process.exit(0);
     });

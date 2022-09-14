@@ -9,9 +9,11 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "@types/command-line-args": "^5.2.0",
+        "babushka-rs": "file:../../node",
+        "command-line-args": "^5.2.1",
         "percentile": "^1.6.0",
-        "redis": "^4.2.0",
-        "babushka-rs": "file:../../node"
+        "redis": "^4.2.0"
     },
     "devDependencies": {
         "@types/node": "^18.7.9",
