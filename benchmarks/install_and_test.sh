@@ -67,3 +67,7 @@ runCSharpBenchmark $csharpResults
 NODE_FOLDER="${BENCH_FOLDER}/../node"
 nodeResults=results/node-$identifier.json
 runNodeBenchmark $nodeResults
+
+cd ${BENCH_FOLDER}
+finalCSV=results/final-$identifier.csv
+$pythonCommand csv_exporter.py $pythonResults $csharpResults $nodeResults $finalCSV
