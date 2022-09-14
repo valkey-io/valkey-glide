@@ -4,6 +4,7 @@ import json
 import os
 import random
 import time
+import argparse
 
 import aioredis
 import numpy as np
@@ -11,12 +12,19 @@ import redis.asyncio as redispy
 import uvloop
 from pybushka import AsyncClient, ClientConfiguration, RedisAsyncClient
 
+arguments_parser = argparse.ArgumentParser()
+arguments_parser.add_argument(
+    "--resultsFile",
+    help="Where to write the results file",
+    required=True,
+)
+args = arguments_parser.parse_args()
+
 HOST = "localhost"
 PORT = 6379
 PROB_GET = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
-RESULTS_FOLDER = os.getenv("BENCH_RESULTS_FOLDER", ".") 
 counter = 0
 running_tasks = set()
 bench_str_results = []
@@ -48,6 +56,7 @@ def calculate_latency(latency_list, percentile):
 def process_results():
     global bench_str_results
     global bench_json_results
+    global args
 
     # print results
     bench_str_results.sort()
@@ -55,9 +64,7 @@ def process_results():
         print(res)
 
     # write json results to a file
-    timestamp = int(time.time())
-    res_file_name = f"python_bench_results_{timestamp}.json"
-    res_file_path = RESULTS_FOLDER + "/" + res_file_name
+    res_file_path = args.resultsFile
     with open(res_file_path, "w+") as f:
         json.dump(bench_json_results, f)
 
