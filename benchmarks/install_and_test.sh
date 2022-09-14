@@ -10,7 +10,9 @@ function runPythonBenchmark(){
   pip install --quiet -r requirements.txt
   maturin develop
   echo "Starting Python benchmarks"
-  python ${BENCH_FOLDER}/python_benchmark.py
+  cd ${BENCH_FOLDER}/python 
+  pip install --quiet -r requirements.txt
+  python python_benchmark.py --resultsFile=../$1
   # exit python virtualenv
   deactivate
 }
@@ -43,7 +45,8 @@ export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
-runPythonBenchmark
+pythonResults=results/python-$identifier.json
+runPythonBenchmark $pythonResults
 
 csharpResults=results/csharp-$identifier.json
 runCSharpBenchmark $csharpResults
