@@ -2,9 +2,22 @@
 
 set -x
 
+if command -v python
+then
+    pythonCommand=python
+else
+    if command -v python3
+    then
+        pythonCommand=python3
+    else
+        echo "python / python3 could not be found"
+        exit
+    fi
+fi
+
 function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
-  python -m venv .env
+  $pythonCommand -m venv .env
   source .env/bin/activate
   pip install --upgrade --quiet pip
   pip install --quiet -r requirements.txt
