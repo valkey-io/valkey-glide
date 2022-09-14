@@ -140,14 +140,12 @@ async def run_client(
         "num_of_tasks": num_of_concurrent_tasks,
         "data_size": data_size,
         "tps": tps,
-        "latency": {
-            "get_50": get_50,
-            "get_90": get_90,
-            "get_99": get_99,
-            "set_50": set_50,
-            "set_90": set_90,
-            "set_99": set_99,
-        },
+        "get_p50_latency": get_50,
+        "get_p90_latency": get_90,
+        "get_p99_latency": get_99,
+        "set_p50_latency": set_50,
+        "set_p90_latency": set_90,
+        "set_p99_latency": set_99,
     }
 
     bench_json_results.append(json_res)
