@@ -24,7 +24,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm i
   npx tsc
-  npm run bench
+  npm run bench -- --resultsFile=../$1
 }
 
 function runCSharpBenchmark(){
@@ -40,6 +40,7 @@ RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
 export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
 export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
+identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
 runPythonBenchmark
@@ -47,4 +48,5 @@ runPythonBenchmark
 runCSharpBenchmark
 
 NODE_FOLDER="${BENCH_FOLDER}/../node"
-runNodeBenchmark
+nodeResults=results/node-$identifier.json
+runNodeBenchmark $nodeResults
