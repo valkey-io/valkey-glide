@@ -87,7 +87,7 @@ public static class MainClass
             }
             stopwatch.Stop();
             var latency_list = (use_get ? get_latency : set_latency)[client_name];
-            latency_list.Add(stopwatch.ElapsedMilliseconds);
+            latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
         } while (Interlocked.Increment(ref counter) < total_commands);
     }
 
