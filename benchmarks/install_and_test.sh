@@ -29,6 +29,8 @@ function runNodeBenchmark(){
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
+  dotnet clean
+  dotnet build
   dotnet run --release
 }
 
