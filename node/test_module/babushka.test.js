@@ -84,7 +84,7 @@ describe("socket client", () => {
     it("can handle non-ASCII unicode", async () => {
         const port = await FreePort(3000).then(([free_port]) => free_port);
         await OpenServerAndExecute(port, async () => {
-            const client = await AsyncClient.CreateConnection(
+            const client = await SocketConnection.CreateConnection(
                 "redis://localhost:" + port
             );
 
