@@ -1,6 +1,8 @@
 import percentile from "percentile";
 import { createClient } from "redis";
 import { AsyncClient, SocketConnection } from "babushka-rs";
+import commandLineArgs from "command-line-args";
+import { writeFileSync } from "fs";
 
 const HOST = "localhost";
 const PORT = 6379;
@@ -44,11 +46,12 @@ function calculate_latency(latency_list: number[], percentile_point: number) {
     return Math.round(percentile_value * 100.0) / 100.0; // round to 2 decimal points
 }
 
-function print_results() {
+function print_results(resultsFile: string) {
     bench_str_results.sort();
     for (const res of bench_str_results) {
         console.log(res);
     }
+    writeFileSync(resultsFile, JSON.stringify(bench_json_results));
 }
 
 async function redis_benchmark(
@@ -109,29 +112,27 @@ async function run_client(
         data
     );
     const tps = Math.round(counter / time);
-    const get_50 = calculate_latency(get_latency[client_name], 50);
-    const get_90 = calculate_latency(get_latency[client_name], 90);
-    const get_99 = calculate_latency(get_latency[client_name], 99);
-    const set_50 = calculate_latency(set_latency[client_name], 50);
-    const set_90 = calculate_latency(set_latency[client_name], 90);
-    const set_99 = calculate_latency(set_latency[client_name], 99);
+    const get_p50_latency = calculate_latency(get_latency[client_name], 50);
+    const get_p90_latency = calculate_latency(get_latency[client_name], 90);
+    const get_p99_latency = calculate_latency(get_latency[client_name], 99);
+    const set_p50_latency = calculate_latency(set_latency[client_name], 50);
+    const set_p90_latency = calculate_latency(set_latency[client_name], 90);
+    const set_p99_latency = calculate_latency(set_latency[client_name], 99);
     const json_res = {
         client: client_name,
         num_of_tasks: num_of_concurrent_tasks,
         data_size,
         tps,
-        latency: {
-            get_50,
-            get_90,
-            get_99,
-            set_50,
-            set_90,
-            set_99,
-        },
+        get_p50_latency,
+        get_p90_latency,
+        get_p99_latency,
+        set_p50_latency,
+        set_p90_latency,
+        set_p99_latency,
     };
-    bench_json_results.push(JSON.stringify(json_res));
+    bench_json_results.push(json_res);
     bench_str_results.push(
-        `client: ${client_name}, event_loop: node, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_50}, get_p90: ${get_90}, get_p99: ${get_99}, set_p50: ${set_50}, set_p90: ${set_90}, set_p99: ${set_99}`
+        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_p50_latency}, get_p90: ${get_p90_latency}, get_p99: ${get_p99_latency}, set_p50: ${set_p50_latency}, set_p90: ${set_p90_latency}, set_p99: ${set_p99_latency}`
     );
 }
 
@@ -144,7 +145,7 @@ async function main(
     const babushka_client = await AsyncClient.CreateConnection(ADDRESS);
     await run_client(
         babushka_client,
-        "babushka",
+        "babushka FFI",
         total_commands,
         num_of_concurrent_tasks,
         data_size,
@@ -162,9 +163,6 @@ async function main(
         data_size,
         data
     );
-    console.log(
-        `\n\n\nTotal ${total_commands}, concurrent: ${num_of_concurrent_tasks}, data size ${data_size}`
-    );
     babushka_socket_client.dispose();
     await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -180,6 +178,9 @@ async function main(
     );
 }
 
+const optionDefinitions = [{ name: "resultsFile", type: String }];
+const receivedOptions = commandLineArgs(optionDefinitions);
+
 Promise.resolve() // just added to clean the indentation of the rest of the calls
     .then(() => main(100000, 1, 100))
     .then(() => main(100000, 1, 4000))
@@ -189,7 +190,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
     .then(() => main(1000000, 100, 4000))
     .then(() => main(5000000, 1000, 100))
     .then(() => main(5000000, 1000, 4000))
-    .then(() => print_results())
+    .then(() => print_results(receivedOptions.resultsFile))
     .then(() => {
         process.exit(0);
     });

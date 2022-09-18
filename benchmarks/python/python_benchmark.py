@@ -4,6 +4,7 @@ import json
 import os
 import random
 import time
+import argparse
 
 import aioredis
 import numpy as np
@@ -11,12 +12,19 @@ import redis.asyncio as redispy
 import uvloop
 from pybushka import AsyncClient, ClientConfiguration, RedisAsyncClient
 
+arguments_parser = argparse.ArgumentParser()
+arguments_parser.add_argument(
+    "--resultsFile",
+    help="Where to write the results file",
+    required=True,
+)
+args = arguments_parser.parse_args()
+
 HOST = "localhost"
 PORT = 6379
 PROB_GET = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
-RESULTS_FOLDER = os.getenv("BENCH_RESULTS_FOLDER", ".") 
 counter = 0
 running_tasks = set()
 bench_str_results = []
@@ -48,6 +56,7 @@ def calculate_latency(latency_list, percentile):
 def process_results():
     global bench_str_results
     global bench_json_results
+    global args
 
     # print results
     bench_str_results.sort()
@@ -55,9 +64,7 @@ def process_results():
         print(res)
 
     # write json results to a file
-    timestamp = int(time.time())
-    res_file_name = f"python_bench_results_{timestamp}.json"
-    res_file_path = RESULTS_FOLDER + "/" + res_file_name
+    res_file_path = args.resultsFile
     with open(res_file_path, "w+") as f:
         json.dump(bench_json_results, f)
 
@@ -133,17 +140,15 @@ async def run_client(
         "num_of_tasks": num_of_concurrent_tasks,
         "data_size": data_size,
         "tps": tps,
-        "latency": {
-            "get_50": get_50,
-            "get_90": get_90,
-            "get_99": get_99,
-            "set_50": set_50,
-            "set_90": set_90,
-            "set_99": set_99,
-        },
+        "get_p50_latency": get_50,
+        "get_p90_latency": get_90,
+        "get_p99_latency": get_99,
+        "set_p50_latency": set_50,
+        "set_p90_latency": set_90,
+        "set_p99_latency": set_99,
     }
 
-    bench_json_results.append(json.dumps(json_res))
+    bench_json_results.append(json_res)
     bench_str_results.append(
         f"client: {client_name}, event_loop: {event_loop_name}, concurrent_tasks: {num_of_concurrent_tasks}, "
         f"data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, "
