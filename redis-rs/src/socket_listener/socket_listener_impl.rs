@@ -17,6 +17,7 @@ use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use std::path::Path;
+use chrono::{DateTime, Utc};
 
 pub const SOCKET_PATH: &'static str = "babushka-socket";
 
@@ -79,12 +80,17 @@ impl SocketListener {
                 .try_read_buf(self.rotating_buffer.current_buffer());
             match read_result {
                 Ok(0) => {
+                    println!("read result 0");
                     return ReadSocketClosed.into();
                 }
-                Ok(_) => {
+                Ok(n) => {
+                    let now: DateTime<Utc> = Utc::now();
+                    println!("{:?} Rust: try_read read {:?} bytes", now.to_rfc3339(), n);
                     return match self.rotating_buffer.get_requests() {
                         Ok(requests) => ReceivedValues(requests),
-                        Err(err) => UnhandledError(err.into()).into(),
+                        Err(err) => {println!("read result UnhandledError");
+                            UnhandledError(err.into()).into()
+                        },
                     };
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -95,6 +101,7 @@ impl SocketListener {
                     continue;
                 }
                 Err(err) => {
+                    println!("read result UnhandledError2");
                     return UnhandledError(err.into()).into();
                 }
             }
@@ -102,8 +109,9 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(output: &[u8], write_socket: &Mutex<UnixStream>) {
-    let write_socket = write_socket.lock().await;
+async fn write_to_output(output: &[u8], write_socket: &UnixStream, lock: &Mutex<()>) {
+    let _ = lock.lock().await;
+    //let write_socket = write_socket.lock().await;
     let mut total_written_bytes = 0;
     while total_written_bytes < output.len() {
         let ready_result = write_socket.ready(Interest::WRITABLE).await;
@@ -170,14 +178,15 @@ async fn send_set_request(
     value_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<Mutex<UnixStream>>,
+    write_socket: Rc<UnixStream>,
+    lock: Rc<Mutex<()>>
 ) {
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
         .await; // TODO - add proper error handling.
     let mut output_buffer = [0_u8; HEADER_END];
     write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
-    write_to_output(&output_buffer, &write_socket).await;
+    write_to_output(&output_buffer, &write_socket, &lock).await;
 }
 
 fn get_vec(pool: &Pool<Vec<u8>>, required_capacity: usize) -> RcRecycled<Vec<u8>> {
@@ -197,6 +206,7 @@ async fn send_get_request(
     mut connection: MultiplexedConnection,
     write_socket: Rc<Mutex<UnixStream>>,
     pool: &Pool<Vec<u8>>,
+    lock: Rc<Mutex<()>>
 ) {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
     match result {
@@ -214,12 +224,12 @@ async fn send_get_request(
             if offset != 0 {
                 output_buffer.resize(length + 4 - offset, 0);
             }
-            write_to_output(&output_buffer, &write_socket).await;
+            write_to_output(&output_buffer, &write_socket, &lock).await;
         }
         None => {
             let mut output_buffer = [0_u8; HEADER_END];
             write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
-            write_to_output(&output_buffer, &write_socket).await;
+            write_to_output(&output_buffer, &write_socket, &lock).await;
         }
     };
 }
@@ -229,6 +239,7 @@ fn handle_request(
     connection: MultiplexedConnection,
     write_socket: Rc<Mutex<UnixStream>>,
     pool: Rc<Pool<Vec<u8>>>,
+    lock: Rc<Mutex<()>>
 ) {
     task::spawn_local(async move {
         match request.request_type {
@@ -240,6 +251,7 @@ fn handle_request(
                     connection,
                     write_socket,
                     &pool,
+                    lock
                 )
                 .await;
             }
@@ -254,6 +266,7 @@ fn handle_request(
                     request.callback_index,
                     connection,
                     write_socket,
+                    lock
                 )
                 .await;
             }
@@ -266,12 +279,14 @@ async fn handle_requests(
     connection: &MultiplexedConnection,
     write_socket: &Rc<Mutex<UnixStream>>,
     pool: Rc<Pool<Vec<u8>>>,
+    lock: &Rc<Mutex<()>>
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
         let connection = connection.clone();
         let write_socket = write_socket.clone();
-        handle_request(request, connection, write_socket, pool.clone())
+        let lock = lock.clone();
+        handle_request(request, connection, write_socket,  pool.clone(), lock)
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -330,17 +345,18 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                     }
                                 };
                             let rc_stream = Rc::new(stream);
+                            let lock = Rc::new(Mutex::new(()));
                             let mut client_listener = SocketListener::new(rc_stream.clone());
                             loop {
                                 let listening_result = client_listener.next_values().await;
                                 match listening_result {
                                     Closed(reason) => {
-                                        println!("Rust: Closing!");
+                                        println!("Rust: Closing! {:?}", reason);
                                         cloned_close_callback(reason);
                                         return;
                                     }
                                     ReceivedValues(received_requests) => {
-                                        handle_requests(received_requests, &connection, &rc_stream)
+                                        handle_requests(received_requests, &connection, &rc_stream, &lock.clone())
                                             .await;
                                     }
                                 }

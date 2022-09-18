@@ -13,19 +13,22 @@ import * as os from "os";
 import * as path from "path";
 import * as net from "net";
 import { nextPow2 } from "bit-twiddle";
+import AsyncLock from "async-lock";
+
 
 export class SocketConnection {
     // private readonly readServer: net.Server;
     // private readonly writeServer: net.Server;
     private socket: net.Socket;
     private writeSocket!: net.Socket;
-    private readonly promiseResolveFunctions: ((val: any) => void)[] = [];
+    private readonly promiseResolveFunctions: ((val: any) => void)[][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
     private backingWriteBuffer = new ArrayBuffer(1024);
     private remainingReadData: Uint8Array | undefined;
     private previousOperation = Promise.resolve();
+
     private handleReadData(data: Buffer) {
         const dataArray = this.remainingReadData
             ? this.concatBuffers(this.remainingReadData, data)
@@ -57,7 +60,7 @@ export class SocketConnection {
             }
             this.availableCallbackSlots.push(callbackIndex);
             if (responseType === ResponseType.Null) {
-                resolveFunction(null);
+                resolveFunction[0](null);
             } else if (responseType === ResponseType.String) {
                 const valueLength = length - HEADER_LENGTH_IN_BYTES;
                 const keyBytes = Buffer.from(
@@ -65,7 +68,7 @@ export class SocketConnection {
                     counter + HEADER_LENGTH_IN_BYTES,
                     valueLength
                 );
-                resolveFunction(keyBytes.toString("utf8"));
+                resolveFunction[0](keyBytes.toString("utf8"));
             }
             counter = counter + length;
             const offset = counter % 4;
@@ -243,9 +246,9 @@ export class SocketConnection {
         operationType: RequestType,
         secondString?: string
     ): Promise<T> {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
-            this.promiseResolveFunctions[callbackIndex] = resolve;
+            this.promiseResolveFunctions[callbackIndex] = [resolve, reject];
             this.chainNewWriteOperation(
                 firstString,
                 operationType,
@@ -271,8 +274,7 @@ export class SocketConnection {
         this.socket.end();
         this.promiseResolveFunctions.forEach(resolveFunction => {
             if (resolveFunction != null) {
-                console.log("fount callback");
-                resolveFunction(null);
+                resolveFunction[1](null);
             }
             
           });

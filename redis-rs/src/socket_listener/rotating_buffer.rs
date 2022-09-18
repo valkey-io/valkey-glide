@@ -4,6 +4,7 @@ use std::{
     ops::Range,
     rc::Rc,
 };
+use chrono::{DateTime, Utc};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use lifeguard::Pool;
@@ -52,9 +53,16 @@ impl RotatingBuffer {
     }
 
     fn read_header(input: &[u8]) -> io::Result<ReadHeader> {
+
+       println!("Rust: read_header input buff = {:?}", &input);
+
         let length = (&input[..MESSAGE_LENGTH_END]).read_u32::<LittleEndian>()? as usize;
         let callback_index =
             (&input[MESSAGE_LENGTH_END..CALLBACK_INDEX_END]).read_u32::<LittleEndian>()?;
+        let now: DateTime<Utc> = Utc::now();
+        //println!("{:?} Rust: length = &input[..MESSAGE_LENGTH_END] {:?}", now.to_rfc3339(), &input[..MESSAGE_LENGTH_END]);
+        println!("{:?} Rust: read_header length = {:?}, callback_index = {:?}", now.to_rfc3339(), length, callback_index);
+
         let request_type = (&input[CALLBACK_INDEX_END..HEADER_END]).read_u32::<LittleEndian>()?;
         let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
             Error::new(
@@ -77,8 +85,11 @@ impl RotatingBuffer {
         if request_range.len() < HEADER_END {
             return Ok(RequestState::PartialNoHeader);
         }
-
+        let now: DateTime<Utc> = Utc::now();
+        println!("{:?} Rust: request_range.start {:?} request_range.end {:?}, ", now.to_rfc3339(), request_range.start, request_range.end);
+        //println!("{:?} Rust: request_range.start {:?} request_range.end {:?}, buffer {:?}, buffer_Str {:?}", now.to_rfc3339(), request_range.start, request_range.end, &buffer,std::str::from_utf8(&buffer));
         let header = Self::read_header(&buffer[request_range.start..request_range.end])?;
+        let now: DateTime<Utc> = Utc::now();
         let header_end = request_range.start + HEADER_END;
         let next = request_range.start + header.length;
         if next > request_range.end {
@@ -88,13 +99,14 @@ impl RotatingBuffer {
         }
         // TODO - use serde for easier deserialization.
         let request = match header.request_type {
-            RequestType::GetString => WholeRequest {
+            RequestType::GetString => { 
+                WholeRequest {
                 callback_index: header.callback_index,
                 request_type: RequestRanges::Get {
                     key: header_end..next,
                 },
                 buffer,
-            },
+            }},
             RequestType::SetString => {
                 let key_start = header_end + MESSAGE_LENGTH_FIELD_LENGTH;
                 let key_length =
@@ -134,11 +146,14 @@ impl RotatingBuffer {
         cursor: usize,
     ) {
         self.match_capacity(required_length.unwrap_or_else(|| self.current_read_buffer.capacity()));
-
         let old_buffer_len = old_buffer.len();
         let slice = &old_buffer[cursor..old_buffer_len];
+        println!("Rust: copy_from_old_buffer cursor={:?}, old_buffer_len={:?} required_length={:?}, copying slice={:?}", cursor, old_buffer_len, required_length, &slice);
         debug_assert!(self.current_read_buffer.len() == 0);
         self.current_read_buffer.extend_from_slice(slice);
+        let now: DateTime<Utc> = Utc::now();
+
+        //println!("{:?} Rust: cursor={:?}, old_buffer_len={:?} required_length={:?}, slice={:?}, new bugger length={:?}", now.to_rfc3339(), cursor, old_buffer_len, required_length, slice.len(),self.current_read_buffer.len());
     }
 
     fn get_new_buffer(&mut self) -> Buffer {
@@ -155,6 +170,8 @@ impl RotatingBuffer {
         let buffer = Rc::new(mem::replace(&mut self.current_read_buffer, new_buffer));
         let mut results = vec![];
         let buffer_length = buffer.len();
+        let now: DateTime<Utc> = Utc::now();
+        println!("{:?} Rust: buffer_length ?= read == {:?} bytes", now.to_rfc3339(), buffer_length);
         while cursor < buffer_length {
             let parse_result = self.parse_request(&(cursor..buffer_length), buffer.clone())?;
             match parse_result {
@@ -166,10 +183,14 @@ impl RotatingBuffer {
                     cursor = next;
                 }
                 RequestState::PartialNoHeader => {
+                    let now: DateTime<Utc> = Utc::now();
+                    println!("{:?} Rust: PartialNoHeader, cursor={:?}", now.to_rfc3339(), cursor);
                     self.copy_from_old_buffer(buffer, None, cursor);
                     return Ok(results);
                 }
                 RequestState::PartialWithHeader { length } => {
+                    let now: DateTime<Utc> = Utc::now();
+                    println!("{:?} Rust: PartialWithHeader, length={:?}, cursor={:?}", now.to_rfc3339(), length, cursor);
                     self.copy_from_old_buffer(buffer, Some(length), cursor);
                     return Ok(results);
                 }
