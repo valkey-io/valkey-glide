@@ -93,6 +93,8 @@ describe("socket client", () => {
             await client.set(key, value);
             const result = await client.get(key);
             expect(result).toEqual(value);
+
+            client.dispose();
         });
     });
 
@@ -106,6 +108,7 @@ describe("socket client", () => {
             const result = await client.get(uuidv4());
 
             expect(result).toEqual(null);
+
             client.dispose();
         });
     });
