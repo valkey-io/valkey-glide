@@ -1,9 +1,18 @@
 ﻿using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using babushka;
+using CommandLine;
 using StackExchange.Redis;
 
 public static class MainClass
 {
+    public class CommandLineOptions
+    {
+        [Option('r', "resultsFile", Required = true, HelpText = "Set the file to which the JSON results are written.")]
+        public string resultsFile { get; set; }
+    }
+
     private const string HOST = "localhost";
     private const int PORT = 6379;
     private static readonly string ADDRESS = $"{HOST}:{PORT}";
@@ -16,6 +25,7 @@ public static class MainClass
     private static readonly Random randomizer = new();
     private static long counter = 0;
     private static readonly List<string> bench_str_results = new();
+    private static readonly List<Dictionary<string, object>> bench_json_results = new();
 
     private static string generate_value(int size)
     {
@@ -57,11 +67,15 @@ public static class MainClass
         return Math.Round(Percentile(latency_list.ToArray(), percentile_point), 2);
     }
 
-    private static void print_results(IEnumerable<string> bench_str_results)
+    private static void print_results(string resultsFile)
     {
         foreach (var res in bench_str_results.OrderBy(str => str))
         {
             Console.WriteLine(res);
+        }
+        using (FileStream createStream = File.Create(resultsFile))
+        {
+            JsonSerializer.Serialize(createStream, bench_json_results);
         }
     }
 
@@ -140,8 +154,22 @@ public static class MainClass
         var set_50 = calculate_latency(set_latency[client_name], 0.5);
         var set_90 = calculate_latency(set_latency[client_name], 0.9);
         var set_99 = calculate_latency(set_latency[client_name], 0.99);
+        var result = new Dictionary<string, object>
+        {
+                    {"client", client_name},
+                    {"num_of_tasks", num_of_concurrent_tasks},
+                    {"data_size", data_size},
+                    {"tps", tps},
+                    {"get_p50_latency", get_50},
+                    {"get_p90_latency", get_90},
+                    {"get_p99_latency", get_99},
+                    {"set_p50_latency", set_50},
+                    {"set_p90_latency", set_90},
+                    {"set_p99_latency", set_99},
+        };
+        bench_json_results.Add(result);
         bench_str_results.Add(
-            $"client: {client_name}, event_loop: C#, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}"
+            $"client: {client_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}"
         );
     }
 
@@ -153,7 +181,7 @@ public static class MainClass
         await run_client(
             async (key) => await babushka_client.GetAsync(key),
             async (key, value) => await babushka_client.SetAsync(key, value),
-            "babushka",
+            "babushka FFI",
             total_commands,
             num_of_concurrent_tasks,
             data_size
@@ -173,8 +201,12 @@ public static class MainClass
         }
     }
 
-    public static async Task Main()
+    public static async Task Main(string[] args)
     {
+        CommandLineOptions options = null;
+        Parser.Default
+            .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
+
         await run_with_parameters(100000, 1, 100);
         await run_with_parameters(100000, 10, 100);
         await run_with_parameters(1000000, 100, 100);
@@ -183,6 +215,7 @@ public static class MainClass
         await run_with_parameters(100000, 10, 4000);
         await run_with_parameters(1000000, 100, 4000);
         await run_with_parameters(5000000, 1000, 4000);
-        print_results(bench_str_results);
+
+        print_results(options.resultsFile);
     }
 }
