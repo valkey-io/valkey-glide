@@ -4,8 +4,7 @@ use napi::{Env, Error, JsFunction, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
-use redis::socket_listener::SOCKET_PATH;
-use redis::socket_listener::{start_socket_listener, ClosingReason};
+use redis::socket_listener::{get_socket_path, start_socket_listener, ClosingReason};
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -32,8 +31,6 @@ pub enum ResponseType {
 #[napi]
 pub const HEADER_LENGTH_IN_BYTES: u32 = HEADER_END as u32;
 
-#[napi]
-pub const SOCKET_FILE_PATH: &str = SOCKET_PATH;
 
 #[napi]
 struct AsyncClient {
@@ -107,6 +104,12 @@ impl AsyncClient {
     }
 }
 
+
+#[napi(js_name = "GetSocketPath")]
+pub fn get_socket_path_external() -> String{
+    return get_socket_path();
+}
+
 #[napi(
     js_name = "StartSocketConnection",
     ts_args_type = "connectionAddress: string, 
@@ -117,8 +120,6 @@ impl AsyncClient {
 )]
 pub fn start_socket_listener_external(
     connection_address: String,
-    read_socket_name: String,
-    write_socket_name: String,
     start_callback: JsFunction,
     close_callback: JsFunction,
 ) -> napi::Result<()> {
@@ -129,8 +130,6 @@ pub fn start_socket_listener_external(
     let client = to_js_result(redis::Client::open(connection_address))?;
     start_socket_listener(
         client,
-        read_socket_name,
-        write_socket_name,
         move || {
             threadsafe_start_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
         },

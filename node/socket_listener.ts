@@ -1,8 +1,8 @@
 import { BabushkaInternal } from ".";
 const {
     StartSocketConnection,
+    GetSocketPath,
     HEADER_LENGTH_IN_BYTES,
-    SOCKET_FILE_PATH,
     ResponseType,
     RequestType,
 } = BabushkaInternal;
@@ -15,13 +15,9 @@ import * as net from "net";
 import { nextPow2 } from "bit-twiddle";
 import AsyncLock from "async-lock";
 
-
 export class SocketConnection {
-    // private readonly readServer: net.Server;
-    // private readonly writeServer: net.Server;
     private socket: net.Socket;
-    private writeSocket!: net.Socket;
-    private readonly promiseResolveFunctions: ((val: any) => void)[][] = [];
+    private readonly promiseCallbackFunctions: ((val: any) => void)[][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
@@ -54,13 +50,14 @@ export class SocketConnection {
             }
             const callbackIndex = header[1];
             const responseType = header[2] as ResponseType;
-            const resolveFunction = this.promiseResolveFunctions[callbackIndex];
-            if (!resolveFunction) {
+            const promiseFunction = this.promiseCallbackFunctions[callbackIndex];
+            if (!promiseFunction) {
                 throw new Error("missing callback for index: " + callbackIndex);
             }
+            const resolveFunction = promiseFunction[0];
             this.availableCallbackSlots.push(callbackIndex);
             if (responseType === ResponseType.Null) {
-                resolveFunction[0](null);
+                resolveFunction(null);
             } else if (responseType === ResponseType.String) {
                 const valueLength = length - HEADER_LENGTH_IN_BYTES;
                 const keyBytes = Buffer.from(
@@ -68,7 +65,7 @@ export class SocketConnection {
                     counter + HEADER_LENGTH_IN_BYTES,
                     valueLength
                 );
-                resolveFunction[0](keyBytes.toString("utf8"));
+                resolveFunction(keyBytes.toString("utf8"));
             }
             counter = counter + length;
             const offset = counter % 4;
@@ -90,20 +87,7 @@ export class SocketConnection {
         }
     }
 
-    //private constructor(readSocketName: string, writeSocketName: string) {
     private constructor() {
-
-        // this.readServer = net
-        //     .createServer((readSocket) => {
-        //         readSocket.on("data", (data) => this.handleReadData(data));
-        //     })
-        //     .listen(readSocketName);
-
-        // this.writeServer = net
-        //     .createServer((socket) => {
-        //         this.writeSocket = socket;
-        //     })
-        //     .listen(writeSocketName);
         this.socket = new net.Socket();
     }
 
@@ -116,6 +100,11 @@ export class SocketConnection {
             })
             // Messages are buffers. use toString
             .on('data', (data) =>{ this.handleReadData(data);
+            })
+            .on('error', (err)=> {
+                console.error(`Server closed: ${err}`); 
+                this.dispose();
+                reject(err);
             })
             ;
         });
@@ -136,7 +125,7 @@ export class SocketConnection {
     private getCallbackIndex(): number {
         return (
             this.availableCallbackSlots.pop() ??
-            this.promiseResolveFunctions.length
+            this.promiseCallbackFunctions.length
         );
     }
 
@@ -232,8 +221,8 @@ export class SocketConnection {
                         0,
                         length
                     );
-                    if (!this.writeSocket.write(uint8Array)) {
-                        this.writeSocket.once("drain", resolve);
+                    if (!this.socket.write(uint8Array)) {
+                        this.socket.once("drain", resolve);
                     } else {
                         resolve();
                     }
@@ -248,7 +237,7 @@ export class SocketConnection {
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
-            this.promiseResolveFunctions[callbackIndex] = [resolve, reject];
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
             this.chainNewWriteOperation(
                 firstString,
                 operationType,
@@ -267,73 +256,38 @@ export class SocketConnection {
     }
 
     dispose(): void {
-        // this.readServer.close();
-        // this.writeServer.close();
-        //this.writeSocket.end();
-        console.info("closing client socket");
         this.socket.end();
-        this.promiseResolveFunctions.forEach(resolveFunction => {
-            if (resolveFunction != null) {
-                resolveFunction[1](null);
+        this.promiseCallbackFunctions.forEach(callbackFunction => {
+            const rejectFunction = callbackFunction[1];
+            if (rejectFunction != null) {
+                rejectFunction(null);
             }
-            
-          });
+        });
     }
 
     static async CreateConnection(address: string): Promise<SocketConnection> {
         return new Promise((resolve, reject) => {
             // TODO - create pipes according to Windows convention:
             // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
-            const temporaryFolder = fs.mkdtempSync(
-                path.join(os.tmpdir(), `socket_listener`)
-            );
-            const readSocketName = path.join(temporaryFolder, "read");
-            const writeSocketName = path.join(temporaryFolder, "write");
-            const timer = setTimeout(() => {
-                reject(new Error(`Promise timed out after ${100} ms`));
-            }, 100);
-            // const connection = new SocketConnection(
-            //     readSocketName,
-            //     writeSocketName
-            // );
-
             let resolved = false;
             const connection = new SocketConnection();
 
             const closeCallback = (err: Error | null) => {
-                //connection.dispose();
+                connection.dispose();
                 if (!resolved) {
                     resolved = true;
                     reject(err);
                 }
             };
-            //this.socket = connection;
             const startCallback = async () => {
                 if (!resolved) {
-                    // resolved = true;
-                    // let counter = 50;
-                    // while (!connection.writeSocket) {
-                    //     await new Promise((resolve) => setTimeout(resolve, 1));
-                    //     counter--;
-                    //     if (counter <= 0) {
-                    //         throw new Error("Failed getting a write socket.");
-                    //     }
-                    // }
-                    // resolve(connection);
-                    
-                    await connection.connect(SOCKET_FILE_PATH);
-                    connection.socket.on('error', (err)=> {
-                        console.error(`Server closed: ${err}`); 
-                        connection.dispose();
-                        reject(err);
-                    })
+                    await connection.connect(GetSocketPath());
                     resolve(connection);
                 }
             };
+            
             StartSocketConnection(
                 address,
-                writeSocketName,
-                readSocketName,
                 startCallback,
                 closeCallback
             );

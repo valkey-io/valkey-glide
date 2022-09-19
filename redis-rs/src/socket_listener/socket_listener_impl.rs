@@ -16,10 +16,9 @@ use tokio::sync::Mutex;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
-use std::path::Path;
-use chrono::{DateTime, Utc};
 
-pub const SOCKET_PATH: &'static str = "babushka-socket";
+/// The socket file name 
+pub const SOCKET_FILE_NAME: &'static str = "babushka-socket";
 
 struct SocketListener {
     read_socket: Rc<UnixStream>,
@@ -41,7 +40,7 @@ impl From<ClosingReason> for PipeListeningResult {
 
 impl Drop for SocketListener {
     fn drop(&mut self) {
-        close_socket(SOCKET_PATH);
+        close_socket();
     }
 }
 
@@ -80,17 +79,12 @@ impl SocketListener {
                 .try_read_buf(self.rotating_buffer.current_buffer());
             match read_result {
                 Ok(0) => {
-                    println!("read result 0");
                     return ReadSocketClosed.into();
                 }
-                Ok(n) => {
-                    let now: DateTime<Utc> = Utc::now();
-                    println!("{:?} Rust: try_read read {:?} bytes", now.to_rfc3339(), n);
+                Ok(_) => {
                     return match self.rotating_buffer.get_requests() {
                         Ok(requests) => ReceivedValues(requests),
-                        Err(err) => {println!("read result UnhandledError");
-                            UnhandledError(err.into()).into()
-                        },
+                        Err(err) =>  UnhandledError(err.into()).into()
                     };
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -100,10 +94,7 @@ impl SocketListener {
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
                     continue;
                 }
-                Err(err) => {
-                    println!("read result UnhandledError2");
-                    return UnhandledError(err.into()).into();
-                }
+                Err(err) => return UnhandledError(err.into()).into()
             }
         }
     }
@@ -204,7 +195,7 @@ async fn send_get_request(
     key_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<Mutex<UnixStream>>,
+    write_socket: Rc<UnixStream>,
     pool: &Pool<Vec<u8>>,
     lock: Rc<Mutex<()>>
 ) {
@@ -237,7 +228,7 @@ async fn send_get_request(
 fn handle_request(
     request: WholeRequest,
     connection: MultiplexedConnection,
-    write_socket: Rc<Mutex<UnixStream>>,
+    write_socket: Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
     lock: Rc<Mutex<()>>
 ) {
@@ -277,7 +268,7 @@ fn handle_request(
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
     connection: &MultiplexedConnection,
-    write_socket: &Rc<Mutex<UnixStream>>,
+    write_socket: &Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
     lock: &Rc<Mutex<()>>
 ) {
@@ -292,9 +283,8 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-fn close_socket(socket_name: &str) {
-    let path = Path::new(socket_name);
-    let _ = match std::fs::remove_file(path) {
+fn close_socket() {
+    let _ = match std::fs::remove_file(get_socket_path()) {
         Ok(()) => { 
             println!("Successfully deleted socket file");
         },
@@ -305,8 +295,6 @@ fn close_socket(socket_name: &str) {
 
 async fn listen_on_socket<StartCallback, CloseCallback>(
     client: Client,
-    read_socket_name: &str,
-    write_socket_name: &str,
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
@@ -314,7 +302,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
     // Bind to socket
-    let listener = match UnixListener::bind(SOCKET_PATH) {
+    let listener = match UnixListener::bind(get_socket_path()) {
         Ok(listener) => listener,
         Err(err) => {
             println!("{}",err);
@@ -356,7 +344,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                         return;
                                     }
                                     ReceivedValues(received_requests) => {
-                                        handle_requests(received_requests, &connection, &rc_stream, &lock.clone())
+                                        handle_requests(received_requests, &connection, &rc_stream, client_listener.pool.clone(), &lock.clone())
                                             .await;
                                     }
                                 }
@@ -369,8 +357,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
             }
         })
         .await;
-    println!("Rust: Bye!");
-    close_socket(SOCKET_PATH);
+    close_socket();
 }
 
 #[derive(Debug)]
@@ -384,29 +371,39 @@ pub enum ClosingReason {
     FailedInitialization(RedisError),
 }
 
+fn is_server_up() -> bool {
+    let _ = match std::os::unix::net::UnixStream::connect(get_socket_path()) {
+        Ok(_) => return true,
+        Err(_) => return false
+    };
+}
+
+pub fn get_socket_path() -> String {
+    return std::env::temp_dir().join(SOCKET_FILE_NAME).into_os_string().into_string().unwrap();
+}
+
 /// Start a thread  
 ///
 /// # Arguments
 ///
 /// * `client` - the client from which to create a connection.
 ///
-/// * `read_socket_name` - name of the socket from which the listener will receive requests.
-///
-/// * `write_socket_name` - name of the socket to which the listener will send results.
-///
 /// * `start_callback` - called when the thread started listening on the socket. This is used to prevent races.
 ///
 /// * `close_callback` - called when the listener stopped listening, with the reason for stopping.
 pub fn start_socket_listener<StartCallback, CloseCallback>(
     client: Client,
-    read_socket_name: String,
-    write_socket_name: String,
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
     StartCallback: Fn() + Send + 'static,
     CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
+    if is_server_up() {
+        // no need to start the server if it's already running
+        start_callback();
+        return
+    }
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
         .spawn(move || {
@@ -418,8 +415,6 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
                 Ok(runtime) => {
                     runtime.block_on(listen_on_socket(
                         client,
-                        read_socket_name.as_str(),
-                        write_socket_name.as_str(),
                         start_callback,
                         close_callback,
                     ));
