@@ -21,9 +21,9 @@ export class SocketConnection {
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
-    private backingWriteBuffer: ArrayBuffer | undefined;
+    private backingWriteBuffer = new ArrayBuffer(1024);
     private remainingReadData: Uint8Array | undefined;
-
+    private previousOperation = Promise.resolve();
     private handleReadData(data: Buffer) {
         const dataArray = this.remainingReadData
             ? this.concatBuffers(this.remainingReadData, data)
@@ -118,6 +118,107 @@ export class SocketConnection {
         );
     }
 
+    private writeHeaderToWriteBuffer(
+        length: number,
+        callbackIndex: number,
+        operationType: RequestType,
+        headerLength: number,
+        firstStringLength: number | undefined
+    ) {
+        const headerUint32Array = new Uint32Array(
+            this.backingWriteBuffer,
+            0,
+            headerLength / 4
+        );
+        headerUint32Array[0] = length;
+        headerUint32Array[1] = callbackIndex;
+        headerUint32Array[2] = operationType;
+        if (firstStringLength) {
+            headerUint32Array[3] = firstStringLength;
+        }
+    }
+
+    private getHeaderLength(hasAdditionalString: boolean) {
+        return hasAdditionalString
+            ? HEADER_LENGTH_IN_BYTES + 4
+            : HEADER_LENGTH_IN_BYTES;
+    }
+
+    private encodeStringToWriteBuffer(str: string, byteOffset: number): number {
+        const encodeResult = this.encoder.encodeInto(
+            str,
+            new Uint8Array(this.backingWriteBuffer, byteOffset)
+        );
+        return encodeResult.written ?? 0;
+    }
+
+    private chainNewWriteOperation(
+        firstString: string,
+        operationType: RequestType,
+        secondString: string | undefined,
+        callbackIndex: number
+    ) {
+        this.previousOperation = this.previousOperation.then(
+            () =>
+                new Promise((resolve) => {
+                    const headerLength = this.getHeaderLength(
+                        secondString !== undefined
+                    );
+                    // length * 3 is the maximum ratio between UTF16 byte count to UTF8 byte count.
+                    // TODO - in practice we used a small part of our arrays, and this will be very expensive on
+                    // large inputs. We can use the slightly slower Buffer.byteLength on longer strings.
+                    const requiredLength =
+                        headerLength +
+                        firstString.length * 3 +
+                        (secondString?.length ?? 0) * 3;
+
+                    if (
+                        !this.backingWriteBuffer ||
+                        this.backingWriteBuffer.byteLength < requiredLength
+                    ) {
+                        this.backingWriteBuffer = new ArrayBuffer(
+                            nextPow2(requiredLength)
+                        );
+                    }
+
+                    const firstStringLength = this.encodeStringToWriteBuffer(
+                        firstString,
+                        headerLength
+                    );
+                    const secondStringLength =
+                        secondString == undefined
+                            ? 0
+                            : this.encodeStringToWriteBuffer(
+                                  secondString,
+                                  headerLength + firstStringLength
+                              );
+
+                    const length =
+                        headerLength + firstStringLength + secondStringLength;
+                    this.writeHeaderToWriteBuffer(
+                        length,
+                        callbackIndex,
+                        operationType,
+                        headerLength,
+                        secondString !== undefined
+                            ? firstStringLength
+                            : undefined
+                    );
+
+                    const uint8Array = new Uint8Array(
+                        this.backingWriteBuffer,
+                        0,
+                        length
+                    );
+                    if (!this.writeSocket.write(uint8Array)) {
+                        this.writeSocket.once("drain", resolve);
+                    } else {
+                        resolve();
+                    }
+                })
+        );
+    }
+
     private writeString<T>(
         firstString: string,
         operationType: RequestType,
@@ -126,60 +227,12 @@ export class SocketConnection {
         return new Promise((resolve) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseResolveFunctions[callbackIndex] = resolve;
-            const headerLength =
-                secondString != undefined
-                    ? HEADER_LENGTH_IN_BYTES + 4
-                    : HEADER_LENGTH_IN_BYTES;
-            // length * 3 is the maximum ratio between UTF16 byte count to UTF8 byte count.
-            // TODO - in practice we used a small part of our arrays, and this will be very expensive on
-            // large inputs. We can use the slightly slower Buffer.byteLength on longer strings.
-            const requiredLength =
-                headerLength +
-                firstString.length * 3 +
-                (secondString?.length ?? 0) * 3;
-            if (
-                !this.backingWriteBuffer ||
-                this.backingWriteBuffer.byteLength < requiredLength
-            ) {
-                this.backingWriteBuffer = new ArrayBuffer(
-                    nextPow2(requiredLength)
-                );
-            }
-            let uint8Array = new Uint8Array(
-                this.backingWriteBuffer,
-                0,
-                requiredLength
-            );
-            const firstStringEncodeResult = this.encoder.encodeInto(
+            this.chainNewWriteOperation(
                 firstString,
-                uint8Array.subarray(headerLength)
+                operationType,
+                secondString,
+                callbackIndex
             );
-            const firstStringLength = firstStringEncodeResult.written ?? 0;
-            const secondStringLength =
-                secondString == undefined
-                    ? 0
-                    : this.encoder.encodeInto(
-                          secondString,
-                          uint8Array.subarray(headerLength + firstStringLength)
-                      ).written ?? 0;
-            const length =
-                headerLength + firstStringLength + secondStringLength;
-            const headerUint32Array = new Uint32Array(
-                this.backingWriteBuffer,
-                0,
-                headerLength / 4
-            );
-            headerUint32Array[0] = length;
-            headerUint32Array[1] = callbackIndex;
-            headerUint32Array[2] = operationType;
-            if (secondStringLength !== undefined) {
-                headerUint32Array[3] = firstStringLength;
-            }
-            uint8Array = new Uint8Array(this.backingWriteBuffer, 0, length);
-            if (!this.writeSocket.write(uint8Array)) {
-                // If the buffer is still being used, we remove it so that no other write operation will interfere.
-                this.backingWriteBuffer = undefined;
-            }
         });
     }
 
