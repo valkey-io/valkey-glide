@@ -21,7 +21,7 @@ export class SocketConnection {
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
-    private backingWriteBuffer = new ArrayBuffer(1024);
+    //private backingWriteBuffer = new ArrayBuffer(1024);
     private remainingReadData: Uint8Array | undefined;
     private previousOperation = Promise.resolve();
 
@@ -134,10 +134,11 @@ export class SocketConnection {
         callbackIndex: number,
         operationType: RequestType,
         headerLength: number,
-        firstStringLength: number | undefined
+        firstStringLength: number | undefined,
+        backingWriteBuffer: &ArrayBuffer
     ) {
         const headerUint32Array = new Uint32Array(
-            this.backingWriteBuffer,
+            backingWriteBuffer,
             0,
             headerLength / 4
         );
@@ -155,10 +156,10 @@ export class SocketConnection {
             : HEADER_LENGTH_IN_BYTES;
     }
 
-    private encodeStringToWriteBuffer(str: string, byteOffset: number): number {
+    private encodeStringToWriteBuffer(str: string, byteOffset: number, backingWriteBuffer: &ArrayBuffer): number {
         const encodeResult = this.encoder.encodeInto(
             str,
-            new Uint8Array(this.backingWriteBuffer, byteOffset)
+            new Uint8Array(backingWriteBuffer, byteOffset)
         );
         return encodeResult.written ?? 0;
     }
@@ -182,26 +183,29 @@ export class SocketConnection {
                         headerLength +
                         firstString.length * 3 +
                         (secondString?.length ?? 0) * 3;
+                    let backingWriteBuffer = new ArrayBuffer(requiredLength);
 
                     if (
-                        !this.backingWriteBuffer ||
-                        this.backingWriteBuffer.byteLength < requiredLength
+                        !backingWriteBuffer ||
+                        backingWriteBuffer.byteLength < requiredLength
                     ) {
-                        this.backingWriteBuffer = new ArrayBuffer(
+                        backingWriteBuffer = new ArrayBuffer(
                             nextPow2(requiredLength)
                         );
                     }
 
                     const firstStringLength = this.encodeStringToWriteBuffer(
                         firstString,
-                        headerLength
+                        headerLength,
+                        backingWriteBuffer
                     );
                     const secondStringLength =
                         secondString == undefined
                             ? 0
                             : this.encodeStringToWriteBuffer(
                                   secondString,
-                                  headerLength + firstStringLength
+                                  headerLength + firstStringLength,
+                                  backingWriteBuffer
                               );
 
                     const length =
@@ -213,11 +217,12 @@ export class SocketConnection {
                         headerLength,
                         secondString !== undefined
                             ? firstStringLength
-                            : undefined
+                            : undefined,
+                        backingWriteBuffer
                     );
 
                     const uint8Array = new Uint8Array(
-                        this.backingWriteBuffer,
+                        backingWriteBuffer,
                         0,
                         length
                     );
