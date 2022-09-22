@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -x
+#remove comment to print the lines running.
+#set -x
 
 if command -v python
 then
