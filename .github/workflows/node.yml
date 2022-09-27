@@ -15,40 +15,6 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                redis:
-                    - 6.2.4
-
-        steps:
-            - uses: actions/checkout@v3
-
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.redis }}
-
-            - name: Use Node.js 16.x
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 16.x
-
-            - run: npm install --global yarn
-
-            - run: |
-                  npm ci
-                  yarn install
-                  yarn build
-              working-directory: ./node/rust-client
-
-            - run: |
-                  npm ci
-                  npm test
-              working-directory: ./node
-
     lint-rust:
         runs-on: ubuntu-latest
         steps:

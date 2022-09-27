@@ -1,63 +1,22 @@
 name: Rust tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - redis-rs/**
-  pull_request:
-    paths:
-      - redis-rs/**
+    push:
+        branches: [main]
+        paths:
+            - redis-rs/**
+    pull_request:
+        paths:
+            - redis-rs/**
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        redis:
-          - 6.2.4
-          - 7.0.0
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install redis
-        uses: ./.github/workflows/install-redis
-        with:
-          redis-version: ${{ matrix.redis }}
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt
-
-      - uses: Swatinem/rust-cache@v1
-
-      - name: Run tests
-        working-directory: ./redis-rs
-        run: make test
-
-      - name: Check features
-        working-directory: ./redis-rs
-        run: |
-          cargo check --benches --all-features
-          cargo check --no-default-features --features tokio-comp
-          # Remove dev-dependencies so they do not enable features accidentally
-          # https://github.com/rust-lang/cargo/issues/4664
-          sed -i '/dev-dependencies/,/dev-dependencies/d' Cargo.toml
-          cargo check --all-features
-          cargo check --no-default-features --features async-std-comp
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/workflows/lint-rust
-        with:
-          cargo-toml-folder: ./redis-rs
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ./redis-rs
