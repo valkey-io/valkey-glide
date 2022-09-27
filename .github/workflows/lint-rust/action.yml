@@ -19,11 +19,6 @@ runs:
               override: true
               components: rustfmt, clippy
 
-        - run: |
-              cargo install cargo-deny cargo-outdated cargo-udeps
-              cd ${{ inputs.cargo-toml-folder }}
-          shell: bash
-
         - uses: Swatinem/rust-cache@v1
 
         - uses: actions-rs/cargo@v1
@@ -36,19 +31,23 @@ runs:
               command: clippy
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
 
-        - uses: actions-rs/cargo@v1
-          with:
-              command: deny
-              args: check licenses
-              working-directory: ${{ inputs.cargo-toml-folder }}
+        - run: |
+              cargo install cargo-deny
+              cd ${{ inputs.cargo-toml-folder }}
+              cargo deny check licenses
+          shell: bash
 
-        - uses: actions-rs/cargo@v1
-          with:
-              command: outdated --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml
+        - run: |
+              cargo install cargo-outdated
+              cd ${{ inputs.cargo-toml-folder }}
+              cargo outdated --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml
+          shell: bash
 
-        - uses: actions-rs/cargo@v1
-          with:
-              command: udeps --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml
+        - run: |
+              cargo install cargo-udeps
+              cd ${{ inputs.cargo-toml-folder }}
+              cargo udeps --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml
+          shell: bash
 
         - name: doc
           shell: bash
