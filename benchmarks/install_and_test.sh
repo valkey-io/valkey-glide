@@ -22,6 +22,8 @@ runAllBenchmarks=1
 runPython=0
 runNode=0
 runCsharp=0
+concurrentTasks="1 10 100 1000"
+dataSize="100 4000"
 
 function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
@@ -33,7 +35,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1
+  python python_benchmark.py --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks
   # exit python virtualenv
   deactivate
 }
@@ -47,14 +49,14 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm i
   npx tsc
-  npm run bench -- --resultsFile=../$1
+  npm run bench -- --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1
+  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks
 }
 
 script=`pwd`/${BASH_SOURCE[0]}
@@ -71,19 +73,50 @@ function Help() {
     echo Pass -node, -csharp, -python as arguments in order to run the node, csharp, or python benchmarks accordingly.
     echo Multiple such flags can be passed.
     echo Pass -no-csv to skip analysis of the results.
+    echo Pass -d and then a space-delimited list of sizes for data.
+    echo Pass -f and then a space-delimited list of number of concurrent operations.
+    echo Example: passing as options \"-node -tasks 10 100 -data 500 20 -python\" will cause the node and python benchmarks to run, with the following configurations:
+    echo "         10 concurrent tasks and 500 bytes of data per value,"
+    echo "         10 concurrent tasks and 20 bytes of data per value, "
+    echo "         100 concurrent tasks and 500 bytes of data per value, "
+    echo "         100 concurrent tasks and 20 bytes of data per value, "
 }
 
 while test $# -gt 0
 do
-    runAllBenchmarks=0
     case "$1" in
         -h) #print help message.
             Help
             exit
             ;;
-        -python) runPython=1 ;;
-        -node) runNode=1 ;;
-        -csharp) runCsharp=1 ;;
+        -data) # set size of data
+            dataSize=$2" "
+            shift
+            until [[ $2 =~ ^- ]] || [ -z $2 ]; do
+                dataSize+=$2
+                shift
+            done
+            ;;
+        -tasks) # set number of concurrent tasks
+            concurrentTasks=$2" "
+            shift
+            until [[ $2 =~ ^- ]] || [ -z $2 ]; do
+                concurrentTasks+=$2" "
+                shift
+            done
+            ;;
+        -python)  
+            runAllBenchmarks=0
+            runPython=1 
+            ;;
+        -node) 
+            runAllBenchmarks=0
+            runNode=1 
+            ;;
+        -csharp)
+            runAllBenchmarks=0
+            runCsharp=1
+            ;;
         -no-csv) writeResultsCSV=0 ;;        
     esac
     shift
