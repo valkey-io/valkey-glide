@@ -1,4 +1,4 @@
-import percentile from "percentile";
+import { percentile, stdev } from "stats-lite";
 import { createClient } from "redis";
 import { AsyncClient, SocketConnection } from "babushka-rs";
 import commandLineArgs from "command-line-args";
@@ -39,7 +39,7 @@ function should_get(): boolean {
 }
 
 function calculate_latency(latency_list: number[], percentile_point: number) {
-    const percentile_calculation = percentile(percentile_point, latency_list);
+    const percentile_calculation = percentile(latency_list, percentile_point);
     const percentile_value = Array.isArray(percentile_calculation)
         ? percentile_calculation[0]
         : percentile_calculation;
@@ -115,9 +115,11 @@ async function run_client(
     const get_p50_latency = calculate_latency(get_latency[client_name], 50);
     const get_p90_latency = calculate_latency(get_latency[client_name], 90);
     const get_p99_latency = calculate_latency(get_latency[client_name], 99);
+    const get_std_dev = stdev(get_latency[client_name]);
     const set_p50_latency = calculate_latency(set_latency[client_name], 50);
     const set_p90_latency = calculate_latency(set_latency[client_name], 90);
     const set_p99_latency = calculate_latency(set_latency[client_name], 99);
+    const set_std_dev = stdev(set_latency[client_name]);
     const json_res = {
         client: client_name,
         num_of_tasks: num_of_concurrent_tasks,
@@ -126,13 +128,17 @@ async function run_client(
         get_p50_latency,
         get_p90_latency,
         get_p99_latency,
+        get_std_dev,
         set_p50_latency,
         set_p90_latency,
         set_p99_latency,
+        set_std_dev,
     };
     bench_json_results.push(json_res);
     bench_str_results.push(
-        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, get_p50: ${get_p50_latency}, get_p90: ${get_p90_latency}, get_p99: ${get_p99_latency}, set_p50: ${set_p50_latency}, set_p90: ${set_p90_latency}, set_p99: ${set_p99_latency}`
+        `client: ${client_name}, concurrent_tasks: ${num_of_concurrent_tasks}, data_size: ${data_size}, TPS: ${tps}, ` +
+            `get_p50: ${get_p50_latency}, get_p90: ${get_p90_latency}, get_p99: ${get_p99_latency}, get_std_dev: ${get_std_dev}, ` +
+            `set_p50: ${set_p50_latency}, set_p90: ${set_p90_latency}, set_p99: ${set_p99_latency}, set_std_dev: ${set_std_dev}`
     );
 }
 

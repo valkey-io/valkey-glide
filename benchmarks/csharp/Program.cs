@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using babushka;
 using CommandLine;
+using LinqStatistics;
 using StackExchange.Redis;
 
 public static class MainClass
@@ -152,9 +153,12 @@ public static class MainClass
         var get_50 = calculate_latency(get_latency[client_name], 0.5);
         var get_90 = calculate_latency(get_latency[client_name], 0.9);
         var get_99 = calculate_latency(get_latency[client_name], 0.99);
+        var get_std_dev = get_latency[client_name].StandardDeviation();
         var set_50 = calculate_latency(set_latency[client_name], 0.5);
         var set_90 = calculate_latency(set_latency[client_name], 0.9);
         var set_99 = calculate_latency(set_latency[client_name], 0.99);
+        var set_std_dev = set_latency[client_name].StandardDeviation();
+
         var result = new Dictionary<string, object>
         {
                     {"client", client_name},
@@ -164,13 +168,17 @@ public static class MainClass
                     {"get_p50_latency", get_50},
                     {"get_p90_latency", get_90},
                     {"get_p99_latency", get_99},
+                    {"get_std_dev", get_std_dev},
                     {"set_p50_latency", set_50},
                     {"set_p90_latency", set_90},
                     {"set_p99_latency", set_99},
+                    {"set_std_dev", set_std_dev},
         };
         bench_json_results.Add(result);
         bench_str_results.Add(
-            $"client: {client_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}"
+            $"client: {client_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, " +
+            $"get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, get_std_dev: {get_std_dev}, " +
+            $"set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}, set_std_dev: {set_std_dev}"
         );
     }
 

@@ -15,9 +15,11 @@ with open(output_file_name, "w+") as output_file:
         "get_p50_latency",
         "get_p90_latency",
         "get_p99_latency",
+        "get_std_dev",
         "set_p50_latency",
         "set_p90_latency",
         "set_p99_latency",
+        "set_std_dev",
     ]
     python_fields = base_fields + ["loop"]
 
