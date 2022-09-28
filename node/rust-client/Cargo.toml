@@ -3,6 +3,7 @@ authors = ["Shachar Langbeheim <shachlan@amazon.com>"]
 edition = "2021"
 name = "babushka_js"
 version = "0.1.0"
+license = "BSD-3-Clause"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
