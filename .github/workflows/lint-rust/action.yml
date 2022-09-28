@@ -37,12 +37,6 @@ runs:
               cargo deny check licenses
           shell: bash
 
-        - run: |
-              cargo install cargo-outdated
-              cd ${{ inputs.cargo-toml-folder }}
-              cargo outdated
-          shell: bash
-
         - uses: actions-rs/toolchain@v1
           with:
               profile: minimal
