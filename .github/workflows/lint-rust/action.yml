@@ -43,10 +43,15 @@ runs:
               cargo outdated
           shell: bash
 
+        - uses: actions-rs/toolchain@v1
+          with:
+              profile: minimal
+              toolchain: nightly
+
         - run: |
               cargo install cargo-udeps
               cd ${{ inputs.cargo-toml-folder }}
-              cargo udeps
+              cargo +nightly udeps
           shell: bash
 
         - name: doc
