@@ -51,7 +51,7 @@ runs:
         - run: |
               cargo install cargo-udeps
               cd ${{ inputs.cargo-toml-folder }}
-              cargo +nightly udeps
+              cargo +nightly udeps --all-targets
           shell: bash
 
         - name: doc
