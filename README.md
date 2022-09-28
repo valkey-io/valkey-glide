@@ -1,1 +1,24 @@
 # babushka
+
+## pre-requirements:
+### rustup -
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+after the instalation will show-up in the terminal steps to add rustup to the path - do it.
+
+### redis-server
+```
+sudo yum -y install gcc make wget
+cd /usr/local/src
+sudo wget http://download.redis.io/releases/{0}.tar.gz
+sudo tar xzf {0}.tar.gz
+sudo rm {0}.tar.gz
+cd {0}
+sudo make distclean
+sudo make
+sudo mkdir /etc/redis
+sudo cp src/redis-server src/redis-cli /usr/local/bin
+```
+
+change {0} to the version you want. version names are available here: http://download.redis.io/releases/
