@@ -18,6 +18,18 @@ arguments_parser.add_argument(
     help="Where to write the results file",
     required=True,
 )
+arguments_parser.add_argument(
+    "--dataSize",
+    help="List of sizes of data to use",
+    nargs="+",
+    required=True,
+)
+arguments_parser.add_argument(
+    "--concurrentTasks",
+    help="List of number of concurrent tasks to run",
+    nargs="+",
+    required=True,
+)
 args = arguments_parser.parse_args()
 
 HOST = "localhost"
@@ -207,17 +219,40 @@ async def main(event_loop_name, total_commands, num_of_concurrent_tasks, data_si
     )
 
 
+def number_of_iterations(num_of_concurrent_tasks):
+    return max(100000, num_of_concurrent_tasks * 10000)
+
+
 if __name__ == "__main__":
-    asyncio.run(main("asyncio", 100000, 10, 100))
-    asyncio.run(main("asyncio", 1000000, 100, 100))
-    asyncio.run(main("asyncio", 100000, 10, 4000))
-    asyncio.run(main("asyncio", 1000000, 100, 4000))
+    concurrent_tasks = args.concurrentTasks
+    data_size = args.dataSize
+
+    product_of_arguments = [
+        (int(data_size), int(num_of_concurrent_tasks))
+        for data_size in data_size
+        for num_of_concurrent_tasks in concurrent_tasks
+    ]
+
+    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
+        asyncio.run(
+            main(
+                "asyncio",
+                number_of_iterations(num_of_concurrent_tasks),
+                num_of_concurrent_tasks,
+                data_size,
+            )
+        )
 
     uvloop.install()
 
-    asyncio.run(main("uvloop", 100000, 10, 100))
-    asyncio.run(main("uvloop", 1000000, 100, 100))
-    asyncio.run(main("uvloop", 100000, 10, 4000))
-    asyncio.run(main("uvloop", 1000000, 100, 4000))
+    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
+        asyncio.run(
+            main(
+                "uvloop",
+                number_of_iterations(num_of_concurrent_tasks),
+                num_of_concurrent_tasks,
+                data_size,
+            )
+        )
 
     process_results()

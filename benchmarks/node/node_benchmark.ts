@@ -184,19 +184,36 @@ async function main(
     );
 }
 
-const optionDefinitions = [{ name: "resultsFile", type: String }];
+const optionDefinitions = [
+    { name: "resultsFile", type: String },
+    { name: "dataSize", type: String, multiple: true },
+    { name: "concurrentTasks", type: String, multiple: true },
+];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
+const number_of_iterations = (num_of_concurrent_tasks: number) =>
+    Math.max(100000, num_of_concurrent_tasks * 10000);
+
 Promise.resolve() // just added to clean the indentation of the rest of the calls
-    .then(() => main(100000, 1, 100))
-    .then(() => main(100000, 1, 4000))
-    .then(() => main(100000, 10, 100))
-    .then(() => main(1000000, 100, 100))
-    .then(() => main(100000, 10, 4000))
-    .then(() => main(1000000, 100, 4000))
-    .then(() => main(5000000, 1000, 100))
-    .then(() => main(5000000, 1000, 4000))
-    .then(() => print_results(receivedOptions.resultsFile))
+    .then(async () => {
+        const data_sizes: string[] = receivedOptions.dataSize;
+        const concurrent_tasks: string[] = receivedOptions.concurrentTasks;
+        const product = data_sizes.flatMap((dataSize: string) =>
+            concurrent_tasks.map((concurrentTasks: string) => [
+                parseInt(concurrentTasks),
+                parseInt(dataSize),
+            ])
+        );
+        for (let [concurrent_tasks, data_size] of product) {
+            await main(
+                number_of_iterations(concurrent_tasks),
+                concurrent_tasks,
+                data_size
+            );
+        }
+
+        print_results(receivedOptions.resultsFile);
+    })
     .then(() => {
         process.exit(0);
     });
