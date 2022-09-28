@@ -10,6 +10,5 @@ license = "BSD-3-Clause"
 crate-type = ["cdylib"]
 
 [dependencies]
-libffi = "3.0.0"
-redis = { path = "../../redis-rs", features = ["aio", "tokio-comp", "connection-manager"] }
+redis = { path = "../../redis-rs", features = ["aio", "tokio-comp"] }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
