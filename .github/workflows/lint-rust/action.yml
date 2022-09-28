@@ -37,17 +37,6 @@ runs:
               cargo deny check licenses
           shell: bash
 
-        - uses: actions-rs/toolchain@v1
-          with:
-              profile: minimal
-              toolchain: nightly
-
-        - run: |
-              cargo install cargo-udeps
-              cd ${{ inputs.cargo-toml-folder }}
-              cargo +nightly udeps --all-targets
-          shell: bash
-
         - name: doc
           shell: bash
           working-directory: ${{ inputs.cargo-toml-folder }}
