@@ -33,8 +33,6 @@ function runPythonBenchmark(){
 function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm i
-  npm run build-internal
-  rm -rf build-ts
   npm run build
   cd ${BENCH_FOLDER}/node
   npm i
