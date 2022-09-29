@@ -145,49 +145,65 @@ async function run_client(
 async function main(
     total_commands: number,
     num_of_concurrent_tasks: number,
-    data_size: number
+    data_size: number,
+    clients_to_run: "all" | "ffi" | "socket" | "babushka"
 ) {
     const data = generate_value(data_size);
-    const babushka_client = await AsyncClient.CreateConnection(ADDRESS);
-    await run_client(
-        babushka_client,
-        "babushka FFI",
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-        data
-    );
+    if (
+        clients_to_run == "ffi" ||
+        clients_to_run == "all" ||
+        clients_to_run == "babushka"
+    ) {
+        const babushka_client = await AsyncClient.CreateConnection(ADDRESS);
+        await run_client(
+            babushka_client,
+            "babushka FFI",
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+            data
+        );
+    }
 
-    const babushka_socket_client = await SocketConnection.CreateConnection(
-        ADDRESS
-    );
-    await run_client(
-        babushka_socket_client,
-        "babushka socket",
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-        data
-    );
-    babushka_socket_client.dispose();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (
+        clients_to_run == "socket" ||
+        clients_to_run == "all" ||
+        clients_to_run == "babushka"
+    ) {
+        const babushka_socket_client = await SocketConnection.CreateConnection(
+            ADDRESS
+        );
+        await run_client(
+            babushka_socket_client,
+            "babushka socket",
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+            data
+        );
+        babushka_socket_client.dispose();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
-    const node_redis_client = createClient({ url: ADDRESS });
-    await node_redis_client.connect();
-    await run_client(
-        node_redis_client,
-        "node_redis",
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-        data
-    );
+    if (clients_to_run == "all") {
+        const node_redis_client = createClient({ url: ADDRESS });
+        await node_redis_client.connect();
+        await run_client(
+            node_redis_client,
+            "node_redis",
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+            data
+        );
+    }
 }
 
 const optionDefinitions = [
     { name: "resultsFile", type: String },
     { name: "dataSize", type: String, multiple: true },
     { name: "concurrentTasks", type: String, multiple: true },
+    { name: "clients", type: String },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -198,6 +214,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
     .then(async () => {
         const data_sizes: string[] = receivedOptions.dataSize;
         const concurrent_tasks: string[] = receivedOptions.concurrentTasks;
+        const clients_to_run = receivedOptions.clients;
         const product = data_sizes.flatMap((dataSize: string) =>
             concurrent_tasks.map((concurrentTasks: string) => [
                 parseInt(concurrentTasks),
@@ -208,7 +225,8 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             await main(
                 number_of_iterations(concurrent_tasks),
                 concurrent_tasks,
-                data_size
+                data_size,
+                clients_to_run
             );
         }
 
