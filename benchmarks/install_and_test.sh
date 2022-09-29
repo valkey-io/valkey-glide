@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -x
+#remove comment to print the lines running.
+#set -x
 
 if command -v python
 then
@@ -14,6 +15,13 @@ else
         exit
     fi
 fi
+
+resultFiles=
+writeResultsCSV=1
+runAllBenchmarks=1
+runPython=0
+runNode=0
+runCsharp=0
 
 function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
@@ -49,7 +57,6 @@ function runCSharpBenchmark(){
   dotnet run --property:Configuration=Release --resultsFile=../$1
 }
 
-
 script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
@@ -58,16 +65,54 @@ export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
-pythonResults=results/python-$identifier.json
-runPythonBenchmark $pythonResults
 
-csharpResults=results/csharp-$identifier.json
-runCSharpBenchmark $csharpResults
+function Help() {
+    echo Running the script without any arguments runs all benchmarks.
+    echo Pass -node, -csharp, -python as arguments in order to run the node, csharp, or python benchmarks accordingly.
+    echo Multiple such flags can be passed.
+    echo Pass -no-csv to skip analysis of the results.
+}
 
-NODE_FOLDER="${BENCH_FOLDER}/../node"
-nodeResults=results/node-$identifier.json
-runNodeBenchmark $nodeResults
+while test $# -gt 0
+do
+    runAllBenchmarks=0
+    case "$1" in
+        -h) #print help message.
+            Help
+            exit
+            ;;
+        -python) runPython=1 ;;
+        -node) runNode=1 ;;
+        -csharp) runCsharp=1 ;;
+        -no-csv) writeResultsCSV=0 ;;        
+    esac
+    shift
+done
 
-cd ${BENCH_FOLDER}
-finalCSV=results/final-$identifier.csv
-$pythonCommand csv_exporter.py $pythonResults $csharpResults $nodeResults $finalCSV
+if [ $runAllBenchmarks == 1 ] || [ $runPython == 1 ]; 
+then
+    pythonResults=results/python-$identifier.json
+    resultFiles+=$pythonResults" "
+    runPythonBenchmark $pythonResults
+fi
+
+if [ $runAllBenchmarks == 1 ] || [ $runNode == 1 ]; 
+then
+    nodeResults=results/node-$identifier.json
+    resultFiles+=$nodeResults" "
+    runNodeBenchmark $nodeResults
+fi
+
+if [ $runAllBenchmarks == 1 ] || [ $runCsharp == 1 ]; 
+then
+    csharpResults=results/csharp-$identifier.json
+    resultFiles+=$csharpResults" "
+    runCSharpBenchmark $csharpResults   
+fi
+
+if [ $writeResultsCSV == 1 ]; 
+then
+    cd ${BENCH_FOLDER}
+    finalCSV=results/final-$identifier.csv
+    $pythonCommand csv_exporter.py $resultFiles$finalCSV
+fi
