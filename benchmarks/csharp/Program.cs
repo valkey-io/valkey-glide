@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using babushka;
@@ -20,8 +21,8 @@ public static class MainClass
     private const double PROB_GET = 0.8;
     private const int SIZE_GET_KEYSPACE = 3750000; // 3.75 million
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
-    private static readonly Dictionary<string, List<double>> get_latency = new();
-    private static readonly Dictionary<string, List<double>> set_latency = new();
+    private static readonly Dictionary<string, ConcurrentBag<double>> get_latency = new();
+    private static readonly Dictionary<string, ConcurrentBag<double>> set_latency = new();
     private static readonly Random randomizer = new();
     private static long counter = 0;
     private static readonly List<string> bench_str_results = new();
