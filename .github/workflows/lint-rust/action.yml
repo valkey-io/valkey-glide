@@ -31,6 +31,12 @@ runs:
               command: clippy
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
 
+        - run: |
+              cargo install cargo-deny
+              cd ${{ inputs.cargo-toml-folder }}
+              cargo deny check licenses
+          shell: bash
+
         - name: doc
           shell: bash
           working-directory: ${{ inputs.cargo-toml-folder }}
