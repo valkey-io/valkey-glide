@@ -9,6 +9,8 @@ using StackExchange.Redis;
 
 public static class MainClass
 {
+    private enum ChosenAction { GET_NON_EXISTING, GET_EXISTING, SET };
+
     public class CommandLineOptions
     {
         [Option('r', "resultsFile", Required = true, HelpText = "Set the file to which the JSON results are written.")]
@@ -29,10 +31,16 @@ public static class MainClass
     private static readonly string ADDRESS = $"{HOST}:{PORT}";
     private static readonly string ADDRESS_WITH_REDIS_PREFIX = $"redis://{ADDRESS}";
     private const double PROB_GET = 0.8;
+
+    private const double PROB_GET_EXISTING_KEY = 0.8;
     private const int SIZE_GET_KEYSPACE = 3750000; // 3.75 million
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
-    private static readonly Dictionary<string, ConcurrentBag<double>> get_latency = new();
-    private static readonly Dictionary<string, ConcurrentBag<double>> set_latency = new();
+
+    private static readonly Dictionary<ChosenAction, Dictionary<string, ConcurrentBag<double>>> actions_latencies = new() {
+        {ChosenAction.GET_NON_EXISTING, new()},
+        {ChosenAction.GET_EXISTING, new()},
+        {ChosenAction.SET, new()},
+    };
     private static readonly Random randomizer = new();
     private static long counter = 0;
     private static readonly List<string> bench_str_results = new();
@@ -49,12 +57,20 @@ public static class MainClass
     }
     private static string generate_key_get()
     {
-        return (randomizer.Next(SIZE_GET_KEYSPACE) + 1).ToString();
+        return (randomizer.Next(SIZE_SET_KEYSPACE, SIZE_GET_KEYSPACE) + 1).ToString();
     }
 
-    private static bool should_get()
+    private static ChosenAction choose_action()
     {
-        return randomizer.NextDouble() < PROB_GET;
+        if (randomizer.NextDouble() > PROB_GET)
+        {
+            return ChosenAction.SET;
+        }
+        if (randomizer.NextDouble() > PROB_GET_EXISTING_KEY)
+        {
+            return ChosenAction.GET_NON_EXISTING;
+        }
+        return ChosenAction.GET_EXISTING;
     }
 
     /// copied from https://stackoverflow.com/questions/8137391/percentile-calculation
@@ -100,18 +116,22 @@ public static class MainClass
         var stopwatch = new Stopwatch();
         do
         {
-            var use_get = should_get();
+            var action = choose_action();
             stopwatch.Start();
-            if (use_get)
+            switch (action)
             {
-                await get(generate_key_get());
-            }
-            else
-            {
-                await set(generate_key_set(), data);
+                case ChosenAction.GET_EXISTING:
+                    await get(generate_key_set());
+                    break;
+                case ChosenAction.GET_NON_EXISTING:
+                    await get(generate_key_get());
+                    break;
+                case ChosenAction.SET:
+                    await set(generate_key_set(), data);
+                    break;
             }
             stopwatch.Stop();
-            var latency_list = (use_get ? get_latency : set_latency)[client_name];
+            var latency_list = actions_latencies[action][client_name];
             latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
         } while (Interlocked.Increment(ref counter) < total_commands);
     }
@@ -126,8 +146,9 @@ public static class MainClass
     )
     {
         counter = 0;
-        get_latency[client_name] = new();
-        set_latency[client_name] = new();
+        actions_latencies[ChosenAction.GET_NON_EXISTING][client_name] = new();
+        actions_latencies[ChosenAction.GET_EXISTING][client_name] = new();
+        actions_latencies[ChosenAction.SET][client_name] = new();
         var stopwatch = Stopwatch.StartNew();
         var running_tasks = new List<Task>();
         for (var i = 0; i < num_of_concurrent_tasks; i++)
@@ -159,10 +180,20 @@ public static class MainClass
             num_of_concurrent_tasks
         );
         var tps = Math.Round((double)counter / ((double)ellapsed_milliseconds / 1000));
-        var get_50 = calculate_latency(get_latency[client_name], 0.5);
-        var get_90 = calculate_latency(get_latency[client_name], 0.9);
-        var get_99 = calculate_latency(get_latency[client_name], 0.99);
-        var get_std_dev = get_latency[client_name].StandardDeviation();
+
+        var get_nonexisting_latency = actions_latencies[ChosenAction.GET_NON_EXISTING];
+        var get_nonexisting_50 = calculate_latency(get_nonexisting_latency[client_name], 0.5);
+        var get_nonexisting_90 = calculate_latency(get_nonexisting_latency[client_name], 0.9);
+        var get_nonexisting_99 = calculate_latency(get_nonexisting_latency[client_name], 0.99);
+        var get_nonexisting_std_dev = get_nonexisting_latency[client_name].StandardDeviation();
+
+        var get_existing_latency = actions_latencies[ChosenAction.GET_EXISTING];
+        var get_existing_50 = calculate_latency(get_existing_latency[client_name], 0.5);
+        var get_existing_90 = calculate_latency(get_existing_latency[client_name], 0.9);
+        var get_existing_99 = calculate_latency(get_existing_latency[client_name], 0.99);
+        var get_existing_std_dev = get_existing_latency[client_name].StandardDeviation();
+
+        var set_latency = actions_latencies[ChosenAction.SET];
         var set_50 = calculate_latency(set_latency[client_name], 0.5);
         var set_90 = calculate_latency(set_latency[client_name], 0.9);
         var set_99 = calculate_latency(set_latency[client_name], 0.99);
@@ -174,10 +205,14 @@ public static class MainClass
                     {"num_of_tasks", num_of_concurrent_tasks},
                     {"data_size", data_size},
                     {"tps", tps},
-                    {"get_p50_latency", get_50},
-                    {"get_p90_latency", get_90},
-                    {"get_p99_latency", get_99},
-                    {"get_std_dev", get_std_dev},
+                    {"get_non_existing_p50_latency", get_nonexisting_50},
+                    {"get_non_existing_p90_latency", get_nonexisting_90},
+                    {"get_non_existing_p99_latency", get_nonexisting_99},
+                    {"get_non_existing_std_dev", get_nonexisting_std_dev},
+                    {"get_existing_p50_latency", get_existing_50},
+                    {"get_existing_p90_latency", get_existing_90},
+                    {"get_existing_p99_latency", get_existing_99},
+                    {"get_existing_std_dev", get_existing_std_dev},
                     {"set_p50_latency", set_50},
                     {"set_p90_latency", set_90},
                     {"set_p99_latency", set_99},
@@ -186,7 +221,8 @@ public static class MainClass
         bench_json_results.Add(result);
         bench_str_results.Add(
             $"client: {client_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, " +
-            $"get_p50: {get_50}, get_p90: {get_90}, get_p99: {get_99}, get_std_dev: {get_std_dev}, " +
+            $"get_non_existing_p50: {get_nonexisting_50}, get_non_existing_p90: {get_nonexisting_90}, get_non_existing_p99: {get_nonexisting_99}, get_non_existing_std_dev: {get_nonexisting_std_dev}, " +
+            $"get_existing_p50: {get_existing_50}, get_existing_p90: {get_existing_90}, get_existing_p99: {get_existing_99}, get_existing_std_dev: {get_existing_std_dev}, " +
             $"set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}, set_std_dev: {set_std_dev}"
         );
     }
