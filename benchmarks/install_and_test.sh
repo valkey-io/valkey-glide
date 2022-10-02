@@ -36,7 +36,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks --clients $chosenClients
+  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
   # exit python virtualenv
   deactivate
 }
@@ -50,16 +50,28 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm i
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks --clients $chosenClients
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $dataSize --concurrentTasks $concurrentTasks --clients $chosenClients
+  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
 }
 
+function flushDB() {
+  cd $utilitiesDir
+  npm run flush
+}
+
+function fillDB(){
+  flushDB
+  cd $utilitiesDir
+  npm run fill -- --dataSize $1
+}
+
+utilitiesDir=`pwd`/utilities
 script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
@@ -68,6 +80,10 @@ export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder 
 mkdir -p $BENCH_RESULTS_FOLDER
+
+function resultFileName() {
+    echo results/$1-$2-$identifier.json
+}
 
 function Help() {
     echo Running the script without any arguments runs all benchmarks.
@@ -137,30 +153,40 @@ do
     shift
 done
 
-if [ $runAllBenchmarks == 1 ] || [ $runPython == 1 ]; 
-then
-    pythonResults=results/python-$identifier.json
-    resultFiles+=$pythonResults" "
-    runPythonBenchmark $pythonResults
-fi
+for currentDataSize in $dataSize
+do
+    fillDB $currentDataSize
 
-if [ $runAllBenchmarks == 1 ] || [ $runNode == 1 ]; 
-then
-    nodeResults=results/node-$identifier.json
-    resultFiles+=$nodeResults" "
-    runNodeBenchmark $nodeResults
-fi
+    if [ $runAllBenchmarks == 1 ] || [ $runPython == 1 ]; 
+    then
+        pythonResults=$(resultFileName python $currentDataSize)
+        resultFiles+=$pythonResults" "
+        runPythonBenchmark $pythonResults $currentDataSize
+    fi
 
-if [ $runAllBenchmarks == 1 ] || [ $runCsharp == 1 ]; 
-then
-    csharpResults=results/csharp-$identifier.json
-    resultFiles+=$csharpResults" "
-    runCSharpBenchmark $csharpResults   
-fi
+    if [ $runAllBenchmarks == 1 ] || [ $runNode == 1 ]; 
+    then
+        nodeResults=$(resultFileName node $currentDataSize)
+        resultFiles+=$nodeResults" "
+        runNodeBenchmark $nodeResults $currentDataSize
+    fi
+
+    if [ $runAllBenchmarks == 1 ] || [ $runCsharp == 1 ]; 
+    then
+        csharpResults=$(resultFileName csharp $currentDataSize)
+        resultFiles+=$csharpResults" "
+        runCSharpBenchmark $csharpResults $currentDataSize
+    fi
+done
+
+
+
+flushDB
 
 if [ $writeResultsCSV == 1 ]; 
 then
     cd ${BENCH_FOLDER}
     finalCSV=results/final-$identifier.csv
-    $pythonCommand csv_exporter.py $resultFiles$finalCSV
+    $pythonCommand $utilitiesDir/csv_exporter.py $resultFiles$finalCSV
+    echo results are in $finalCSV
 fi
