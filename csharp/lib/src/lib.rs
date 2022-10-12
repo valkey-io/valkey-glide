@@ -65,47 +65,48 @@ pub extern "C" fn set(
     key: *const c_char,
     value: *const c_char,
 ) {
-    let connection_ptr = connection_ptr as *mut Connection;
+    let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
-    let ptr_as_usize = connection_ptr as usize;
+    let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
     let value_cstring = unsafe { CStr::from_ptr(value as *mut c_char) };
-    unsafe {
-        let mut connection_clone = (*connection_ptr).connection.clone();
-        (*connection_ptr).runtime.spawn(async move {
-            let key_bytes = key_cstring.to_bytes();
-            let value_bytes = value_cstring.to_bytes();
-            let result: RedisResult<()> = connection_clone.set(key_bytes, value_bytes).await;
-            let connection = ptr_as_usize as *mut Connection;
+    let mut connection_clone = connection.connection.clone();
+    connection.runtime.spawn(async move {
+        let key_bytes = key_cstring.to_bytes();
+        let value_bytes = value_cstring.to_bytes();
+        let result: RedisResult<()> = connection_clone.set(key_bytes, value_bytes).await;
+        unsafe {
+            let connection = Box::leak(Box::from_raw(ptr_address as *mut Connection));
             match result {
-                Ok(_) => ((*connection).success_callback)(callback_index, std::ptr::null()),
-                Err(_) => ((*connection).failure_callback)(callback_index), // TODO - report errors
+                Ok(_) => (connection.success_callback)(callback_index, std::ptr::null()),
+                Err(_) => (connection.failure_callback)(callback_index), // TODO - report errors
             };
-        });
-    }
+        }
+    });
 }
 
 /// Expects that key will be kept valid until the callback is called. If the callback is called with a string pointer, the pointer must
 /// be used synchronously, because the string will be dropped after the callback.
 #[no_mangle]
 pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key: *const c_char) {
-    let connection_ptr = connection_ptr as *mut Connection;
+    let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
-    let ptr_as_usize = connection_ptr as usize;
+    let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    unsafe {
-        let mut connection_clone = (*connection_ptr).connection.clone();
-        (*connection_ptr).runtime.spawn(async move {
-            let key_bytes = key_cstring.to_bytes();
-            let result: RedisResult<Option<CString>> = connection_clone.get(key_bytes).await;
-            let connection = ptr_as_usize as *mut Connection;
+    let mut connection_clone = connection.connection.clone();
+    connection.runtime.spawn(async move {
+        let key_bytes = key_cstring.to_bytes();
+        let result: RedisResult<Option<CString>> = connection_clone.get(key_bytes).await;
+
+        unsafe {
+            let connection = Box::leak(Box::from_raw(ptr_address as *mut Connection));
             match result {
-                Ok(None) => ((*connection).success_callback)(callback_index, std::ptr::null()),
-                Ok(Some(c_str)) => ((*connection).success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => ((*connection).failure_callback)(callback_index), // TODO - report errors
+                Ok(None) => (connection.success_callback)(callback_index, std::ptr::null()),
+                Ok(Some(c_str)) => (connection.success_callback)(callback_index, c_str.as_ptr()),
+                Err(_) => (connection.failure_callback)(callback_index), // TODO - report errors
             };
-        });
-    }
+        }
+    });
 }
