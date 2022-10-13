@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -12,7 +12,16 @@ public static class MainClass
     public class CommandLineOptions
     {
         [Option('r', "resultsFile", Required = true, HelpText = "Set the file to which the JSON results are written.")]
-        public string resultsFile { get; set; }
+        public string resultsFile { get; set; } = "";
+
+        [Option('d', "dataSize", Required = true, HelpText = "The size of the sent data in bytes.")]
+        public IEnumerable<int> dataSizes { get; set; } = Enumerable.Empty<int>();
+
+        [Option('c', "concurrentTasks", Required = true, HelpText = "The number of concurrent operations to perform.")]
+        public IEnumerable<int> concurrentTasks { get; set; } = Enumerable.Empty<int>();
+
+        [Option('l', "clients", Required = true, HelpText = "Which clients should run")]
+        public string clientsToRun { get; set; } = "";
     }
 
     private const string HOST = "localhost";
@@ -184,46 +193,55 @@ public static class MainClass
 
     private static async Task run_with_parameters(int total_commands,
         int data_size,
-        int num_of_concurrent_tasks)
+        int num_of_concurrent_tasks,
+        string clientsToRun)
     {
-        var babushka_client = new AsyncClient(ADDRESS_WITH_REDIS_PREFIX);
-        await run_client(
-            async (key) => await babushka_client.GetAsync(key),
-            async (key, value) => await babushka_client.SetAsync(key, value),
-            "babushka FFI",
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size
-        );
-
-        using (var connection = ConnectionMultiplexer.Connect(ADDRESS))
+        if (clientsToRun == "all" || clientsToRun == "ffi" || clientsToRun == "babushka")
         {
-            var db = connection.GetDatabase();
+            var babushka_client = new AsyncClient(ADDRESS_WITH_REDIS_PREFIX);
             await run_client(
-                async (key) => (await db.StringGetAsync(key)).ToString(),
-                (key, value) => db.StringSetAsync(key, value),
-                "StackExchange.Redis",
+                async (key) => await babushka_client.GetAsync(key),
+                async (key, value) => await babushka_client.SetAsync(key, value),
+                "babushka FFI",
                 total_commands,
                 num_of_concurrent_tasks,
                 data_size
             );
         }
+
+        if (clientsToRun == "all")
+        {
+            using (var connection = ConnectionMultiplexer.Connect(ADDRESS))
+            {
+                var db = connection.GetDatabase();
+                await run_client(
+                    async (key) => (await db.StringGetAsync(key)).ToString(),
+                    (key, value) => db.StringSetAsync(key, value),
+                    "StackExchange.Redis",
+                    total_commands,
+                    num_of_concurrent_tasks,
+                    data_size
+                );
+            }
+        }
+    }
+
+    private static int number_of_iterations(int num_of_concurrent_tasks)
+    {
+        return Math.Max(100000, num_of_concurrent_tasks * 10000);
     }
 
     public static async Task Main(string[] args)
     {
-        CommandLineOptions options = null;
+        CommandLineOptions options = new CommandLineOptions();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
-        await run_with_parameters(100000, 1, 100);
-        await run_with_parameters(100000, 10, 100);
-        await run_with_parameters(1000000, 100, 100);
-        await run_with_parameters(5000000, 1000, 100);
-        await run_with_parameters(100000, 1, 4000);
-        await run_with_parameters(100000, 10, 4000);
-        await run_with_parameters(1000000, 100, 4000);
-        await run_with_parameters(5000000, 1000, 4000);
+        var product = options.concurrentTasks.SelectMany(concurrentTasks => options.dataSizes.Select(dataSize => (concurrentTasks, dataSize)));
+        foreach (var (concurrentTasks, dataSize) in product)
+        {
+            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun);
+        }
 
         print_results(options.resultsFile);
     }

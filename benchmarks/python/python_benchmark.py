@@ -18,6 +18,23 @@ arguments_parser.add_argument(
     help="Where to write the results file",
     required=True,
 )
+arguments_parser.add_argument(
+    "--dataSize",
+    help="List of sizes of data to use",
+    nargs="+",
+    required=True,
+)
+arguments_parser.add_argument(
+    "--concurrentTasks",
+    help="List of number of concurrent tasks to run",
+    nargs="+",
+    required=True,
+)
+arguments_parser.add_argument(
+    "--clients",
+    help="Which clients should run",
+    required=True,
+)
 args = arguments_parser.parse_args()
 
 HOST = "localhost"
@@ -161,63 +178,97 @@ async def run_client(
     )
 
 
-async def main(event_loop_name, total_commands, num_of_concurrent_tasks, data_size):
-    # Redis-py
-    redispy_client = await redispy.Redis(host=HOST, port=PORT)
-    await run_client(
-        redispy_client,
-        "redispy",
-        event_loop_name,
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-    )
+async def main(
+    event_loop_name, total_commands, num_of_concurrent_tasks, data_size, clients_to_run
+):
+    if clients_to_run == "all":
+        # Redis-py
+        redispy_client = await redispy.Redis(host=HOST, port=PORT)
+        await run_client(
+            redispy_client,
+            "redispy",
+            event_loop_name,
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+        )
 
-    # AIORedis
-    aioredis_client = await aioredis.from_url(f"redis://{HOST}:{PORT}")
-    await run_client(
-        aioredis_client,
-        "aioredis",
-        event_loop_name,
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-    )
+        # AIORedis
+        aioredis_client = await aioredis.from_url(f"redis://{HOST}:{PORT}")
+        await run_client(
+            aioredis_client,
+            "aioredis",
+            event_loop_name,
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+        )
 
-    # Babushka
-    config = ClientConfiguration(host=HOST, port=PORT)
-    babushka_client = await RedisAsyncClient.create(config)
-    await run_client(
-        babushka_client,
-        "babushka",
-        event_loop_name,
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-    )
+    if (
+        clients_to_run == "all"
+        or clients_to_run == "ffi"
+        or clients_to_run == "babushka"
+    ):
+        # Babushka
+        config = ClientConfiguration(host=HOST, port=PORT)
+        babushka_client = await RedisAsyncClient.create(config)
+        await run_client(
+            babushka_client,
+            "babushka",
+            event_loop_name,
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+        )
 
-    direct_babushka = await AsyncClient.create_client(f"redis://{HOST}:{PORT}")
-    await run_client(
-        direct_babushka,
-        "direct_babushka",
-        event_loop_name,
-        total_commands,
-        num_of_concurrent_tasks,
-        data_size,
-    )
+        direct_babushka = await AsyncClient.create_client(f"redis://{HOST}:{PORT}")
+        await run_client(
+            direct_babushka,
+            "direct_babushka",
+            event_loop_name,
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+        )
+
+
+def number_of_iterations(num_of_concurrent_tasks):
+    return max(100000, num_of_concurrent_tasks * 10000)
 
 
 if __name__ == "__main__":
-    asyncio.run(main("asyncio", 100000, 10, 100))
-    asyncio.run(main("asyncio", 1000000, 100, 100))
-    asyncio.run(main("asyncio", 100000, 10, 4000))
-    asyncio.run(main("asyncio", 1000000, 100, 4000))
+    concurrent_tasks = args.concurrentTasks
+    data_size = args.dataSize
+    clients_to_run = args.clients
+
+    product_of_arguments = [
+        (int(data_size), int(num_of_concurrent_tasks))
+        for data_size in data_size
+        for num_of_concurrent_tasks in concurrent_tasks
+    ]
+
+    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
+        asyncio.run(
+            main(
+                "asyncio",
+                number_of_iterations(num_of_concurrent_tasks),
+                num_of_concurrent_tasks,
+                data_size,
+                clients_to_run,
+            )
+        )
 
     uvloop.install()
 
-    asyncio.run(main("uvloop", 100000, 10, 100))
-    asyncio.run(main("uvloop", 1000000, 100, 100))
-    asyncio.run(main("uvloop", 100000, 10, 4000))
-    asyncio.run(main("uvloop", 1000000, 100, 4000))
+    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
+        asyncio.run(
+            main(
+                "uvloop",
+                number_of_iterations(num_of_concurrent_tasks),
+                num_of_concurrent_tasks,
+                data_size,
+                clients_to_run,
+            )
+        )
 
     process_results()
