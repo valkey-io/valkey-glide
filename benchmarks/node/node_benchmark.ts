@@ -1,4 +1,5 @@
-import { percentile, stdev } from "stats-lite";
+import percentile from "percentile";
+import { stdev } from "stats-lite";
 import { createClient } from "redis";
 import { AsyncClient, SocketConnection } from "babushka-rs";
 import commandLineArgs from "command-line-args";
@@ -39,7 +40,7 @@ function should_get(): boolean {
 }
 
 function calculate_latency(latency_list: number[], percentile_point: number) {
-    const percentile_calculation = percentile(latency_list, percentile_point);
+    const percentile_calculation = percentile(percentile_point, latency_list);
     const percentile_value = Array.isArray(percentile_calculation)
         ? percentile_calculation[0]
         : percentile_calculation;
