@@ -17,7 +17,7 @@ public static class MainClass
         public string resultsFile { get; set; } = "";
 
         [Option('d', "dataSize", Required = true, HelpText = "The size of the sent data in bytes.")]
-        public IEnumerable<int> dataSizes { get; set; } = Enumerable.Empty<int>();
+        public int dataSize { get; set; } = -1;
 
         [Option('c', "concurrentTasks", Required = true, HelpText = "The number of concurrent operations to perform.")]
         public IEnumerable<int> concurrentTasks { get; set; } = Enumerable.Empty<int>();
@@ -273,7 +273,7 @@ public static class MainClass
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
-        var product = options.concurrentTasks.SelectMany(concurrentTasks => options.dataSizes.Select(dataSize => (concurrentTasks, dataSize)));
+        var product = options.concurrentTasks.Select(concurrentTasks => (concurrentTasks, options.dataSize));
         foreach (var (concurrentTasks, dataSize) in product)
         {
             await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun);
