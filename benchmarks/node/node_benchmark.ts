@@ -263,7 +263,7 @@ async function main(
 
 const optionDefinitions = [
     { name: "resultsFile", type: String },
-    { name: "dataSize", type: String, multiple: true },
+    { name: "dataSize", type: String },
     { name: "concurrentTasks", type: String, multiple: true },
     { name: "clients", type: String },
 ];
@@ -274,15 +274,13 @@ const number_of_iterations = (num_of_concurrent_tasks: number) =>
 
 Promise.resolve() // just added to clean the indentation of the rest of the calls
     .then(async () => {
-        const data_sizes: string[] = receivedOptions.dataSize;
+        const data_size: string = receivedOptions.dataSize;
         const concurrent_tasks: string[] = receivedOptions.concurrentTasks;
         const clients_to_run = receivedOptions.clients;
-        const product = data_sizes.flatMap((dataSize: string) =>
-            concurrent_tasks.map((concurrentTasks: string) => [
-                parseInt(concurrentTasks),
-                parseInt(dataSize),
-            ])
-        );
+        const product = concurrent_tasks.map((concurrentTasks: string) => [
+            parseInt(concurrentTasks),
+            parseInt(data_size),
+        ]);
         for (let [concurrent_tasks, data_size] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),

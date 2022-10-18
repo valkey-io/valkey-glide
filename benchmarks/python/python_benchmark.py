@@ -27,8 +27,7 @@ arguments_parser.add_argument(
 )
 arguments_parser.add_argument(
     "--dataSize",
-    help="List of sizes of data to use",
-    nargs="+",
+    help="Size of data to set",
     required=True,
 )
 arguments_parser.add_argument(
@@ -271,12 +270,11 @@ def number_of_iterations(num_of_concurrent_tasks):
 
 if __name__ == "__main__":
     concurrent_tasks = args.concurrentTasks
-    data_size = args.dataSize
+    data_size = int(args.dataSize)
     clients_to_run = args.clients
 
     product_of_arguments = [
-        (int(data_size), int(num_of_concurrent_tasks))
-        for data_size in data_size
+        (data_size, int(num_of_concurrent_tasks))
         for num_of_concurrent_tasks in concurrent_tasks
     ]
 
