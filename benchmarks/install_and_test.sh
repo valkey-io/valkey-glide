@@ -115,7 +115,7 @@ do
             dataSize=$2" "
             shift
             until [[ $2 =~ ^- ]] || [ -z $2 ]; do
-                dataSize+=$2
+                dataSize+=$2"  "
                 shift
             done
             ;;
@@ -123,7 +123,7 @@ do
             concurrentTasks=$2" "
             shift
             until [[ $2 =~ ^- ]] || [ -z $2 ]; do
-                concurrentTasks+=$2" "
+                concurrentTasks+=$2"  "
                 shift
             done
             ;;
