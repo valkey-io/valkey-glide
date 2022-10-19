@@ -1,0 +1,17 @@
+{
+    "name": "utilities",
+    "version": "1.0.0",
+    "description": "",
+    "main": "fill_db.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "fill": "node fill_db.js",
+        "flush": "node flush_db.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "command-line-args": "^5.2.1",
+        "redis": "^4.3.1"
+    }
+}
