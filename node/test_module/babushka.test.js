@@ -65,6 +65,72 @@ describe("NAPI client", () => {
             expect(result).toEqual(null);
         });
     });
+
+    it("get for empty string", async () => {
+        const port = await FreePort(3000).then(([free_port]) => free_port);
+        await OpenServerAndExecute(port, async () => {
+            const client = await AsyncClient.CreateConnection(
+                "redis://localhost:" + port
+            );
+
+            const key = uuidv4();
+            await client.set(key, "");
+            const result = await client.get(key);
+
+            expect(result).toEqual("");
+        });
+    });
+
+    it("send very large values", async () => {
+        const startTime = new Date();
+        const port = await FreePort(3000).then(([free_port]) => free_port);
+        await OpenServerAndExecute(port, async () => {
+            const client = await AsyncClient.CreateConnection(
+                "redis://localhost:" + port
+            );
+
+            const WANTED_LENGTH = Math.pow(2, 16);
+            const getLongUUID = () => {
+                let id = uuidv4();
+                while (id.length < WANTED_LENGTH) {
+                    id += uuidv4();
+                }
+                return id;
+            };
+            let key = getLongUUID();
+            let value = getLongUUID();
+            await client.set(key, value);
+            const result = await client.get(key);
+
+            expect(result).toEqual(value);
+        });
+    });
+
+    it("can handle concurrent operations", async () => {
+        const port = await FreePort(3000).then(([free_port]) => free_port);
+        await OpenServerAndExecute(port, async () => {
+            const client = await AsyncClient.CreateConnection(
+                "redis://localhost:" + port
+            );
+
+            const singleOp = async (index) => {
+                if (index % 2 === 0) {
+                    await GetAndSetRandomValue(client);
+                } else {
+                    var result = await client.get(uuidv4());
+                    expect(result).toEqual(null);
+                }
+            };
+
+            const operations = [];
+
+            for (let i = 0; i < 100; ++i) {
+                operations.push(singleOp(i));
+            }
+
+            await Promise.all(operations);
+        });
+    });
 });
 
 describe("socket client", () => {
