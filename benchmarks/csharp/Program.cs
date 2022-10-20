@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using babushka;
@@ -43,7 +44,6 @@ public static class MainClass
     };
     private static readonly Random randomizer = new();
     private static long counter = 0;
-    private static readonly List<string> bench_str_results = new();
     private static readonly List<Dictionary<string, object>> bench_json_results = new();
 
     private static string generate_value(int size)
@@ -96,10 +96,6 @@ public static class MainClass
 
     private static void print_results(string resultsFile)
     {
-        foreach (var res in bench_str_results.OrderBy(str => str))
-        {
-            Console.WriteLine(res);
-        }
         using (FileStream createStream = File.Create(resultsFile))
         {
             JsonSerializer.Serialize(createStream, bench_json_results);
@@ -162,6 +158,21 @@ public static class MainClass
         return stopwatch.ElapsedMilliseconds;
     }
 
+    private static Dictionary<string, object> latency_results(
+        string prefix,
+        ConcurrentBag<double> latencies
+    )
+    {
+        return new Dictionary<string, object>
+        {
+            {prefix + "_p50_latency", calculate_latency(latencies, 0.5)},
+            {prefix + "_p90_latency", calculate_latency(latencies, 0.9)},
+            {prefix + "_p99_latency", calculate_latency(latencies, 0.99)},
+            {prefix + "_average_latency", Math.Round(latencies.Average(), 3)},
+            {prefix + "_std_dev", latencies.StandardDeviation()},
+        };
+    }
+
     private static async Task run_client(
         Func<string, Task<string>> get,
         Func<string, string, Task> set,
@@ -169,7 +180,7 @@ public static class MainClass
         int total_commands,
         int data_size,
         int num_of_concurrent_tasks
-)
+    )
     {
         var data = generate_value(data_size);
         var ellapsed_milliseconds = await create_bench_tasks(
@@ -181,50 +192,28 @@ public static class MainClass
         );
         var tps = Math.Round((double)counter / ((double)ellapsed_milliseconds / 1000));
 
-        var get_nonexisting_latency = actions_latencies[ChosenAction.GET_NON_EXISTING];
-        var get_nonexisting_50 = calculate_latency(get_nonexisting_latency[client_name], 0.5);
-        var get_nonexisting_90 = calculate_latency(get_nonexisting_latency[client_name], 0.9);
-        var get_nonexisting_99 = calculate_latency(get_nonexisting_latency[client_name], 0.99);
-        var get_nonexisting_std_dev = get_nonexisting_latency[client_name].StandardDeviation();
+        var get_non_existing_latencies = actions_latencies[ChosenAction.GET_NON_EXISTING][client_name];
+        var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
 
-        var get_existing_latency = actions_latencies[ChosenAction.GET_EXISTING];
-        var get_existing_50 = calculate_latency(get_existing_latency[client_name], 0.5);
-        var get_existing_90 = calculate_latency(get_existing_latency[client_name], 0.9);
-        var get_existing_99 = calculate_latency(get_existing_latency[client_name], 0.99);
-        var get_existing_std_dev = get_existing_latency[client_name].StandardDeviation();
+        var get_existing_latencies = actions_latencies[ChosenAction.GET_EXISTING][client_name];
+        var get_existing_latency_results = latency_results("get_existing", get_existing_latencies);
 
-        var set_latency = actions_latencies[ChosenAction.SET];
-        var set_50 = calculate_latency(set_latency[client_name], 0.5);
-        var set_90 = calculate_latency(set_latency[client_name], 0.9);
-        var set_99 = calculate_latency(set_latency[client_name], 0.99);
-        var set_std_dev = set_latency[client_name].StandardDeviation();
+        var set_latencies = actions_latencies[ChosenAction.SET][client_name];
+        var set_latency_results = latency_results("set", set_latencies);
 
         var result = new Dictionary<string, object>
         {
-                    {"client", client_name},
-                    {"num_of_tasks", num_of_concurrent_tasks},
-                    {"data_size", data_size},
-                    {"tps", tps},
-                    {"get_non_existing_p50_latency", get_nonexisting_50},
-                    {"get_non_existing_p90_latency", get_nonexisting_90},
-                    {"get_non_existing_p99_latency", get_nonexisting_99},
-                    {"get_non_existing_std_dev", get_nonexisting_std_dev},
-                    {"get_existing_p50_latency", get_existing_50},
-                    {"get_existing_p90_latency", get_existing_90},
-                    {"get_existing_p99_latency", get_existing_99},
-                    {"get_existing_std_dev", get_existing_std_dev},
-                    {"set_p50_latency", set_50},
-                    {"set_p90_latency", set_90},
-                    {"set_p99_latency", set_99},
-                    {"set_std_dev", set_std_dev},
+            {"client", client_name},
+            {"num_of_tasks", num_of_concurrent_tasks},
+            {"data_size", data_size},
+            {"tps", tps},
         };
+        result = result
+            .Concat(get_existing_latency_results)
+            .Concat(get_non_existing_latency_results)
+            .Concat(set_latency_results)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
         bench_json_results.Add(result);
-        bench_str_results.Add(
-            $"client: {client_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, " +
-            $"get_non_existing_p50: {get_nonexisting_50}, get_non_existing_p90: {get_nonexisting_90}, get_non_existing_p99: {get_nonexisting_99}, get_non_existing_std_dev: {get_nonexisting_std_dev}, " +
-            $"get_existing_p50: {get_existing_50}, get_existing_p90: {get_existing_90}, get_existing_p99: {get_existing_99}, get_existing_std_dev: {get_existing_std_dev}, " +
-            $"set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}, set_std_dev: {set_std_dev}"
-        );
     }
 
     private static async Task run_with_parameters(int total_commands,
