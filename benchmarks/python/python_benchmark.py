@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import json
-import os
 import random
 import time
 import argparse
@@ -10,6 +9,7 @@ import aioredis
 import numpy as np
 import redis.asyncio as redispy
 import uvloop
+from statistics import mean
 from pybushka import AsyncClient, ClientConfiguration, RedisAsyncClient
 
 
@@ -51,7 +51,6 @@ SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
 counter = 0
 running_tasks = set()
-bench_str_results = []
 bench_json_results = []
 action_latencies = {
     ChosenAction.GET_NON_EXISTING: dict(),
@@ -85,14 +84,8 @@ def calculate_latency(latency_list, percentile):
 
 
 def process_results():
-    global bench_str_results
     global bench_json_results
     global args
-
-    # print results
-    bench_str_results.sort()
-    for res in bench_str_results:
-        print(res)
 
     # write json results to a file
     res_file_path = args.resultsFile
@@ -151,6 +144,17 @@ async def create_and_run_concurrent_tasks(
     await asyncio.gather(*(list(running_tasks)))
 
 
+def latency_results(prefix, latencies):
+    result = {}
+    result[prefix + "_p50_latency"] = calculate_latency(latencies, 50)
+    result[prefix + "_p90_latency"] = calculate_latency(latencies, 90)
+    result[prefix + "_p99_latency"] = calculate_latency(latencies, 9)
+    result[prefix + "_average_latency"] = mean(latencies)
+    result[prefix + "_std_dev"] = np.std(latencies)
+
+    return result
+
+
 async def run_client(
     client,
     client_name,
@@ -159,55 +163,39 @@ async def run_client(
     num_of_concurrent_tasks,
     data_size,
 ):
-    global bench_str_results
     time = await create_and_run_concurrent_tasks(
         client, client_name, total_commands, num_of_concurrent_tasks, data_size
     )
     tps = int(counter / time)
-    get_nonexisting_latency = action_latencies[ChosenAction.GET_NON_EXISTING]
-    get_nonexisting_50 = calculate_latency(get_nonexisting_latency[client_name], 50)
-    get_nonexisting_90 = calculate_latency(get_nonexisting_latency[client_name], 90)
-    get_nonexisting_99 = calculate_latency(get_nonexisting_latency[client_name], 99)
-    get_nonexisting_std_dev = np.std(get_nonexisting_latency[client_name])
+    get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING][
+        client_name
+    ]
+    get_non_existing_latency_results = latency_results(
+        "get_non_existing", get_non_existing_latencies
+    )
 
-    get_existing_latency = action_latencies[ChosenAction.GET_EXISTING]
-    get_existing_50 = calculate_latency(get_existing_latency[client_name], 50)
-    get_existing_90 = calculate_latency(get_existing_latency[client_name], 90)
-    get_existing_99 = calculate_latency(get_existing_latency[client_name], 99)
-    get_existing_std_dev = np.std(get_existing_latency[client_name])
+    get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING][client_name]
+    get_existing_latency_results = latency_results(
+        "get_existing", get_existing_latencies
+    )
 
-    set_latency = action_latencies[ChosenAction.SET]
-    set_50 = calculate_latency(set_latency[client_name], 50)
-    set_90 = calculate_latency(set_latency[client_name], 90)
-    set_99 = calculate_latency(set_latency[client_name], 99)
-    set_std_dev = np.std(set_latency[client_name])
+    set_latencies = action_latencies[ChosenAction.SET][client_name]
+    set_results = latency_results("set", set_latencies)
+
     json_res = {
-        "client": client_name,
-        "loop": event_loop_name,
-        "num_of_tasks": num_of_concurrent_tasks,
-        "data_size": data_size,
-        "tps": tps,
-        "get_non_existing_p50_latency": get_nonexisting_50,
-        "get_non_existing_p90_latency": get_nonexisting_90,
-        "get_non_existing_p99_latency": get_nonexisting_99,
-        "get_non_existing_std_dev": get_nonexisting_std_dev,
-        "get_existing_p50_latency": get_existing_50,
-        "get_existing_p90_latency": get_existing_90,
-        "get_existing_p99_latency": get_existing_99,
-        "get_existing_std_dev": get_existing_std_dev,
-        "set_p50_latency": set_50,
-        "set_p90_latency": set_90,
-        "set_p99_latency": set_99,
-        "set_std_dev": set_std_dev,
+        **{
+            "client": client_name,
+            "loop": event_loop_name,
+            "num_of_tasks": num_of_concurrent_tasks,
+            "data_size": data_size,
+            "tps": tps,
+        },
+        **get_existing_latency_results,
+        **get_non_existing_latency_results,
+        **set_results,
     }
 
     bench_json_results.append(json_res)
-    bench_str_results.append(
-        f"client: {client_name}, event_loop: {event_loop_name}, concurrent_tasks: {num_of_concurrent_tasks}, data_size: {data_size}, TPS: {tps}, "
-        f"get_non_existing_p50: {get_nonexisting_50}, get_non_existing_p90: {get_nonexisting_90}, get_non_existing_p99: {get_nonexisting_99}, get_non_existing_std_dev: {get_nonexisting_std_dev},"
-        f"get_existing_p50_: {get_existing_50}, get_existing_p90: {get_existing_90}, get_existing_p99: {get_existing_99}, get_existing_std_dev: {get_existing_std_dev}, "
-        f" set_p50: {set_50}, set_p90: {set_90}, set_p99: {set_99}, set_std_dev: {set_std_dev}"
-    )
 
 
 async def main(
