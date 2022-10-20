@@ -88,6 +88,14 @@ impl RotatingBuffer {
         }
         // TODO - use serde for easier deserialization.
         let request = match header.request_type {
+            RequestType::ServerAddress => { 
+                WholeRequest {
+                callback_index: header.callback_index,
+                request_type: RequestRanges::ServerAddress {
+                    address: header_end..next,
+                },
+                buffer,
+            }},
             RequestType::GetString => { 
                 WholeRequest {
                 callback_index: header.callback_index,

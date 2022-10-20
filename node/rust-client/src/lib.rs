@@ -134,6 +134,9 @@ pub fn start_socket_listener_external(
             threadsafe_start_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
         },
         move |result| match result {
+            ClosingReason::AllConnectionsClosed => {
+                threadsafe_close_callback.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
+            }
             ClosingReason::ReadSocketClosed => {
                 threadsafe_close_callback.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
             }

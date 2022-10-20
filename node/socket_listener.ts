@@ -21,7 +21,7 @@ export class SocketConnection {
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
-    //private backingWriteBuffer = new ArrayBuffer(1024);
+    private backingWriteBuffer = new ArrayBuffer(1024);
     private remainingReadData: Uint8Array | undefined;
     private previousOperation = Promise.resolve();
 
@@ -134,11 +134,10 @@ export class SocketConnection {
         callbackIndex: number,
         operationType: RequestType,
         headerLength: number,
-        firstStringLength: number | undefined,
-        backingWriteBuffer: &ArrayBuffer
+        firstStringLength: number | undefined
     ) {
         const headerUint32Array = new Uint32Array(
-            backingWriteBuffer,
+            this.backingWriteBuffer,
             0,
             headerLength / 4
         );
@@ -156,10 +155,10 @@ export class SocketConnection {
             : HEADER_LENGTH_IN_BYTES;
     }
 
-    private encodeStringToWriteBuffer(str: string, byteOffset: number, backingWriteBuffer: &ArrayBuffer): number {
+    private encodeStringToWriteBuffer(str: string, byteOffset: number): number {
         const encodeResult = this.encoder.encodeInto(
             str,
-            new Uint8Array(backingWriteBuffer, byteOffset)
+            new Uint8Array(this.backingWriteBuffer, byteOffset)
         );
         return encodeResult.written ?? 0;
     }
@@ -183,29 +182,26 @@ export class SocketConnection {
                         headerLength +
                         firstString.length * 3 +
                         (secondString?.length ?? 0) * 3;
-                    let backingWriteBuffer = new ArrayBuffer(requiredLength);
 
                     if (
-                        !backingWriteBuffer ||
-                        backingWriteBuffer.byteLength < requiredLength
+                        !this.backingWriteBuffer ||
+                        this.backingWriteBuffer.byteLength < requiredLength
                     ) {
-                        backingWriteBuffer = new ArrayBuffer(
+                        this.backingWriteBuffer = new ArrayBuffer(
                             nextPow2(requiredLength)
                         );
                     }
 
                     const firstStringLength = this.encodeStringToWriteBuffer(
                         firstString,
-                        headerLength,
-                        backingWriteBuffer
+                        headerLength
                     );
                     const secondStringLength =
                         secondString == undefined
                             ? 0
                             : this.encodeStringToWriteBuffer(
                                   secondString,
-                                  headerLength + firstStringLength,
-                                  backingWriteBuffer
+                                  headerLength + firstStringLength
                               );
 
                     const length =
@@ -217,19 +213,18 @@ export class SocketConnection {
                         headerLength,
                         secondString !== undefined
                             ? firstStringLength
-                            : undefined,
-                        backingWriteBuffer
+                            : undefined
                     );
 
                     const uint8Array = new Uint8Array(
-                        backingWriteBuffer,
+                        this.backingWriteBuffer,
                         0,
                         length
                     );
-                    if (!this.socket.write(uint8Array)) {
+                    if (!this.socket.write(uint8Array, undefined, () => {resolve();})) {
                         this.socket.once("drain", resolve);
-                    } else {
-                        resolve();
+                    //} else {
+                    //    resolve();
                     }
                 })
         );
@@ -260,6 +255,10 @@ export class SocketConnection {
         return this.writeString(key, RequestType.SetString, value);
     }
 
+    serverAddress(address: string): Promise<void> {
+        return this.writeString(address, RequestType.ServerAddress);
+    }
+
     dispose(): void {
         this.socket.end();
         this.promiseCallbackFunctions.forEach(callbackFunction => {
@@ -287,6 +286,7 @@ export class SocketConnection {
             const startCallback = async () => {
                 if (!resolved) {
                     await connection.connect(GetSocketPath());
+                    await connection.serverAddress(address);
                     resolve(connection);
                 }
             };

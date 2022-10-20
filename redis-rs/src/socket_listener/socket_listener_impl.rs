@@ -8,6 +8,9 @@ use num_traits::ToPrimitive;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
+use std::sync::Arc;
+use tokio::sync::Notify;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{io, thread};
 use tokio::io::Interest;
 use tokio::net::{UnixListener, UnixStream};
@@ -38,11 +41,11 @@ impl From<ClosingReason> for PipeListeningResult {
 }
 
 
-impl Drop for SocketListener {
-    fn drop(&mut self) {
-        close_socket();
-    }
-}
+// impl Drop for SocketListener {
+//     fn drop(&mut self) {
+//         close_socket();
+//     }
+// }
 
 impl SocketListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
@@ -227,6 +230,7 @@ async fn send_get_request(
 
 fn handle_request(
     request: WholeRequest,
+    //connection: Rc<RefCell<Option<MultiplexedConnection>>>,
     connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
@@ -235,6 +239,10 @@ fn handle_request(
     task::spawn_local(async move {
         match request.request_type {
             RequestRanges::Get { key: key_range } => {
+                // let connection = match (*connection).clone().into_inner() {
+                //     Some(res) => res.clone(),
+                //     None => panic!("cannt execute get, server address wasn't sent")
+                // };
                 send_get_request(
                     request.buffer,
                     key_range,
@@ -261,12 +269,14 @@ fn handle_request(
                 )
                 .await;
             }
+            RequestRanges::ServerAddress { address } => {}
         }
     });
 }
 
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
+    //connection: Rc<RefCell<Option<MultiplexedConnection>>>,
     connection: &MultiplexedConnection,
     write_socket: &Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
@@ -274,10 +284,10 @@ async fn handle_requests(
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
-        let connection = connection.clone();
+        //let connection = connection.clone();
         let write_socket = write_socket.clone();
         let lock = lock.clone();
-        handle_request(request, connection, write_socket,  pool.clone(), lock)
+        handle_request(request, connection.clone(), write_socket,  pool.clone(), lock)
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -293,10 +303,59 @@ fn close_socket() {
     };
 }
 
+async fn wait_for_server_address(
+    client_listener: &mut SocketListener, 
+    connected_clients: Arc<AtomicUsize>, 
+    notifier: Arc<Notify>,
+    socket: &Rc<UnixStream>,
+    lock: &Rc<Mutex<()>>) -> Result<(MultiplexedConnection, Vec<WholeRequest>), ClosingReason>
+    {
+    // wait for address
+    let listening_result = client_listener.next_values().await;
+    match listening_result {
+        Closed(reason) => {
+            println!("Rust: Closing! {:?}", reason);
+            connected_clients.fetch_sub(1, Ordering::SeqCst);
+            if connected_clients.load(Ordering::SeqCst) == 0 {
+                notifier.notify_one();
+            }
+            return Err(reason);
+        }
+        ReceivedValues(received_requests) => {
+            for index in 0..received_requests.len() {
+                let request = received_requests.get(index).unwrap();
+                match request.request_type.clone() {
+                    RequestRanges::ServerAddress { address: address_range } => {
+                        let address = &request.buffer[address_range];
+                        let address = std::str::from_utf8(address).expect("Found invalid UTF-8");
+                        println!("Got address: {}", address);
+                        let client = Client::open(address).unwrap(); // TODO: better error handling
+                        let connection = match client.get_multiplexed_async_connection().await {
+                            Ok(socket) => socket,
+                            Err(err) => {
+                                return Err(FailedInitialization(err));
+                            }
+                        };
+                        //connection.replace(Some(conn));
+                        //received_requests.remove(index);
+                        let mut output_buffer = [0_u8; HEADER_END];
+                        write_response_header(&mut output_buffer, request.callback_index, ResponseType::Null);
+                        write_to_output(&output_buffer, &socket, &lock).await;
+                        return Ok((connection, received_requests))
+                    }
+                    _ => {panic!("Got other request before server address");}
+                }
+            };
+        }
+    }
+    return Err(ClosingReason::AllConnectionsClosed)
+}
+
 async fn listen_on_socket<StartCallback, CloseCallback>(
     client: Client,
     start_callback: StartCallback,
-    close_callback: CloseCallback,
+    close_callback: Rc<CloseCallback>,
+    notify_close: Arc<Notify>
 ) where
     StartCallback: Fn() + Send + 'static,
     CloseCallback: Fn(ClosingReason) + Send + 'static,
@@ -305,41 +364,55 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     let listener = match UnixListener::bind(get_socket_path()) {
         Ok(listener) => listener,
         Err(err) => {
-            println!("{}",err);
-            close_callback(FailedInitialization(err.into()));
+            if err.to_string().contains("Address already in use") {
+                println!("Address already in use, exiting this thread to let bind to the exiting connection");
+                start_callback();
+            } else {
+                println!("Got error trying to bind {}",err);
+                close_callback(FailedInitialization(err.into()));
+            }
             return;
         }
     };
     let local = task::LocalSet::new();
-    let client_rc = Rc::new(client);
-    let close_callback_rc = Rc::new(close_callback);
+    let connected_clients = Arc::new(AtomicUsize::new(0));
     start_callback();
     local
         .run_until(async move {
             loop {
                 println!("Rust: entering loop");
-                let cloned_close_callback = close_callback_rc.clone();
+                let cloned_close_callback = close_callback.clone();
                 match listener.accept().await {
                     Ok((stream, _addr)) => {
-                        let cloned_client = client_rc.clone();
+                        //let cloned_client = client_rc.clone();
+                        let cloned_close_notifier = notify_close.clone();
+                        let cloned_connected_clients = connected_clients.clone();
+                        cloned_connected_clients.fetch_add(1, Ordering::SeqCst);
                         println!("Rust: new client!");
                         task::spawn_local(async move {
-                            let connection =
-                                match cloned_client.get_multiplexed_async_connection().await {
-                                    Ok(socket) => socket,
-                                    Err(err) => {
-                                        cloned_close_callback(FailedInitialization(err));
-                                        return;
-                                    }
-                                };
                             let rc_stream = Rc::new(stream);
                             let lock = Rc::new(Mutex::new(()));
                             let mut client_listener = SocketListener::new(rc_stream.clone());
+                            let (connection, _already_received_requests) = 
+                                match wait_for_server_address(
+                                    &mut client_listener, 
+                                    cloned_connected_clients.clone(), 
+                                    cloned_close_notifier.clone(),
+                                    &rc_stream,
+                                    &lock.clone()
+                                ).await {
+                                    Ok((conn, requests)) => (conn, requests),
+                                    Err(err) => {cloned_close_callback(err); return;}
+                            };
                             loop {
                                 let listening_result = client_listener.next_values().await;
                                 match listening_result {
                                     Closed(reason) => {
                                         println!("Rust: Closing! {:?}", reason);
+                                        cloned_connected_clients.fetch_sub(1, Ordering::SeqCst);
+                                        if cloned_connected_clients.load(Ordering::SeqCst) == 0 {
+                                            cloned_close_notifier.notify_one();
+                                        }
                                         cloned_close_callback(reason);
                                         return;
                                     }
@@ -357,7 +430,6 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
             }
         })
         .await;
-    close_socket();
 }
 
 #[derive(Debug)]
@@ -369,6 +441,8 @@ pub enum ClosingReason {
     UnhandledError(RedisError),
     /// The listener couldn't start due to Redis connection error.
     FailedInitialization(RedisError),
+    /// No clients left to handle, close the connection
+    AllConnectionsClosed
 }
 
 fn is_server_up() -> bool {
@@ -378,6 +452,7 @@ fn is_server_up() -> bool {
     };
 }
 
+/// Get the socket path as a string
 pub fn get_socket_path() -> String {
     return std::env::temp_dir().join(SOCKET_FILE_NAME).into_os_string().into_string().unwrap();
 }
@@ -399,11 +474,13 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
     StartCallback: Fn() + Send + 'static,
     CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
-    if is_server_up() {
-        // no need to start the server if it's already running
-        start_callback();
-        return
-    }
+    // if is_server_up() {
+    //     // no need to start the server if it's already running
+    //     println!("server is already up");
+    //     start_callback();
+    //     return
+    // }
+    
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
         .spawn(move || {
@@ -413,13 +490,25 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
                 .build();
             match runtime {
                 Ok(runtime) => {
-                    runtime.block_on(listen_on_socket(
+                    let notify_close = Arc::new(Notify::new());
+                    let cloned_close_notifier = notify_close.clone();
+                    let close_callback_rc = Rc::new(close_callback);
+                    runtime.block_on(async move { tokio::select! {
+                        _ = listen_on_socket(
                         client,
                         start_callback,
-                        close_callback,
-                    ));
+                        close_callback_rc.clone(),
+                        cloned_close_notifier
+                    ) => {println!("listen_on_socket completed first")}
+                    _ = notify_close.notified() => {
+                        println!("closing the server as 'closed' message recieved");
+                        close_socket();
+                        close_callback_rc(AllConnectionsClosed)
+                    }
+                    };});
                 }
                 Err(err) => {
+                    close_socket();
                     close_callback(FailedInitialization(err.into()))
                 }
             };

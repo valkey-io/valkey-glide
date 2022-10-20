@@ -21,6 +21,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 ryu = "1.0"
 itoa = "1.0"
 
+# needed for the socket listner
+rsevents = "0.3"
+
 # This is a dependency that already exists in url
 percent-encoding = "2.1"
 
