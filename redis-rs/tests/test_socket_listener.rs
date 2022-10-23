@@ -496,5 +496,5 @@ fn test_socket_handle_multiple_long_inputs() {
 
         get_receiver(test_basics)
     };
-
+    thread::sleep(std::time::Duration::from_secs(1)); // TODO: delete this, find a better solution
 }

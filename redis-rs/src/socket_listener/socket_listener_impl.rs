@@ -17,9 +17,12 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
 use tokio::task;
+use signal_hook::consts::signal::*;
+use signal_hook_tokio::Signals;
 use ClosingReason::*;
 use PipeListeningResult::*;
-
+use futures::stream::StreamExt;
+use tokio::io::ErrorKind::{AddrInUse};
 /// The socket file name 
 pub const SOCKET_FILE_NAME: &'static str = "babushka-socket";
 
@@ -39,13 +42,6 @@ impl From<ClosingReason> for PipeListeningResult {
         Closed(result)
     }
 }
-
-
-// impl Drop for SocketListener {
-//     fn drop(&mut self) {
-//         close_socket();
-//     }
-// }
 
 impl SocketListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
@@ -239,10 +235,6 @@ fn handle_request(
     task::spawn_local(async move {
         match request.request_type {
             RequestRanges::Get { key: key_range } => {
-                // let connection = match (*connection).clone().into_inner() {
-                //     Some(res) => res.clone(),
-                //     None => panic!("cannt execute get, server address wasn't sent")
-                // };
                 send_get_request(
                     request.buffer,
                     key_range,
@@ -276,7 +268,6 @@ fn handle_request(
 
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
-    //connection: Rc<RefCell<Option<MultiplexedConnection>>>,
     connection: &MultiplexedConnection,
     write_socket: &Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
@@ -294,6 +285,7 @@ async fn handle_requests(
 }
 
 fn close_socket() {
+    println!("close_socket() was called");
     let _ = match std::fs::remove_file(get_socket_path()) {
         Ok(()) => { 
             println!("Successfully deleted socket file");
@@ -336,8 +328,6 @@ async fn wait_for_server_address(
                                 return Err(FailedInitialization(err));
                             }
                         };
-                        //connection.replace(Some(conn));
-                        //received_requests.remove(index);
                         let mut output_buffer = [0_u8; HEADER_END];
                         write_response_header(&mut output_buffer, request.callback_index, ResponseType::Null);
                         write_to_output(&output_buffer, &socket, &lock).await;
@@ -352,10 +342,8 @@ async fn wait_for_server_address(
 }
 
 async fn listen_on_socket<StartCallback, CloseCallback>(
-    client: Client,
     start_callback: StartCallback,
     close_callback: Rc<CloseCallback>,
-    notify_close: Arc<Notify>
 ) where
     StartCallback: Fn() + Send + 'static,
     CloseCallback: Fn(ClosingReason) + Send + 'static,
@@ -364,7 +352,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     let listener = match UnixListener::bind(get_socket_path()) {
         Ok(listener) => listener,
         Err(err) => {
-            if err.to_string().contains("Address already in use") {
+            if err.kind() == AddrInUse {
                 println!("Address already in use, exiting this thread to let bind to the exiting connection");
                 start_callback();
             } else {
@@ -376,15 +364,15 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     };
     let local = task::LocalSet::new();
     let connected_clients = Arc::new(AtomicUsize::new(0));
+    let notify_close = Arc::new(Notify::new());
     start_callback();
     local
         .run_until(async move {
             loop {
-                println!("Rust: entering loop");
                 let cloned_close_callback = close_callback.clone();
-                match listener.accept().await {
-                    Ok((stream, _addr)) => {
-                        //let cloned_client = client_rc.clone();
+                tokio::select! {
+                    listen_v = listener.accept() => {
+                    if let Ok((stream, _addr)) = listen_v {
                         let cloned_close_notifier = notify_close.clone();
                         let cloned_connected_clients = connected_clients.clone();
                         cloned_connected_clients.fetch_add(1, Ordering::SeqCst);
@@ -411,9 +399,12 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                         println!("Rust: Closing! {:?}", reason);
                                         cloned_connected_clients.fetch_sub(1, Ordering::SeqCst);
                                         if cloned_connected_clients.load(Ordering::SeqCst) == 0 {
+                                            // No more clients connected, close the socket
                                             cloned_close_notifier.notify_one();
+                                            println!("notified");
+                                        } else {
+                                            cloned_close_callback(reason);
                                         }
-                                        cloned_close_callback(reason);
                                         return;
                                     }
                                     ReceivedValues(received_requests) => {
@@ -421,12 +412,26 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                             .await;
                                     }
                                 }
-                        }});
-                    }
-                    Err(err) => {
+                        }}
+                    );
+                    } else if let Err(err) = listen_v {
+                        println!("closing due to error");
                         cloned_close_callback(FailedInitialization(err.into()));
                     }
                 }
+                _ = notify_close.notified() => {
+                    println!("closing the server as 'closed' message recieved");
+                    // `notify_one` was called to indicate no more clients are connected,
+                    // close the socket
+                    close_socket();
+                }
+                _ = handle_signals() => {
+                    // Interrupt was received, close the socket 
+                    println!("closing the server as SIGINT recieved");
+                    close_socket();
+                }
+
+            }
             }
         })
         .await;
@@ -445,16 +450,27 @@ pub enum ClosingReason {
     AllConnectionsClosed
 }
 
-fn is_server_up() -> bool {
-    let _ = match std::os::unix::net::UnixStream::connect(get_socket_path()) {
-        Ok(_) => return true,
-        Err(_) => return false
-    };
-}
-
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
     return std::env::temp_dir().join(SOCKET_FILE_NAME).into_os_string().into_string().unwrap();
+}
+
+async fn handle_signals() {
+    let mut signals = Signals::new(&[
+        SIGTERM,
+        SIGINT,
+        SIGQUIT,
+    ]).unwrap();
+    while let Some(signal) = signals.next().await {
+        match signal {
+            SIGTERM | SIGINT | SIGQUIT => {
+                // Shutdown the system;
+                println!("Exiting due to signal interrupt");
+                close_socket();
+            },
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Start a thread  
@@ -490,23 +506,13 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
                 .build();
             match runtime {
                 Ok(runtime) => {
-                    let notify_close = Arc::new(Notify::new());
-                    let cloned_close_notifier = notify_close.clone();
                     let close_callback_rc = Rc::new(close_callback);
-                    runtime.block_on(async move { tokio::select! {
-                        _ = listen_on_socket(
-                        client,
+                    runtime.block_on(listen_on_socket(
                         start_callback,
                         close_callback_rc.clone(),
-                        cloned_close_notifier
-                    ) => {println!("listen_on_socket completed first")}
-                    _ = notify_close.notified() => {
-                        println!("closing the server as 'closed' message recieved");
-                        close_socket();
-                        close_callback_rc(AllConnectionsClosed)
-                    }
-                    };});
+                    ));
                 }
+                
                 Err(err) => {
                     close_socket();
                     close_callback(FailedInitialization(err.into()))
