@@ -45,7 +45,6 @@ jobs:
               working-directory: ./node/rust-client
 
             - run: |
-                  rm -rf node_modules && yarn install --frozen-lockfile
                   yarn test
               working-directory: ./node
 
