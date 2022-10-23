@@ -60,16 +60,15 @@ async-native-tls = { version = "0.4", optional = true }
 
 # Optional aHash support
 ahash = { version = "0.7.6", optional = true }
-byteorder = "1.4.3"
-lifeguard = "0.6.1"
-num-derive = "0.3.3"
-num-traits = "0.2.15"
-ntest = "0.8.1"
+byteorder = { version = "1.4.3", optional = true }
+lifeguard = { version = "0.6.1", optional = true }
+num-derive = { version = "0.3.3", optional = true }
+num-traits = { version = "0.2.15", optional = true }
 
 [features]
 default = ["acl", "streams", "geospatial", "script"]
 acl = []
-aio = ["bytes", "pin-project-lite", "futures-util", "futures-util/alloc", "futures-util/sink", "tokio/io-util", "tokio-util", "tokio-util/codec", "tokio/sync", "combine/tokio", "async-trait"]
+aio = ["bytes", "pin-project-lite", "futures-util", "futures-util/alloc", "futures-util/sink", "tokio/io-util", "tokio-util", "tokio-util/codec", "tokio/sync", "combine/tokio", "async-trait", "byteorder", "lifeguard", "num-derive", "num-traits"]
 geospatial = []
 cluster = ["crc16", "rand"]
 script = ["sha1_smol"]
@@ -93,6 +92,7 @@ partial-io = { version = "0.5", features = ["tokio", "quickcheck1"] }
 quickcheck = "1.0.3"
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 tempfile = "3.2"
+ntest = "0.8.1"
 
 [[test]]
 name = "test_async"
