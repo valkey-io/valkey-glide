@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from pybushka.connection import AsyncFFIConnection, AsyncSocketConnection
-
 BASE_ALLOWED_KEYS = {
     "host",
     "port",
@@ -10,19 +8,10 @@ BASE_ALLOWED_KEYS = {
     "password",
     "retry",
     "timeout",
-    "read_socket_name",
-    "write_socket_name",
 }
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
-
-DEFAULT_CONFIGS = {
-    "host": DEFAULT_HOST,
-    "port": DEFAULT_PORT,
-    "db": 0,
-    "tls_enabled": False,
-}
 
 
 class BaseClientConfiguration(ABC):
@@ -49,12 +38,6 @@ class ClientConfiguration(BaseClientConfiguration):
 
     @staticmethod
     def get_default_config():
-        return ClientConfiguration(**DEFAULT_CONFIGS)
-
-    @staticmethod
-    def get_default_uds_config():
         return ClientConfiguration(
-            **DEFAULT_CONFIGS,
-            read_socket_name="./uds_read_socket",
-            write_socket_name="./uds_write_socket",
+            host=DEFAULT_HOST, port=DEFAULT_PORT, db=0, tls_enabled=False
         )

@@ -1,4 +1,4 @@
-def to_url(host, port=6379, user="", password="", tls=False, *args, **kwargs):
+def to_url(host, port=6379, user="", password="", tls=False):
     protocol = "rediss" if tls else "redis"
     auth = ""
     if user or password:
