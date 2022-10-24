@@ -406,7 +406,7 @@ mod tests {
         );
         assert_eq!(requests[0].callback_index, 100);
 
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(3); // 2nd message operation type
         rotating_buffer.write_to_buffer(4); // 2nd message key length
         let buffer = rotating_buffer.current_buffer();
         assert_eq!(buffer.len(), HEADER_WITH_KEY_LENGTH_END);
@@ -433,7 +433,7 @@ mod tests {
         write_get_message(&mut rotating_buffer, FIRST_MESSAGE_LENGTH, 100);
         rotating_buffer.write_to_buffer(SECOND_MESSAGE_LENGTH as u32); // 2nd message length
         rotating_buffer.write_to_buffer(5); // 2nd message callback index
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(3); // 2nd message operation type
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(
@@ -481,7 +481,7 @@ mod tests {
         );
         assert_eq!(requests[0].callback_index, 100);
 
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(3); // 2nd message operation type
         rotating_buffer.write_to_buffer(8); // 2nd message key length
         let buffer = rotating_buffer.current_buffer();
         let mut message = vec![0_u8; SECOND_MESSAGE_LENGTH - buffer.len()];
