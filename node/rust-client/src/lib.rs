@@ -12,10 +12,12 @@ use tokio::runtime::{Builder, Runtime};
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]
 pub enum RequestType {
+    /// Type of a server address request
+    ServerAddress = 1,
     /// Type of a get string request.
-    GetString = 1,
+    GetString = 2,
     /// Type of a set string request.
-    SetString = 2,
+    SetString = 3,
 }
 
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
@@ -112,14 +114,10 @@ pub fn get_socket_path_external() -> String{
 
 #[napi(
     js_name = "StartSocketConnection",
-    ts_args_type = "connectionAddress: string, 
-                    readSocketName: string, 
-                    writeSocketName: string, 
-                    startCallback: () => void, 
+    ts_args_type = "startCallback: (err: null | Error) => void, 
                     closeCallback: (err: null | Error) => void"
 )]
 pub fn start_socket_listener_external(
-    connection_address: String,
     start_callback: JsFunction,
     close_callback: JsFunction,
 ) -> napi::Result<()> {
@@ -127,9 +125,7 @@ pub fn start_socket_listener_external(
         start_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
     let threadsafe_close_callback: ThreadsafeFunction<(), ErrorStrategy::CalleeHandled> =
         close_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
-    let client = to_js_result(redis::Client::open(connection_address))?;
     start_socket_listener(
-        client,
         move || {
             threadsafe_start_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
         },

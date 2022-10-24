@@ -20,7 +20,6 @@ export const enum ResponseType {
 export const HEADER_LENGTH_IN_BYTES: number
 export function GetSocketPath(): string
 export function StartSocketConnection(
-  connectionAddress: string,
   startCallback: (err: null | Error) => void,
   closeCallback: (err: null | Error) => void,
 ): void

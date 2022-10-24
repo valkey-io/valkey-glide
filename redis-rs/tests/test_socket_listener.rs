@@ -43,7 +43,6 @@ fn send_address(address: String, socket: &UnixStream) {
     buffer.write_all(address.as_bytes()).unwrap();
     let mut socket = socket.try_clone().unwrap();
     socket.write_all(&buffer).unwrap();
-    println!("wrote address to socket");
     let size = socket.read(&mut buffer).unwrap();
     assert_eq!(size, HEADER_END);
     assert_eq!(
@@ -64,27 +63,20 @@ fn send_address(address: String, socket: &UnixStream) {
             .unwrap(),
         ResponseType::Null.to_u32().unwrap()
     );
-    println!("Got OK response on address");
 }
 fn setup_test_basics() -> TestBasics {
     let (close_sender, close_receiver) = channel();
-    //let (start_sender, start_receiver) = channel();
     let close_sender = Arc::new(Mutex::new(close_sender));
     let channel_state: Arc<ManualResetEvent> = Arc::new(ManualResetEvent::new(EventState::Unset));
     let context = TestContext::new();
     let cloned_state = channel_state.clone();
     let close_sender_clone = close_sender.clone();
     start_socket_listener(
-        context.client,
         move || {
-            //start_sender.send(ClosingReason::NoOp).unwrap();
             cloned_state.set();
         },
-        move |_| {
-            println!("{}", "closing");
-        },
+        move |_err| {},
     );
-    //wait_for_receiver(start_receiver);
     channel_state.wait();
     let socket = std::os::unix::net::UnixStream::connect(get_socket_path()).unwrap();
     let address = context.server.get_client_addr().to_string();
@@ -192,8 +184,6 @@ fn test_socket_set_and_get() {
         ResponseType::String.to_u32().unwrap()
     );
     assert_eq!(&buffer[HEADER_END..VALUE_LENGTH + HEADER_END], value);
-
-    //wait_for_closing_result(receiver, ClosingReason::ReadSocketClosed);
 }
 
 #[test]
@@ -252,13 +242,6 @@ fn test_socket_report_error() {
     buffer.write_all(key.as_bytes()).unwrap();
     buffer.write_all(&value).unwrap();
     test_basics.socket.write_all(&buffer).unwrap();
-
-    let receiver = get_receiver(test_basics);
-
-    // wait_for_closing_result(
-    //     receiver,
-    //     ClosingReason::UnhandledError(io::Error::new(ErrorKind::InvalidInput, "").into()),
-    // );
 }
 
 #[test]
@@ -470,7 +453,6 @@ fn test_socket_handle_multiple_long_inputs() {
                     buffer.write_all(key.as_bytes()).unwrap();
                     buffer.write_all(&value).unwrap();
                     write_socket.write_all(&buffer).unwrap();
-                    println!("thread {} wrote all SET to socket", i);
                     buffer.clear();
 
                     // Send a get request
@@ -484,7 +466,6 @@ fn test_socket_handle_multiple_long_inputs() {
                         .unwrap();
                     buffer.write_all(key.as_bytes()).unwrap();
                     write_socket.write_all(&buffer).unwrap();
-                    println!("thread {} wrote all GET to socket", i);
                 });
             }
         });

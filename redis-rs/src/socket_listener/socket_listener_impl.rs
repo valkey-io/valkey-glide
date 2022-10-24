@@ -22,7 +22,7 @@ use signal_hook_tokio::Signals;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use futures::stream::StreamExt;
-use tokio::io::ErrorKind::{AddrInUse};
+use tokio::io::ErrorKind::AddrInUse;
 /// The socket file name 
 pub const SOCKET_FILE_NAME: &'static str = "babushka-socket";
 
@@ -99,9 +99,8 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(output: &[u8], write_socket: &UnixStream, lock: &Mutex<()>) {
-    let _ = lock.lock().await;
-    //let write_socket = write_socket.lock().await;
+async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &Mutex<()>) {
+    let _ = write_lock.lock().await;
     let mut total_written_bytes = 0;
     while total_written_bytes < output.len() {
         let ready_result = write_socket.ready(Interest::WRITABLE).await;
@@ -169,14 +168,14 @@ async fn send_set_request(
     callback_index: u32,
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
-    lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>
 ) {
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
         .await; // TODO - add proper error handling.
     let mut output_buffer = [0_u8; HEADER_END];
     write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
-    write_to_output(&output_buffer, &write_socket, &lock).await;
+    write_to_output(&output_buffer, &write_socket, &write_lock).await;
 }
 
 fn get_vec(pool: &Pool<Vec<u8>>, required_capacity: usize) -> RcRecycled<Vec<u8>> {
@@ -196,7 +195,7 @@ async fn send_get_request(
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     pool: &Pool<Vec<u8>>,
-    lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>
 ) {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
     match result {
@@ -214,23 +213,22 @@ async fn send_get_request(
             if offset != 0 {
                 output_buffer.resize(length + 4 - offset, 0);
             }
-            write_to_output(&output_buffer, &write_socket, &lock).await;
+            write_to_output(&output_buffer, &write_socket, &write_lock).await;
         }
         None => {
             let mut output_buffer = [0_u8; HEADER_END];
             write_response_header(&mut output_buffer, callback_index, ResponseType::Null);
-            write_to_output(&output_buffer, &write_socket, &lock).await;
+            write_to_output(&output_buffer, &write_socket, &write_lock).await;
         }
     };
 }
 
 fn handle_request(
     request: WholeRequest,
-    //connection: Rc<RefCell<Option<MultiplexedConnection>>>,
     connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
-    lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>
 ) {
     task::spawn_local(async move {
         match request.request_type {
@@ -242,7 +240,7 @@ fn handle_request(
                     connection,
                     write_socket,
                     &pool,
-                    lock
+                    write_lock
                 )
                 .await;
             }
@@ -257,11 +255,11 @@ fn handle_request(
                     request.callback_index,
                     connection,
                     write_socket,
-                    lock
+                    write_lock
                 )
                 .await;
             }
-            RequestRanges::ServerAddress { address } => {}
+            RequestRanges::ServerAddress { address: _ } => {}
         }
     });
 }
@@ -271,13 +269,13 @@ async fn handle_requests(
     connection: &MultiplexedConnection,
     write_socket: &Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
-    lock: &Rc<Mutex<()>>
+    write_lock: &Rc<Mutex<()>>
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
         //let connection = connection.clone();
         let write_socket = write_socket.clone();
-        let lock = lock.clone();
+        let lock = write_lock.clone();
         handle_request(request, connection.clone(), write_socket,  pool.clone(), lock)
     }
     // Yield to ensure that the subtasks aren't starved.
@@ -285,33 +283,23 @@ async fn handle_requests(
 }
 
 fn close_socket() {
-    println!("close_socket() was called");
     let _ = match std::fs::remove_file(get_socket_path()) {
-        Ok(()) => { 
-            println!("Successfully deleted socket file");
-        },
-        Err(e) => { println!("Failed to delete socket file: {}", e);
+        Ok(()) => {},
+        Err(e) => { panic!("Failed to delete socket file: {}", e); // TODO: better error handling
         }
     };
 }
 
-async fn wait_for_server_address(
+async fn wait_for_server_address_create_conn(
     client_listener: &mut SocketListener, 
-    connected_clients: Arc<AtomicUsize>, 
-    notifier: Arc<Notify>,
     socket: &Rc<UnixStream>,
-    lock: &Rc<Mutex<()>>) -> Result<(MultiplexedConnection, Vec<WholeRequest>), ClosingReason>
+    write_lock: &Rc<Mutex<()>>) -> Result<MultiplexedConnection, BabushkaError>
     {
-    // wait for address
+    // Wait for the server's address
     let listening_result = client_listener.next_values().await;
     match listening_result {
         Closed(reason) => {
-            println!("Rust: Closing! {:?}", reason);
-            connected_clients.fetch_sub(1, Ordering::SeqCst);
-            if connected_clients.load(Ordering::SeqCst) == 0 {
-                notifier.notify_one();
-            }
-            return Err(reason);
+            return Err(BabushkaError::CloseError(reason));
         }
         ReceivedValues(received_requests) => {
             for index in 0..received_requests.len() {
@@ -320,25 +308,34 @@ async fn wait_for_server_address(
                     RequestRanges::ServerAddress { address: address_range } => {
                         let address = &request.buffer[address_range];
                         let address = std::str::from_utf8(address).expect("Found invalid UTF-8");
-                        println!("Got address: {}", address);
                         let client = Client::open(address).unwrap(); // TODO: better error handling
                         let connection = match client.get_multiplexed_async_connection().await {
                             Ok(socket) => socket,
                             Err(err) => {
-                                return Err(FailedInitialization(err));
+                                return Err(BabushkaError::BaseError(format!("Failed to create a multiplexed connection: {:?}", err)))
                             }
                         };
                         let mut output_buffer = [0_u8; HEADER_END];
                         write_response_header(&mut output_buffer, request.callback_index, ResponseType::Null);
-                        write_to_output(&output_buffer, &socket, &lock).await;
-                        return Ok((connection, received_requests))
+                        write_to_output(&output_buffer, &socket, &write_lock).await;
+                        return Ok(connection)
                     }
-                    _ => {panic!("Got other request before server address");}
+                    _ => return Err(BabushkaError::BaseError("Received another request before receiving server address".to_string())) 
                 }
             };
         }
     }
-    return Err(ClosingReason::AllConnectionsClosed)
+    Err(BabushkaError::BaseError("Failed to get the server's address".to_string()))
+}
+
+fn update_notify_connected_clients(connected_clients: Arc<AtomicUsize>, close_notifier: Arc<Notify>) {
+    // Check if the entire socket listener should be closed before 
+    // closing the client's connection task
+    connected_clients.fetch_sub(1, Ordering::SeqCst);
+    if connected_clients.load(Ordering::SeqCst) == 0 {
+        // No more clients connected, close the socket
+        close_notifier.notify_one();
+    }
 }
 
 async fn listen_on_socket<StartCallback, CloseCallback>(
@@ -353,10 +350,10 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
         Ok(listener) => listener,
         Err(err) => {
             if err.kind() == AddrInUse {
-                println!("Address already in use, exiting this thread to let bind to the exiting connection");
+                // Address already in use, exit this thread and try to connect to the existing listener
                 start_callback();
             } else {
-                println!("Got error trying to bind {}",err);
+                // Got another error while trying to bind
                 close_callback(FailedInitialization(err.into()));
             }
             return;
@@ -369,65 +366,59 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
     local
         .run_until(async move {
             loop {
-                let cloned_close_callback = close_callback.clone();
                 tokio::select! {
                     listen_v = listener.accept() => {
                     if let Ok((stream, _addr)) = listen_v {
+                        // New client
                         let cloned_close_notifier = notify_close.clone();
                         let cloned_connected_clients = connected_clients.clone();
                         cloned_connected_clients.fetch_add(1, Ordering::SeqCst);
-                        println!("Rust: new client!");
                         task::spawn_local(async move {
+                            // Spawn a new task to listen on this client's stream
                             let rc_stream = Rc::new(stream);
-                            let lock = Rc::new(Mutex::new(()));
+                            let write_lock = Rc::new(Mutex::new(()));
                             let mut client_listener = SocketListener::new(rc_stream.clone());
-                            let (connection, _already_received_requests) = 
-                                match wait_for_server_address(
+                            let connection = 
+                                match wait_for_server_address_create_conn(
                                     &mut client_listener, 
-                                    cloned_connected_clients.clone(), 
-                                    cloned_close_notifier.clone(),
                                     &rc_stream,
-                                    &lock.clone()
+                                    &write_lock.clone()
                                 ).await {
-                                    Ok((conn, requests)) => (conn, requests),
-                                    Err(err) => {cloned_close_callback(err); return;}
+                                    Ok(conn) => conn,
+                                    Err(BabushkaError::CloseError(_reason)) => {
+                                        update_notify_connected_clients(cloned_connected_clients, cloned_close_notifier);
+                                        return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
+                                    } 
+                                    Err(BabushkaError::BaseError(err)) => {
+                                        panic!("{:?}", err); // TODO: implement error protocol 
+                                    }
                             };
                             loop {
                                 let listening_result = client_listener.next_values().await;
                                 match listening_result {
-                                    Closed(reason) => {
-                                        println!("Rust: Closing! {:?}", reason);
-                                        cloned_connected_clients.fetch_sub(1, Ordering::SeqCst);
-                                        if cloned_connected_clients.load(Ordering::SeqCst) == 0 {
-                                            // No more clients connected, close the socket
-                                            cloned_close_notifier.notify_one();
-                                            println!("notified");
-                                        } else {
-                                            cloned_close_callback(reason);
-                                        }
-                                        return;
+                                    Closed(_reason) => {
+                                        update_notify_connected_clients(cloned_connected_clients, cloned_close_notifier);
+                                        return; // TODO: implement error protocol, handle error closing reasons
                                     }
                                     ReceivedValues(received_requests) => {
-                                        handle_requests(received_requests, &connection, &rc_stream, client_listener.pool.clone(), &lock.clone())
+                                        handle_requests(received_requests, &connection, &rc_stream, 
+                                            client_listener.pool.clone(), &write_lock.clone())
                                             .await;
                                     }
                                 }
                         }}
                     );
                     } else if let Err(err) = listen_v {
-                        println!("closing due to error");
-                        cloned_close_callback(FailedInitialization(err.into()));
+                        close_callback(FailedInitialization(err.into()));
                     }
                 }
                 _ = notify_close.notified() => {
-                    println!("closing the server as 'closed' message recieved");
                     // `notify_one` was called to indicate no more clients are connected,
                     // close the socket
                     close_socket();
                 }
                 _ = handle_signals() => {
                     // Interrupt was received, close the socket 
-                    println!("closing the server as SIGINT recieved");
                     close_socket();
                 }
 
@@ -450,22 +441,33 @@ pub enum ClosingReason {
     AllConnectionsClosed
 }
 
+/// Enum describing babushka errors
+pub enum BabushkaError {
+    /// Base error
+    BaseError(String),
+    /// Close error
+    CloseError(ClosingReason)
+}
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
     return std::env::temp_dir().join(SOCKET_FILE_NAME).into_os_string().into_string().unwrap();
 }
 
 async fn handle_signals() {
+    // Handle Unix signals
     let mut signals = Signals::new(&[
         SIGTERM,
-        SIGINT,
         SIGQUIT,
+        SIGINT,
+        SIGHUP
     ]).unwrap();
     while let Some(signal) = signals.next().await {
         match signal {
-            SIGTERM | SIGINT | SIGQUIT => {
-                // Shutdown the system;
-                println!("Exiting due to signal interrupt");
+            SIGTERM |
+            SIGQUIT |
+            SIGINT |
+            SIGHUP => {
+                // Close the socket
                 close_socket();
             },
             _ => unreachable!(),
@@ -477,26 +479,16 @@ async fn handle_signals() {
 ///
 /// # Arguments
 ///
-/// * `client` - the client from which to create a connection.
-///
 /// * `start_callback` - called when the thread started listening on the socket. This is used to prevent races.
 ///
-/// * `close_callback` - called when the listener stopped listening, with the reason for stopping.
+/// * `close_callback` - called when the socket listener fails to initialize, with the reason for the failure.
 pub fn start_socket_listener<StartCallback, CloseCallback>(
-    client: Client,
     start_callback: StartCallback,
     close_callback: CloseCallback,
 ) where
     StartCallback: Fn() + Send + 'static,
     CloseCallback: Fn(ClosingReason) + Send + 'static,
 {
-    // if is_server_up() {
-    //     // no need to start the server if it's already running
-    //     println!("server is already up");
-    //     start_callback();
-    //     return
-    // }
-    
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
         .spawn(move || {

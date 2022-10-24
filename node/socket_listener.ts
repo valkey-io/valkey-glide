@@ -95,7 +95,6 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             this.socket.connect(socketPath)
             .on('connect', ()=>{
-                console.log("Connected.");
                 resolve("Connected");
             })
             // Messages are buffers. use toString
@@ -261,12 +260,6 @@ export class SocketConnection {
 
     dispose(): void {
         this.socket.end();
-        this.promiseCallbackFunctions.forEach(callbackFunction => {
-            const rejectFunction = callbackFunction[1];
-            if (rejectFunction != null) {
-                rejectFunction(null);
-            }
-        });
     }
 
     static async CreateConnection(address: string): Promise<SocketConnection> {
@@ -292,7 +285,6 @@ export class SocketConnection {
             };
             
             StartSocketConnection(
-                address,
                 startCallback,
                 closeCallback
             );
