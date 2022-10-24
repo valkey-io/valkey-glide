@@ -22,7 +22,7 @@ sudo tar xzf {0}.tar.gz
 sudo rm {0}.tar.gz
 cd {0}
 sudo make distclean
-sudo make
+sudo make distclean
 sudo mkdir /etc/redis
 sudo cp src/redis-server src/redis-cli /usr/local/bin
 ```

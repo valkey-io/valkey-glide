@@ -9,7 +9,7 @@ run `yarn run initial-build`.
 ### Build
 
 Run `yarn run build-internal` to build the internal package and generates TS code. `yarn run build-external` builds the external package without rebuilding the internal package.
-Run `npm run build` runs a full build.
+Run `yarn run build` runs a full build.
 
 ### Testing
 
