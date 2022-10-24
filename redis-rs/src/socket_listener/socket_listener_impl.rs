@@ -3,27 +3,27 @@ use super::{headers::*, rotating_buffer::RotatingBuffer};
 use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
 use byteorder::{LittleEndian, WriteBytesExt};
+use futures::stream::StreamExt;
 use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use num_traits::ToPrimitive;
+use signal_hook::consts::signal::*;
+use signal_hook_tokio::Signals;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
-use std::sync::Arc;
-use tokio::sync::Notify;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::{io, thread};
+use tokio::io::ErrorKind::AddrInUse;
 use tokio::io::Interest;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
+use tokio::sync::Notify;
 use tokio::task;
-use signal_hook::consts::signal::*;
-use signal_hook_tokio::Signals;
 use ClosingReason::*;
 use PipeListeningResult::*;
-use futures::stream::StreamExt;
-use tokio::io::ErrorKind::AddrInUse;
-/// The socket file name 
+/// The socket file name
 pub const SOCKET_FILE_NAME: &'static str = "babushka-socket";
 
 struct SocketListener {
@@ -83,7 +83,7 @@ impl SocketListener {
                 Ok(_) => {
                     return match self.rotating_buffer.get_requests() {
                         Ok(requests) => ReceivedValues(requests),
-                        Err(err) =>  UnhandledError(err.into()).into()
+                        Err(err) => UnhandledError(err.into()).into(),
                     };
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -93,7 +93,7 @@ impl SocketListener {
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
                     continue;
                 }
-                Err(err) => return UnhandledError(err.into()).into()
+                Err(err) => return UnhandledError(err.into()).into(),
             }
         }
     }
@@ -168,7 +168,7 @@ async fn send_set_request(
     callback_index: u32,
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
-    write_lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>,
 ) {
     let _: RedisResult<()> = connection
         .set(&buffer[key_range], &buffer[value_range])
@@ -195,7 +195,7 @@ async fn send_get_request(
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     pool: &Pool<Vec<u8>>,
-    write_lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>,
 ) {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await.unwrap(); // TODO - add proper error handling.
     match result {
@@ -228,7 +228,7 @@ fn handle_request(
     connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
-    write_lock: Rc<Mutex<()>>
+    write_lock: Rc<Mutex<()>>,
 ) {
     task::spawn_local(async move {
         match request.request_type {
@@ -240,7 +240,7 @@ fn handle_request(
                     connection,
                     write_socket,
                     &pool,
-                    write_lock
+                    write_lock,
                 )
                 .await;
             }
@@ -255,7 +255,7 @@ fn handle_request(
                     request.callback_index,
                     connection,
                     write_socket,
-                    write_lock
+                    write_lock,
                 )
                 .await;
             }
@@ -269,14 +269,20 @@ async fn handle_requests(
     connection: &MultiplexedConnection,
     write_socket: &Rc<UnixStream>,
     pool: Rc<Pool<Vec<u8>>>,
-    write_lock: &Rc<Mutex<()>>
+    write_lock: &Rc<Mutex<()>>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
         //let connection = connection.clone();
         let write_socket = write_socket.clone();
         let lock = write_lock.clone();
-        handle_request(request, connection.clone(), write_socket,  pool.clone(), lock)
+        handle_request(
+            request,
+            connection.clone(),
+            write_socket,
+            pool.clone(),
+            lock,
+        )
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -284,17 +290,18 @@ async fn handle_requests(
 
 fn close_socket() {
     let _ = match std::fs::remove_file(get_socket_path()) {
-        Ok(()) => {},
-        Err(e) => { panic!("Failed to delete socket file: {}", e); // TODO: better error handling
+        Ok(()) => {}
+        Err(e) => {
+            panic!("Failed to delete socket file: {}", e); // TODO: better error handling
         }
     };
 }
 
 async fn wait_for_server_address_create_conn(
-    client_listener: &mut SocketListener, 
+    client_listener: &mut SocketListener,
     socket: &Rc<UnixStream>,
-    write_lock: &Rc<Mutex<()>>) -> Result<MultiplexedConnection, BabushkaError>
-    {
+    write_lock: &Rc<Mutex<()>>,
+) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
     let listening_result = client_listener.next_values().await;
     match listening_result {
@@ -305,31 +312,49 @@ async fn wait_for_server_address_create_conn(
             for index in 0..received_requests.len() {
                 let request = received_requests.get(index).unwrap();
                 match request.request_type.clone() {
-                    RequestRanges::ServerAddress { address: address_range } => {
+                    RequestRanges::ServerAddress {
+                        address: address_range,
+                    } => {
                         let address = &request.buffer[address_range];
                         let address = std::str::from_utf8(address).expect("Found invalid UTF-8");
                         let client = Client::open(address).unwrap(); // TODO: better error handling
                         let connection = match client.get_multiplexed_async_connection().await {
                             Ok(socket) => socket,
                             Err(err) => {
-                                return Err(BabushkaError::BaseError(format!("Failed to create a multiplexed connection: {:?}", err)))
+                                return Err(BabushkaError::BaseError(format!(
+                                    "Failed to create a multiplexed connection: {:?}",
+                                    err
+                                )))
                             }
                         };
                         let mut output_buffer = [0_u8; HEADER_END];
-                        write_response_header(&mut output_buffer, request.callback_index, ResponseType::Null);
+                        write_response_header(
+                            &mut output_buffer,
+                            request.callback_index,
+                            ResponseType::Null,
+                        );
                         write_to_output(&output_buffer, &socket, &write_lock).await;
-                        return Ok(connection)
+                        return Ok(connection);
                     }
-                    _ => return Err(BabushkaError::BaseError("Received another request before receiving server address".to_string())) 
+                    _ => {
+                        return Err(BabushkaError::BaseError(
+                            "Received another request before receiving server address".to_string(),
+                        ))
+                    }
                 }
-            };
+            }
         }
     }
-    Err(BabushkaError::BaseError("Failed to get the server's address".to_string()))
+    Err(BabushkaError::BaseError(
+        "Failed to get the server's address".to_string(),
+    ))
 }
 
-fn update_notify_connected_clients(connected_clients: Arc<AtomicUsize>, close_notifier: Arc<Notify>) {
-    // Check if the entire socket listener should be closed before 
+fn update_notify_connected_clients(
+    connected_clients: Arc<AtomicUsize>,
+    close_notifier: Arc<Notify>,
+) {
+    // Check if the entire socket listener should be closed before
     // closing the client's connection task
     connected_clients.fetch_sub(1, Ordering::SeqCst);
     if connected_clients.load(Ordering::SeqCst) == 0 {
@@ -378,9 +403,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                             let rc_stream = Rc::new(stream);
                             let write_lock = Rc::new(Mutex::new(()));
                             let mut client_listener = SocketListener::new(rc_stream.clone());
-                            let connection = 
-                                match wait_for_server_address_create_conn(
-                                    &mut client_listener, 
+                            let connection = match wait_for_server_address_create_conn(&mut client_listener,
                                     &rc_stream,
                                     &write_lock.clone()
                                 ).await {
@@ -388,9 +411,9 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                     Err(BabushkaError::CloseError(_reason)) => {
                                         update_notify_connected_clients(cloned_connected_clients, cloned_close_notifier);
                                         return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
-                                    } 
+                                    }
                                     Err(BabushkaError::BaseError(err)) => {
-                                        panic!("{:?}", err); // TODO: implement error protocol 
+                                        panic!("{:?}", err); // TODO: implement error protocol
                                     }
                             };
                             loop {
@@ -401,7 +424,7 @@ async fn listen_on_socket<StartCallback, CloseCallback>(
                                         return; // TODO: implement error protocol, handle error closing reasons
                                     }
                                     ReceivedValues(received_requests) => {
-                                        handle_requests(received_requests, &connection, &rc_stream, 
+                                        handle_requests(received_requests, &connection, &rc_stream,
                                             client_listener.pool.clone(), &write_lock.clone())
                                             .await;
                                     }
@@ -438,7 +461,7 @@ pub enum ClosingReason {
     /// The listener couldn't start due to Redis connection error.
     FailedInitialization(RedisError),
     /// No clients left to handle, close the connection
-    AllConnectionsClosed
+    AllConnectionsClosed,
 }
 
 /// Enum describing babushka errors
@@ -446,30 +469,26 @@ pub enum BabushkaError {
     /// Base error
     BaseError(String),
     /// Close error
-    CloseError(ClosingReason)
+    CloseError(ClosingReason),
 }
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
-    return std::env::temp_dir().join(SOCKET_FILE_NAME).into_os_string().into_string().unwrap();
+    return std::env::temp_dir()
+        .join(SOCKET_FILE_NAME)
+        .into_os_string()
+        .into_string()
+        .unwrap();
 }
 
 async fn handle_signals() {
     // Handle Unix signals
-    let mut signals = Signals::new(&[
-        SIGTERM,
-        SIGQUIT,
-        SIGINT,
-        SIGHUP
-    ]).unwrap();
+    let mut signals = Signals::new(&[SIGTERM, SIGQUIT, SIGINT, SIGHUP]).unwrap();
     while let Some(signal) = signals.next().await {
         match signal {
-            SIGTERM |
-            SIGQUIT |
-            SIGINT |
-            SIGHUP => {
+            SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
                 // Close the socket
                 close_socket();
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -499,12 +518,9 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
             match runtime {
                 Ok(runtime) => {
                     let close_callback_rc = Rc::new(close_callback);
-                    runtime.block_on(listen_on_socket(
-                        start_callback,
-                        close_callback_rc.clone(),
-                    ));
+                    runtime.block_on(listen_on_socket(start_callback, close_callback_rc.clone()));
                 }
-                
+
                 Err(err) => {
                     close_socket();
                     close_callback(FailedInitialization(err.into()))

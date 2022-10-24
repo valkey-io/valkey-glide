@@ -1,10 +1,11 @@
+import argparse
 import asyncio
 import functools
 import json
 import random
 import time
-import argparse
 from enum import Enum
+
 import aioredis
 import numpy as np
 import redis.asyncio as redispy

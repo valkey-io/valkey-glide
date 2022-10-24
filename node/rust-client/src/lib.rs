@@ -33,7 +33,6 @@ pub enum ResponseType {
 #[napi]
 pub const HEADER_LENGTH_IN_BYTES: u32 = HEADER_END as u32;
 
-
 #[napi]
 struct AsyncClient {
     #[allow(dead_code)]
@@ -106,9 +105,8 @@ impl AsyncClient {
     }
 }
 
-
 #[napi(js_name = "GetSocketPath")]
-pub fn get_socket_path_external() -> String{
+pub fn get_socket_path_external() -> String {
     return get_socket_path();
 }
 

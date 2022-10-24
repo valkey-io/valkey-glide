@@ -107,15 +107,10 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     fn start_socket_listener_external(
         connection_address: String,
-        socket_path: String,
         start_callback: PyObject,
         close_callback: PyObject,
     ) -> PyResult<PyObject> {
-        let client = redis::Client::open(connection_address).unwrap();
         start_socket_listener(
-            client,
-            socket_path.clone(),
-            socket_path.clone(),
             move || {
                 let gil = Python::acquire_gil();
                 let py = gil.python();
@@ -134,13 +129,21 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
                 ClosingReason::UnhandledError(err) => {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    let _ = close_callback.call(py, (), Some([("err", err.to_string())].into_py_dict(py)));
+                    let _ = close_callback.call(
+                        py,
+                        (),
+                        Some([("err", err.to_string())].into_py_dict(py)),
+                    );
                 }
                 ClosingReason::FailedInitialization(err) => {
                     // TODO - Do we want to differentiate this from UnhandledError ?
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    let _ = close_callback.call(py, (), Some([("err", err.to_string())].into_py_dict(py)));
+                    let _ = close_callback.call(
+                        py,
+                        (),
+                        Some([("err", err.to_string())].into_py_dict(py)),
+                    );
                 }
             },
         );
