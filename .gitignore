@@ -16,3 +16,8 @@ Cargo.lock
 dump.rdb
 .env
 benchmarks/results
+
+# lock files
+
+yarn.lock
+pacakge-lock.json
