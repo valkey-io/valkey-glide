@@ -24,7 +24,7 @@ use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
 /// The socket file name
-pub const SOCKET_FILE_NAME: &'static str = "babushka-socket";
+pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 
 struct SocketListener {
     read_socket: Rc<UnixStream>,
@@ -289,7 +289,7 @@ async fn handle_requests(
 }
 
 fn close_socket() {
-    let _ = match std::fs::remove_file(get_socket_path()) {
+    match std::fs::remove_file(get_socket_path()) {
         Ok(()) => {}
         Err(e) => {
             panic!("Failed to delete socket file: {}", e); // TODO: better error handling
@@ -303,13 +303,12 @@ async fn wait_for_server_address_create_conn(
     write_lock: &Rc<Mutex<()>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
-    let listening_result = client_listener.next_values().await;
-    match listening_result {
+    match client_listener.next_values().await {
         Closed(reason) => {
             return Err(BabushkaError::CloseError(reason));
         }
         ReceivedValues(received_requests) => {
-            for index in 0..received_requests.len() {
+            if let Some(index) = (0..received_requests.len()).next() {
                 let request = received_requests.get(index).unwrap();
                 match request.request_type.clone() {
                     RequestRanges::ServerAddress {
@@ -319,7 +318,7 @@ async fn wait_for_server_address_create_conn(
                         let address = std::str::from_utf8(address).expect("Found invalid UTF-8");
                         let client = Client::open(address).unwrap(); // TODO: better error handling
                         let connection = match client.get_multiplexed_async_connection().await {
-                            Ok(socket) => socket,
+                            Ok(conn) => conn,
                             Err(err) => {
                                 return Err(BabushkaError::BaseError(format!(
                                     "Failed to create a multiplexed connection: {:?}",
@@ -333,7 +332,7 @@ async fn wait_for_server_address_create_conn(
                             request.callback_index,
                             ResponseType::Null,
                         );
-                        write_to_output(&output_buffer, &socket, &write_lock).await;
+                        write_to_output(&output_buffer, socket, write_lock).await;
                         return Ok(connection);
                     }
                     _ => {
@@ -473,11 +472,11 @@ pub enum BabushkaError {
 }
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
-    return std::env::temp_dir()
+    std::env::temp_dir()
         .join(SOCKET_FILE_NAME)
         .into_os_string()
         .into_string()
-        .unwrap();
+        .unwrap()
 }
 
 async fn handle_signals() {
@@ -518,7 +517,7 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
             match runtime {
                 Ok(runtime) => {
                     let close_callback_rc = Rc::new(close_callback);
-                    runtime.block_on(listen_on_socket(start_callback, close_callback_rc.clone()));
+                    runtime.block_on(listen_on_socket(start_callback, close_callback_rc));
                 }
 
                 Err(err) => {

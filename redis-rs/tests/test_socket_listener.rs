@@ -12,14 +12,13 @@ use redis::socket_listener::headers::{
 use redis::socket_listener::*;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
-use std::{mem, os::unix::net::UnixStream, thread};
+use std::{os::unix::net::UnixStream, thread};
 
 struct TestBasics {
     _server: RedisServer,
     socket: UnixStream,
-    closing_message_receiver: Option<Receiver<ClosingReason>>,
     _sender_gaurd: Arc<std::sync::Mutex<Sender<ClosingReason>>>,
 }
 
@@ -63,12 +62,12 @@ fn send_address(address: String, socket: &UnixStream) {
     );
 }
 fn setup_test_basics() -> TestBasics {
-    let (close_sender, close_receiver) = channel();
+    let (close_sender, _close_receiver) = channel();
     let close_sender = Arc::new(Mutex::new(close_sender));
     let channel_state: Arc<ManualResetEvent> = Arc::new(ManualResetEvent::new(EventState::Unset));
     let context = TestContext::new();
     let cloned_state = channel_state.clone();
-    let close_sender_clone = close_sender.clone();
+    let close_sender_clone = close_sender;
     start_socket_listener(
         move || {
             cloned_state.set();
@@ -82,13 +81,8 @@ fn setup_test_basics() -> TestBasics {
     TestBasics {
         _server: context.server,
         socket,
-        closing_message_receiver: Some(close_receiver),
         _sender_gaurd: close_sender_clone,
     }
-}
-
-fn get_receiver(mut test_basics: TestBasics) -> Receiver<ClosingReason> {
-    mem::replace(&mut test_basics.closing_message_receiver, None).unwrap()
 }
 
 fn generate_random_bytes(length: usize) -> Vec<u8> {
@@ -325,7 +319,6 @@ fn test_socket_handle_long_input() {
         ResponseType::String.to_u32().unwrap()
     );
     assert_eq!(&buffer[HEADER_END..VALUE_LENGTH + HEADER_END], value);
-
 }
 
 // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and

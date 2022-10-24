@@ -107,7 +107,7 @@ impl AsyncClient {
 
 #[napi(js_name = "GetSocketPath")]
 pub fn get_socket_path_external() -> String {
-    return get_socket_path();
+    get_socket_path()
 }
 
 #[napi(
