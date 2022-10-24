@@ -8,12 +8,8 @@ const {
 } = BabushkaInternal;
 type RequestType = BabushkaInternal.RequestType;
 type ResponseType = BabushkaInternal.ResponseType;
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import * as net from "net";
 import { nextPow2 } from "bit-twiddle";
-import AsyncLock from "async-lock";
 
 export class SocketConnection {
     private socket: net.Socket;
