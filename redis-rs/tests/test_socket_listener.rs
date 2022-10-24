@@ -93,8 +93,19 @@ fn generate_random_bytes(length: usize) -> Vec<u8> {
         .collect()
 }
 
+pub fn is_tls_or_unix() -> bool {
+    match std::env::var("REDISRS_SERVER_TYPE") {
+        Ok(env) => env.eq_ignore_ascii_case("tcp+tls") || env.eq_ignore_ascii_case("unix"),
+        Err(_) => false,
+    }
+}
+
 #[test]
 fn test_socket_set_and_get() {
+    if is_tls_or_unix() {
+        // TODO: delete after we'll support passing configurations to socket
+        return;
+    }
     let mut test_basics = setup_test_basics();
 
     const CALLBACK1_INDEX: u32 = 100;
@@ -178,6 +189,10 @@ fn test_socket_set_and_get() {
 
 #[test]
 fn test_socket_get_returns_null() {
+    if is_tls_or_unix() {
+        // TODO: delete after we'll support passing configurations to socket
+        return;
+    }
     const CALLBACK_INDEX: u32 = 99;
     let mut test_basics = setup_test_basics();
     let key = "hello";
@@ -214,6 +229,10 @@ fn test_socket_get_returns_null() {
 
 #[test]
 fn test_socket_report_error() {
+    if is_tls_or_unix() {
+        // TODO: delete after we'll support passing configurations to socket
+        return;
+    }
     let mut test_basics = setup_test_basics();
 
     let key = "a";
@@ -236,6 +255,10 @@ fn test_socket_report_error() {
 
 #[test]
 fn test_socket_handle_long_input() {
+    if is_tls_or_unix() {
+        // TODO: delete after we'll support passing configurations to socket
+        return;
+    }
     let mut test_basics = setup_test_basics();
 
     const CALLBACK1_INDEX: u32 = 100;
@@ -326,6 +349,10 @@ fn test_socket_handle_long_input() {
 #[test]
 #[timeout(10000)]
 fn test_socket_handle_multiple_long_inputs() {
+    if is_tls_or_unix() {
+        // TODO: delete after we'll support passing configurations to socket
+        return;
+    }
     #[derive(Clone, PartialEq, Eq, Debug)]
     enum State {
         Initial,
