@@ -41,6 +41,7 @@ jobs:
             - run: |
                   rm -rf node_modules && yarn install --frozen-lockfile
                   yarn install
+                  yarn build-initial
                   yarn build
               working-directory: ./node/rust-client
 
