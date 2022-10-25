@@ -40,12 +40,10 @@ jobs:
 
             - run: |
                   rm -rf node_modules && yarn install --frozen-lockfile
-                  yarn install
               working-directory: ./node/rust-client
 
             - run: |
                   rm -rf node_modules && yarn install --frozen-lockfile
-                  yarn install
                   yarn build
               working-directory: ./node
 
