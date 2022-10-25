@@ -45,7 +45,6 @@ function runNodeBenchmark(){
   yarn install
   cd ${BENCH_FOLDER}/../node
   yarn install
-  yarn run build-internal
   rm -rf build-ts
   yarn run build
   cd ${BENCH_FOLDER}/node
