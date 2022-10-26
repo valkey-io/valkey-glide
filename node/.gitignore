@@ -132,3 +132,4 @@ dist
 .pnp.*
 *babushka*.node
 build-ts/**
+yarn.lock
