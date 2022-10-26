@@ -42,15 +42,15 @@ function runPythonBenchmark(){
 }
 
 function runNodeBenchmark(){
+  yarn install
   cd ${BENCH_FOLDER}/../node
-  npm i
-  npm run build-internal
+  yarn install
   rm -rf build-ts
-  npm run build
+  yarn run build
   cd ${BENCH_FOLDER}/node
-  npm i
+  yarn install
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
+  yarn run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
 }
 
 function runCSharpBenchmark(){
@@ -62,13 +62,13 @@ function runCSharpBenchmark(){
 
 function flushDB() {
   cd $utilitiesDir
-  npm run flush
+  yarn run flush
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  npm run fill -- --dataSize $1
+  yarn run fill -- --dataSize $1
 }
 
 utilitiesDir=`pwd`/utilities
