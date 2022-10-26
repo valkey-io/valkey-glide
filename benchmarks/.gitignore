@@ -132,6 +132,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 *babushka*.node
+yarn.lock
 
 
 # C# gitignore
