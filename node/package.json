@@ -347,9 +347,10 @@
         "yargs-parser": "^21.0.1"
     },
     "scripts": {
-        "initial-build": "npm install --location=global yarn && cd rust-client && npm i && yarn install",
-        "build": "rm -rf build-ts && npx tsc",
+        "initial-build": "npm install --location=global yarn && cd rust-client && yarn install",
+        "build": "yarn build-external && yarn build-internal",
         "build-internal": "cd rust-client && yarn build",
+        "build-external": "rm -rf build-ts && yarn tsc",
         "test": "jest"
     },
     "author": "",

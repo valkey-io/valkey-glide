@@ -39,14 +39,19 @@ jobs:
             - run: npm install --global yarn
 
             - run: |
-                  npm ci
+                  rm -rf node_modules && yarn install --frozen-lockfile
                   yarn install
-                  yarn build
               working-directory: ./node/rust-client
 
             - run: |
-                  npm ci
-                  npm test
+                  rm -rf node_modules && yarn install --frozen-lockfile
+                  yarn install
+                  yarn build
+              working-directory: ./node
+
+            - run: |
+                  rm -rf node_modules && yarn install --frozen-lockfile
+                  yarn test
               working-directory: ./node
 
     lint-rust:
