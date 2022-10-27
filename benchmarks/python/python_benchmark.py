@@ -41,9 +41,13 @@ arguments_parser.add_argument(
     help="Which clients should run",
     required=True,
 )
+arguments_parser.add_argument(
+    "--host",
+    help="What host to target",
+    required=True,
+)
 args = arguments_parser.parse_args()
 
-HOST = "localhost"
 PORT = 6379
 PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
@@ -199,11 +203,16 @@ async def run_client(
 
 
 async def main(
-    event_loop_name, total_commands, num_of_concurrent_tasks, data_size, clients_to_run
+    event_loop_name,
+    total_commands,
+    num_of_concurrent_tasks,
+    data_size,
+    clients_to_run,
+    host,
 ):
     if clients_to_run == "all":
         # Redis-py
-        redispy_client = await redispy.Redis(host=HOST, port=PORT)
+        redispy_client = await redispy.Redis(host=host, port=PORT)
         await run_client(
             redispy_client,
             "redispy",
@@ -214,7 +223,7 @@ async def main(
         )
 
         # AIORedis
-        aioredis_client = await aioredis.from_url(f"redis://{HOST}:{PORT}")
+        aioredis_client = await aioredis.from_url(f"redis://{host}:{PORT}")
         await run_client(
             aioredis_client,
             "aioredis",
@@ -230,7 +239,7 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka
-        config = ClientConfiguration(host=HOST, port=PORT)
+        config = ClientConfiguration(host=host, port=PORT)
         babushka_client = await RedisAsyncClient.create(config)
         await run_client(
             babushka_client,
@@ -241,7 +250,7 @@ async def main(
             data_size,
         )
 
-        direct_babushka = await AsyncClient.create_client(f"redis://{HOST}:{PORT}")
+        direct_babushka = await AsyncClient.create_client(f"redis://{host}:{PORT}")
         await run_client(
             direct_babushka,
             "direct_babushka",
@@ -260,6 +269,7 @@ if __name__ == "__main__":
     concurrent_tasks = args.concurrentTasks
     data_size = int(args.dataSize)
     clients_to_run = args.clients
+    host = args.host
 
     product_of_arguments = [
         (data_size, int(num_of_concurrent_tasks))
@@ -274,6 +284,7 @@ if __name__ == "__main__":
                 num_of_concurrent_tasks,
                 data_size,
                 clients_to_run,
+                host,
             )
         )
 
@@ -287,6 +298,7 @@ if __name__ == "__main__":
                 num_of_concurrent_tasks,
                 data_size,
                 clients_to_run,
+                host,
             )
         )
 
