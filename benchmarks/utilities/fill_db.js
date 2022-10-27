@@ -1,17 +1,19 @@
 const redis = require("redis");
 const commandLineArgs = require("command-line-args");
 
-const HOST = "localhost";
-const PORT = 6379;
-const ADDRESS = `redis://${HOST}:${PORT}`;
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
+
+function getAddress(host) {
+    const PORT = 6379;
+    return `redis://${host}:${PORT}`;
+}
 
 function generate_value(size) {
     return "0".repeat(size);
 }
 
-async function fill_database(data_size) {
-    const client = redis.createClient({ url: ADDRESS });
+async function fill_database(data_size, address) {
+    const client = redis.createClient({ url: address });
     const data = generate_value(data_size);
     await client.connect();
 
@@ -27,12 +29,19 @@ async function fill_database(data_size) {
     await Promise.all(sets);
 }
 
-const optionDefinitions = [{ name: "dataSize", type: String }];
+const optionDefinitions = [
+    { name: "dataSize", type: String },
+    { name: "host", type: String },
+];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
 Promise.resolve()
     .then(async () => {
-        await fill_database(receivedOptions.dataSize);
+        const address = getAddress(receivedOptions.host);
+        console.log(
+            `Filling ${address} with data size ${receivedOptions.dataSize}`
+        );
+        await fill_database(receivedOptions.dataSize, address);
     })
     .then(() => {
         process.exit(0);
