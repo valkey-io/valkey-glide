@@ -20,11 +20,11 @@ export function StartSocketConnection(
   connectionAddress: string,
   readSocketName: string,
   writeSocketName: string,
-  startCallback: (err: null | Error) => void,
+  startCallback: () => void,
   closeCallback: (err: null | Error) => void,
 ): void
 export class AsyncClient {
-  static CreateConnection(connectionAddress: string): Promise<AsyncClient>
+  static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
 }
