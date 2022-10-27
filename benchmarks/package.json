@@ -1,6 +1,0 @@
-{
-    "dependencies": {
-        "command-line-args": "^5.2.1",
-        "redis": "^4.3.1"
-    }
-}
