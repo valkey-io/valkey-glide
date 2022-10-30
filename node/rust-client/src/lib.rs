@@ -1,10 +1,12 @@
 use napi::bindgen_prelude::ToNapiValue;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
-use napi::{Env, Error, JsFunction, JsObject, Result, Status};
+use napi::threadsafe_function::{
+    ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
+};
+use napi::{Error, JsFunction, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
-use redis::socket_listener::{get_socket_path, start_socket_listener, ClosingReason};
+use redis::socket_listener::{get_socket_path, start_socket_listener};
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -112,42 +114,23 @@ pub fn get_socket_path_external() -> String {
 
 #[napi(
     js_name = "StartSocketConnection",
-    ts_args_type = "startCallback: (err: null | Error) => void, 
-                    closeCallback: (err: null | Error) => void"
+    ts_args_type = "Callback: (err: null | Error, path: string | null) => void"
 )]
-pub fn start_socket_listener_external(
-    start_callback: JsFunction,
-    close_callback: JsFunction,
-) -> napi::Result<()> {
-    let threadsafe_start_callback: ThreadsafeFunction<(), ErrorStrategy::Fatal> =
-        start_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
-    let threadsafe_close_callback: ThreadsafeFunction<(), ErrorStrategy::CalleeHandled> =
-        close_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
-    start_socket_listener(
-        move || {
-            threadsafe_start_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
-        },
-        move |result| match result {
-            ClosingReason::AllConnectionsClosed => {
-                threadsafe_close_callback.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
-            }
-            ClosingReason::ReadSocketClosed => {
-                threadsafe_close_callback.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
-            }
-            ClosingReason::UnhandledError(err) => {
-                threadsafe_close_callback.call(
-                    Err(to_js_error(err)),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
-            }
-            ClosingReason::FailedInitialization(err) => {
-                // TODO - Do we want to differentiate this from UnhandledError ?
-                threadsafe_close_callback.call(
-                    Err(to_js_error(err)),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
-            }
-        },
-    );
+pub fn start_socket_listener_external(init_callback: JsFunction) -> napi::Result<()> {
+    let threadsafe_init_callback: ThreadsafeFunction<String, ErrorStrategy::CalleeHandled> =
+        init_callback.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
+            Ok(vec![ctx.value])
+        })?;
+    start_socket_listener(move |result| match result {
+        Ok(path) => {
+            threadsafe_init_callback.call(Ok(path), ThreadsafeFunctionCallMode::NonBlocking);
+        }
+        Err(err) => {
+            threadsafe_init_callback.call(
+                Err(to_js_error(err)),
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        }
+    });
     Ok(())
 }

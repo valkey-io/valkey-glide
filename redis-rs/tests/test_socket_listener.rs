@@ -68,14 +68,24 @@ fn setup_test_basics() -> TestBasics {
     let context = TestContext::new();
     let cloned_state = channel_state.clone();
     let close_sender_clone = close_sender;
-    start_socket_listener(
-        move || {
-            cloned_state.set();
-        },
-        move |_err| {},
-    );
+    let path_arc = Arc::new(std::sync::Mutex::new(None));
+    let path_arc_clone = Arc::clone(&path_arc);
+    start_socket_listener(move |res| {
+        let path: String = match res {
+            Ok(path) => path,
+            Err(err) => panic!("Failed to initialize the socket listener: {:?}", err),
+        };
+        let mut path_arc_clone = path_arc_clone.lock().unwrap();
+        *path_arc_clone = Some(path);
+        cloned_state.set();
+    });
     channel_state.wait();
-    let socket = std::os::unix::net::UnixStream::connect(get_socket_path()).unwrap();
+    let path = path_arc.lock().unwrap();
+    let path = match &*path {
+        Some(res) => res,
+        None => panic!("Didn't get any socket path"),
+    };
+    let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
     let address = context.server.get_client_addr().to_string();
     send_address(address, &socket);
     TestBasics {

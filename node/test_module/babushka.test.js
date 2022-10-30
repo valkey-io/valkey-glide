@@ -1,34 +1,10 @@
 const { AsyncClient, SocketConnection } = require("..");
 const RedisServer = require("redis-server");
 const FreePort = require("find-free-port");
-const { v4: uuidv4 } = require("uuid");
-const net = require("net")
-const SOCKET_FILE_PATH = "babushka-socket";
-
-function onClientConnected(sock) {  
-    var remoteAddress = sock.remoteAddress + ':' + sock.remotePort;
-    console.log('new client connected: %s', remoteAddress);
-   
-    sock.on('data', function(data) {
-      console.log('%s Says: %s', remoteAddress, data);
-      sock.write(data);
-      sock.write(' exit');
-    });
-    sock.on('close',  function () {
-      console.log('connection from %s closed', remoteAddress);
-    });
-    sock.on('error', function (err) {
-      console.log('Connection %s error: %s', remoteAddress, err.message);
-    });
-  };
+const { v4: uuidv4 } = require("uuid"); 
 
 function OpenServerAndExecute(port, action) {
     return new Promise((resolve, reject) => {
-        var mserver = net.createServer(onClientConnected);  
- 
-        mserver.listen(SOCKET_FILE_PATH, function() {  
-            console.log('server listening on %j', server.address());
-        });
         const server = new RedisServer(port);
         server.open(async (err) => {
             if (err) {
@@ -36,7 +12,7 @@ function OpenServerAndExecute(port, action) {
             }
             await action();
             server.close();
-            resolve(mserver);
+            resolve();
         });
     });
 }

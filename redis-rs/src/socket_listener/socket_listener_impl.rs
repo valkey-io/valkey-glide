@@ -273,15 +273,12 @@ async fn handle_requests(
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
-        //let connection = connection.clone();
-        let write_socket = write_socket.clone();
-        let lock = write_lock.clone();
         handle_request(
             request,
             connection.clone(),
-            write_socket,
+            write_socket.clone(),
             pool.clone(),
-            lock,
+            write_lock.clone(),
         )
     }
     // Yield to ensure that the subtasks aren't starved.
@@ -295,6 +292,52 @@ fn close_socket() {
             panic!("Failed to delete socket file: {}", e); // TODO: better error handling
         }
     };
+}
+
+async fn parse_address_create_conn(
+    socket: &Rc<UnixStream>,
+    request: &WholeRequest,
+    address_range: Range<usize>,
+    write_lock: &Rc<Mutex<()>>,
+) -> Result<MultiplexedConnection, BabushkaError> {
+    let address = &request.buffer[address_range];
+    let address = match std::str::from_utf8(address) {
+        Ok(res) => res,
+        Err(err) => {
+            return Err(BabushkaError::BaseError(format!(
+                "Failed to parse address: {:?}",
+                err
+            )))
+        }
+    };
+    let client = match Client::open(address) {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Err(BabushkaError::BaseError(format!(
+                "Failed to parse address: {:?}",
+                err
+            )))
+        }
+    };
+    let connection = match client.get_multiplexed_async_connection().await {
+        Ok(conn) => conn,
+        Err(err) => {
+            return Err(BabushkaError::BaseError(format!(
+                "Failed to create a multiplexed connection: {:?}",
+                err
+            )))
+        }
+    };
+
+    // Send response
+    let mut output_buffer = [0_u8; HEADER_END];
+    write_response_header(
+        &mut output_buffer,
+        request.callback_index,
+        ResponseType::Null,
+    );
+    write_to_output(&output_buffer, socket, write_lock).await;
+    Ok(connection)
 }
 
 async fn wait_for_server_address_create_conn(
@@ -314,26 +357,13 @@ async fn wait_for_server_address_create_conn(
                     RequestRanges::ServerAddress {
                         address: address_range,
                     } => {
-                        let address = &request.buffer[address_range];
-                        let address = std::str::from_utf8(address).expect("Found invalid UTF-8");
-                        let client = Client::open(address).unwrap(); // TODO: better error handling
-                        let connection = match client.get_multiplexed_async_connection().await {
-                            Ok(conn) => conn,
-                            Err(err) => {
-                                return Err(BabushkaError::BaseError(format!(
-                                    "Failed to create a multiplexed connection: {:?}",
-                                    err
-                                )))
-                            }
-                        };
-                        let mut output_buffer = [0_u8; HEADER_END];
-                        write_response_header(
-                            &mut output_buffer,
-                            request.callback_index,
-                            ResponseType::Null,
-                        );
-                        write_to_output(&output_buffer, socket, write_lock).await;
-                        return Ok(connection);
+                        return parse_address_create_conn(
+                            socket,
+                            request,
+                            address_range,
+                            write_lock,
+                        )
+                        .await
                     }
                     _ => {
                         return Err(BabushkaError::BaseError(
@@ -355,99 +385,103 @@ fn update_notify_connected_clients(
 ) {
     // Check if the entire socket listener should be closed before
     // closing the client's connection task
-    connected_clients.fetch_sub(1, Ordering::SeqCst);
-    if connected_clients.load(Ordering::SeqCst) == 0 {
+    if connected_clients.fetch_sub(1, Ordering::Relaxed) == 1 {
         // No more clients connected, close the socket
         close_notifier.notify_one();
     }
 }
 
-async fn listen_on_socket<StartCallback, CloseCallback>(
-    start_callback: StartCallback,
-    close_callback: Rc<CloseCallback>,
-) where
-    StartCallback: Fn() + Send + 'static,
-    CloseCallback: Fn(ClosingReason) + Send + 'static,
+async fn listen_on_client_stream(
+    stream: UnixStream,
+    notify_close: Arc<Notify>,
+    connected_clients: Arc<AtomicUsize>,
+) {
+    // Spawn a new task to listen on this client's stream
+    let rc_stream = Rc::new(stream);
+    let write_lock = Rc::new(Mutex::new(()));
+    let mut client_listener = SocketListener::new(rc_stream.clone());
+    let connection = match wait_for_server_address_create_conn(
+        &mut client_listener,
+        &rc_stream,
+        &write_lock.clone(),
+    )
+    .await
+    {
+        Ok(conn) => conn,
+        Err(BabushkaError::CloseError(_reason)) => {
+            update_notify_connected_clients(connected_clients, notify_close);
+            return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
+        }
+        Err(BabushkaError::BaseError(err)) => {
+            println!("Recieved error: {:?}", err); // TODO: implement error protocol
+            return;
+        }
+    };
+    loop {
+        let listening_result = client_listener.next_values().await;
+        match listening_result {
+            Closed(_reason) => {
+                update_notify_connected_clients(connected_clients, notify_close);
+                return; // TODO: implement error protocol, handle error closing reasons
+            }
+            ReceivedValues(received_requests) => {
+                handle_requests(
+                    received_requests,
+                    &connection,
+                    &rc_stream,
+                    client_listener.pool.clone(),
+                    &write_lock.clone(),
+                )
+                .await;
+            }
+        }
+    }
+}
+
+async fn listen_on_socket<InitCallback>(init_callback: Rc<InitCallback>)
+where
+    InitCallback: Fn(Result<String, RedisError>) + Send + 'static,
 {
     // Bind to socket
     let listener = match UnixListener::bind(get_socket_path()) {
         Ok(listener) => listener,
+        Err(err) if err.kind() == AddrInUse => {
+            init_callback(Ok(get_socket_path()));
+            return;
+        }
         Err(err) => {
-            if err.kind() == AddrInUse {
-                // Address already in use, exit this thread and try to connect to the existing listener
-                start_callback();
-            } else {
-                // Got another error while trying to bind
-                close_callback(FailedInitialization(err.into()));
-            }
+            init_callback(Err(err.into()));
             return;
         }
     };
     let local = task::LocalSet::new();
     let connected_clients = Arc::new(AtomicUsize::new(0));
     let notify_close = Arc::new(Notify::new());
-    start_callback();
-    local
-        .run_until(async move {
-            loop {
-                tokio::select! {
+    init_callback(Ok(get_socket_path()));
+    local.run_until(async move {
+        loop {
+            tokio::select! {
                     listen_v = listener.accept() => {
                     if let Ok((stream, _addr)) = listen_v {
                         // New client
                         let cloned_close_notifier = notify_close.clone();
                         let cloned_connected_clients = connected_clients.clone();
-                        cloned_connected_clients.fetch_add(1, Ordering::SeqCst);
-                        task::spawn_local(async move {
-                            // Spawn a new task to listen on this client's stream
-                            let rc_stream = Rc::new(stream);
-                            let write_lock = Rc::new(Mutex::new(()));
-                            let mut client_listener = SocketListener::new(rc_stream.clone());
-                            let connection = match wait_for_server_address_create_conn(&mut client_listener,
-                                    &rc_stream,
-                                    &write_lock.clone()
-                                ).await {
-                                    Ok(conn) => conn,
-                                    Err(BabushkaError::CloseError(_reason)) => {
-                                        update_notify_connected_clients(cloned_connected_clients, cloned_close_notifier);
-                                        return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
-                                    }
-                                    Err(BabushkaError::BaseError(err)) => {
-                                        panic!("{:?}", err); // TODO: implement error protocol
-                                    }
-                            };
-                            loop {
-                                let listening_result = client_listener.next_values().await;
-                                match listening_result {
-                                    Closed(_reason) => {
-                                        update_notify_connected_clients(cloned_connected_clients, cloned_close_notifier);
-                                        return; // TODO: implement error protocol, handle error closing reasons
-                                    }
-                                    ReceivedValues(received_requests) => {
-                                        handle_requests(received_requests, &connection, &rc_stream,
-                                            client_listener.pool.clone(), &write_lock.clone())
-                                            .await;
-                                    }
-                                }
-                        }}
-                    );
+                        cloned_connected_clients.fetch_add(1, Ordering::Relaxed);
+                        task::spawn_local(listen_on_client_stream(stream, cloned_close_notifier.clone(), cloned_connected_clients));
                     } else if let Err(err) = listen_v {
-                        close_callback(FailedInitialization(err.into()));
+                        init_callback(Err(err.into()));
+                        return;
                     }
                 }
-                _ = notify_close.notified() => {
-                    // `notify_one` was called to indicate no more clients are connected,
-                    // close the socket
-                    close_socket();
-                }
-                _ = handle_signals() => {
-                    // Interrupt was received, close the socket 
-                    close_socket();
-                }
-
+                // `notify_one` was called to indicate no more clients are connected,
+                // close the socket
+                _ = notify_close.notified() => {close_socket(); return;},
+                // Interrupt was received, close the socket
+                _ = handle_signals() => {close_socket(); return;}
             }
-            }
+        }
         })
-        .await;
+    .await;
 }
 
 #[derive(Debug)]
@@ -457,8 +491,6 @@ pub enum ClosingReason {
     ReadSocketClosed,
     /// The listener encounter an error it couldn't handle.
     UnhandledError(RedisError),
-    /// The listener couldn't start due to Redis connection error.
-    FailedInitialization(RedisError),
     /// No clients left to handle, close the connection
     AllConnectionsClosed,
 }
@@ -470,10 +502,12 @@ pub enum BabushkaError {
     /// Close error
     CloseError(ClosingReason),
 }
+
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
+    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
     std::env::temp_dir()
-        .join(SOCKET_FILE_NAME)
+        .join(socket_name)
         .into_os_string()
         .into_string()
         .unwrap()
@@ -488,7 +522,7 @@ async fn handle_signals() {
                 // Close the socket
                 close_socket();
             }
-            _ => unreachable!(),
+            sig => unreachable!("Received an unregistered signal `{}`", sig),
         }
     }
 }
@@ -497,15 +531,10 @@ async fn handle_signals() {
 ///
 /// # Arguments
 ///
-/// * `start_callback` - called when the thread started listening on the socket. This is used to prevent races.
-///
-/// * `close_callback` - called when the socket listener fails to initialize, with the reason for the failure.
-pub fn start_socket_listener<StartCallback, CloseCallback>(
-    start_callback: StartCallback,
-    close_callback: CloseCallback,
-) where
-    StartCallback: Fn() + Send + 'static,
-    CloseCallback: Fn(ClosingReason) + Send + 'static,
+/// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
+pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
+where
+    InitCallback: Fn(Result<String, RedisError>) + Send + 'static,
 {
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
@@ -516,13 +545,12 @@ pub fn start_socket_listener<StartCallback, CloseCallback>(
                 .build();
             match runtime {
                 Ok(runtime) => {
-                    let close_callback_rc = Rc::new(close_callback);
-                    runtime.block_on(listen_on_socket(start_callback, close_callback_rc));
+                    let init_callback_rc = Rc::new(init_callback);
+                    runtime.block_on(listen_on_socket(init_callback_rc));
                 }
-
                 Err(err) => {
                     close_socket();
-                    close_callback(FailedInitialization(err.into()))
+                    init_callback(Err(err.into()))
                 }
             };
         })

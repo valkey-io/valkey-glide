@@ -15,14 +15,11 @@ export const enum ResponseType {
   /** Type of a response that returns a null. */
   Null = 0,
   /** Type of a response that returns a string. */
-  String = 1,
+  String = 1
 }
 export const HEADER_LENGTH_IN_BYTES: number
 export function GetSocketPath(): string
-export function StartSocketConnection(
-  startCallback: (err: null | Error) => void,
-  closeCallback: (err: null | Error) => void,
-): void
+export function StartSocketConnection(Callback: (err: null | Error, path: string | null) => void): void
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>

@@ -8,12 +8,13 @@ const {
 } = BabushkaInternal;
 type RequestType = BabushkaInternal.RequestType;
 type ResponseType = BabushkaInternal.ResponseType;
+type PromiseFunction =  (value?: any) => void;
 import * as net from "net";
 import { nextPow2 } from "bit-twiddle";
 
 export class SocketConnection {
     private socket: net.Socket;
-    private readonly promiseCallbackFunctions: ((val: any) => void)[][] = [];
+    private readonly promiseCallbackFunctions: [PromiseFunction, PromiseFunction][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
@@ -46,14 +47,10 @@ export class SocketConnection {
             }
             const callbackIndex = header[1];
             const responseType = header[2] as ResponseType;
-            const promiseFunction = this.promiseCallbackFunctions[callbackIndex];
-            if (!promiseFunction) {
-                throw new Error("missing callback for index: " + callbackIndex);
-            }
-            const resolveFunction = promiseFunction[0];
+            const [resolve, _reject] = this.promiseCallbackFunctions[callbackIndex];
             this.availableCallbackSlots.push(callbackIndex);
             if (responseType === ResponseType.Null) {
-                resolveFunction(null);
+                resolve(null);
             } else if (responseType === ResponseType.String) {
                 const valueLength = length - HEADER_LENGTH_IN_BYTES;
                 const keyBytes = Buffer.from(
@@ -61,7 +58,7 @@ export class SocketConnection {
                     counter + HEADER_LENGTH_IN_BYTES,
                     valueLength
                 );
-                resolveFunction(keyBytes.toString("utf8"));
+                resolve(keyBytes.toString("utf8"));
             }
             counter = counter + length;
             const offset = counter % 4;
@@ -94,8 +91,7 @@ export class SocketConnection {
                 resolve("Connected");
             })
             // Messages are buffers. use toString
-            .on('data', (data) =>{ this.handleReadData(data);
-            })
+            .on('data', (data) =>this.handleReadData(data))
             .on('error', (err)=> {
                 console.error(`Server closed: ${err}`); 
                 this.dispose();
@@ -216,11 +212,7 @@ export class SocketConnection {
                         0,
                         length
                     );
-                    if (!this.socket.write(uint8Array, undefined, () => {resolve();})) {
-                        this.socket.once("drain", resolve);
-                    //} else {
-                    //    resolve();
-                    }
+                    this.socket.write(uint8Array, undefined, () => {resolve();});
                 })
         );
     }
@@ -250,7 +242,7 @@ export class SocketConnection {
         return this.writeString(key, RequestType.SetString, value);
     }
 
-    serverAddress(address: string): Promise<void> {
+    setServerAddress(address: string): Promise<void> {
         return this.writeString(address, RequestType.ServerAddress);
     }
 
@@ -262,27 +254,22 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             // TODO - create pipes according to Windows convention:
             // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
-            let resolved = false;
             const connection = new SocketConnection();
 
-            const closeCallback = (err: Error | null) => {
-                connection.dispose();
-                if (!resolved) {
-                    resolved = true;
+            const startCallback = async (err: null | Error, path: string | null) => {
+                if (path !== null) {
+                    console.log("Got path:", path);
+                    await connection.connect(path);
+                    await connection.setServerAddress(address);
+                    resolve(connection);
+                } else if (err !== null) {
+                    connection.dispose();
                     reject(err);
                 }
             };
-            const startCallback = async () => {
-                if (!resolved) {
-                    await connection.connect(GetSocketPath());
-                    await connection.serverAddress(address);
-                    resolve(connection);
-                }
-            };
-            
+
             StartSocketConnection(
-                startCallback,
-                closeCallback
+                startCallback
             );
         });
     }
