@@ -62,6 +62,7 @@ function runCSharpBenchmark(){
 
 function flushDB() {
   cd $utilitiesDir
+  yarn install
   yarn run flush
 }
 
