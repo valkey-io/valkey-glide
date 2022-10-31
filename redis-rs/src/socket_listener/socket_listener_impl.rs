@@ -99,8 +99,8 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &Mutex<()>) {
-    let _ = write_lock.lock().await;
+async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &Rc<Mutex<()>>) {
+    let _guard = write_lock.lock().await;
     let mut total_written_bytes = 0;
     while total_written_bytes < output.len() {
         let ready_result = write_socket.ready(Interest::WRITABLE).await;
@@ -294,17 +294,19 @@ fn close_socket() {
     };
 }
 
-fn to_babushka_result<T, E: std::fmt::Display>(result: Result<T, E>, err_msg: Option<&str>)
-    -> Result<T, BabushkaError> {
+fn to_babushka_result<T, E: std::fmt::Display>(
+    result: Result<T, E>,
+    err_msg: Option<&str>,
+) -> Result<T, BabushkaError> {
     match result {
         Ok(val) => Ok(val),
         Err(err) => {
             let err_msg = match err_msg {
                 Some(msg) => format!("{}: {}", msg, err),
-                None => format!("{}", err)
+                None => format!("{}", err),
             };
             Err(BabushkaError::BaseError(err_msg))
-        },
+        }
     }
 }
 
@@ -315,10 +317,18 @@ async fn parse_address_create_conn(
     write_lock: &Rc<Mutex<()>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     let address = &request.buffer[address_range];
-    let address = to_babushka_result(std::str::from_utf8(address), Some("Failed to parse address"))?;
-    let client = to_babushka_result(Client::open(address), Some("Failed to open redis-rs client"))?;
-    let connection = to_babushka_result(client.get_multiplexed_async_connection().await,
-        Some("Failed to create a multiplexed connection"))?;
+    let address = to_babushka_result(
+        std::str::from_utf8(address),
+        Some("Failed to parse address"),
+    )?;
+    let client = to_babushka_result(
+        Client::open(address),
+        Some("Failed to open redis-rs client"),
+    )?;
+    let connection = to_babushka_result(
+        client.get_multiplexed_async_connection().await,
+        Some("Failed to create a multiplexed connection"),
+    )?;
 
     // Send response
     let mut output_buffer = [0_u8; HEADER_END];
@@ -461,6 +471,7 @@ where
                         task::spawn_local(listen_on_client_stream(stream, cloned_close_notifier.clone(), cloned_connected_clients));
                     } else if let Err(err) = listen_v {
                         init_callback(Err(err.into()));
+                        close_socket();
                         return;
                     }
                 }
@@ -518,10 +529,10 @@ async fn handle_signals() {
     }
 }
 
-/// Start a thread  
+/// Creates a new thread with a main loop task listening on the socket for new connections.
+/// Every new connection will be assigned with a client-listener task to handle their requests.
 ///
 /// # Arguments
-///
 /// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
 pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
 where

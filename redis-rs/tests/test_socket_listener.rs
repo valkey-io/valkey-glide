@@ -2,7 +2,6 @@
 mod support;
 use crate::support::*;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use ntest::timeout;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::{distributions::Standard, thread_rng, Rng};
 use redis::socket_listener::headers::{
@@ -12,13 +11,12 @@ use redis::socket_listener::headers::{
 use redis::socket_listener::*;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
-use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::{os::unix::net::UnixStream, thread};
 
 struct TestBasics {
     _server: RedisServer,
-    socket: UnixStream
+    socket: UnixStream,
 }
 
 fn send_address(address: String, socket: &UnixStream) {
@@ -62,7 +60,8 @@ fn send_address(address: String, socket: &UnixStream) {
 }
 
 fn setup_test_basics() -> TestBasics {
-    let socket_listener_state: Arc<ManualResetEvent> = Arc::new(ManualResetEvent::new(EventState::Unset));
+    let socket_listener_state: Arc<ManualResetEvent> =
+        Arc::new(ManualResetEvent::new(EventState::Unset));
     let context = TestContext::new();
     let cloned_state = socket_listener_state.clone();
     let path_arc = Arc::new(std::sync::Mutex::new(None));
@@ -81,7 +80,7 @@ fn setup_test_basics() -> TestBasics {
     send_address(address, &socket);
     TestBasics {
         _server: context.server,
-        socket
+        socket,
     }
 }
 
@@ -93,6 +92,7 @@ fn generate_random_bytes(length: usize) -> Vec<u8> {
         .collect()
 }
 
+/// Check if the passed server type is TLS or UNIX
 pub fn is_tls_or_unix() -> bool {
     match std::env::var("REDISRS_SERVER_TYPE") {
         Ok(env) => env.eq_ignore_ascii_case("tcp+tls") || env.eq_ignore_ascii_case("unix"),
