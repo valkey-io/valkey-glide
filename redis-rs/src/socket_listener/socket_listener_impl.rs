@@ -294,6 +294,20 @@ fn close_socket() {
     };
 }
 
+fn to_babushka_result<T, E: std::fmt::Display>(result: Result<T, E>, err_msg: Option<&str>)
+    -> Result<T, BabushkaError> {
+    match result {
+        Ok(val) => Ok(val),
+        Err(err) => {
+            let err_msg = match err_msg {
+                Some(msg) => format!("{}: {}", msg, err),
+                None => format!("{}", err)
+            };
+            Err(BabushkaError::BaseError(err_msg))
+        },
+    }
+}
+
 async fn parse_address_create_conn(
     socket: &Rc<UnixStream>,
     request: &WholeRequest,
@@ -301,33 +315,10 @@ async fn parse_address_create_conn(
     write_lock: &Rc<Mutex<()>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     let address = &request.buffer[address_range];
-    let address = match std::str::from_utf8(address) {
-        Ok(res) => res,
-        Err(err) => {
-            return Err(BabushkaError::BaseError(format!(
-                "Failed to parse address: {:?}",
-                err
-            )))
-        }
-    };
-    let client = match Client::open(address) {
-        Ok(conn) => conn,
-        Err(err) => {
-            return Err(BabushkaError::BaseError(format!(
-                "Failed to parse address: {:?}",
-                err
-            )))
-        }
-    };
-    let connection = match client.get_multiplexed_async_connection().await {
-        Ok(conn) => conn,
-        Err(err) => {
-            return Err(BabushkaError::BaseError(format!(
-                "Failed to create a multiplexed connection: {:?}",
-                err
-            )))
-        }
-    };
+    let address = to_babushka_result(std::str::from_utf8(address), Some("Failed to parse address"))?;
+    let client = to_babushka_result(Client::open(address), Some("Failed to open redis-rs client"))?;
+    let connection = to_babushka_result(client.get_multiplexed_async_connection().await,
+        Some("Failed to create a multiplexed connection"))?;
 
     // Send response
     let mut output_buffer = [0_u8; HEADER_END];

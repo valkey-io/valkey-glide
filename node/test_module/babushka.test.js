@@ -1,7 +1,7 @@
 const { AsyncClient, SocketConnection } = require("..");
 const RedisServer = require("redis-server");
 const FreePort = require("find-free-port");
-const { v4: uuidv4 } = require("uuid"); 
+const { v4: uuidv4 } = require("uuid");
 
 function OpenServerAndExecute(port, action) {
     return new Promise((resolve, reject) => {

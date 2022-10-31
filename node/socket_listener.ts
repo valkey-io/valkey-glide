@@ -1,4 +1,6 @@
 import { BabushkaInternal } from ".";
+import * as net from "net";
+import { nextPow2 } from "bit-twiddle";
 const {
     StartSocketConnection,
     GetSocketPath,
@@ -6,11 +8,10 @@ const {
     ResponseType,
     RequestType,
 } = BabushkaInternal;
+
 type RequestType = BabushkaInternal.RequestType;
 type ResponseType = BabushkaInternal.ResponseType;
 type PromiseFunction =  (value?: any) => void;
-import * as net from "net";
-import { nextPow2 } from "bit-twiddle";
 
 export class SocketConnection {
     private socket: net.Socket;
@@ -84,7 +85,7 @@ export class SocketConnection {
         this.socket = new net.Socket();
     }
 
-    public async connect(socketPath: string) {
+    public connect(socketPath: string) {
         return new Promise((resolve, reject) => {
             this.socket.connect(socketPath)
             .on('connect', ()=>{
@@ -96,8 +97,7 @@ export class SocketConnection {
                 console.error(`Server closed: ${err}`); 
                 this.dispose();
                 reject(err);
-            })
-            ;
+            });
         });
     }
 
@@ -258,7 +258,6 @@ export class SocketConnection {
 
             const startCallback = async (err: null | Error, path: string | null) => {
                 if (path !== null) {
-                    console.log("Got path:", path);
                     await connection.connect(path);
                     await connection.setServerAddress(address);
                     resolve(connection);

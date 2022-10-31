@@ -5,11 +5,11 @@
 
 export const enum RequestType {
   /** Type of a server address request */
-  ServerAddress = 1,
+  ServerAddress = 0,
   /** Type of a get string request. */
-  GetString = 2,
+  GetString = 1,
   /** Type of a set string request. */
-  SetString = 3
+  SetString = 2
 }
 export const enum ResponseType {
   /** Type of a response that returns a null. */

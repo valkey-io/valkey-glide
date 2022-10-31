@@ -15,11 +15,11 @@ use tokio::runtime::{Builder, Runtime};
 #[napi]
 pub enum RequestType {
     /// Type of a server address request
-    ServerAddress = 1,
+    ServerAddress = 0,
     /// Type of a get string request.
-    GetString = 2,
+    GetString = 1,
     /// Type of a set string request.
-    SetString = 3,
+    SetString = 2,
 }
 
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
@@ -121,16 +121,19 @@ pub fn start_socket_listener_external(init_callback: JsFunction) -> napi::Result
         init_callback.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
             Ok(vec![ctx.value])
         })?;
-    start_socket_listener(move |result| match result {
-        Ok(path) => {
-            threadsafe_init_callback.call(Ok(path), ThreadsafeFunctionCallMode::NonBlocking);
-        }
-        Err(err) => {
-            threadsafe_init_callback.call(
-                Err(to_js_error(err)),
-                ThreadsafeFunctionCallMode::NonBlocking,
-            );
-        }
-    });
+    // start_socket_listener(move |result| match result {
+    //     Ok(path) => {
+    //         threadsafe_init_callback.call(Ok(path), ThreadsafeFunctionCallMode::NonBlocking);
+    //     }
+    //     Err(err) => {
+    //         threadsafe_init_callback.call(
+    //             Err(to_js_error(err)),
+    //             ThreadsafeFunctionCallMode::NonBlocking,
+    //         );
+    //     }
+    // });
+    
+    start_socket_listener(move |result| {threadsafe_init_callback.call(to_js_result(result), 
+        ThreadsafeFunctionCallMode::NonBlocking);});
     Ok(())
 }

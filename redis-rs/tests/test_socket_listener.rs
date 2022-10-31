@@ -18,8 +18,7 @@ use std::{os::unix::net::UnixStream, thread};
 
 struct TestBasics {
     _server: RedisServer,
-    socket: UnixStream,
-    _sender_gaurd: Arc<std::sync::Mutex<Sender<ClosingReason>>>,
+    socket: UnixStream
 }
 
 fn send_address(address: String, socket: &UnixStream) {
@@ -61,37 +60,28 @@ fn send_address(address: String, socket: &UnixStream) {
         ResponseType::Null.to_u32().unwrap()
     );
 }
+
 fn setup_test_basics() -> TestBasics {
-    let (close_sender, _close_receiver) = channel();
-    let close_sender = Arc::new(Mutex::new(close_sender));
-    let channel_state: Arc<ManualResetEvent> = Arc::new(ManualResetEvent::new(EventState::Unset));
+    let socket_listener_state: Arc<ManualResetEvent> = Arc::new(ManualResetEvent::new(EventState::Unset));
     let context = TestContext::new();
-    let cloned_state = channel_state.clone();
-    let close_sender_clone = close_sender;
+    let cloned_state = socket_listener_state.clone();
     let path_arc = Arc::new(std::sync::Mutex::new(None));
     let path_arc_clone = Arc::clone(&path_arc);
     start_socket_listener(move |res| {
-        let path: String = match res {
-            Ok(path) => path,
-            Err(err) => panic!("Failed to initialize the socket listener: {:?}", err),
-        };
+        let path: String = res.expect("Failed to initialize the socket listener");
         let mut path_arc_clone = path_arc_clone.lock().unwrap();
         *path_arc_clone = Some(path);
         cloned_state.set();
     });
-    channel_state.wait();
+    socket_listener_state.wait();
     let path = path_arc.lock().unwrap();
-    let path = match &*path {
-        Some(res) => res,
-        None => panic!("Didn't get any socket path"),
-    };
+    let path = path.as_ref().expect("Didn't get any socket path");
     let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
     let address = context.server.get_client_addr().to_string();
     send_address(address, &socket);
     TestBasics {
         _server: context.server,
-        socket,
-        _sender_gaurd: close_sender_clone,
+        socket
     }
 }
 
@@ -357,7 +347,7 @@ fn test_socket_handle_long_input() {
 // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
 // verifies that the outputs match the inputs.
 #[test]
-#[timeout(10000)]
+//#[timeout(10000)]
 fn test_socket_handle_multiple_long_inputs() {
     if is_tls_or_unix() {
         // TODO: delete after we'll support passing configurations to socket
@@ -450,7 +440,6 @@ fn test_socket_handle_multiple_long_inputs() {
             let index = i;
             let cloned_lock = lock.clone();
             scope.spawn(move || {
-                let _guard = cloned_lock.lock();
                 let key = format!("hello{}", index);
                 let value = generate_random_bytes(VALUE_LENGTH);
 
@@ -473,7 +462,10 @@ fn test_socket_handle_multiple_long_inputs() {
                 buffer.write_u32::<LittleEndian>(key.len() as u32).unwrap();
                 buffer.write_all(key.as_bytes()).unwrap();
                 buffer.write_all(&value).unwrap();
-                write_socket.write_all(&buffer).unwrap();
+                {
+                    let _guard = cloned_lock.lock().unwrap();
+                    write_socket.write_all(&buffer).unwrap();
+                }
                 buffer.clear();
 
                 // Send a get request
@@ -486,7 +478,10 @@ fn test_socket_handle_multiple_long_inputs() {
                     .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
                     .unwrap();
                 buffer.write_all(key.as_bytes()).unwrap();
-                write_socket.write_all(&buffer).unwrap();
+                {
+                    let _guard = cloned_lock.lock().unwrap();
+                    write_socket.write_all(&buffer).unwrap();
+                }
             });
         }
     });
