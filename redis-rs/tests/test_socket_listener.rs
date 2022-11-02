@@ -2,6 +2,7 @@
 mod support;
 use crate::support::*;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use ntest::timeout;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::{distributions::Standard, thread_rng, Rng};
 use redis::socket_listener::headers::{
@@ -347,7 +348,7 @@ fn test_socket_handle_long_input() {
 // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
 // verifies that the outputs match the inputs.
 #[test]
-//#[timeout(10000)]
+#[timeout(10000)]
 fn test_socket_handle_multiple_long_inputs() {
     if is_tls_or_unix() {
         // TODO: delete after we'll support passing configurations to socket
