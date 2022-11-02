@@ -6,7 +6,7 @@ use napi::{Env, Error, JsFunction, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
-use redis::socket_listener::{get_socket_path, start_socket_listener};
+use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -105,11 +105,6 @@ impl AsyncClient {
 
         Ok(promise)
     }
-}
-
-#[napi(js_name = "GetSocketPath")]
-pub fn get_socket_path_external() -> String {
-    get_socket_path()
 }
 
 #[napi(

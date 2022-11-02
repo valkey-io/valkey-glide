@@ -259,7 +259,9 @@ fn handle_request(
                 )
                 .await;
             }
-            RequestRanges::ServerAddress { address: _ } => {}
+            RequestRanges::ServerAddress { address: _ } => {
+                unreachable!("Server address can only be sent once")
+            }
         }
     });
 }
@@ -286,28 +288,19 @@ async fn handle_requests(
 }
 
 fn close_socket() {
-    match std::fs::remove_file(get_socket_path()) {
-        Ok(()) => {}
-        Err(e) => {
-            panic!("Failed to delete socket file: {}", e); // TODO: better error handling
-        }
-    };
+    std::fs::remove_file(get_socket_path()).expect("Failed to delete socket file");
 }
 
 fn to_babushka_result<T, E: std::fmt::Display>(
     result: Result<T, E>,
     err_msg: Option<&str>,
 ) -> Result<T, BabushkaError> {
-    match result {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            let err_msg = match err_msg {
-                Some(msg) => format!("{}: {}", msg, err),
-                None => format!("{}", err),
-            };
-            Err(BabushkaError::BaseError(err_msg))
-        }
-    }
+    result.map_err(|err: E| {
+        BabushkaError::BaseError(match err_msg {
+            Some(msg) => format!("{}: {}", msg, err),
+            None => format!("{}", err),
+        })
+    })
 }
 
 async fn parse_address_create_conn(
@@ -462,7 +455,7 @@ where
     local.run_until(async move {
         loop {
             tokio::select! {
-                    listen_v = listener.accept() => {
+                listen_v = listener.accept() => {
                     if let Ok((stream, _addr)) = listen_v {
                         // New client
                         let cloned_close_notifier = notify_close.clone();
@@ -506,7 +499,7 @@ pub enum BabushkaError {
 }
 
 /// Get the socket path as a string
-pub fn get_socket_path() -> String {
+fn get_socket_path() -> String {
     let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
     std::env::temp_dir()
         .join(socket_name)

@@ -18,7 +18,6 @@ export const enum ResponseType {
   String = 1
 }
 export const HEADER_LENGTH_IN_BYTES: number
-export function GetSocketPath(): string
 export function StartSocketConnection(Callback: (err: null | Error, path: string | null) => void): void
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
