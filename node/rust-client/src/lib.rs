@@ -1,10 +1,12 @@
 use napi::bindgen_prelude::ToNapiValue;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::threadsafe_function::{
+    ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
+};
 use napi::{Env, Error, JsFunction, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
-use redis::socket_listener::{start_socket_listener, ClosingReason};
+use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -12,10 +14,12 @@ use tokio::runtime::{Builder, Runtime};
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]
 pub enum RequestType {
+    /// Type of a server address request
+    ServerAddress = 1,
     /// Type of a get string request.
-    GetString = 1,
+    GetString = 2,
     /// Type of a set string request.
-    SetString = 2,
+    SetString = 3,
 }
 
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
@@ -105,49 +109,19 @@ impl AsyncClient {
 
 #[napi(
     js_name = "StartSocketConnection",
-    ts_args_type = "connectionAddress: string, 
-                    readSocketName: string, 
-                    writeSocketName: string, 
-                    startCallback: () => void, 
-                    closeCallback: (err: null | Error) => void"
+    ts_args_type = "Callback: (err: null | Error, path: string | null) => void"
 )]
-pub fn start_socket_listener_external(
-    connection_address: String,
-    read_socket_name: String,
-    write_socket_name: String,
-    start_callback: JsFunction,
-    close_callback: JsFunction,
-) -> napi::Result<()> {
-    let threadsafe_start_callback: ThreadsafeFunction<(), ErrorStrategy::Fatal> =
-        start_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
-    let threadsafe_close_callback: ThreadsafeFunction<(), ErrorStrategy::CalleeHandled> =
-        close_callback.create_threadsafe_function(0, |_| Ok(Vec::<()>::new()))?;
-    let client = to_js_result(redis::Client::open(connection_address))?;
-    start_socket_listener(
-        client,
-        read_socket_name,
-        write_socket_name,
-        move || {
-            threadsafe_start_callback.call((), ThreadsafeFunctionCallMode::NonBlocking);
-        },
-        move |result| match result {
-            ClosingReason::ReadSocketClosed => {
-                threadsafe_close_callback.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
-            }
-            ClosingReason::UnhandledError(err) => {
-                threadsafe_close_callback.call(
-                    Err(to_js_error(err)),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
-            }
-            ClosingReason::FailedInitialization(err) => {
-                // TODO - Do we want to differentiate this from UnhandledError ?
-                threadsafe_close_callback.call(
-                    Err(to_js_error(err)),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
-            }
-        },
-    );
+pub fn start_socket_listener_external(init_callback: JsFunction) -> napi::Result<()> {
+    let threadsafe_init_callback: ThreadsafeFunction<String, ErrorStrategy::CalleeHandled> =
+        init_callback.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
+            Ok(vec![ctx.value])
+        })?;
+
+    start_socket_listener(move |result| {
+        threadsafe_init_callback.call(
+            to_js_result(result),
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    });
     Ok(())
 }

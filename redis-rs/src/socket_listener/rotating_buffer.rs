@@ -55,6 +55,7 @@ impl RotatingBuffer {
         let length = (&input[..MESSAGE_LENGTH_END]).read_u32::<LittleEndian>()? as usize;
         let callback_index =
             (&input[MESSAGE_LENGTH_END..CALLBACK_INDEX_END]).read_u32::<LittleEndian>()?;
+
         let request_type = (&input[CALLBACK_INDEX_END..HEADER_END]).read_u32::<LittleEndian>()?;
         let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
             Error::new(
@@ -77,7 +78,6 @@ impl RotatingBuffer {
         if request_range.len() < HEADER_END {
             return Ok(RequestState::PartialNoHeader);
         }
-
         let header = Self::read_header(&buffer[request_range.start..request_range.end])?;
         let header_end = request_range.start + HEADER_END;
         let next = request_range.start + header.length;
@@ -88,6 +88,13 @@ impl RotatingBuffer {
         }
         // TODO - use serde for easier deserialization.
         let request = match header.request_type {
+            RequestType::ServerAddress => WholeRequest {
+                callback_index: header.callback_index,
+                request_type: RequestRanges::ServerAddress {
+                    address: header_end..next,
+                },
+                buffer,
+            },
             RequestType::GetString => WholeRequest {
                 callback_index: header.callback_index,
                 request_type: RequestRanges::Get {
@@ -134,7 +141,6 @@ impl RotatingBuffer {
         cursor: usize,
     ) {
         self.match_capacity(required_length.unwrap_or_else(|| self.current_read_buffer.capacity()));
-
         let old_buffer_len = old_buffer.len();
         let slice = &old_buffer[cursor..old_buffer_len];
         debug_assert!(self.current_read_buffer.len() == 0);
@@ -400,7 +406,7 @@ mod tests {
         );
         assert_eq!(requests[0].callback_index, 100);
 
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(RequestType::SetString as u32); // 2nd message operation type
         rotating_buffer.write_to_buffer(4); // 2nd message key length
         let buffer = rotating_buffer.current_buffer();
         assert_eq!(buffer.len(), HEADER_WITH_KEY_LENGTH_END);
@@ -427,7 +433,7 @@ mod tests {
         write_get_message(&mut rotating_buffer, FIRST_MESSAGE_LENGTH, 100);
         rotating_buffer.write_to_buffer(SECOND_MESSAGE_LENGTH as u32); // 2nd message length
         rotating_buffer.write_to_buffer(5); // 2nd message callback index
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(RequestType::SetString as u32); // 2nd message operation type
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(
@@ -475,7 +481,7 @@ mod tests {
         );
         assert_eq!(requests[0].callback_index, 100);
 
-        rotating_buffer.write_to_buffer(2); // 2nd message operation type
+        rotating_buffer.write_to_buffer(RequestType::SetString as u32); // 2nd message operation type
         rotating_buffer.write_to_buffer(8); // 2nd message key length
         let buffer = rotating_buffer.current_buffer();
         let mut message = vec![0_u8; SECOND_MESSAGE_LENGTH - buffer.len()];
