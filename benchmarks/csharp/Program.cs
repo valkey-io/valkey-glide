@@ -25,12 +25,21 @@ public static class MainClass
 
         [Option('l', "clients", Required = true, HelpText = "Which clients should run")]
         public string clientsToRun { get; set; } = "";
+
+        [Option('h', "host", Required = true, HelpText = "What host to target")]
+        public string host { get; set; } = "";
     }
 
-    private const string HOST = "localhost";
     private const int PORT = 6379;
-    private static readonly string ADDRESS = $"{HOST}:{PORT}";
-    private static readonly string ADDRESS_WITH_REDIS_PREFIX = $"redis://{ADDRESS}";
+    private static string getAddress(string host)
+    {
+        return $"{host}:{PORT}";
+    }
+
+    private static string getAddressWithRedisPrefix(string host)
+    {
+        return $"redis://{getAddress(host)}";
+    }
     private const double PROB_GET = 0.8;
 
     private const double PROB_GET_EXISTING_KEY = 0.8;
@@ -219,11 +228,12 @@ public static class MainClass
     private static async Task run_with_parameters(int total_commands,
         int data_size,
         int num_of_concurrent_tasks,
-        string clientsToRun)
+        string clientsToRun,
+        string host)
     {
         if (clientsToRun == "all" || clientsToRun == "ffi" || clientsToRun == "babushka")
         {
-            var babushka_client = new AsyncClient(ADDRESS_WITH_REDIS_PREFIX);
+            var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host));
             await run_client(
                 async (key) => await babushka_client.GetAsync(key),
                 async (key, value) => await babushka_client.SetAsync(key, value),
@@ -236,7 +246,7 @@ public static class MainClass
 
         if (clientsToRun == "all")
         {
-            using (var connection = ConnectionMultiplexer.Connect(ADDRESS))
+            using (var connection = ConnectionMultiplexer.Connect(getAddress(host)))
             {
                 var db = connection.GetDatabase();
                 await run_client(
@@ -265,7 +275,7 @@ public static class MainClass
         var product = options.concurrentTasks.Select(concurrentTasks => (concurrentTasks, options.dataSize));
         foreach (var (concurrentTasks, dataSize) in product)
         {
-            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun);
+            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host);
         }
 
         print_results(options.resultsFile);

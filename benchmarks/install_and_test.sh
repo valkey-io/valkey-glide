@@ -25,6 +25,7 @@ runCsharp=0
 concurrentTasks="1 10 100 1000"
 dataSize="100 4000"
 chosenClients="all"
+host="localhost"
 
 function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
@@ -36,7 +37,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
+  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
   # exit python virtualenv
   deactivate
 }
@@ -50,26 +51,26 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   yarn install
   npx tsc
-  yarn run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
+  yarn run bench --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients
+  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
 }
 
 function flushDB() {
   cd $utilitiesDir
   yarn install
-  yarn run flush
+  yarn run flush --host $host
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  yarn run fill -- --dataSize $1
+  yarn run fill --dataSize $1 --host $host
 }
 
 utilitiesDir=`pwd`/utilities
@@ -103,6 +104,7 @@ function Help() {
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
     echo Pass -only-babushka to only run Babushk clients.
+    echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
 }
 
 while test $# -gt 0
@@ -119,6 +121,10 @@ do
                 dataSize+=$2"  "
                 shift
             done
+            ;;
+        -host)
+            host=$2
+            shift
             ;;
         -tasks) # set number of concurrent tasks
             concurrentTasks=$2" "

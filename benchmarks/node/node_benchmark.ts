@@ -11,9 +11,11 @@ enum ChosenAction {
     SET,
 }
 
-const HOST = "localhost";
-const PORT = 6379;
-const ADDRESS = `redis://${HOST}:${PORT}`;
+function getAddress(host: string): string {
+    const PORT = 6379;
+    return `redis://${host}:${PORT}`;
+}
+
 const PROB_GET = 0.8;
 const PROB_GET_EXISTING_KEY = 0.8;
 const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
@@ -181,7 +183,8 @@ async function main(
     total_commands: number,
     num_of_concurrent_tasks: number,
     data_size: number,
-    clients_to_run: "all" | "ffi" | "socket" | "babushka"
+    clients_to_run: "all" | "ffi" | "socket" | "babushka",
+    address: string
 ) {
     const data = generate_value(data_size);
     if (
@@ -189,7 +192,7 @@ async function main(
         clients_to_run == "all" ||
         clients_to_run == "babushka"
     ) {
-        const babushka_client = await AsyncClient.CreateConnection(ADDRESS);
+        const babushka_client = await AsyncClient.CreateConnection(address);
         await run_client(
             babushka_client,
             "babushka FFI",
@@ -206,7 +209,7 @@ async function main(
         clients_to_run == "babushka"
     ) {
         const babushka_socket_client = await SocketConnection.CreateConnection(
-            ADDRESS
+            address
         );
         await run_client(
             babushka_socket_client,
@@ -221,7 +224,7 @@ async function main(
     }
 
     if (clients_to_run == "all") {
-        const node_redis_client = createClient({ url: ADDRESS });
+        const node_redis_client = createClient({ url: address });
         await node_redis_client.connect();
         await run_client(
             node_redis_client,
@@ -239,6 +242,7 @@ const optionDefinitions = [
     { name: "dataSize", type: String },
     { name: "concurrentTasks", type: String, multiple: true },
     { name: "clients", type: String },
+    { name: "host", type: String },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -254,12 +258,14 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             parseInt(concurrentTasks),
             parseInt(data_size),
         ]);
+        const address = getAddress(receivedOptions.host);
         for (let [concurrent_tasks, data_size] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),
                 concurrent_tasks,
                 data_size,
-                clients_to_run
+                clients_to_run,
+                address
             );
         }
 
