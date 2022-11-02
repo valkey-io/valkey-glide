@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 redis = { path = "../../redis-rs", features = ["aio", "tokio-comp"] }
 tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
-napi = {version = "2", features = ["napi4"] }
+napi = {version = "2.10", features = ["napi4"] }
 napi-derive = "2"
 
 [build-dependencies]

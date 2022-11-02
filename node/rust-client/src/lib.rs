@@ -2,7 +2,7 @@ use napi::bindgen_prelude::ToNapiValue;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
 };
-use napi::{Error, JsFunction, Result, Status};
+use napi::{Env, Error, JsFunction, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
