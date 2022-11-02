@@ -20,4 +20,4 @@ benchmarks/results
 # lock files
 
 yarn.lock
-pacakge-lock.json
+package-lock.json
