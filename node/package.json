@@ -348,7 +348,7 @@
     },
     "scripts": {
         "initial-build": "npm install --location=global yarn && cd rust-client && yarn install",
-        "build": "yarn build-external && yarn build-internal",
+        "build": "yarn build-internal && yarn build-external",
         "build-internal": "cd rust-client && yarn build",
         "build-external": "rm -rf build-ts && yarn tsc",
         "test": "jest"
