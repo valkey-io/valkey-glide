@@ -2,14 +2,13 @@
 
 #remove comment to print the lines running.
 #set -x
-
-if command -v python
+if command -v python3
 then
-    pythonCommand=python
+    pythonCommand=python3
 else
-    if command -v python3
+    if command -v python
     then
-        pythonCommand=python3
+        pythonCommand=python
     else
         echo "python / python3 could not be found"
         exit
