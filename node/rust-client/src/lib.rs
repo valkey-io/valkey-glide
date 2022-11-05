@@ -47,10 +47,7 @@ fn to_js_error(err: RedisError) -> Error {
 }
 
 fn to_js_result<T>(result: RedisResult<T>) -> Result<T> {
-    match result {
-        Ok(val) => Ok(val),
-        Err(err) => Err(to_js_error(err)),
-    }
+    result.map_err(to_js_error)
 }
 
 #[napi]
