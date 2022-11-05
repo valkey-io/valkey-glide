@@ -15,7 +15,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::{io, thread};
 use tokio::io::ErrorKind::AddrInUse;
-use tokio::io::Interest;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::Mutex;
@@ -61,17 +60,10 @@ impl SocketListener {
 
     pub(crate) async fn next_values(&mut self) -> PipeListeningResult {
         loop {
-            let ready_result = self.read_socket.ready(Interest::READABLE).await;
-            match ready_result {
-                Ok(ready) => {
-                    if !ready.is_readable() {
-                        continue;
-                    }
-                }
-                Err(err) => {
-                    return UnhandledError(err.into()).into();
-                }
-            };
+            self.read_socket
+                .readable()
+                .await
+                .expect("Readable check failed");
 
             let read_result = self
                 .read_socket
@@ -86,11 +78,10 @@ impl SocketListener {
                         Err(err) => UnhandledError(err.into()).into(),
                     };
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    task::yield_now().await;
-                    continue;
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
+                Err(ref e)
+                    if e.kind() == io::ErrorKind::WouldBlock
+                        || e.kind() == io::ErrorKind::Interrupted =>
+                {
                     continue;
                 }
                 Err(err) => return UnhandledError(err.into()).into(),
@@ -103,20 +94,20 @@ async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &
     let _guard = write_lock.lock().await;
     let mut total_written_bytes = 0;
     while total_written_bytes < output.len() {
-        let ready_result = write_socket.ready(Interest::WRITABLE).await;
-        if let Ok(ready) = ready_result {
-            if !ready.is_writable() {
-                continue;
-            }
-        }
+        write_socket
+            .writable()
+            .await
+            .expect("Writable check failed");
         match write_socket.try_write(&output[total_written_bytes..]) {
             Ok(written_bytes) => {
                 total_written_bytes += written_bytes;
             }
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
-                task::yield_now().await;
+            Err(err)
+                if err.kind() == io::ErrorKind::WouldBlock
+                    || err.kind() == io::ErrorKind::Interrupted =>
+            {
+                continue;
             }
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
             Err(err) => {
                 // TODO - add proper error handling.
                 panic!("received unexpected error {:?}", err);
