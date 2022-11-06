@@ -56,11 +56,6 @@ SIZE_SET_KEYSPACE = 3000000  # 3 million
 counter = 0
 running_tasks = set()
 bench_json_results = []
-action_latencies = {
-    ChosenAction.GET_NON_EXISTING: dict(),
-    ChosenAction.GET_EXISTING: dict(),
-    ChosenAction.SET: dict(),
-}
 
 
 def generate_value(size):
@@ -108,7 +103,7 @@ def timer(func):
     return wrapper
 
 
-async def execute_commands(client, client_name, total_commands, data_size):
+async def execute_commands(client, total_commands, data_size, action_latencies):
     global counter
     while counter < total_commands:
         chosen_action = choose_action()
@@ -121,27 +116,22 @@ async def execute_commands(client, client_name, total_commands, data_size):
             await client.set(generate_key_set(), generate_value(data_size))
         toc = time.perf_counter()
         execution_time = toc - tic
-        action_latencies[chosen_action].get(client_name).append(execution_time)
+        action_latencies[chosen_action].append(execution_time)
         counter += 1
     return True
 
 
 @timer
 async def create_and_run_concurrent_tasks(
-    client, client_name, total_commands, num_of_concurrent_tasks, data_size
+    client, total_commands, num_of_concurrent_tasks, data_size, action_latencies
 ):
     global counter
     global get_latency
     global set_latency
     counter = 0
-    action_latencies[ChosenAction.GET_NON_EXISTING].setdefault(
-        client_name, list()
-    ).clear()
-    action_latencies[ChosenAction.GET_EXISTING].setdefault(client_name, list()).clear()
-    action_latencies[ChosenAction.SET].setdefault(client_name, list()).clear()
     for _ in range(num_of_concurrent_tasks):
         task = asyncio.create_task(
-            execute_commands(client, client_name, total_commands, data_size)
+            execute_commands(client, total_commands, data_size, action_latencies)
         )
         running_tasks.add(task)
         task.add_done_callback(running_tasks.discard)
@@ -167,23 +157,26 @@ async def run_client(
     num_of_concurrent_tasks,
     data_size,
 ):
+    action_latencies = {
+        ChosenAction.GET_NON_EXISTING: list(),
+        ChosenAction.GET_EXISTING: list(),
+        ChosenAction.SET: list(),
+    }
     time = await create_and_run_concurrent_tasks(
-        client, client_name, total_commands, num_of_concurrent_tasks, data_size
+        client, total_commands, num_of_concurrent_tasks, data_size, action_latencies
     )
     tps = int(counter / time)
-    get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING][
-        client_name
-    ]
+    get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING]
     get_non_existing_latency_results = latency_results(
         "get_non_existing", get_non_existing_latencies
     )
 
-    get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING][client_name]
+    get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING]
     get_existing_latency_results = latency_results(
         "get_existing", get_existing_latencies
     )
 
-    set_latencies = action_latencies[ChosenAction.SET][client_name]
+    set_latencies = action_latencies[ChosenAction.SET]
     set_results = latency_results("set", set_latencies)
 
     json_res = {
