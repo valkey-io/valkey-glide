@@ -83,7 +83,7 @@ identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 mkdir -p $BENCH_RESULTS_FOLDER
 
 function resultFileName() {
-    echo results/$1-$2-$identifier.json
+    echo results/$namePrefix$1-$2-$identifier.json
 }
 
 function Help() {
@@ -120,6 +120,10 @@ do
                 dataSize+=$2"  "
                 shift
             done
+            ;;
+        -prefix) # set size of data
+            namePrefix=$2-
+            shift
             ;;
         -host)
             host=$2
@@ -192,7 +196,7 @@ flushDB
 if [ $writeResultsCSV == 1 ]; 
 then
     cd ${BENCH_FOLDER}
-    finalCSV=results/final-$identifier.csv
+    finalCSV=results/$namePrefix""final-$identifier.csv
     $pythonCommand $utilitiesDir/csv_exporter.py $resultFiles$finalCSV
     echo results are in $finalCSV
 fi
