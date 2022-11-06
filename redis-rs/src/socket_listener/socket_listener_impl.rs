@@ -510,7 +510,7 @@ fn get_socket_path() -> String {
 
 async fn handle_signals() {
     // Handle Unix signals
-    let mut signals = Signals::new(&[SIGTERM, SIGQUIT, SIGINT, SIGHUP]).unwrap();
+    let mut signals = Signals::new([SIGTERM, SIGQUIT, SIGINT, SIGHUP]).unwrap();
     while let Some(signal) = signals.next().await {
         match signal {
             SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
