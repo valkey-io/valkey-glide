@@ -430,7 +430,7 @@ impl ClusterConnection {
             let (addr, rv) = {
                 let mut connections = self.connections.borrow_mut();
                 let (addr, conn) = if let Some(addr) = redirected.take() {
-                    let conn = self.get_connection_by_addr(&mut *connections, &addr)?;
+                    let conn = self.get_connection_by_addr(&mut connections, &addr)?;
                     if is_asking {
                         // if we are in asking mode we want to feed a single
                         // ASKING command into the connection before what we
@@ -440,9 +440,9 @@ impl ClusterConnection {
                     }
                     (addr.to_string(), conn)
                 } else if !excludes.is_empty() || slot.is_none() {
-                    get_random_connection(&mut *connections, Some(&excludes))
+                    get_random_connection(&mut connections, Some(&excludes))
                 } else {
-                    self.get_connection(&mut *connections, slot.unwrap())?
+                    self.get_connection(&mut connections, slot.unwrap())?
                 };
                 (addr, func(conn))
             };
