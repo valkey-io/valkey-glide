@@ -467,14 +467,14 @@ where
                         close_socket();
                         return;
                     }
-                }
+                },
                 // `notify_one` was called to indicate no more clients are connected,
                 // close the socket
                 _ = notify_close.notified() => {close_socket(); return;},
                 // Interrupt was received, close the socket
                 _ = handle_signals() => {close_socket(); return;}
             }
-        }
+        };
         })
     .await;
 }
