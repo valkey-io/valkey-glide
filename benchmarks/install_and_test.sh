@@ -42,15 +42,15 @@ function runPythonBenchmark(){
 }
 
 function runNodeBenchmark(){
-  yarn install
+  npm install
   cd ${BENCH_FOLDER}/../node
-  yarn install
+  npm install
   rm -rf build-ts
-  yarn run build
+  npm run build
   cd ${BENCH_FOLDER}/node
-  yarn install
+  npm install
   npx tsc
-  yarn run bench --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
 }
 
 function runCSharpBenchmark(){
