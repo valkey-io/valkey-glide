@@ -238,23 +238,23 @@ export class SocketConnection {
         });
     }
 
-    get(key: string): Promise<string> {
+    public get(key: string): Promise<string> {
         return this.writeString(key, RequestType.GetString);
     }
 
-    set(key: string, value: string): Promise<void> {
+    public set(key: string, value: string): Promise<void> {
         return this.writeString(key, RequestType.SetString, value);
     }
 
-    setServerAddress(address: string): Promise<void> {
+    private setServerAddress(address: string): Promise<void> {
         return this.writeString(address, RequestType.ServerAddress);
     }
 
-    dispose(): void {
+    public dispose(): void {
         this.socket.end();
     }
 
-    static async CreateConnection(address: string): Promise<SocketConnection> {
+    public static async CreateConnection(address: string): Promise<SocketConnection> {
         return new Promise((resolve, reject) => {
             // TODO - create pipes according to Windows convention:
             // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
