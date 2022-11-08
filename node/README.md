@@ -4,13 +4,13 @@ This package contains an internal package under the folder `rust-client`, which 
 Homebrew is the easiest way to install node, but you can choose any way you want to install it.
 Npm should come as part as node.
 Use npm to install yarn globaly - `npm install -g yarn` 
-run `yarn run initial-build`.
+run `npm run initial-build`.
 
 ### Build
 
-Run `yarn run build-internal` to build the internal package and generates TS code. `yarn run build-external` builds the external package without rebuilding the internal package.
-Run `yarn run build` runs a full build.
+Run `npm run build-internal` to build the internal package and generates TS code. `npm run build-external` builds the external package without rebuilding the internal package.
+Run `npm run build` runs a full build.
 
 ### Testing
 
-Run `yarn test` after building.
+Run `npm test` after building.
