@@ -1,4 +1,4 @@
-import { BabushkaInternal } from ".";
+import { BabushkaInternal } from "../";
 import * as net from "net";
 import { nextPow2 } from "bit-twiddle";
 const {
