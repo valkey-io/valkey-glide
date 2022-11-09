@@ -84,25 +84,14 @@ export class SocketConnection {
         }
     }
 
-    private constructor() {
-        this.socket = new net.Socket();
-    }
-
-    public connect(socketPath: string) {
-        return new Promise((resolve, reject) => {
-            this.socket
-                .connect(socketPath)
-                .on("connect", () => {
-                    resolve("Connected");
-                })
-                // Messages are buffers. use toString
-                .on("data", (data) => this.handleReadData(data))
-                .on("error", (err) => {
-                    console.error(`Server closed: ${err}`);
-                    this.dispose();
-                    reject(err);
-                });
-        });
+    private constructor(socket: net.Socket) {
+        this.socket = socket;
+        this.socket
+            .on("data", (data) => this.handleReadData(data))
+            .on("error", (err) => {
+                console.error(`Server closed: ${err}`);
+                this.dispose();
+            });
     }
 
     private concatBuffers(priorBuffer: Uint8Array, data: Buffer): Uint8Array {
@@ -254,22 +243,41 @@ export class SocketConnection {
         this.socket.end();
     }
 
-    public static async CreateConnection(address: string): Promise<SocketConnection> {
-        return new Promise((resolve, reject) => {
-            // TODO - create pipes according to Windows convention:
-            // https://nodejs.org/api/net.html#identifying-paths-for-ipc-connections
-            const connection = new SocketConnection();
+    static async __CreateConnection(
+        address: string,
+        connectedSocket: net.Socket
+    ): Promise<SocketConnection> {
+        const connection = new SocketConnection(connectedSocket);
+        await connection.setServerAddress(address);
+        return connection;
+    }
 
+    private static GetSocket(path: string): Promise<net.Socket> {
+        return new Promise((resolve, reject) => {
+            const socket = new net.Socket();
+            socket
+                .connect(path)
+                .once("connect", () => resolve(socket))
+                .once("error", reject);
+        });
+    }
+
+    public static async CreateConnection(
+        address: string
+    ): Promise<SocketConnection> {
+        return new Promise((resolve, reject) => {
             const startCallback = async (
                 err: null | Error,
                 path: string | null
             ) => {
                 if (path !== null) {
-                    await connection.connect(path);
-                    await connection.setServerAddress(address);
+                    const socket = await this.GetSocket(path);
+                    const connection = await this.__CreateConnection(
+                        address,
+                        socket
+                    );
                     resolve(connection);
                 } else if (err !== null) {
-                    connection.dispose();
                     reject(err);
                 }
             };
