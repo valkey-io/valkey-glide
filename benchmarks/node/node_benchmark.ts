@@ -24,11 +24,6 @@ const SIZE_SET_KEYSPACE = 3000000; // 3 million
 let counter = 0;
 const running_tasks: Promise<void>[] = [];
 const bench_json_results: {}[] = [];
-const action_latencies: Record<ChosenAction, Record<string, number[]>> = {
-    [ChosenAction.SET]: {},
-    [ChosenAction.GET_NON_EXISTING]: {},
-    [ChosenAction.GET_EXISTING]: {},
-};
 
 interface IAsyncClient {
     set: (key: string, value: string) => Promise<any>;
@@ -71,9 +66,9 @@ function print_results(resultsFile: string) {
 
 async function redis_benchmark(
     client: IAsyncClient,
-    client_name: string,
     total_commands: number,
-    data: string
+    data: string,
+    action_latencies: Record<ChosenAction, number[]>
 ) {
     while (counter < total_commands) {
         const chosen_action = choose_action();
@@ -90,7 +85,7 @@ async function redis_benchmark(
                 break;
         }
         let toc = process.hrtime(tic);
-        const latency_list = action_latencies[chosen_action][client_name];
+        const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
         counter += 1;
     }
@@ -98,19 +93,16 @@ async function redis_benchmark(
 
 async function create_bench_tasks(
     client: IAsyncClient,
-    client_name: string,
     total_commands: number,
     num_of_concurrent_tasks: number,
-    data: string
+    data: string,
+    action_latencies: Record<ChosenAction, number[]>
 ) {
     counter = 0;
-    action_latencies[ChosenAction.GET_EXISTING][client_name] = [];
-    action_latencies[ChosenAction.GET_NON_EXISTING][client_name] = [];
-    action_latencies[ChosenAction.SET][client_name] = [];
     let tic = process.hrtime();
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
-            redis_benchmark(client, client_name, total_commands, data)
+            redis_benchmark(client, total_commands, data, action_latencies)
         );
     }
     await Promise.all(running_tasks);
@@ -141,30 +133,35 @@ async function run_client(
     data_size: number,
     data: string
 ) {
+    const action_latencies = {
+        [ChosenAction.SET]: [],
+        [ChosenAction.GET_NON_EXISTING]: [],
+        [ChosenAction.GET_EXISTING]: [],
+    };
+
     const time = await create_bench_tasks(
         client,
-        client_name,
         total_commands,
         num_of_concurrent_tasks,
-        data
+        data,
+        action_latencies
     );
     const tps = Math.round(counter / time);
 
     const get_non_existing_latencies =
-        action_latencies[ChosenAction.GET_NON_EXISTING][client_name];
+        action_latencies[ChosenAction.GET_NON_EXISTING];
     const get_non_existing_latency_results = latency_results(
         "get_non_existing",
         get_non_existing_latencies
     );
 
-    const get_existing_latencies =
-        action_latencies[ChosenAction.GET_EXISTING][client_name];
+    const get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING];
     const get_existing_latency_results = latency_results(
         "get_existing",
         get_existing_latencies
     );
 
-    const set_latencies = action_latencies[ChosenAction.SET][client_name];
+    const set_latencies = action_latencies[ChosenAction.SET];
     const set_latency_results = latency_results("set", set_latencies);
 
     const json_res = {
