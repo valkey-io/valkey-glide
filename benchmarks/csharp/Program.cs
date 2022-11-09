@@ -46,11 +46,6 @@ public static class MainClass
     private const int SIZE_GET_KEYSPACE = 3750000; // 3.75 million
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
 
-    private static readonly Dictionary<ChosenAction, Dictionary<string, ConcurrentBag<double>>> actions_latencies = new() {
-        {ChosenAction.GET_NON_EXISTING, new()},
-        {ChosenAction.GET_EXISTING, new()},
-        {ChosenAction.SET, new()},
-    };
     private static readonly Random randomizer = new();
     private static long counter = 0;
     private static readonly List<Dictionary<string, object>> bench_json_results = new();
@@ -114,9 +109,9 @@ public static class MainClass
     private static async Task redis_benchmark(
         Func<string, Task<string>> get,
         Func<string, string, Task> set,
-        string client_name,
         long total_commands,
-        string data)
+        string data,
+        Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies)
     {
         var stopwatch = new Stopwatch();
         do
@@ -136,7 +131,7 @@ public static class MainClass
                     break;
             }
             stopwatch.Stop();
-            var latency_list = actions_latencies[action][client_name];
+            var latency_list = action_latencies[action];
             latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
         } while (Interlocked.Increment(ref counter) < total_commands);
     }
@@ -144,22 +139,19 @@ public static class MainClass
     private static async Task<long> create_bench_tasks(
         Func<string, Task<string>> get,
         Func<string, string, Task> set,
-        string client_name,
         int total_commands,
         string data,
-        int num_of_concurrent_tasks
+        int num_of_concurrent_tasks,
+        Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies
     )
     {
         counter = 0;
-        actions_latencies[ChosenAction.GET_NON_EXISTING][client_name] = new();
-        actions_latencies[ChosenAction.GET_EXISTING][client_name] = new();
-        actions_latencies[ChosenAction.SET][client_name] = new();
         var stopwatch = Stopwatch.StartNew();
         var running_tasks = new List<Task>();
         for (var i = 0; i < num_of_concurrent_tasks; i++)
         {
             running_tasks.Add(
-                redis_benchmark(get, set, client_name, total_commands, data)
+                redis_benchmark(get, set, total_commands, data, action_latencies)
             );
         }
         await Task.WhenAll(running_tasks);
@@ -191,23 +183,28 @@ public static class MainClass
         int num_of_concurrent_tasks
     )
     {
+        var action_latencies = new Dictionary<ChosenAction, ConcurrentBag<double>>() {
+            {ChosenAction.GET_NON_EXISTING, new()},
+            {ChosenAction.GET_EXISTING, new()},
+            {ChosenAction.SET, new()},
+        };
         var data = generate_value(data_size);
         var ellapsed_milliseconds = await create_bench_tasks(
             get, set,
-            client_name,
             total_commands,
             data,
-            num_of_concurrent_tasks
+            num_of_concurrent_tasks,
+            action_latencies
         );
         var tps = Math.Round((double)counter / ((double)ellapsed_milliseconds / 1000));
 
-        var get_non_existing_latencies = actions_latencies[ChosenAction.GET_NON_EXISTING][client_name];
+        var get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING];
         var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
 
-        var get_existing_latencies = actions_latencies[ChosenAction.GET_EXISTING][client_name];
+        var get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING];
         var get_existing_latency_results = latency_results("get_existing", get_existing_latencies);
 
-        var set_latencies = actions_latencies[ChosenAction.SET][client_name];
+        var set_latencies = action_latencies[ChosenAction.SET];
         var set_latency_results = latency_results("set", set_latencies);
 
         var result = new Dictionary<string, object>
