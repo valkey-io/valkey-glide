@@ -50,19 +50,26 @@ export class SocketConnection {
             }
             const callbackIndex = header[1];
             const responseType = header[2] as ResponseType;
-            const [resolve, _reject] =
+            const [resolve, reject] =
                 this.promiseCallbackFunctions[callbackIndex];
             this.availableCallbackSlots.push(callbackIndex);
             if (responseType === ResponseType.Null) {
                 resolve(null);
-            } else if (responseType === ResponseType.String) {
+            } else {
                 const valueLength = length - HEADER_LENGTH_IN_BYTES;
                 const keyBytes = Buffer.from(
                     dataArray.buffer,
                     counter + HEADER_LENGTH_IN_BYTES,
                     valueLength
                 );
-                resolve(keyBytes.toString("utf8"));
+                const message = keyBytes.toString("utf8");
+                if (responseType === ResponseType.String) {
+                    resolve(message);
+                } else if (responseType === ResponseType.RequestError) {
+                    reject(message);
+                } else if (responseType === ResponseType.ClosingError) {
+                    this.dispose(message);
+                }
             }
             counter = counter + length;
             const offset = counter % 4;
@@ -239,7 +246,10 @@ export class SocketConnection {
         return this.writeString(address, RequestType.ServerAddress);
     }
 
-    public dispose(): void {
+    public dispose(errorMessage?: string): void {
+        this.promiseCallbackFunctions.forEach(([_resolve, reject], _index) => {
+            reject(errorMessage);
+        });
         this.socket.end();
     }
 
