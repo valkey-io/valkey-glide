@@ -236,22 +236,26 @@ fn test_socket_report_error() {
     }
     let mut test_basics = setup_test_basics();
 
+    const CALLBACK_INDEX: u32 = 99;
     let key = "a";
-    let value = generate_random_bytes(1);
     // Send a set request
-    let message_length = 1 + key.len() + 16;
+    let message_length = HEADER_END + key.len();
     let mut buffer = Vec::with_capacity(message_length);
     buffer
         .write_u32::<LittleEndian>(message_length as u32)
         .unwrap();
-    buffer
-        .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
-        .unwrap();
+    buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
     buffer.write_u32::<LittleEndian>(u32::MAX).unwrap(); // here we send an erroneous enum
-    buffer.write_u32::<LittleEndian>(5).unwrap();
     buffer.write_all(key.as_bytes()).unwrap();
-    buffer.write_all(&value).unwrap();
     test_basics.socket.write_all(&buffer).unwrap();
+
+    let _ = test_basics.socket.read(&mut buffer).unwrap();
+    assert_eq!(
+        (&buffer[CALLBACK_INDEX_END..HEADER_END])
+            .read_u32::<LittleEndian>()
+            .unwrap(),
+        ResponseType::ClosingError.to_u32().unwrap()
+    );
 }
 
 #[test]
@@ -416,6 +420,7 @@ fn test_socket_handle_multiple_long_inputs() {
 
                                 results[callback_index] = State::ReceivedValue;
                             }
+                            _ => unreachable!(),
                         };
                     }
 

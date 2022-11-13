@@ -29,6 +29,10 @@ pub enum ResponseType {
     Null = 0,
     /// Type of a response that returns a string.
     String = 1,
+    /// Type of response containing an error that impacts a single request.
+    RequestError = 2,
+    /// Type of response containing an error causes the connection to close.
+    ClosingError = 3,
 }
 
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
