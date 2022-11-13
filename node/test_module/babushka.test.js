@@ -82,7 +82,6 @@ describe("NAPI client", () => {
     });
 
     it("send very large values", async () => {
-        const startTime = new Date();
         const port = await FreePort(3000).then(([free_port]) => free_port);
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
@@ -197,7 +196,6 @@ describe("socket client", () => {
     });
 
     it("send very large values", async () => {
-        const startTime = new Date();
         const port = await FreePort(3000).then(([free_port]) => free_port);
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
