@@ -359,7 +359,7 @@ async fn parse_address_create_conn(
         request.callback_index,
         ResponseType::Null,
     )
-    .expect("Failed writing address request");
+    .expect("Failed writing address response.");
     write_to_output(&output_buffer, socket, write_lock).await;
     Ok(connection)
 }
