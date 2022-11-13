@@ -41,12 +41,16 @@ pub enum RequestType {
 }
 
 /// An enum representing the values of the request type field.
-#[derive(ToPrimitive, FromPrimitive, PartialEq, Eq)]
+#[derive(ToPrimitive, FromPrimitive, PartialEq, Eq, Debug)]
 pub enum ResponseType {
     /// Type of a response that returns a null.
     Null = 0,
     /// Type of a response that returns a string.
     String = 1,
+    /// Type of response containing an error that impacts a single request.
+    RequestError = 2,
+    /// Type of response containing an error causes the connection to close.
+    ClosingError = 3,
 }
 
 #[derive(PartialEq, Debug, Clone)]

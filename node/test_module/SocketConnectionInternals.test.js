@@ -32,14 +32,12 @@ function getConnectionAndSocket() {
         const server = net
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
-                    const uint32Array = new Uint32Array(
-                        data.buffer,
-                        data.byteOffset,
-                        data.byteLength / 4
-                    );
+                    const uint32Array = new Uint32Array(data.buffer, 0, 3);
+
                     expect(data.byteLength).toEqual(HEADER_LENGTH_IN_BYTES);
                     expect(uint32Array[0]).toEqual(HEADER_LENGTH_IN_BYTES); // length of message when empty string is the address
                     expect(uint32Array[2]).toEqual(RequestType.ServerAddress);
+
                     sendResponse(socket, ResponseType.Null, uint32Array[1]);
                 });
 
@@ -105,11 +103,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             const expected = "bar";
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(
-                    data.buffer,
-                    data.byteOffset,
-                    data.byteLength / 4
-                );
+                const uint32Array = new Uint32Array(data.buffer, 0, 3);
                 expect(uint32Array[0]).toEqual(15);
                 expect(uint32Array[2]).toEqual(RequestType.GetString);
 
@@ -128,11 +122,7 @@ describe("SocketConnectionInternals", () => {
     it("should pass null returned from socket", async () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(
-                    data.buffer,
-                    data.byteOffset,
-                    data.byteLength / 4
-                );
+                const uint32Array = new Uint32Array(data.buffer, 0, 3);
                 expect(uint32Array[0]).toEqual(15);
                 expect(uint32Array[2]).toEqual(RequestType.GetString);
 
@@ -140,6 +130,44 @@ describe("SocketConnectionInternals", () => {
             });
             const result = await connection.get("foo");
             expect(result).toBeNull();
+        });
+    });
+
+    it("should reject requests that received a response error", async () => {
+        await testWithResources(async (connection, socket) => {
+            const error = "check";
+            socket.once("data", (data) => {
+                const uint32Array = new Uint32Array(data.buffer, 0, 3);
+                sendResponse(
+                    socket,
+                    ResponseType.RequestError,
+                    uint32Array[1],
+                    error
+                );
+            });
+            const request = connection.get("foo");
+
+            await expect(request).rejects.toMatch(error);
+        });
+    });
+
+    it("should all requests when receiving a closing error", async () => {
+        await testWithResources(async (connection, socket) => {
+            const error = "check";
+            socket.once("data", (data) => {
+                const uint32Array = new Uint32Array(data.buffer, 0, 3);
+                sendResponse(
+                    socket,
+                    ResponseType.ClosingError,
+                    uint32Array[1],
+                    error
+                );
+            });
+            const request1 = connection.get("foo");
+            const request2 = connection.get("bar");
+
+            await expect(request1).rejects.toMatch(error);
+            await expect(request2).rejects.toMatch(error);
         });
     });
 });
