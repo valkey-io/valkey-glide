@@ -2,6 +2,9 @@
 
 #remove comment to print the lines running.
 #set -x
+
+set -e
+
 if command -v python3
 then
     pythonCommand=python3
