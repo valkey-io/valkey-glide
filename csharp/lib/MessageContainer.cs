@@ -10,7 +10,7 @@ namespace babushka
             return messages[index];
         }
 
-        internal (Message<string?>, Task<string?>) GetMessageForCall(string key, string? value)
+        internal (Message<string?>, Task<string?>) GetMessageForCall(string? key, string? value)
         {
             var message = GetFreeMessage();
             var task = message.CreateTask(key, value, this).ContinueWith(result =>
