@@ -107,7 +107,7 @@ public static class MainClass
     }
 
     private static async Task redis_benchmark(
-        Func<string, Task<string>> get,
+        Func<string, Task<string?>> get,
         Func<string, string, Task> set,
         long total_commands,
         string data,
@@ -137,7 +137,7 @@ public static class MainClass
     }
 
     private static async Task<long> create_bench_tasks(
-        Func<string, Task<string>> get,
+        Func<string, Task<string?>> get,
         Func<string, string, Task> set,
         int total_commands,
         string data,
@@ -175,7 +175,7 @@ public static class MainClass
     }
 
     private static async Task run_client(
-        Func<string, Task<string>> get,
+        Func<string, Task<string?>> get,
         Func<string, string, Task> set,
         string client_name,
         int total_commands,
