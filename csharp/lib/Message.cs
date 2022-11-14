@@ -32,10 +32,10 @@ internal class Message<T> : IValueTaskSource<T>
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public async Task<T> CreateTask(string key, string? value, object client)
+    public async Task<T> CreateTask(string? key, string? value, object client)
     {
         this.client = client;
-        this.KeyPtr = Marshal.StringToHGlobalAnsi(key);
+        this.KeyPtr = key is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(key);
         this.ValuePtr = value is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(value);
         var result = await new ValueTask<T>(this, _source.Version);
         FreePointers();
@@ -45,7 +45,10 @@ internal class Message<T> : IValueTaskSource<T>
 
     private void FreePointers()
     {
-        Marshal.FreeHGlobal(KeyPtr);
+        if (ValuePtr != IntPtr.Zero)
+        {
+            Marshal.FreeHGlobal(KeyPtr);
+        }
         if (ValuePtr != IntPtr.Zero)
         {
             Marshal.FreeHGlobal(ValuePtr);
