@@ -236,8 +236,8 @@ public static class MainClass
                 async (key, value) => await babushka_client.SetAsync(key, value),
                 "babushka FFI",
                 total_commands,
-                num_of_concurrent_tasks,
-                data_size
+                data_size,
+                num_of_concurrent_tasks
             );
         }
 
@@ -251,8 +251,8 @@ public static class MainClass
                     (key, value) => db.StringSetAsync(key, value),
                     "StackExchange.Redis",
                     total_commands,
-                    num_of_concurrent_tasks,
-                    data_size
+                    data_size,
+                    num_of_concurrent_tasks
                 );
             }
         }
