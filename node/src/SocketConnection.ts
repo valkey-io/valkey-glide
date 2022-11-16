@@ -1,6 +1,5 @@
 import { BabushkaInternal } from "../";
 import * as net from "net";
-import { nextPow2 } from "bit-twiddle";
 const {
     StartSocketConnection,
     HEADER_LENGTH_IN_BYTES,
@@ -105,7 +104,7 @@ export class SocketConnection {
         const requiredLength = priorBuffer.length + data.byteLength;
 
         if (this.backingReadBuffer.byteLength < requiredLength) {
-            this.backingReadBuffer = new ArrayBuffer(nextPow2(requiredLength));
+            this.backingReadBuffer = new ArrayBuffer(requiredLength);
         }
         const array = new Uint8Array(this.backingReadBuffer, 0, requiredLength);
         array.set(priorBuffer);
@@ -179,7 +178,7 @@ export class SocketConnection {
                         this.backingWriteBuffer.byteLength < requiredLength
                     ) {
                         this.backingWriteBuffer = new ArrayBuffer(
-                            nextPow2(requiredLength)
+                            requiredLength
                         );
                     }
 

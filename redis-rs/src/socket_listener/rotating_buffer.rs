@@ -125,11 +125,7 @@ impl RotatingBuffer {
 
     /// Adjusts the current buffer size so that it will fit [required_length]
     fn match_capacity(&mut self, required_length: usize) {
-        if required_length <= self.current_read_buffer.len() {
-            return;
-        }
-
-        let extra_capacity = required_length.next_power_of_two() - self.current_read_buffer.len();
+        let extra_capacity = required_length - self.current_read_buffer.len();
         self.current_read_buffer.reserve(extra_capacity);
     }
 
