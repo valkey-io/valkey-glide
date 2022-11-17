@@ -28,14 +28,11 @@ export class SocketConnection {
         const dataArray = this.remainingReadData
             ? this.concatBuffers(this.remainingReadData, data)
             : new Uint8Array(data.buffer, data.byteOffset, data.length);
-        if (dataArray.byteLength % 4 !== 0) {
-            throw new Error("inputs are not aligned to 4.");
-        }
 
         let counter = 0;
         while (counter <= dataArray.byteLength - HEADER_LENGTH_IN_BYTES) {
-            const header = new Uint32Array(dataArray.buffer, counter, 3);
-            const length = header[0];
+            const header = new DataView(dataArray.buffer, counter, 12);
+            const length = header.getUint32(0, true);
             if (length === 0) {
                 throw new Error("length 0");
             }
@@ -47,8 +44,8 @@ export class SocketConnection {
                 );
                 break;
             }
-            const callbackIndex = header[1];
-            const responseType = header[2] as ResponseType;
+            const callbackIndex = header.getUint32(4, true);
+            const responseType = header.getUint32(8, true) as ResponseType;
             const [resolve, reject] =
                 this.promiseCallbackFunctions[callbackIndex];
             this.availableCallbackSlots.push(callbackIndex);
@@ -71,12 +68,6 @@ export class SocketConnection {
                 }
             }
             counter = counter + length;
-            const offset = counter % 4;
-
-            if (offset !== 0) {
-                // align counter to 4.
-                counter += 4 - offset;
-            }
         }
 
         if (counter == dataArray.byteLength) {
