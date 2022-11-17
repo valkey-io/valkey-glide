@@ -5,7 +5,6 @@
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
     "dependencies": {
-        "@types/bit-twiddle": "^1.0.1",
         "acorn": "^8.7.1",
         "acorn-jsx": "^5.3.2",
         "aggregate-error": "^3.1.0",
@@ -28,7 +27,6 @@
         "balanced-match": "^1.0.2",
         "benchmark": "^2.1.4",
         "benny": "^3.7.1",
-        "bit-twiddle": "^1.0.2",
         "brace-expansion": "^1.1.11",
         "braces": "^3.0.2",
         "browserslist": "^4.21.3",
