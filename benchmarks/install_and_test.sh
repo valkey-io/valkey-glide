@@ -35,7 +35,7 @@ function runPythonBenchmark(){
   source .env/bin/activate
   pip install --upgrade --quiet pip
   pip install --quiet -r requirements.txt
-  maturin develop
+  maturin develop --release
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
