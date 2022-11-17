@@ -45,7 +45,7 @@ jobs:
       - name: Lint with isort
         working-directory: ./python
         run: |
-          isort . --check --diff
+          isort . --profile black --check --diff
 
       - name: Lint with flake8
         working-directory: ./python
