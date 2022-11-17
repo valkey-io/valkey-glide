@@ -7,11 +7,19 @@ BASE_ALLOWED_KEYS = {
     "user",
     "password",
     "retry",
-    "timeout",
+    "connection_timeout",
 }
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
+
+DEFAULT_CONFIGS = {
+    "host": DEFAULT_HOST,
+    "port": DEFAULT_PORT,
+    "db": 0,
+    "tls_enabled": False,
+    "connection_timeout": 1,  # seconds
+}
 
 
 class BaseClientConfiguration(ABC):
@@ -38,6 +46,4 @@ class ClientConfiguration(BaseClientConfiguration):
 
     @staticmethod
     def get_default_config():
-        return ClientConfiguration(
-            host=DEFAULT_HOST, port=DEFAULT_PORT, db=0, tls_enabled=False
-        )
+        return ClientConfiguration(**DEFAULT_CONFIGS)
