@@ -1,3 +1,4 @@
+async-timeout==4.0.2
 attrs==21.4.0
 iniconfig==1.1.1
 maturin==0.13.0
