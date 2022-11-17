@@ -22,6 +22,7 @@ use tokio::sync::Notify;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
+
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 
@@ -176,10 +177,7 @@ async fn send_set_request(
 fn get_vec(pool: &Pool<Vec<u8>>, required_capacity: usize) -> RcRecycled<Vec<u8>> {
     let mut vec = pool.new_rc();
     vec.clear();
-    let current_capacity = vec.capacity();
-    if required_capacity > current_capacity {
-        vec.reserve(required_capacity.next_power_of_two() - current_capacity);
-    }
+    vec.reserve(required_capacity);
     vec
 }
 
