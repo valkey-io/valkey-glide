@@ -44,3 +44,6 @@ with open(output_file_name, "w+") as output_file:
                 relevant_fields = python_fields if language == "python" else base_fields
                 values = [json_object[field] for field in relevant_fields]
                 writer.writerow(values)
+
+for json_file_full_path in sys.argv[1:-1]:
+    os.remove(json_file_full_path)
