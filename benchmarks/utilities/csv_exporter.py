@@ -38,7 +38,15 @@ with open(output_file_name, "w+") as output_file:
             json_objects = json.load(file)
 
             json_file_name = os.path.basename(json_file_full_path)
-            language = json_file_name.split("-")[0]
+
+            languages = ["csharp", "node", "python"]
+            language = next(
+                (language for language in languages if language in json_file_name),
+                None
+            )
+
+            if not language:
+                raise "Unknown language for " + json_file_name
             for json_object in json_objects:
                 json_object["language"] = language
                 relevant_fields = python_fields if language == "python" else base_fields
