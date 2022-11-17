@@ -202,10 +202,6 @@ async fn send_get_request(
                 length,
             )?;
             output_buffer.extend_from_slice(&result_bytes);
-            let offset = output_buffer.len() % 4;
-            if offset != 0 {
-                output_buffer.resize(length + 4 - offset, 0);
-            }
             write_to_output(&output_buffer, &write_socket, &write_lock).await;
         }
         None => {
