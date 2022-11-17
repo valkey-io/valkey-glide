@@ -70,7 +70,7 @@ jobs:
           python -m venv .env
           source .env/bin/activate
           pip install -r requirements.txt
-          maturin develop
+          maturin develop --release
           pytest --asyncio-mode=auto
 
   lint-rust:
