@@ -42,10 +42,10 @@ function runPythonBenchmark(){
   python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
   # exit python virtualenv
   deactivate
+  echo "done python benchmark"
 }
 
 function runNodeBenchmark(){
-  npm install
   cd ${BENCH_FOLDER}/../node
   npm install
   rm -rf build-ts
