@@ -1,11 +1,35 @@
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use redis::aio::MultiplexedConnection;
+use redis::socket_listener::headers::{RequestType, ResponseType, HEADER_END};
+use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisResult};
 
 #[pyclass]
 struct AsyncClient {
     multiplexer: MultiplexedConnection,
+}
+
+#[pyclass]
+enum PyRequestType {
+    /// Type of a server address request
+    ServerAddress = RequestType::ServerAddress as isize,
+    /// Type of a get string request.
+    GetString = RequestType::GetString as isize,
+    /// Type of a set string request.
+    SetString = RequestType::SetString as isize,
+}
+
+#[pyclass]
+enum PyResponseType {
+    /// Type of a response that returns a null.
+    Null = ResponseType::Null as isize,
+    /// Type of a response that returns a string.
+    String = ResponseType::String as isize,
+    /// Type of response containing an error that impacts a single request.
+    RequestError = ResponseType::RequestError as isize,
+    /// Type of response containing an error causes the connection to close.
+    ClosingError = ResponseType::ClosingError as isize,
 }
 
 #[pymethods]
@@ -100,5 +124,26 @@ impl AsyncPipeline {
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AsyncClient>()?;
+    m.add_class::<PyRequestType>()?;
+    m.add_class::<PyResponseType>()?;
+    m.add("HEADER_LENGTH_IN_BYTES", HEADER_END).unwrap();
+
+    #[pyfn(m)]
+    fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
+        start_socket_listener(move |socket_path| {
+            Python::with_gil(|py| {
+                match socket_path {
+                    Ok(path) => {
+                        let _ = init_callback.call(py, (path, py.None()), None);
+                    }
+                    Err(err) => {
+                        let _ = init_callback.call(py, (py.None(), err.to_string()), None);
+                    }
+                };
+            });
+        });
+        Ok(Python::with_gil(|py| "OK".into_py(py)))
+    }
+
     Ok(())
 }

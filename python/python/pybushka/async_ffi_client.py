@@ -5,16 +5,14 @@ from pybushka.utils import to_url
 from .pybushka import AsyncClient
 
 
-class RedisAsyncClient(CoreCommands):
+class RedisAsyncFFIClient(CoreCommands):
     @classmethod
-    async def create(
-        cls, config: ClientConfiguration = ClientConfiguration.get_default_config()
-    ):
-        self = RedisAsyncClient()
+    async def create(cls, config: ClientConfiguration = None):
+        config = config or ClientConfiguration.get_default_config()
+        self = RedisAsyncFFIClient()
         self.config = config
         self.connection = await self._create_multiplexed_conn()
         self.rust_functions = self._initialize_functions([CoreCommands])
-
         return self
 
     def _initialize_functions(self, classes):
