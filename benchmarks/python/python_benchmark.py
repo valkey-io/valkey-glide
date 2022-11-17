@@ -1,16 +1,17 @@
+import argparse
 import asyncio
 import functools
 import json
 import random
 import time
-import argparse
 from enum import Enum
+from statistics import mean
+
 import aioredis
 import numpy as np
 import redis.asyncio as redispy
 import uvloop
-from statistics import mean
-from pybushka import AsyncClient, ClientConfiguration, RedisAsyncClient
+from pybushka import ClientConfiguration, RedisAsyncFFIClient, RedisAsyncSocketClient
 
 
 class ChosenAction(Enum):
@@ -59,7 +60,7 @@ bench_json_results = []
 
 
 def generate_value(size):
-    return str(b"0" * size)
+    return str("0" * size)
 
 
 def generate_key_set():
@@ -205,7 +206,9 @@ async def main(
 ):
     if clients_to_run == "all":
         # Redis-py
-        redispy_client = await redispy.Redis(host=host, port=PORT)
+        redispy_client = await redispy.Redis(
+            host=host, port=PORT, decode_responses=True
+        )
         await run_client(
             redispy_client,
             "redispy",
@@ -231,22 +234,29 @@ async def main(
         or clients_to_run == "ffi"
         or clients_to_run == "babushka"
     ):
-        # Babushka
+        # Babushka FFI
         config = ClientConfiguration(host=host, port=PORT)
-        babushka_client = await RedisAsyncClient.create(config)
+        babushka_client = await RedisAsyncFFIClient.create(config)
         await run_client(
             babushka_client,
-            "babushka",
+            "babushka-FFI",
             event_loop_name,
             total_commands,
             num_of_concurrent_tasks,
             data_size,
         )
 
-        direct_babushka = await AsyncClient.create_client(f"redis://{host}:{PORT}")
+    if (
+        clients_to_run == "all"
+        or clients_to_run == "socket"
+        or clients_to_run == "babushka"
+    ):
+        # Babushka Socket
+        config = ClientConfiguration(host=host, port=PORT)
+        babushka_socket_client = await RedisAsyncSocketClient.create(config)
         await run_client(
-            direct_babushka,
-            "direct_babushka",
+            babushka_socket_client,
+            "babushka-socket",
             event_loop_name,
             total_commands,
             num_of_concurrent_tasks,
