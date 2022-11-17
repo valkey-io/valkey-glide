@@ -9,5 +9,10 @@
         "python/Cargo.toml",
         "node/rust-client/Cargo.toml",
         "csharp/lib/Cargo.toml"
-    ]
+    ],
+    "python.testing.pytestArgs": [
+        "python"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
