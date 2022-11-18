@@ -79,10 +79,6 @@ async function testWithResources(testFunction) {
 describe("SocketConnectionInternals", () => {
     it("Test setup returns values", async () => {
         await testWithResources((connection, socket) => {
-            connection.dispose();
-            connection.dispose();
-            socket.end();
-            socket.end();
             expect(connection).toEqual(expect.anything());
             expect(socket).toEqual(expect.anything());
         });
