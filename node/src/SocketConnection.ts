@@ -11,6 +11,12 @@ type RequestType = BabushkaInternal.RequestType;
 type ResponseType = BabushkaInternal.ResponseType;
 type PromiseFunction = (value?: any) => void;
 
+type WriteRequest = {
+    callbackIndex: number;
+    args: string[];
+    type: RequestType;
+};
+
 export class SocketConnection {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -21,8 +27,9 @@ export class SocketConnection {
     private readonly encoder = new TextEncoder();
     private backingReadBuffer = new ArrayBuffer(1024);
     private backingWriteBuffer = new ArrayBuffer(1024);
+    private bufferedWriteRequests: WriteRequest[] = [];
+    private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
-    private previousOperation = Promise.resolve();
 
     private handleReadData(data: Buffer) {
         const dataArray = this.remainingReadData
@@ -115,7 +122,7 @@ export class SocketConnection {
         callbackIndex: number,
         operationType: RequestType,
         headerLength: number,
-        firstStringLength: number | undefined,
+        argLengths: number[],
         offset: number
     ) {
         const headerView = new DataView(
@@ -127,15 +134,22 @@ export class SocketConnection {
         headerView.setUint32(4, callbackIndex, true);
         headerView.setUint32(8, operationType, true);
 
-        if (firstStringLength) {
-            headerView.setUint32(12, firstStringLength, true);
+        for (let i = 0; i < argLengths.length - 1; i++) {
+            const argLength = argLengths[i];
+            headerView.setUint32(
+                HEADER_LENGTH_IN_BYTES + 4 * i,
+                argLength,
+                true
+            );
         }
     }
 
-    private getHeaderLength(hasAdditionalString: boolean) {
-        return hasAdditionalString
-            ? HEADER_LENGTH_IN_BYTES + 4
-            : HEADER_LENGTH_IN_BYTES;
+    private getHeaderLength(writeRequest: WriteRequest) {
+        return HEADER_LENGTH_IN_BYTES + 4 * (writeRequest.args.length - 1);
+    }
+
+    private lengthOfStrings(request: WriteRequest) {
+        return request.args.reduce((sum, arg) => sum + arg.length, 0);
     }
 
     private encodeStringToWriteBuffer(str: string, byteOffset: number): number {
@@ -146,96 +160,112 @@ export class SocketConnection {
         return encodeResult.written ?? 0;
     }
 
-    private chainNewWriteOperation(
-        firstString: string,
-        operationType: RequestType,
-        secondString: string | undefined,
-        callbackIndex: number
-    ) {
-        this.previousOperation = this.previousOperation.then(
-            () =>
-                new Promise((resolve) => {
-                    const headerLength = this.getHeaderLength(
-                        secondString !== undefined
-                    );
-                    // length * 3 is the maximum ratio between UTF16 byte count to UTF8 byte count.
-                    // TODO - in practice we used a small part of our arrays, and this will be very expensive on
-                    // large inputs. We can use the slightly slower Buffer.byteLength on longer strings.
-                    const requiredLength =
-                        headerLength +
-                        firstString.length * 3 +
-                        (secondString?.length ?? 0) * 3;
-
-                    if (
-                        !this.backingWriteBuffer ||
-                        this.backingWriteBuffer.byteLength < requiredLength
-                    ) {
-                        this.backingWriteBuffer = new ArrayBuffer(
-                            requiredLength
-                        );
-                    }
-
-                    const firstStringLength = this.encodeStringToWriteBuffer(
-                        firstString,
-                        headerLength
-                    );
-                    const secondStringLength =
-                        secondString == undefined
-                            ? 0
-                            : this.encodeStringToWriteBuffer(
-                                  secondString,
-                                  headerLength + firstStringLength
-                              );
-
-                    const length =
-                        headerLength + firstStringLength + secondStringLength;
-                    this.writeHeaderToWriteBuffer(
-                        length,
-                        callbackIndex,
-                        operationType,
-                        headerLength,
-                        secondString !== undefined
-                            ? firstStringLength
-                            : undefined
-                    );
-
-                    const uint8Array = new Uint8Array(
-                        this.backingWriteBuffer,
-                        0,
-                        length
-                    );
-                    this.socket.write(uint8Array, undefined, () => resolve());
-                })
-        );
+    private getRequiredBufferLength(writeRequests: WriteRequest[]): number {
+        return writeRequests.reduce((sum, request) => {
+            return (
+                sum +
+                this.getHeaderLength(request) +
+                // length * 3 is the maximum ratio between UTF16 byte count to UTF8 byte count.
+                // TODO - in practice we used a small part of our arrays, and this will be very expensive on
+                // large inputs. We can use the slightly slower Buffer.byteLength on longer strings.
+                this.lengthOfStrings(request) * 3
+            );
+        }, 0);
     }
 
-    private writeString<T>(
-        firstString: string,
-        operationType: RequestType,
-        secondString?: string
-    ): Promise<T> {
-        return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.chainNewWriteOperation(
-                firstString,
-                operationType,
-                secondString,
-                callbackIndex
+    private writeBufferedRequestsToSocket() {
+        this.writeInProgress = true;
+        const writeRequests = this.bufferedWriteRequests.splice(
+            0,
+            this.bufferedWriteRequests.length
+        );
+        const requiredBufferLength =
+            this.getRequiredBufferLength(writeRequests);
+
+        if (
+            !this.backingWriteBuffer ||
+            this.backingWriteBuffer.byteLength < requiredBufferLength
+        ) {
+            this.backingWriteBuffer = new ArrayBuffer(requiredBufferLength);
+        }
+        let cursor = 0;
+        for (const writeRequest of writeRequests) {
+            const headerLength = this.getHeaderLength(writeRequest);
+            let argOffset = 0;
+            const writtenLengths = [];
+            for (let arg of writeRequest.args) {
+                const argLength = this.encodeStringToWriteBuffer(
+                    arg,
+                    cursor + headerLength + argOffset
+                );
+                argOffset += argLength;
+                writtenLengths.push(argLength);
+            }
+
+            const length = headerLength + argOffset;
+            this.writeHeaderToWriteBuffer(
+                length,
+                writeRequest.callbackIndex,
+                writeRequest.type,
+                headerLength,
+                writtenLengths,
+                cursor
             );
+            cursor += length;
+        }
+
+        const uint8Array = new Uint8Array(this.backingWriteBuffer, 0, cursor);
+        this.socket.write(uint8Array, undefined, () => {
+            if (this.bufferedWriteRequests.length > 0) {
+                this.writeBufferedRequestsToSocket();
+            } else {
+                this.writeInProgress = false;
+            }
         });
     }
 
+    private writeOrBufferRequest(writeRequest: WriteRequest) {
+        this.bufferedWriteRequests.push(writeRequest);
+        if (this.writeInProgress) {
+            return;
+        }
+        this.writeBufferedRequestsToSocket();
+    }
+
     public get(key: string): Promise<string> {
-        return this.writeString(key, RequestType.GetString);
+        return new Promise((resolve, reject) => {
+            const callbackIndex = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.writeOrBufferRequest({
+                args: [key],
+                type: RequestType.GetString,
+                callbackIndex,
+            });
+        });
     }
 
     public set(key: string, value: string): Promise<void> {
-        return this.writeString(key, RequestType.SetString, value);
+        return new Promise((resolve, reject) => {
+            const callbackIndex = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.writeOrBufferRequest({
+                args: [key, value],
+                type: RequestType.SetString,
+                callbackIndex,
+            });
+        });
     }
 
     private setServerAddress(address: string): Promise<void> {
-        return this.writeString(address, RequestType.ServerAddress);
+        return new Promise((resolve, reject) => {
+            const callbackIndex = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.writeOrBufferRequest({
+                args: [address],
+                type: RequestType.ServerAddress,
+                callbackIndex,
+            });
+        });
     }
 
     public dispose(errorMessage?: string): void {
