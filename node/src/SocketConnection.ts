@@ -115,18 +115,20 @@ export class SocketConnection {
         callbackIndex: number,
         operationType: RequestType,
         headerLength: number,
-        firstStringLength: number | undefined
+        firstStringLength: number | undefined,
+        offset: number
     ) {
-        const headerUint32Array = new Uint32Array(
+        const headerView = new DataView(
             this.backingWriteBuffer,
-            0,
-            headerLength / 4
+            offset,
+            headerLength
         );
-        headerUint32Array[0] = length;
-        headerUint32Array[1] = callbackIndex;
-        headerUint32Array[2] = operationType;
+        headerView.setUint32(0, length, true);
+        headerView.setUint32(4, callbackIndex, true);
+        headerView.setUint32(8, operationType, true);
+
         if (firstStringLength) {
-            headerUint32Array[3] = firstStringLength;
+            headerView.setUint32(12, firstStringLength, true);
         }
     }
 
