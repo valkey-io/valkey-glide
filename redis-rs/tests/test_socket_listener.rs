@@ -162,11 +162,10 @@ fn test_socket_set_and_get() {
     test_basics.socket.write_all(&buffer).unwrap();
 
     let expected_length = VALUE_LENGTH + HEADER_END;
-    let expected_aligned_length = expected_length + (4 - expected_length % 4);
     // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
     unsafe { buffer.set_len(message_length) };
     let size = test_basics.socket.read(&mut buffer).unwrap();
-    assert_eq!(size, expected_aligned_length);
+    assert_eq!(size, expected_length);
     assert_eq!(
         (&buffer[..MESSAGE_LENGTH_END])
             .read_u32::<LittleEndian>()

@@ -182,12 +182,8 @@ class RedisAsyncSocketClient(CoreCommands):
         else:
             msg_length = length - HEADER_LENGTH_IN_BYTES
             if msg_length > 0:
-                aligned_msg_length = msg_length
-                offset = msg_length % 4
-                if offset != 0:
-                    aligned_msg_length += 4 - offset
                 # Wait for the rest of the message
-                message = await self._reader.readexactly(aligned_msg_length)
+                message = await self._reader.readexactly(msg_length)
                 response = message[:msg_length].decode("UTF-8")
             else:
                 response = ""
