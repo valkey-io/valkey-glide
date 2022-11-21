@@ -6,11 +6,8 @@ import random
 import time
 from enum import Enum
 from statistics import mean
-
-import aioredis
 import numpy as np
 import redis.asyncio as redispy
-import uvloop
 from pybushka import ClientConfiguration, RedisAsyncFFIClient, RedisAsyncSocketClient
 
 
@@ -218,17 +215,6 @@ async def main(
             data_size,
         )
 
-        # AIORedis
-        aioredis_client = await aioredis.from_url(f"redis://{host}:{PORT}")
-        await run_client(
-            aioredis_client,
-            "aioredis",
-            event_loop_name,
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
-        )
-
     if (
         clients_to_run == "all"
         or clients_to_run == "ffi"
@@ -283,20 +269,6 @@ if __name__ == "__main__":
         asyncio.run(
             main(
                 "asyncio",
-                number_of_iterations(num_of_concurrent_tasks),
-                num_of_concurrent_tasks,
-                data_size,
-                clients_to_run,
-                host,
-            )
-        )
-
-    uvloop.install()
-
-    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
-        asyncio.run(
-            main(
-                "uvloop",
                 number_of_iterations(num_of_concurrent_tasks),
                 num_of_concurrent_tasks,
                 data_size,

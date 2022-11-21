@@ -1,11 +1,5 @@
 hiredis
-uvloop
 numpy
-
-
-# aioredis
-aioredis>=1.1.0
-#-e git+https://github.com/aio-libs/aioredis#egg=aioredis
 
 # asyncio_redis
 asyncio_redis>=0.14.3
