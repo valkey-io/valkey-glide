@@ -282,10 +282,6 @@ async fn write_error(
     write_response_header_to_vec(&mut output_buffer, callback_index, response_type, length)
         .expect("Failed writing error to vec");
     output_buffer.extend_from_slice(error_bytes);
-    let offset = output_buffer.len() % 4;
-    if offset != 0 {
-        output_buffer.resize(length + 4 - offset, 0);
-    }
     write_to_output(&output_buffer, &write_socket, &write_lock).await;
 }
 
