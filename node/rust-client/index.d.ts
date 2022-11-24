@@ -22,7 +22,7 @@ export const enum ResponseType {
   ClosingError = 3,
 }
 export const HEADER_LENGTH_IN_BYTES: number
-export function StartSocketConnection(Callback: (err: null | Error, path: string | null) => void): void
+export function StartSocketConnection(): Promise<string>
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>

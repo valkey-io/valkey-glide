@@ -297,24 +297,8 @@ export class SocketConnection {
     public static async CreateConnection(
         address: string
     ): Promise<SocketConnection> {
-        return new Promise((resolve, reject) => {
-            const startCallback = async (
-                err: null | Error,
-                path: string | null
-            ) => {
-                if (path !== null) {
-                    const socket = await this.GetSocket(path);
-                    const connection = await this.__CreateConnection(
-                        address,
-                        socket
-                    );
-                    resolve(connection);
-                } else if (err !== null) {
-                    reject(err);
-                }
-            };
-
-            StartSocketConnection(startCallback);
-        });
+        const path = await StartSocketConnection();
+        const socket = await this.GetSocket(path);
+        return await this.__CreateConnection(address, socket);
     }
 }
