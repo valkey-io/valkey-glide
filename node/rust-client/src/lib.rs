@@ -1,8 +1,5 @@
 use napi::bindgen_prelude::ToNapiValue;
-use napi::threadsafe_function::{
-    ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
-};
-use napi::{Env, Error, JsFunction, JsObject, Result, Status};
+use napi::{Env, Error, JsObject, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::socket_listener::headers::HEADER_END;
@@ -108,21 +105,16 @@ impl AsyncClient {
     }
 }
 
-#[napi(
-    js_name = "StartSocketConnection",
-    ts_args_type = "Callback: (err: null | Error, path: string | null) => void"
-)]
-pub fn start_socket_listener_external(init_callback: JsFunction) -> napi::Result<()> {
-    let threadsafe_init_callback: ThreadsafeFunction<String, ErrorStrategy::CalleeHandled> =
-        init_callback.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<String>| {
-            Ok(vec![ctx.value])
-        })?;
+#[napi(js_name = "StartSocketConnection", ts_return_type = "Promise<string>")]
+pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
 
     start_socket_listener(move |result| {
-        threadsafe_init_callback.call(
-            to_js_result(result),
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
+        match result {
+            Ok(path) => deferred.resolve(|_| Ok(path)),
+            Err(e) => deferred.reject(to_js_error(e)),
+        };
     });
-    Ok(())
+
+    Ok(promise)
 }
