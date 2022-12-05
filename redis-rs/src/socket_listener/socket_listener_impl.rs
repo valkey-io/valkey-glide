@@ -2,7 +2,7 @@ use super::super::{AsyncCommands, RedisResult};
 use super::{headers::*, rotating_buffer::RotatingBuffer};
 use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
-use byteorder::{LittleEndian, WriteBytesExt};
+use bytes::BufMut;
 use futures::stream::StreamExt;
 use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use num_traits::ToPrimitive;
@@ -117,42 +117,20 @@ async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &
     }
 }
 
-fn write_response_header_to_vec(
-    output_buffer: &mut Vec<u8>,
+fn write_response_header(
+    mut output_buffer: impl BufMut,
     callback_index: u32,
     response_type: ResponseType,
     length: usize,
 ) -> Result<(), io::Error> {
-    // TODO - use serde for easier serialization.
-    output_buffer.write_u32::<LittleEndian>(length as u32)?;
-    output_buffer.write_u32::<LittleEndian>(callback_index)?;
-    output_buffer.write_u32::<LittleEndian>(response_type.to_u32().ok_or_else(|| {
+    output_buffer.put_u32_le(length as u32);
+    output_buffer.put_u32_le(callback_index);
+    output_buffer.put_u32_le(response_type.to_u32().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Response type {:?} wasn't found", response_type),
         )
-    })?)?;
-    Ok(())
-}
-
-fn write_response_header(
-    output_buffer: &mut [u8],
-    callback_index: u32,
-    response_type: ResponseType,
-) -> Result<(), io::Error> {
-    let length = output_buffer.len();
-    // TODO - use serde for easier serialization.
-    (&mut output_buffer[..MESSAGE_LENGTH_END]).write_u32::<LittleEndian>(length as u32)?;
-    (&mut output_buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-        .write_u32::<LittleEndian>(callback_index)?;
-    (&mut output_buffer[CALLBACK_INDEX_END..HEADER_END]).write_u32::<LittleEndian>(
-        response_type.to_u32().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Response type {:?} wasn't found", response_type),
-            )
-        })?,
-    )?;
+    })?);
     Ok(())
 }
 
@@ -169,7 +147,12 @@ async fn send_set_request(
         .set(&buffer[key_range], &buffer[value_range])
         .await?;
     let mut output_buffer = [0_u8; HEADER_END];
-    write_response_header(&mut output_buffer, callback_index, ResponseType::Null)?;
+    write_response_header(
+        output_buffer.as_mut(),
+        callback_index,
+        ResponseType::Null,
+        HEADER_END,
+    )?;
     write_to_output(&output_buffer, &write_socket, &write_lock).await;
     Ok(())
 }
@@ -195,8 +178,8 @@ async fn send_get_request(
         Some(result_bytes) => {
             let length = HEADER_END + result_bytes.len();
             let mut output_buffer = get_vec(pool, length);
-            write_response_header_to_vec(
-                &mut output_buffer,
+            write_response_header(
+                output_buffer.as_mut(),
                 callback_index,
                 ResponseType::String,
                 length,
@@ -206,7 +189,12 @@ async fn send_get_request(
         }
         None => {
             let mut output_buffer = [0_u8; HEADER_END];
-            write_response_header(&mut output_buffer, callback_index, ResponseType::Null)?;
+            write_response_header(
+                output_buffer.as_mut(),
+                callback_index,
+                ResponseType::Null,
+                HEADER_END,
+            )?;
             write_to_output(&output_buffer, &write_socket, &write_lock).await;
         }
     };
@@ -279,8 +267,13 @@ async fn write_error(
     let error_bytes = err_str.as_bytes();
     let length = HEADER_END + error_bytes.len();
     let mut output_buffer = get_vec(pool, length);
-    write_response_header_to_vec(&mut output_buffer, callback_index, response_type, length)
-        .expect("Failed writing error to vec");
+    write_response_header(
+        output_buffer.as_mut(),
+        callback_index,
+        response_type,
+        length,
+    )
+    .expect("Failed writing error to vec");
     output_buffer.extend_from_slice(error_bytes);
     write_to_output(&output_buffer, &write_socket, &write_lock).await;
 }
@@ -345,9 +338,10 @@ async fn parse_address_create_conn(
     // Send response
     let mut output_buffer = [0_u8; HEADER_END];
     write_response_header(
-        &mut output_buffer,
+        output_buffer.as_mut(),
         request.callback_index,
         ResponseType::Null,
+        HEADER_END,
     )
     .expect("Failed writing address response.");
     write_to_output(&output_buffer, socket, write_lock).await;
