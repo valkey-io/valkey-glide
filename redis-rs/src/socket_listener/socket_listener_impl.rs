@@ -4,10 +4,10 @@ use crate::aio::MultiplexedConnection;
 use crate::{Client, RedisError};
 use bytes::BufMut;
 use futures::stream::StreamExt;
-use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use num_traits::ToPrimitive;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
@@ -29,7 +29,6 @@ pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 struct SocketListener {
     read_socket: Rc<UnixStream>,
     rotating_buffer: RotatingBuffer,
-    pool: Rc<Pool<Vec<u8>>>,
 }
 
 enum PipeListeningResult {
@@ -45,17 +44,10 @@ impl From<ClosingReason> for PipeListeningResult {
 
 impl SocketListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
-        let pool = Rc::new(
-            pool()
-                .with(StartingSize(2))
-                .with(Supplier(move || Vec::<u8>::with_capacity(65_536)))
-                .build(),
-        );
-        let rotating_buffer = RotatingBuffer::with_pool(pool.clone());
+        let rotating_buffer = RotatingBuffer::new(2, 65_536);
         SocketListener {
             read_socket,
             rotating_buffer,
-            pool,
         }
     }
 
@@ -91,47 +83,84 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(output: &[u8], write_socket: &UnixStream, write_lock: &Rc<Mutex<()>>) {
-    let _guard = write_lock.lock().await;
-    let mut total_written_bytes = 0;
-    while total_written_bytes < output.len() {
-        write_socket
-            .writable()
-            .await
-            .expect("Writable check failed");
-        match write_socket.try_write(&output[total_written_bytes..]) {
-            Ok(written_bytes) => {
-                total_written_bytes += written_bytes;
-            }
-            Err(err)
-                if err.kind() == io::ErrorKind::WouldBlock
-                    || err.kind() == io::ErrorKind::Interrupted =>
-            {
-                continue;
-            }
-            Err(err) => {
-                // TODO - add proper error handling.
-                panic!("received unexpected error {:?}", err);
+async fn write_to_output(
+    write_socket: &UnixStream,
+    write_lock: &Rc<Mutex<()>>,
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+) {
+    let Ok(_guard) = write_lock.try_lock() else {
+        return;
+    };
+
+    let mut output = accumulated_outputs.take();
+    loop {
+        if output.is_empty() {
+            return;
+        }
+        let mut total_written_bytes = 0;
+        while total_written_bytes < output.len() {
+            write_socket
+                .writable()
+                .await
+                .expect("Writable check failed");
+            match write_socket.try_write(&output[total_written_bytes..]) {
+                Ok(written_bytes) => {
+                    total_written_bytes += written_bytes;
+                }
+                Err(err)
+                    if err.kind() == io::ErrorKind::WouldBlock
+                        || err.kind() == io::ErrorKind::Interrupted =>
+                {
+                    continue;
+                }
+                Err(err) => {
+                    // TODO - add proper error handling.
+                    panic!("received unexpected error {:?}", err);
+                }
             }
         }
+        output.clear();
+        output = accumulated_outputs.replace(output);
     }
 }
 
 fn write_response_header(
-    mut output_buffer: impl BufMut,
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
     callback_index: u32,
     response_type: ResponseType,
     length: usize,
 ) -> Result<(), io::Error> {
-    output_buffer.put_u32_le(length as u32);
-    output_buffer.put_u32_le(callback_index);
-    output_buffer.put_u32_le(response_type.to_u32().ok_or_else(|| {
+    let mut vec = accumulated_outputs.take();
+    vec.put_u32_le(length as u32);
+    vec.put_u32_le(callback_index);
+    vec.put_u32_le(response_type.to_u32().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Response type {:?} wasn't found", response_type),
         )
     })?);
+
+    assert!(!vec.is_empty());
+    accumulated_outputs.set(vec);
     Ok(())
+}
+
+fn write_null_response_header(
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+    callback_index: u32,
+) -> Result<(), io::Error> {
+    write_response_header(
+        accumulated_outputs,
+        callback_index,
+        ResponseType::Null,
+        HEADER_END,
+    )
+}
+
+fn write_slice_to_output(accumulated_outputs: &Cell<Vec<u8>>, bytes_to_write: &[u8]) {
+    let mut vec = accumulated_outputs.take();
+    vec.extend_from_slice(bytes_to_write);
+    accumulated_outputs.set(vec);
 }
 
 async fn send_set_request(
@@ -142,26 +171,14 @@ async fn send_set_request(
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
     write_lock: Rc<Mutex<()>>,
+    accumulated_outputs: Rc<Cell<Vec<u8>>>,
 ) -> RedisResult<()> {
     connection
         .set(&buffer[key_range], &buffer[value_range])
         .await?;
-    let mut output_buffer = [0_u8; HEADER_END];
-    write_response_header(
-        output_buffer.as_mut(),
-        callback_index,
-        ResponseType::Null,
-        HEADER_END,
-    )?;
-    write_to_output(&output_buffer, &write_socket, &write_lock).await;
+    write_null_response_header(&accumulated_outputs, callback_index)?;
+    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
     Ok(())
-}
-
-fn get_vec(pool: &Pool<Vec<u8>>, required_capacity: usize) -> RcRecycled<Vec<u8>> {
-    let mut vec = pool.new_rc();
-    vec.clear();
-    vec.reserve(required_capacity);
-    vec
 }
 
 async fn send_get_request(
@@ -170,34 +187,26 @@ async fn send_get_request(
     callback_index: u32,
     mut connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
-    pool: &Pool<Vec<u8>>,
     write_lock: Rc<Mutex<()>>,
+    accumulated_outputs: Rc<Cell<Vec<u8>>>,
 ) -> RedisResult<()> {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await?;
     match result {
         Some(result_bytes) => {
             let length = HEADER_END + result_bytes.len();
-            let mut output_buffer = get_vec(pool, length);
             write_response_header(
-                output_buffer.as_mut(),
+                &accumulated_outputs,
                 callback_index,
                 ResponseType::String,
                 length,
             )?;
-            output_buffer.extend_from_slice(&result_bytes);
-            write_to_output(&output_buffer, &write_socket, &write_lock).await;
+            write_slice_to_output(&accumulated_outputs, &result_bytes);
         }
         None => {
-            let mut output_buffer = [0_u8; HEADER_END];
-            write_response_header(
-                output_buffer.as_mut(),
-                callback_index,
-                ResponseType::Null,
-                HEADER_END,
-            )?;
-            write_to_output(&output_buffer, &write_socket, &write_lock).await;
+            write_null_response_header(&accumulated_outputs, callback_index)?;
         }
     };
+    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
     Ok(())
 }
 
@@ -205,8 +214,8 @@ fn handle_request(
     request: WholeRequest,
     connection: MultiplexedConnection,
     write_socket: Rc<UnixStream>,
-    pool: Rc<Pool<Vec<u8>>>,
     write_lock: Rc<Mutex<()>>,
+    accumulated_outputs: Rc<Cell<Vec<u8>>>,
 ) {
     task::spawn_local(async move {
         let result = match request.request_type {
@@ -217,8 +226,8 @@ fn handle_request(
                     request.callback_index,
                     connection,
                     write_socket.clone(),
-                    &pool,
                     write_lock.clone(),
+                    accumulated_outputs.clone(),
                 )
                 .await
             }
@@ -234,6 +243,7 @@ fn handle_request(
                     connection,
                     write_socket.clone(),
                     write_lock.clone(),
+                    accumulated_outputs.clone(),
                 )
                 .await
             }
@@ -246,9 +256,9 @@ fn handle_request(
                 err,
                 request.callback_index,
                 write_socket,
-                &pool,
                 write_lock,
                 ResponseType::RequestError,
+                accumulated_outputs,
             )
             .await;
         }
@@ -259,31 +269,25 @@ async fn write_error(
     err: RedisError,
     callback_index: u32,
     write_socket: Rc<UnixStream>,
-    pool: &Rc<Pool<Vec<u8>>>,
     write_lock: Rc<Mutex<()>>,
     response_type: ResponseType,
+    accumulated_outputs: Rc<Cell<Vec<u8>>>,
 ) {
     let err_str = err.to_string();
     let error_bytes = err_str.as_bytes();
     let length = HEADER_END + error_bytes.len();
-    let mut output_buffer = get_vec(pool, length);
-    write_response_header(
-        output_buffer.as_mut(),
-        callback_index,
-        response_type,
-        length,
-    )
-    .expect("Failed writing error to vec");
-    output_buffer.extend_from_slice(error_bytes);
-    write_to_output(&output_buffer, &write_socket, &write_lock).await;
+    write_response_header(&accumulated_outputs, callback_index, response_type, length)
+        .expect("Failed writing error to vec");
+    write_slice_to_output(&accumulated_outputs, error_bytes);
+    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
 }
 
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
     connection: &MultiplexedConnection,
     write_socket: &Rc<UnixStream>,
-    pool: Rc<Pool<Vec<u8>>>,
     write_lock: &Rc<Mutex<()>>,
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
@@ -291,8 +295,8 @@ async fn handle_requests(
             request,
             connection.clone(),
             write_socket.clone(),
-            pool.clone(),
             write_lock.clone(),
+            accumulated_outputs.clone(),
         )
     }
     // Yield to ensure that the subtasks aren't starved.
@@ -320,6 +324,7 @@ async fn parse_address_create_conn(
     request: &WholeRequest,
     address_range: Range<usize>,
     write_lock: &Rc<Mutex<()>>,
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     let address = &request.buffer[address_range];
     let address = to_babushka_result(
@@ -336,15 +341,9 @@ async fn parse_address_create_conn(
     )?;
 
     // Send response
-    let mut output_buffer = [0_u8; HEADER_END];
-    write_response_header(
-        output_buffer.as_mut(),
-        request.callback_index,
-        ResponseType::Null,
-        HEADER_END,
-    )
-    .expect("Failed writing address response.");
-    write_to_output(&output_buffer, socket, write_lock).await;
+    write_null_response_header(accumulated_outputs, request.callback_index)
+        .expect("Failed writing address response.");
+    write_to_output(socket, write_lock, accumulated_outputs).await;
     Ok(connection)
 }
 
@@ -352,6 +351,7 @@ async fn wait_for_server_address_create_conn(
     client_listener: &mut SocketListener,
     socket: &Rc<UnixStream>,
     write_lock: &Rc<Mutex<()>>,
+    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
     match client_listener.next_values().await {
@@ -372,6 +372,7 @@ async fn wait_for_server_address_create_conn(
                             request,
                             address_range,
                             write_lock,
+                            accumulated_outputs,
                         )
                         .await
                     }
@@ -410,10 +411,12 @@ async fn listen_on_client_stream(
     let rc_stream = Rc::new(stream);
     let write_lock = Rc::new(Mutex::new(()));
     let mut client_listener = SocketListener::new(rc_stream.clone());
+    let accumulated_outputs = Rc::new(Cell::new(Vec::new()));
     let connection = match wait_for_server_address_create_conn(
         &mut client_listener,
         &rc_stream,
         &write_lock.clone(),
+        &accumulated_outputs,
     )
     .await
     {
@@ -435,9 +438,9 @@ async fn listen_on_client_stream(
                         err,
                         u32::MAX,
                         rc_stream.clone(),
-                        &client_listener.pool,
                         write_lock.clone(),
                         ResponseType::ClosingError,
+                        accumulated_outputs.clone(),
                     )
                     .await;
                 };
@@ -449,8 +452,8 @@ async fn listen_on_client_stream(
                     received_requests,
                     &connection,
                     &rc_stream,
-                    client_listener.pool.clone(),
                     &write_lock.clone(),
+                    &accumulated_outputs,
                 )
                 .await;
             }
