@@ -26,9 +26,17 @@ use PipeListeningResult::*;
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 
+/// struct containing all objects needed to read from a socket.
 struct SocketListener {
     read_socket: Rc<UnixStream>,
     rotating_buffer: RotatingBuffer,
+}
+
+/// struct containing all objects needed to write to a socket.
+struct Writer {
+    socket: Rc<UnixStream>,
+    lock: Mutex<()>,
+    accumulated_outputs: Cell<Vec<u8>>,
 }
 
 enum PipeListeningResult {
@@ -83,27 +91,24 @@ impl SocketListener {
     }
 }
 
-async fn write_to_output(
-    write_socket: &UnixStream,
-    write_lock: &Rc<Mutex<()>>,
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
-) {
-    let Ok(_guard) = write_lock.try_lock() else {
+async fn write_to_output(writer: &Rc<Writer>) {
+    let Ok(_guard) = writer.lock.try_lock() else {
         return;
     };
 
-    let mut output = accumulated_outputs.take();
+    let mut output = writer.accumulated_outputs.take();
     loop {
         if output.is_empty() {
             return;
         }
         let mut total_written_bytes = 0;
         while total_written_bytes < output.len() {
-            write_socket
+            writer
+                .socket
                 .writable()
                 .await
                 .expect("Writable check failed");
-            match write_socket.try_write(&output[total_written_bytes..]) {
+            match writer.socket.try_write(&output[total_written_bytes..]) {
                 Ok(written_bytes) => {
                     total_written_bytes += written_bytes;
                 }
@@ -120,12 +125,12 @@ async fn write_to_output(
             }
         }
         output.clear();
-        output = accumulated_outputs.replace(output);
+        output = writer.accumulated_outputs.replace(output);
     }
 }
 
 fn write_response_header(
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+    accumulated_outputs: &Cell<Vec<u8>>,
     callback_index: u32,
     response_type: ResponseType,
     length: usize,
@@ -146,7 +151,7 @@ fn write_response_header(
 }
 
 fn write_null_response_header(
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+    accumulated_outputs: &Cell<Vec<u8>>,
     callback_index: u32,
 ) -> Result<(), io::Error> {
     write_response_header(
@@ -169,15 +174,13 @@ async fn send_set_request(
     value_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
-    write_lock: Rc<Mutex<()>>,
-    accumulated_outputs: Rc<Cell<Vec<u8>>>,
+    writer: Rc<Writer>,
 ) -> RedisResult<()> {
     connection
         .set(&buffer[key_range], &buffer[value_range])
         .await?;
-    write_null_response_header(&accumulated_outputs, callback_index)?;
-    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
+    write_null_response_header(&writer.accumulated_outputs, callback_index)?;
+    write_to_output(&writer).await;
     Ok(())
 }
 
@@ -186,37 +189,29 @@ async fn send_get_request(
     key_range: Range<usize>,
     callback_index: u32,
     mut connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
-    write_lock: Rc<Mutex<()>>,
-    accumulated_outputs: Rc<Cell<Vec<u8>>>,
+    writer: Rc<Writer>,
 ) -> RedisResult<()> {
     let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await?;
     match result {
         Some(result_bytes) => {
             let length = HEADER_END + result_bytes.len();
             write_response_header(
-                &accumulated_outputs,
+                &writer.accumulated_outputs,
                 callback_index,
                 ResponseType::String,
                 length,
             )?;
-            write_slice_to_output(&accumulated_outputs, &result_bytes);
+            write_slice_to_output(&writer.accumulated_outputs, &result_bytes);
         }
         None => {
-            write_null_response_header(&accumulated_outputs, callback_index)?;
+            write_null_response_header(&writer.accumulated_outputs, callback_index)?;
         }
     };
-    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
+    write_to_output(&writer).await;
     Ok(())
 }
 
-fn handle_request(
-    request: WholeRequest,
-    connection: MultiplexedConnection,
-    write_socket: Rc<UnixStream>,
-    write_lock: Rc<Mutex<()>>,
-    accumulated_outputs: Rc<Cell<Vec<u8>>>,
-) {
+fn handle_request(request: WholeRequest, connection: MultiplexedConnection, writer: Rc<Writer>) {
     task::spawn_local(async move {
         let result = match request.request_type {
             RequestRanges::Get { key: key_range } => {
@@ -225,9 +220,7 @@ fn handle_request(
                     key_range,
                     request.callback_index,
                     connection,
-                    write_socket.clone(),
-                    write_lock.clone(),
-                    accumulated_outputs.clone(),
+                    writer.clone(),
                 )
                 .await
             }
@@ -241,9 +234,7 @@ fn handle_request(
                     value_range,
                     request.callback_index,
                     connection,
-                    write_socket.clone(),
-                    write_lock.clone(),
-                    accumulated_outputs.clone(),
+                    writer.clone(),
                 )
                 .await
             }
@@ -255,10 +246,8 @@ fn handle_request(
             write_error(
                 err,
                 request.callback_index,
-                write_socket,
-                write_lock,
+                writer,
                 ResponseType::RequestError,
-                accumulated_outputs,
             )
             .await;
         }
@@ -268,36 +257,31 @@ fn handle_request(
 async fn write_error(
     err: RedisError,
     callback_index: u32,
-    write_socket: Rc<UnixStream>,
-    write_lock: Rc<Mutex<()>>,
+    writer: Rc<Writer>,
     response_type: ResponseType,
-    accumulated_outputs: Rc<Cell<Vec<u8>>>,
 ) {
     let err_str = err.to_string();
     let error_bytes = err_str.as_bytes();
     let length = HEADER_END + error_bytes.len();
-    write_response_header(&accumulated_outputs, callback_index, response_type, length)
-        .expect("Failed writing error to vec");
-    write_slice_to_output(&accumulated_outputs, error_bytes);
-    write_to_output(&write_socket, &write_lock, &accumulated_outputs).await;
+    write_response_header(
+        &writer.accumulated_outputs,
+        callback_index,
+        response_type,
+        length,
+    )
+    .expect("Failed writing error to vec");
+    write_slice_to_output(&writer.accumulated_outputs, error_bytes);
+    write_to_output(&writer).await;
 }
 
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
     connection: &MultiplexedConnection,
-    write_socket: &Rc<UnixStream>,
-    write_lock: &Rc<Mutex<()>>,
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+    writer: &Rc<Writer>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
-        handle_request(
-            request,
-            connection.clone(),
-            write_socket.clone(),
-            write_lock.clone(),
-            accumulated_outputs.clone(),
-        )
+        handle_request(request, connection.clone(), writer.clone())
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -320,11 +304,9 @@ fn to_babushka_result<T, E: std::fmt::Display>(
 }
 
 async fn parse_address_create_conn(
-    socket: &Rc<UnixStream>,
+    writer: &Rc<Writer>,
     request: &WholeRequest,
     address_range: Range<usize>,
-    write_lock: &Rc<Mutex<()>>,
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     let address = &request.buffer[address_range];
     let address = to_babushka_result(
@@ -341,17 +323,15 @@ async fn parse_address_create_conn(
     )?;
 
     // Send response
-    write_null_response_header(accumulated_outputs, request.callback_index)
+    write_null_response_header(&writer.accumulated_outputs, request.callback_index)
         .expect("Failed writing address response.");
-    write_to_output(socket, write_lock, accumulated_outputs).await;
+    write_to_output(writer).await;
     Ok(connection)
 }
 
 async fn wait_for_server_address_create_conn(
     client_listener: &mut SocketListener,
-    socket: &Rc<UnixStream>,
-    write_lock: &Rc<Mutex<()>>,
-    accumulated_outputs: &Rc<Cell<Vec<u8>>>,
+    writer: &Rc<Writer>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
     match client_listener.next_values().await {
@@ -366,16 +346,7 @@ async fn wait_for_server_address_create_conn(
                 match request.request_type.clone() {
                     RequestRanges::ServerAddress {
                         address: address_range,
-                    } => {
-                        return parse_address_create_conn(
-                            socket,
-                            request,
-                            address_range,
-                            write_lock,
-                            accumulated_outputs,
-                        )
-                        .await
-                    }
+                    } => return parse_address_create_conn(writer, request, address_range).await,
                     _ => {
                         return Err(BabushkaError::BaseError(
                             "Received another request before receiving server address".to_string(),
@@ -403,22 +374,21 @@ fn update_notify_connected_clients(
 }
 
 async fn listen_on_client_stream(
-    stream: UnixStream,
+    socket: UnixStream,
     notify_close: Arc<Notify>,
     connected_clients: Arc<AtomicUsize>,
 ) {
+    let socket = Rc::new(socket);
     // Spawn a new task to listen on this client's stream
-    let rc_stream = Rc::new(stream);
-    let write_lock = Rc::new(Mutex::new(()));
-    let mut client_listener = SocketListener::new(rc_stream.clone());
-    let accumulated_outputs = Rc::new(Cell::new(Vec::new()));
-    let connection = match wait_for_server_address_create_conn(
-        &mut client_listener,
-        &rc_stream,
-        &write_lock.clone(),
-        &accumulated_outputs,
-    )
-    .await
+    let write_lock = Mutex::new(());
+    let mut client_listener = SocketListener::new(socket.clone());
+    let accumulated_outputs = Cell::new(Vec::new());
+    let writer = Rc::new(Writer {
+        socket,
+        lock: write_lock,
+        accumulated_outputs,
+    });
+    let connection = match wait_for_server_address_create_conn(&mut client_listener, &writer).await
     {
         Ok(conn) => conn,
         Err(BabushkaError::CloseError(_reason)) => {
@@ -434,28 +404,13 @@ async fn listen_on_client_stream(
         match client_listener.next_values().await {
             Closed(reason) => {
                 if let ClosingReason::UnhandledError(err) = reason {
-                    write_error(
-                        err,
-                        u32::MAX,
-                        rc_stream.clone(),
-                        write_lock.clone(),
-                        ResponseType::ClosingError,
-                        accumulated_outputs.clone(),
-                    )
-                    .await;
+                    write_error(err, u32::MAX, writer.clone(), ResponseType::ClosingError).await;
                 };
                 update_notify_connected_clients(connected_clients, notify_close);
                 return; // TODO: implement error protocol, handle error closing reasons
             }
             ReceivedValues(received_requests) => {
-                handle_requests(
-                    received_requests,
-                    &connection,
-                    &rc_stream,
-                    &write_lock.clone(),
-                    &accumulated_outputs,
-                )
-                .await;
+                handle_requests(received_requests, &connection, &writer).await;
             }
         }
     }
