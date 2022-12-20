@@ -1,15 +1,13 @@
+use super::headers::*;
+use byteorder::{LittleEndian, ReadBytesExt};
+use lifeguard::{pool, Pool, StartingSize, Supplier};
+use num_traits::FromPrimitive;
 use std::{
     io::{self, Error, ErrorKind},
     mem,
     ops::Range,
     rc::Rc,
 };
-
-use byteorder::{LittleEndian, ReadBytesExt};
-use lifeguard::Pool;
-use num_traits::FromPrimitive;
-
-use super::headers::*;
 
 /// An enum representing a request during the parsing phase.
 pub(super) enum RequestState {
@@ -49,6 +47,16 @@ impl RotatingBuffer {
             pool,
             current_read_buffer: next_read,
         }
+    }
+
+    pub(super) fn new(initial_buffers: usize, buffer_size: usize) -> Self {
+        let pool = Rc::new(
+            pool()
+                .with(StartingSize(initial_buffers))
+                .with(Supplier(move || Vec::with_capacity(buffer_size)))
+                .build(),
+        );
+        Self::with_pool(pool)
     }
 
     fn read_header(input: &[u8]) -> io::Result<ReadHeader> {
@@ -191,7 +199,6 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use byteorder::WriteBytesExt;
-    use lifeguard::{pool, StartingSize, Supplier};
     use num_traits::ToPrimitive;
 
     use super::*;
@@ -201,16 +208,6 @@ mod tests {
             self.current_buffer()
                 .write_u32::<LittleEndian>(val)
                 .unwrap();
-        }
-
-        fn new(initial_buffers: usize, buffer_size: usize) -> Self {
-            let pool = Rc::new(
-                pool()
-                    .with(StartingSize(initial_buffers))
-                    .with(Supplier(move || Vec::with_capacity(buffer_size)))
-                    .build(),
-            );
-            Self::with_pool(pool)
         }
     }
 
