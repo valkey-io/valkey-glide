@@ -133,6 +133,10 @@ async function run_client(
     data_size: number,
     data: string
 ) {
+    const now = new Date();
+    console.log(
+        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} ${now.toLocaleTimeString()}`
+    );
     const action_latencies = {
         [ChosenAction.SET]: [],
         [ChosenAction.GET_NON_EXISTING]: [],
