@@ -183,6 +183,7 @@ public static class MainClass
         int num_of_concurrent_tasks
     )
     {
+        Console.WriteLine($"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} {DateTime.UtcNow.ToString("HH:mm:ss")}");
         var action_latencies = new Dictionary<ChosenAction, ConcurrentBag<double>>() {
             {ChosenAction.GET_NON_EXISTING, new()},
             {ChosenAction.GET_EXISTING, new()},
