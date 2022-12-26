@@ -4,6 +4,7 @@ import functools
 import json
 import random
 import time
+from datetime import datetime
 from enum import Enum
 from statistics import mean
 import numpy as np
@@ -155,6 +156,10 @@ async def run_client(
     num_of_concurrent_tasks,
     data_size,
 ):
+    now = datetime.now().strftime("%H:%M:%S")
+    print(
+        f"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} {now}"
+    )
     action_latencies = {
         ChosenAction.GET_NON_EXISTING: list(),
         ChosenAction.GET_EXISTING: list(),
