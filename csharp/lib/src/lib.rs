@@ -118,15 +118,19 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
 pub extern "C" fn start_socket_listener_wrapper(
     init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
 ) {
-    start_socket_listener(move |result| unsafe {
+    start_socket_listener(move |result| {
         match result {
             Ok(socket_name) => {
                 let c_str = CString::new(socket_name).unwrap();
-                init_callback(c_str.as_ptr(), std::ptr::null());
+                unsafe {
+                    init_callback(c_str.as_ptr(), std::ptr::null());
+                }
             }
             Err(error) => {
                 let c_str = CString::new(error.to_string()).unwrap();
-                init_callback(std::ptr::null(), c_str.as_ptr());
+                unsafe {
+                    init_callback(std::ptr::null(), c_str.as_ptr());
+                }
             }
         };
     });

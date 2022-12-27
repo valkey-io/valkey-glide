@@ -19,7 +19,7 @@ public class AsyncSocketClientTests
     [Test, Timeout(200)]
     public async Task GetReturnsLastSet()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             await GetAndSetRandomValues(client);
         }
@@ -28,7 +28,7 @@ public class AsyncSocketClientTests
     [Test, Timeout(200)]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
@@ -41,7 +41,7 @@ public class AsyncSocketClientTests
     [Test, Timeout(200)]
     public async Task GetReturnsNull()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             var result = await client.GetAsync(Guid.NewGuid().ToString());
             Assert.That(result, Is.EqualTo(null));
@@ -51,7 +51,7 @@ public class AsyncSocketClientTests
     [Test, Timeout(200)]
     public async Task GetReturnsEmptyString()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             var key = Guid.NewGuid().ToString();
             var value = "";
@@ -64,11 +64,12 @@ public class AsyncSocketClientTests
     [Test, Timeout(20000)]
     public async Task HandleVeryLargeInput()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             var key = Guid.NewGuid().ToString();
             var value = Guid.NewGuid().ToString();
-            while (value.Length < Math.Pow(2, 23))
+            const int EXPECTED_SIZE = 2 << 23;
+            while (value.Length < EXPECTED_SIZE)
             {
                 value += value;
             }
@@ -83,7 +84,7 @@ public class AsyncSocketClientTests
     [Test, Timeout(5000)]
     public async Task ConcurrentOperationsWork()
     {
-        await using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
+        using (var client = await AsyncSocketClient.CreateSocketClient("redis://localhost:6379"))
         {
             var operations = new List<Task>();
 

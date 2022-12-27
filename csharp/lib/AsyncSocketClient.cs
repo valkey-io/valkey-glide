@@ -8,7 +8,7 @@ using System.Text;
 
 namespace babushka
 {
-    public class AsyncSocketClient : IAsyncDisposable
+    public class AsyncSocketClient : IDisposable
     {
         #region public methods
 
@@ -21,23 +21,31 @@ namespace babushka
 
         public async Task SetAsync(string key, string value)
         {
-            var (message, task) = messageContainer.GetMessageForCall(key, value);
+            var (message, task) = messageContainer.GetMessageForCall(null, null);
             await WriteToSocketAsync(new WriteRequest { callbackIndex = message.Index, type = RequestType.SetString, args = new() { key, value } });
             await task;
         }
 
         public async Task<string?> GetAsync(string key)
         {
-            var (message, task) = messageContainer.GetMessageForCall(key, null);
+            var (message, task) = messageContainer.GetMessageForCall(null, null);
             await WriteToSocketAsync(new WriteRequest { callbackIndex = message.Index, type = RequestType.GetString, args = new() { key } });
             return await task;
         }
 
-        public async ValueTask DisposeAsync()
+        private void DisposeWithError(Exception error)
         {
-            await writeSemaphore.WaitAsync();
+            if (Interlocked.CompareExchange(ref this.disposedFlag, 1, 0) == 1)
+            {
+                return;
+            }
             this.socket.Close();
-            writeSemaphore.Release();
+            messageContainer.DisposeWithError(error);
+        }
+
+        public void Dispose()
+        {
+            DisposeWithError(new ObjectDisposedException(null));
         }
 
         #endregion public methods
@@ -149,12 +157,7 @@ namespace babushka
 
         ~AsyncSocketClient()
         {
-            CloseConnections();
-        }
-
-        private void CloseConnections()
-        {
-            socket.Dispose();
+            Dispose();
         }
 
         private static Header GetHeader(byte[] buffer, int position)
@@ -173,17 +176,28 @@ namespace babushka
             Task.Run(async () =>
             {
                 var previousSegment = new ArraySegment<byte>();
-                while (socket.Connected)
+                while (socket.Connected && !IsDisposed)
                 {
-                    var buffer = GetBuffer(previousSegment);
-                    var segmentAfterPreviousData = new ArraySegment<byte>(buffer, previousSegment.Count, buffer.Length - previousSegment.Count);
-                    var receivedLength = await socket.ReceiveAsync(segmentAfterPreviousData, SocketFlags.None);
-                    var newBuffer = ParseReadResults(buffer, receivedLength + previousSegment.Count, messageContainer);
-                    if (previousSegment.Array is not null && previousSegment.Array != newBuffer.Array)
+                    try
                     {
-                        ArrayPool<byte>.Shared.Return(previousSegment.Array);
+                        var buffer = GetBuffer(previousSegment);
+                        var segmentAfterPreviousData = new ArraySegment<byte>(buffer, previousSegment.Count, buffer.Length - previousSegment.Count);
+                        var receivedLength = await socket.ReceiveAsync(segmentAfterPreviousData, SocketFlags.None);
+                        if (receivedLength == 0)
+                        {
+                            continue;
+                        }
+                        var newBuffer = ParseReadResults(buffer, receivedLength + previousSegment.Count, messageContainer);
+                        if (previousSegment.Array is not null && previousSegment.Array != newBuffer.Array)
+                        {
+                            ArrayPool<byte>.Shared.Return(previousSegment.Array);
+                        }
+                        previousSegment = newBuffer;
                     }
-                    previousSegment = newBuffer;
+                    catch (Exception exc)
+                    {
+                        DisposeWithError(exc);
+                    }
                 }
             });
         }
@@ -211,7 +225,7 @@ namespace babushka
                 }
                 if (header.responseType == ResponseType.ClosingError)
                 {
-                    this.socket.Close();
+                    DisposeWithError(new Exception(result));
                     message.SetException(new Exception(result));
                 }
             });
@@ -225,7 +239,7 @@ namespace babushka
                 var header = GetHeader(buffer, counter);
                 if (header.length == 0)
                 {
-                    throw new ArgumentException("length 0");
+                    throw new InvalidOperationException("Received 0-length header from socket");
                 }
                 if (counter + header.length > messageLength)
                 {
@@ -266,8 +280,6 @@ namespace babushka
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.IP);
             var endpoint = new UnixDomainSocketEndPoint(socketAddress);
             socket.Blocking = false;
-            socket.SendBufferSize = 2 ^ 22;
-            socket.ReceiveBufferSize = 2 ^ 22;
             socket.Connect(endpoint);
             return socket;
         }
@@ -280,6 +292,10 @@ namespace babushka
 
         private async Task WriteToSocketAsync(WriteRequest writeRequest)
         {
+            if (IsDisposed)
+            {
+                throw new ObjectDisposedException(null);
+            }
             await queueSemaphore.WaitAsync();
             this.WriteRequests.Add(writeRequest);
             queueSemaphore.Release();
@@ -381,6 +397,9 @@ namespace babushka
         private readonly SemaphoreSlim writeSemaphore = new(1, 1);
         private readonly SemaphoreSlim queueSemaphore = new(1, 1);
         private List<WriteRequest> WriteRequests = new();
+        /// 1 when disposed, 0 before
+        private int disposedFlag = 0;
+        private bool IsDisposed => disposedFlag == 1;
 
         #endregion private types
 

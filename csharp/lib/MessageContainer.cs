@@ -40,6 +40,23 @@ namespace babushka
             availableMessages.Enqueue(message);
         }
 
+        internal void DisposeWithError(Exception? error)
+        {
+            lock (messages)
+            {
+                foreach (var message in messages)
+                {
+                    try
+                    {
+                        message.SetException(new TaskCanceledException("Client closed", error));
+                    }
+                    catch (Exception) { }
+                }
+                messages.Clear();
+            }
+            availableMessages.Clear();
+        }
+
         /// This list allows us random-access to the message in each index,
         /// which means that once we receive a callback with an index, we can
         /// find the message to resolve in constant time.
