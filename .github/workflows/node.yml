@@ -36,8 +36,6 @@ jobs:
               with:
                   node-version: 16.x
 
-            - run: npm install
-
             - run: |
                   rm -rf node_modules && npm install --frozen-lockfile
                   npm install
@@ -46,7 +44,7 @@ jobs:
             - run: |
                   rm -rf node_modules && npm install --frozen-lockfile
                   npm install
-                  npm build
+                  npm run build
               working-directory: ./node
 
             - run: |
