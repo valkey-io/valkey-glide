@@ -296,27 +296,19 @@ namespace babushka
             {
                 throw new ObjectDisposedException(null);
             }
-            await queueSemaphore.WaitAsync();
-            this.WriteRequests.Add(writeRequest);
-            queueSemaphore.Release();
+            this.writeRequests.Enqueue(writeRequest);
             if (!writeSemaphore.Wait(0) || !socket.Connected)
             {
                 return;
             }
-            while (true)
+            while (!this.writeRequests.IsEmpty)
             {
-                await queueSemaphore.WaitAsync();
-                if (this.WriteRequests.Count > 0)
+                var writeRequestsCopy = new List<WriteRequest>(this.writeRequests.Count);
+                while (this.writeRequests.TryDequeue(out var dequeuedWriteRequest))
                 {
-                    var queue = Interlocked.Exchange(ref this.WriteRequests, new());
-                    queueSemaphore.Release();
-                    await WriteToSocketAsync(this.socket, queue);
+                    writeRequestsCopy.Add(dequeuedWriteRequest);
                 }
-                else
-                {
-                    queueSemaphore.Release();
-                    break;
-                }
+                await WriteToSocketAsync(this.socket, writeRequestsCopy);
             }
 
             writeSemaphore.Release();
@@ -395,8 +387,7 @@ namespace babushka
         private readonly Socket socket;
         private readonly MessageContainer messageContainer = new();
         private readonly SemaphoreSlim writeSemaphore = new(1, 1);
-        private readonly SemaphoreSlim queueSemaphore = new(1, 1);
-        private List<WriteRequest> WriteRequests = new();
+        private ConcurrentQueue<WriteRequest> writeRequests = new();
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;
         private bool IsDisposed => disposedFlag == 1;
