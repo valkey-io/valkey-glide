@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Channels;
 
 namespace babushka
 {
@@ -22,14 +23,14 @@ namespace babushka
         public async Task SetAsync(string key, string value)
         {
             var (message, task) = messageContainer.GetMessageForCall(null, null);
-            await WriteToSocketAsync(new WriteRequest { callbackIndex = message.Index, type = RequestType.SetString, args = new() { key, value } });
+            WriteToSocket(new WriteRequest { callbackIndex = message.Index, type = RequestType.SetString, args = new() { key, value } });
             await task;
         }
 
         public async Task<string?> GetAsync(string key)
         {
             var (message, task) = messageContainer.GetMessageForCall(null, null);
-            await WriteToSocketAsync(new WriteRequest { callbackIndex = message.Index, type = RequestType.GetString, args = new() { key } });
+            WriteToSocket(new WriteRequest { callbackIndex = message.Index, type = RequestType.GetString, args = new() { key } });
             return await task;
         }
 
@@ -134,7 +135,7 @@ namespace babushka
         private static async Task<Socket> GetSocketAsync(string socketName, string address)
         {
             var socket = CreateSocket(socketName);
-            await WriteToSocketAsync(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } });
+            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } });
             var buffer = new byte[HEADER_LENGTH_IN_BYTES];
             await socket.ReceiveAsync(buffer, SocketFlags.None);
             var header = GetHeader(buffer, 0);
@@ -153,6 +154,7 @@ namespace babushka
         {
             this.socket = socket;
             StartListeningOnReadSocket();
+            StartListeningOnWriteChannel();
         }
 
         ~AsyncSocketClient()
@@ -198,6 +200,24 @@ namespace babushka
                     {
                         DisposeWithError(exc);
                     }
+                }
+            });
+        }
+
+        private void StartListeningOnWriteChannel()
+        {
+            Task.Run(async () =>
+            {
+                var writeRequests = new List<WriteRequest>();
+                while (socket.Connected)
+                {
+                    await this.writeRequestsChannel.Reader.WaitToReadAsync();
+                    while (this.writeRequestsChannel.Reader.TryRead(out var writeRequest))
+                    {
+                        writeRequests.Add(writeRequest);
+                    }
+                    await WriteToSocket(this.socket, writeRequests);
+                    writeRequests.Clear();
                 }
             });
         }
@@ -290,28 +310,13 @@ namespace babushka
             Buffer.BlockCopy(encodedVal, 0, target, offset, encodedVal.Length);
         }
 
-        private async Task WriteToSocketAsync(WriteRequest writeRequest)
+        private void WriteToSocket(WriteRequest writeRequest)
         {
             if (IsDisposed)
             {
                 throw new ObjectDisposedException(null);
             }
-            this.writeRequests.Enqueue(writeRequest);
-            if (!writeSemaphore.Wait(0) || !socket.Connected)
-            {
-                return;
-            }
-            while (!this.writeRequests.IsEmpty)
-            {
-                var writeRequestsCopy = new List<WriteRequest>(this.writeRequests.Count);
-                while (this.writeRequests.TryDequeue(out var dequeuedWriteRequest))
-                {
-                    writeRequestsCopy.Add(dequeuedWriteRequest);
-                }
-                await WriteToSocketAsync(this.socket, writeRequestsCopy);
-            }
-
-            writeSemaphore.Release();
+            this.writeRequestsChannel.Writer.TryWrite(writeRequest);
         }
 
         private static int getHeaderLength(WriteRequest writeRequest)
@@ -362,7 +367,7 @@ namespace babushka
             return length;
         }
 
-        private static async Task WriteToSocketAsync(Socket socket, IEnumerable<WriteRequest> WriteRequests)
+        private static async Task WriteToSocket(Socket socket, IEnumerable<WriteRequest> WriteRequests)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(getRequiredBufferLength(WriteRequests));
             var bytesAdded = 0;
@@ -387,10 +392,15 @@ namespace babushka
         private readonly Socket socket;
         private readonly MessageContainer messageContainer = new();
         private readonly SemaphoreSlim writeSemaphore = new(1, 1);
-        private ConcurrentQueue<WriteRequest> writeRequests = new();
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;
         private bool IsDisposed => disposedFlag == 1;
+        private readonly Channel<WriteRequest> writeRequestsChannel = Channel.CreateUnbounded<WriteRequest>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false
+        });
 
         #endregion private types
 
