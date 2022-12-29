@@ -77,9 +77,9 @@ namespace babushka
             ClosingError = 3,
         }
 
-        private class WriteRequest
+        private struct WriteRequest
         {
-            internal List<string> args = new();
+            internal List<string> args;
             internal int callbackIndex;
             internal RequestType type;
         }
@@ -135,7 +135,7 @@ namespace babushka
         private static async Task<Socket> GetSocketAsync(string socketName, string address)
         {
             var socket = CreateSocket(socketName);
-            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } });
+            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } }, new());
             var buffer = new byte[HEADER_LENGTH_IN_BYTES];
             await socket.ReceiveAsync(buffer, SocketFlags.None);
             var header = GetHeader(buffer, 0);
@@ -209,6 +209,7 @@ namespace babushka
             Task.Run(async () =>
             {
                 var writeRequests = new List<WriteRequest>();
+                var argLengths = new List<int>();
                 while (socket.Connected)
                 {
                     await this.writeRequestsChannel.Reader.WaitToReadAsync();
@@ -216,7 +217,7 @@ namespace babushka
                     {
                         writeRequests.Add(writeRequest);
                     }
-                    await WriteToSocket(this.socket, writeRequests);
+                    await WriteToSocket(this.socket, writeRequests, argLengths);
                     writeRequests.Clear();
                 }
             });
@@ -344,12 +345,12 @@ namespace babushka
             });
         }
 
-        private static int WriteRequestToBuffer(byte[] buffer, int offset, WriteRequest writeRequest)
+        private static int WriteRequestToBuffer(byte[] buffer, int offset, WriteRequest writeRequest, List<int> argLengths)
         {
             var encoding = Encoding.UTF8;
             var headerLength = getHeaderLength(writeRequest);
             var length = headerLength;
-            var argLengths = new List<int>(writeRequest.args.Count);
+            argLengths.Clear();
             for (var i = 0; i < writeRequest.args.Count; i++)
             {
                 var arg = writeRequest.args[i];
@@ -367,13 +368,13 @@ namespace babushka
             return length;
         }
 
-        private static async Task WriteToSocket(Socket socket, IEnumerable<WriteRequest> WriteRequests)
+        private static async Task WriteToSocket(Socket socket, IEnumerable<WriteRequest> WriteRequests, List<int> argLengths)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(getRequiredBufferLength(WriteRequests));
             var bytesAdded = 0;
             foreach (var writeRequest in WriteRequests)
             {
-                bytesAdded += WriteRequestToBuffer(buffer, bytesAdded, writeRequest);
+                bytesAdded += WriteRequestToBuffer(buffer, bytesAdded, writeRequest, argLengths);
             }
 
 
