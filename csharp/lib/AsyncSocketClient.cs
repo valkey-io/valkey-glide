@@ -270,12 +270,6 @@ namespace babushka
                 ResolveMessage(message, header, buffer, counter);
 
                 counter += (int)header.length;
-                var offset = counter % 4;
-                if (offset != 0)
-                {
-                    // align counter to 4.
-                    counter += 4 - offset;
-                }
             }
 
             return new ArraySegment<byte>(buffer, counter, messageLength - counter);
