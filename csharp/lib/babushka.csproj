@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="cargo build --release" />
+    <Exec Command="RUSTFLAGS='--cfg tokio_unstable' cargo build --release" />
   </Target>
 
   <ItemGroup Condition=" '$(OS)' == 'UNIX'">

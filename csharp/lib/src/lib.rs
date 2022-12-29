@@ -6,12 +6,64 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+use console_subscriber;
+use tokio_metrics;
+use std::fs::OpenOptions;
+use std::io::Write;
+use chrono::offset::Utc;
+use chrono::DateTime;
+use std::time::SystemTime;
 
 pub struct Connection {
     connection: MultiplexedConnection,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
     runtime: Runtime,
+}
+
+
+static mut CONSOLE_INIT:bool = false;
+
+fn start_collecting_metrics(rt: &Runtime) {
+    if unsafe{!CONSOLE_INIT} {
+        console_subscriber::init();
+        unsafe  {CONSOLE_INIT = true;}
+    }
+
+    let handle = rt.handle();
+    let monitor = tokio_metrics::RuntimeMonitor::new(&handle);
+
+    let st = SystemTime::now();
+    let dt : DateTime<Utc> = st.into();
+    let runtime_metrics_file_name = format!("../results/csharp-runtime-metrics-{}.txt",  dt.format("%Y-%m-%d-%H-%M-%S"));
+    let task_metrics_file_name = format!("../results/csharp-task-metrics-{}.txt",  dt.format("%Y-%m-%d-%H-%M-%S"));
+
+    //print metrics every 100ms
+    {
+        let frequency = std::time::Duration::from_millis(100);
+        rt.spawn(async move {
+            for metrics in monitor.intervals() {
+                let mut w = OpenOptions::new().create(true)
+                .append(true).open(&runtime_metrics_file_name).unwrap();
+                _ = writeln!(&mut w, "{:?}> {:?}", nix::unistd::gettid().as_raw(), metrics);
+                tokio::time::sleep(frequency).await;
+            }
+        });
+    }
+
+    let monitor_tasks = tokio_metrics::TaskMonitor::new();
+    {
+        let frequency = std::time::Duration::from_millis(100);
+        let monitor_tasks1 = monitor_tasks.clone();
+        rt.spawn(async move {         
+            let mut w = OpenOptions::new().create(true)
+            .append(true).open(&task_metrics_file_name).unwrap();   
+            for metrics in monitor_tasks1.intervals() {
+                _ = writeln!(&mut w, "{:?}> {:?}", nix::unistd::gettid().as_raw(), metrics);
+                tokio::time::sleep(frequency).await;
+            }
+        });
+    }
 }
 
 fn create_connection_internal(
@@ -24,9 +76,10 @@ fn create_connection_internal(
     let client = redis::Client::open(address_string)?;
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .worker_threads(1)
         .thread_name("Babushka C# thread")
         .build()?;
+    
+    start_collecting_metrics(&runtime);
     let _runtime_handle = runtime.enter();
     let connection = runtime.block_on(client.get_multiplexed_async_connection())?; // TODO - log errors
     Ok(Connection {
