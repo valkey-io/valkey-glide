@@ -311,7 +311,10 @@ namespace babushka
             {
                 throw new ObjectDisposedException(null);
             }
-            this.writeRequestsChannel.Writer.TryWrite(writeRequest);
+            if (!this.writeRequestsChannel.Writer.TryWrite(writeRequest))
+            {
+                throw new ObjectDisposedException("Writing after channel is closed");
+            }
         }
 
         private static int getHeaderLength(WriteRequest writeRequest)
