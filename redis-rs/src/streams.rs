@@ -38,7 +38,10 @@ impl ToRedisArgs for StreamMaxlen {
 ///
 /// [`xclaim_options`]: ../trait.Commands.html#method.xclaim_options
 ///
+
 #[derive(Default, Debug)]
+#[allow(rustdoc::invalid_html_tags)]
+
 pub struct StreamClaimOptions {
     /// Set IDLE <milliseconds> cmd arg.
     idle: Option<usize>,
@@ -52,6 +55,7 @@ pub struct StreamClaimOptions {
     /// type changes with this option.
     justid: bool,
 }
+#[allow(rustdoc::invalid_html_tags)]
 
 impl StreamClaimOptions {
     /// Set IDLE <milliseconds> cmd arg.
@@ -111,16 +115,21 @@ impl ToRedisArgs for StreamClaimOptions {
         }
     }
 }
+#[allow(rustdoc::invalid_html_tags)]
 
 /// Argument to `StreamReadOptions`
 /// Represents the Redis GROUP <groupname> <consumername> cmd arg.
 /// This option will toggle the cmd from XREAD to XREADGROUP
 type SRGroup = Option<(Vec<Vec<u8>>, Vec<Vec<u8>>)>;
+#[allow(rustdoc::invalid_html_tags)]
+
 /// Builder options for [`xread_options`] command.
 ///
 /// [`xread_options`]: ../trait.Commands.html#method.xread_options
 ///
 #[derive(Default, Debug)]
+#[allow(rustdoc::invalid_html_tags)]
+
 pub struct StreamReadOptions {
     /// Set the BLOCK <milliseconds> cmd arg.
     block: Option<usize>,
