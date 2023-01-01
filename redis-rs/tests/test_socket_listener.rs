@@ -33,9 +33,7 @@ mod socket_listener {
         buffer
             .write_u32::<LittleEndian>(message_length as u32)
             .unwrap();
-        buffer
-            .write_u32::<LittleEndian>(CALLBACK_INDEX as u32)
-            .unwrap();
+        buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
         buffer
             .write_u32::<LittleEndian>(RequestType::ServerAddress.to_u32().unwrap())
             .unwrap();
