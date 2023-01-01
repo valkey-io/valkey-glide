@@ -272,7 +272,7 @@ mod tests {
         const FIRST_MESSAGE_LENGTH: usize = 18;
         const SECOND_MESSAGE_LENGTH: usize = BUFFER_SIZE - FIRST_MESSAGE_LENGTH;
         const SECOND_MESSAGE_KEY_LENGTH: usize = 4;
-        let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE as usize);
+        let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE);
         write_get_message(&mut rotating_buffer, FIRST_MESSAGE_LENGTH, 100);
         write_set_message(
             &mut rotating_buffer,
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(
             requests[0].request_type,
             RequestRanges::Get {
-                key: (HEADER_END..MESSAGE_LENGTH as usize)
+                key: (HEADER_END..MESSAGE_LENGTH)
             }
         );
         assert_eq!(requests[0].callback_index, 100);

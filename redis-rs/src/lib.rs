@@ -1,3 +1,4 @@
+#![allow(rustdoc::invalid_html_tags)]
 //! redis-rs is a rust implementation of a Redis client library.  It exposes
 //! a general purpose interface to Redis and also provides specific helpers for
 //! commonly used functionality.
