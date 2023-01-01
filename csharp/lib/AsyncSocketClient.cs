@@ -389,7 +389,6 @@ namespace babushka
 
         private readonly Socket socket;
         private readonly MessageContainer messageContainer = new();
-        private readonly SemaphoreSlim writeSemaphore = new(1, 1);
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;
         private bool IsDisposed => disposedFlag == 1;
