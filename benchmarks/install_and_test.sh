@@ -65,14 +65,14 @@ function runCSharpBenchmark(){
 
 function flushDB() {
   cd $utilitiesDir
-  yarn install
-  yarn run flush --host $host
+  npm install
+  npm run flush -- --host $host
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  yarn run fill --dataSize $1 --host $host
+  npm run fill -- --dataSize $1 --host $host
 }
 
 utilitiesDir=`pwd`/utilities
