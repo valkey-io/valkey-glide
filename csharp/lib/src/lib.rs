@@ -1,6 +1,5 @@
 use chrono::offset::Utc;
 use chrono::DateTime;
-use console_subscriber;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult};
 use std::fs::OpenOptions;
@@ -12,7 +11,6 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
-use tokio_metrics;
 
 pub struct Connection {
     connection: MultiplexedConnection,
@@ -31,8 +29,7 @@ fn start_collecting_metrics(rt: &Runtime) {
         }
     }
 
-    let handle = rt.handle();
-    let monitor = tokio_metrics::RuntimeMonitor::new(&handle);
+    let monitor = tokio_metrics::RuntimeMonitor::new(rt.handle());
 
     let st = SystemTime::now();
     let dt: DateTime<Utc> = st.into();
@@ -69,14 +66,13 @@ fn start_collecting_metrics(rt: &Runtime) {
     let monitor_tasks = tokio_metrics::TaskMonitor::new();
     {
         let frequency = std::time::Duration::from_millis(100);
-        let monitor_tasks1 = monitor_tasks.clone();
         rt.spawn(async move {
             let mut w = OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&task_metrics_file_name)
                 .unwrap();
-            for metrics in monitor_tasks1.intervals() {
+            for metrics in monitor_tasks.intervals() {
                 _ = writeln!(
                     &mut w,
                     "{:?}> {:?}",

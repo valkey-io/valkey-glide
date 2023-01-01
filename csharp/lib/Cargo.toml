@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../../redis-rs", features = ["aio", "tokio-comp"] }
-tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time", "tracing"] }
+tokio = { version = "^1.23.0", features = ["rt", "macros", "rt-multi-thread", "time", "tracing"] }
 
 tracing-subscriber = "0.3.16"
 console-subscriber ="0.1.8"
