@@ -6,15 +6,58 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
+using System.Diagnostics;
 
 namespace babushka
 {
     public class AsyncSocketClient : IDisposable
     {
-        #region public methods
-
+        [DllImport("libc.so.6", SetLastError=true)]
+        private static extern int sched_setaffinity(
+            int pid, 
+            IntPtr cpusetsize, 
+            ulong[] cpuset
+        );
         public static async Task<AsyncSocketClient> CreateSocketClient(string address)
         {
+            Process Proc = Process.GetCurrentProcess();
+            //ulong AffinityMask = (ulong)Proc.ProcessorAffinity;
+            //AffinityMask &= 0x000000000000FFFF; // use processors 0-15
+            //Proc.ProcessorAffinity = (IntPtr)AffinityMask;
+            
+            for (int i = 0; i < Proc.Threads.Count; i++) 
+            {
+                ProcessThread Thread = Proc.Threads[i];
+                string affinitystr = null;
+                ulong AffinityMask = 0x000000000000F7F7;
+                // if (i == 0) {
+                //     AffinityMask = 0x0000000000000001;
+                // } else if (i == 1){
+                //     AffinityMask = 0x0000000000000002;
+                // }else if (i == 2){
+                //     AffinityMask = 0x0000000000000004;
+                // }else if (i == 3){
+                //     AffinityMask = 0x0000000000000010;
+                // }else if (i == 4){
+                //     AffinityMask = 0x0000000000000020;
+                // }else if (i == 5){
+                //     AffinityMask = 0x0000000000000040;
+                // }else if (i == 6){
+                //     AffinityMask = 0x0000000000000080;
+                // }else if (i == 7){
+                //     AffinityMask = 0x0000000000000100;
+                // } else {
+                //     AffinityMask = 0x0000000000000100;
+                // }
+                // if (i < 9) {
+                //     AffinityMask = 0x000000000000F7F7;
+                // } else {
+                //     AffinityMask = 0x00000000000001E0;
+                // }
+
+                sched_setaffinity(Thread.Id, new IntPtr(sizeof(ulong)),  new[] { AffinityMask });
+                Console.WriteLine($"Setting affinity for thread with ID {Thread.Id} to {AffinityMask}");
+            }
             var socketName = await GetSocketNameAsync();
             var socket = await GetSocketAsync(socketName, address);
             return new AsyncSocketClient(socket);
@@ -49,7 +92,6 @@ namespace babushka
             DisposeWithError(new ObjectDisposedException(null));
         }
 
-        #endregion public methods
 
         #region private types
 

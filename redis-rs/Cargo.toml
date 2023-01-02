@@ -20,6 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # an indirection through std::Formatter.
 ryu = "1.0"
 itoa = "1.0"
+affinity= "0.1.2"
 
 # needed for the socket listner tests
 rsevents ={ version = "0.3", optional = true }
@@ -98,7 +99,6 @@ quickcheck = "1.0.3"
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 tempfile = "3.2"
 ntest = "0.8.1"
-
 [[test]]
 name = "test_async"
 required-features = ["tokio-comp", "rsevents"]

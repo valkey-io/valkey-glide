@@ -22,6 +22,9 @@ use tokio::sync::Notify;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
+use std::collections::HashMap;
+use affinity::*;
+
 
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
@@ -518,6 +521,7 @@ where
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
         .spawn(move || {
+            set_thread_affinity(&[3]).unwrap();
             let runtime = Builder::new_current_thread()
                 .enable_all()
                 .thread_name("socket_listener_thread")
