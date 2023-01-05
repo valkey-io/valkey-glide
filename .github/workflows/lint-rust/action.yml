@@ -8,8 +8,7 @@ inputs:
 
 runs:
     using: "composite"
-    env:
-        RUSTFLAGS: --cfg tokio_unstable
+
 
     steps:
         - uses: actions/checkout@v3
@@ -29,6 +28,8 @@ runs:
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all -- --check
 
         - uses: actions-rs/cargo@v1
+          env:
+              RUSTFLAGS: --cfg tokio_unstable
           with:
               command: clippy
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
