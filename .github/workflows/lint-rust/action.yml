@@ -30,14 +30,14 @@ runs:
           with:
               command: clippy
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
-          
+          env:
+              RUSTFLAGS: --cfg tokio_unstable -Dwarnings
+           
         - run: |
               cargo install cargo-deny
               cd ${{ inputs.cargo-toml-folder }}
               cargo deny check licenses
-          env:
-              RUSTFLAGS: --cfg tokio_unstable
-          shell: bash
+         shell: bash
 
         - name: doc
           shell: bash
