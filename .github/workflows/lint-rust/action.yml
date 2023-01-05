@@ -8,6 +8,8 @@ inputs:
 
 runs:
     using: "composite"
+    env:
+        RUSTFLAGS: --cfg tokio_unstable
 
     steps:
         - uses: actions/checkout@v3
@@ -35,8 +37,6 @@ runs:
               cargo install cargo-deny
               cd ${{ inputs.cargo-toml-folder }}
               cargo deny check licenses
-          env:
-              RUSTFLAGS: --cfg tokio_unstable
           shell: bash
 
         - name: doc

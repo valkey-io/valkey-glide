@@ -44,7 +44,7 @@ style-check:
 
 lint:
 	@rustup component add clippy 2> /dev/null
-	cargo clippy --all-features --all --tests --examples -- -D clippy::all -D warnings
+	RUSTFLAGS="--cfg tokio_unstable" cargo clippy --all-features --all --tests --examples -- -D clippy::all -D warnings
 
 fuzz:
 	cd afl/parser/ && \
