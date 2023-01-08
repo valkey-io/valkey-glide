@@ -3,7 +3,7 @@ namespace tests;
 using babushka;
 
 // TODO - need to start a new redis server for each test?
-public class Tests
+public class AsyncClientTests
 {
     private async Task GetAndSetRandomValues(AsyncClient client)
     {
