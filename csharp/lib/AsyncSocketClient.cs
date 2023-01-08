@@ -7,11 +7,14 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Diagnostics;
+using Pipelines.Sockets.Unofficial;
+using System.IO.Pipelines;
 
 namespace babushka
 {
     public class AsyncSocketClient : IDisposable
     {
+        private const int MINIMUM_SEGMENT_SIZE = 8 * 1024;
         [DllImport("libc.so.6", SetLastError=true)]
         private static extern int sched_setaffinity(
             int pid, 
@@ -20,52 +23,105 @@ namespace babushka
         );
         public static async Task<AsyncSocketClient> CreateSocketClient(string address)
         {
-            Process Proc = Process.GetCurrentProcess();
+            // Process Proc = Process.GetCurrentProcess();
             //ulong AffinityMask = (ulong)Proc.ProcessorAffinity;
             //AffinityMask &= 0x000000000000FFFF; // use processors 0-15
             //Proc.ProcessorAffinity = (IntPtr)AffinityMask;
-            
-            for (int i = 0; i < Proc.Threads.Count; i++) 
-            {
-                ProcessThread Thread = Proc.Threads[i];
-                string affinitystr = null;
-                ulong AffinityMask = 0x000000000000F7F7;
-                // if (i == 0) {
-                //     AffinityMask = 0x0000000000000001;
-                // } else if (i == 1){
-                //     AffinityMask = 0x0000000000000002;
-                // }else if (i == 2){
-                //     AffinityMask = 0x0000000000000004;
-                // }else if (i == 3){
-                //     AffinityMask = 0x0000000000000010;
-                // }else if (i == 4){
-                //     AffinityMask = 0x0000000000000020;
-                // }else if (i == 5){
-                //     AffinityMask = 0x0000000000000040;
-                // }else if (i == 6){
-                //     AffinityMask = 0x0000000000000080;
-                // }else if (i == 7){
-                //     AffinityMask = 0x0000000000000100;
-                // } else {
-                //     AffinityMask = 0x0000000000000100;
-                // }
-                // if (i < 9) {
-                //     AffinityMask = 0x000000000000F7F7;
-                // } else {
-                //     AffinityMask = 0x00000000000001E0;
-                // }
 
-                sched_setaffinity(Thread.Id, new IntPtr(sizeof(ulong)),  new[] { AffinityMask });
-                Console.WriteLine($"Setting affinity for thread with ID {Thread.Id} to {AffinityMask}");
-            }
+            // for (int i = 0; i < Proc.Threads.Count; i++) 
+            // {
+            //     ProcessThread Thread = Proc.Threads[i];
+            //     string affinitystr = null;
+            //     ulong AffinityMask = 0x000000000000F7F7;
+            //     // if (i == 0) {
+            //     //     AffinityMask = 0x0000000000000001;
+            //     // } else if (i == 1){
+            //     //     AffinityMask = 0x0000000000000002;
+            //     // }else if (i == 2){
+            //     //     AffinityMask = 0x0000000000000004;
+            //     // }else if (i == 3){
+            //     //     AffinityMask = 0x0000000000000010;
+            //     // }else if (i == 4){
+            //     //     AffinityMask = 0x0000000000000020;
+            //     // }else if (i == 5){
+            //     //     AffinityMask = 0x0000000000000040;
+            //     // }else if (i == 6){
+            //     //     AffinityMask = 0x0000000000000080;
+            //     // }else if (i == 7){
+            //     //     AffinityMask = 0x0000000000000100;
+            //     // } else {
+            //     //     AffinityMask = 0x0000000000000100;
+            //     // }
+            //     // if (i < 9) {
+            //     //     AffinityMask = 0x000000000000F7F7;
+            //     // } else {
+            //     //     AffinityMask = 0x00000000000001E0;
+            //     // }
+
+            //     sched_setaffinity(Thread.Id, new IntPtr(sizeof(ulong)),  new[] { AffinityMask });
+            //     Console.WriteLine($"Setting affinity for thread with ID {Thread.Id} to {AffinityMask}");
+            // }
+            // DedicatedThreadPoolPipeScheduler Scheduler = new DedicatedThreadPoolPipeScheduler("SOCKETMANAGER:IO",
+            //     workerCount: 10,
+            //     priority: ThreadPriority.AboveNormal);
+            PipeScheduler Scheduler = PipeScheduler.ThreadPool;
+
+            const long Receive_PauseWriterThreshold = 4L * 1024 * 1024 * 1024; // receive: let's give it up to 4GiB of buffer for now
+            const long Receive_ResumeWriterThreshold = 3L * 1024 * 1024 * 1024; // (large replies get crazy big)
+
+            var defaultPipeOptions = PipeOptions.Default;
+
+            long Send_PauseWriterThreshold = Math.Max(
+                4L * 1024 * 1024 * 1024,// send: let's give it up to 4GiB
+                defaultPipeOptions.PauseWriterThreshold); // or the default, whichever is bigger
+            long Send_ResumeWriterThreshold = Math.Max(
+                Send_PauseWriterThreshold,
+                defaultPipeOptions.ResumeWriterThreshold);
+            var SendPipeOptions = new PipeOptions(
+                pool: defaultPipeOptions.Pool,
+                readerScheduler: Scheduler,
+                writerScheduler: Scheduler,
+                pauseWriterThreshold: Send_PauseWriterThreshold,
+                resumeWriterThreshold: Send_ResumeWriterThreshold,
+                minimumSegmentSize: Math.Max(defaultPipeOptions.MinimumSegmentSize, MINIMUM_SEGMENT_SIZE),
+                useSynchronizationContext: false);
+            var ReceivePipeOptions = new PipeOptions(
+                pool: defaultPipeOptions.Pool,
+                readerScheduler: Scheduler,
+                writerScheduler: Scheduler,
+                pauseWriterThreshold: Receive_PauseWriterThreshold,
+                resumeWriterThreshold: Receive_ResumeWriterThreshold,
+                minimumSegmentSize: Math.Max(defaultPipeOptions.MinimumSegmentSize, MINIMUM_SEGMENT_SIZE),
+                useSynchronizationContext: false);
+
             var socketName = await GetSocketNameAsync();
             var socket = await GetSocketAsync(socketName, address);
-            return new AsyncSocketClient(socket);
+            IDuplexPipe pipe = SocketConnection.Create(socket, SendPipeOptions, ReceivePipeOptions, name: "babuska pipe");
+            await WriteToSocket(socket, pipe, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } }, new());
+            //var buffer = new byte[HEADER_LENGTH_IN_BYTES];
+
+            Console.WriteLine($"Reading...");
+            var input = pipe.Input;
+            var readResult = await input.ReadAsync();
+            Console.WriteLine($"ADDRESS: IsCompleted:{readResult.IsCompleted}, IsCanceled:{readResult.IsCanceled}, Length:{readResult.Buffer.Length}");
+            var buffer = readResult.Buffer;
+            var len = checked((int)buffer.Length);
+            var arr = ArrayPool<byte>.Shared.Rent(len);
+            buffer.CopyTo(arr);
+            var header = GetHeader(arr, 0);
+            if (header.responseType == ResponseType.ClosingError || header.responseType == ResponseType.RequestError)
+            {
+                throw new Exception("failed sending address");
+            }
+            input.AdvanceTo(readResult.Buffer.End);
+            ArrayPool<byte>.Shared.Return(arr);
+            return new AsyncSocketClient(socket, pipe);
         }
 
         public async Task SetAsync(string key, string value)
         {
             var (message, task) = messageContainer.GetMessageForCall(null, null);
+            //Console.WriteLine($"SetAsync");
             WriteToSocket(new WriteRequest { callbackIndex = message.Index, type = RequestType.SetString, args = new() { key, value } });
             await task;
         }
@@ -177,24 +233,18 @@ namespace babushka
         private static async Task<Socket> GetSocketAsync(string socketName, string address)
         {
             var socket = CreateSocket(socketName);
-            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } }, new());
-            var buffer = new byte[HEADER_LENGTH_IN_BYTES];
-            await socket.ReceiveAsync(buffer, SocketFlags.None);
-            var header = GetHeader(buffer, 0);
-            if (header.responseType == ResponseType.ClosingError || header.responseType == ResponseType.RequestError)
-            {
-                var messageLength = header.length - buffer.Length;
-                var messageBuffer = new byte[messageLength];
-                var bytes = await socket.ReceiveAsync(messageBuffer, SocketFlags.None);
-                var message = Encoding.UTF8.GetString(new Span<byte>(messageBuffer, 0, (int)messageLength));
-                throw new Exception(message);
-            }
+            // Set the receive buffer size to 30k
+            socket.ReceiveBufferSize = 30192;
+            // Set the send buffer size to 30k.
+            socket.SendBufferSize = 30192;
+
             return socket;
         }
 
-        private AsyncSocketClient(Socket socket)
+        private AsyncSocketClient(Socket socket, IDuplexPipe? pipe = null)
         {
             this.socket = socket;
+            this.pipe = pipe;
             StartListeningOnReadSocket();
             StartListeningOnWriteChannel();
         }
@@ -219,32 +269,25 @@ namespace babushka
         {
             Task.Run(async () =>
             {
-                var previousSegment = new ArraySegment<byte>();
+
+                var input = pipe.Input;
                 while (socket.Connected && !IsDisposed)
                 {
-                    try
-                    {
-                        var buffer = GetBuffer(previousSegment);
-                        var segmentAfterPreviousData = new ArraySegment<byte>(buffer, previousSegment.Count, buffer.Length - previousSegment.Count);
-                        var receivedLength = await socket.ReceiveAsync(segmentAfterPreviousData, SocketFlags.None);
-                        if (receivedLength == 0)
-                        {
-                            continue;
-                        }
-                        var newBuffer = ParseReadResults(buffer, receivedLength + previousSegment.Count, messageContainer);
-                        if (previousSegment.Array is not null && previousSegment.Array != newBuffer.Array)
-                        {
-                            ArrayPool<byte>.Shared.Return(previousSegment.Array);
-                        }
-                        previousSegment = newBuffer;
-                    }
-                    catch (Exception exc)
-                    {
-                        DisposeWithError(exc);
-                    }
+                    //Console.WriteLine($"Reading...");
+                    var readResult = await input.ReadAsync();
+                    //Console.WriteLine($"IsCompleted:{readResult.IsCompleted}, IsCanceled:{readResult.IsCanceled}, Length:{readResult.Buffer.Length}");
+                    if (readResult.IsCompleted || readResult.IsCanceled) break;
+                    var buffer = readResult.Buffer;
+                    var len = checked((int)buffer.Length);
+                    var arr = ArrayPool<byte>.Shared.Rent(len);
+                    buffer.CopyTo(arr);
+                    var newBuffer = ParseReadResults(arr, len, messageContainer);
+                    input.AdvanceTo(readResult.Buffer.GetPosition(newBuffer.Offset), readResult.Buffer.End); // TODO: fix this, probably broken
+                    ArrayPool<byte>.Shared.Return(arr);
                 }
             });
         }
+
 
         private void StartListeningOnWriteChannel()
         {
@@ -259,7 +302,7 @@ namespace babushka
                     {
                         writeRequests.Add(writeRequest);
                     }
-                    await WriteToSocket(this.socket, writeRequests, argLengths);
+                    await WriteToSocket(this.socket, this.pipe, writeRequests, argLengths);
                     writeRequests.Clear();
                 }
             });
@@ -273,6 +316,7 @@ namespace babushka
                 if (header.responseType == ResponseType.Null)
                 {
                     message.SetResult(null);
+                    //Console.WriteLine($"Got null response");
                     return;
                 }
 
@@ -280,14 +324,17 @@ namespace babushka
                 var result = Encoding.UTF8.GetString(new Span<byte>(buffer, counter + HEADER_LENGTH_IN_BYTES, (int)stringLength));
                 if (header.responseType == ResponseType.String)
                 {
+                    //Console.WriteLine($"Got response {result}");
                     message.SetResult(result);
                 }
                 if (header.responseType == ResponseType.RequestError)
                 {
+                    //Console.WriteLine($"Got excetion {result}");
                     message.SetException(new Exception(result));
                 }
                 if (header.responseType == ResponseType.ClosingError)
                 {
+                    //Console.WriteLine($"Got excetion {result}");
                     DisposeWithError(new Exception(result));
                     message.SetException(new Exception(result));
                 }
@@ -309,6 +356,7 @@ namespace babushka
                     return new ArraySegment<byte>(buffer, counter, messageLength - counter);
                 }
                 var message = messageContainer.GetMessage((int)header.callbackIndex);
+
                 ResolveMessage(message, header, buffer, counter);
 
                 counter += (int)header.length;
@@ -341,10 +389,13 @@ namespace babushka
             return socket;
         }
 
-        private static void WriteUint32ToBuffer(UInt32 value, byte[] target, int offset)
+        private static void WriteUint32ToBuffer(UInt32 value, Memory<byte> target, int offset)
         {
             var encodedVal = BitConverter.GetBytes(value);
-            Buffer.BlockCopy(encodedVal, 0, target, offset, encodedVal.Length);
+            //Buffer.BlockCopy(encodedVal, 0, target, offset, encodedVal.Length);
+            for (var i = 0; i < encodedVal.Length; i++) {
+                target.Span[offset++] = encodedVal[i];
+            }
         }
 
         private void WriteToSocket(WriteRequest writeRequest)
@@ -384,7 +435,7 @@ namespace babushka
             });
         }
 
-        private static int WriteRequestToBuffer(byte[] buffer, int offset, WriteRequest writeRequest, List<int> argLengths)
+        private static int WriteHeaderRequestToBuffer(Memory<byte> buffer, int offset, WriteRequest writeRequest, List<int> argLengths)
         {
             var encoding = Encoding.UTF8;
             var headerLength = getHeaderLength(writeRequest);
@@ -393,7 +444,7 @@ namespace babushka
             for (var i = 0; i < writeRequest.args.Count; i++)
             {
                 var arg = writeRequest.args[i];
-                var currentLength = encoding.GetBytes(arg, 0, arg.Length, buffer, length + offset);
+                var currentLength = encoding.GetByteCount(arg);
                 argLengths.Add(currentLength);
                 length += currentLength;
             }
@@ -404,25 +455,84 @@ namespace babushka
             {
                 WriteUint32ToBuffer((UInt32)argLengths[i], buffer, offset + HEADER_LENGTH_IN_BYTES + i * 4);
             }
-            return length;
+            return (argLengths.Count - 1) * 4 + HEADER_LENGTH_IN_BYTES;
         }
 
-        private static async Task WriteToSocket(Socket socket, IEnumerable<WriteRequest> WriteRequests, List<int> argLengths)
+        private static async Task WriteToSocket(Socket socket, IDuplexPipe pipe, IEnumerable<WriteRequest> WriteRequests, List<int> argLengths)
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(getRequiredBufferLength(WriteRequests));
             var bytesAdded = 0;
+            var output = pipe.Output;
             foreach (var writeRequest in WriteRequests)
             {
-                bytesAdded += WriteRequestToBuffer(buffer, bytesAdded, writeRequest, argLengths);
+                var memory = output.GetMemory(getHeaderLength(writeRequest) + lengthOfStrings(writeRequest) * 3);
+                var headerLength = WriteHeaderRequestToBuffer(memory, 0, writeRequest, argLengths);
+                //Console.WriteLine($"Header: Writing {Encoding.UTF8.GetString(buffer)} to socket");
+                //Console.WriteLine($"C#: Writing {buffer.Length} bytes to socket");
+                output.Advance(headerLength);
+                for (var i = 0; i < writeRequest.args.Count; i++)
+                {
+                    var arg = writeRequest.args[i];
+                    //Console.WriteLine($"Writing arg {arg} to socket");
+                    int encodedLength = Encoding.UTF8.GetByteCount(arg);
+                    WriteRaw(output, arg, encodedLength);
+                    //Console.WriteLine($"Flush:IsCompleted:{flushResult.IsCompleted}, IsCanceled:{flushResult.IsCanceled}");   
+                }
             }
+            var flushResult = await output.FlushAsync();
+        }
 
+        internal static unsafe void WriteRaw(PipeWriter writer, string value, int expectedLength)
+        {
+            const int MaxQuickEncodeSize = 512;
 
-            var bytesWritten = 0;
-            while (bytesWritten < bytesAdded)
+            fixed (char* cPtr = value)
             {
-                bytesWritten += await socket.SendAsync(new ArraySegment<byte>(buffer, bytesWritten, bytesAdded - bytesWritten), SocketFlags.None);
+                int totalBytes;
+                if (expectedLength <= MaxQuickEncodeSize)
+                {
+                    // encode directly in one hit
+                    var span = writer.GetSpan(expectedLength);
+                    fixed (byte* bPtr = span)
+                    {
+                        totalBytes = Encoding.UTF8.GetBytes(cPtr, value.Length, bPtr, expectedLength);
+                    }
+                    writer.Advance(expectedLength);
+                }
+                else
+                {
+                    // use an encoder in a loop
+                    var encoder = Encoding.UTF8.GetEncoder();
+                    int charsRemaining = value.Length, charOffset = 0;
+                    totalBytes = 0;
+
+                    bool final = false;
+                    while (true)
+                    {
+                        var span = writer.GetSpan(5); // get *some* memory - at least enough for 1 character (but hopefully lots more)
+
+                        int charsUsed, bytesUsed;
+                        bool completed;
+                        fixed (byte* bPtr = span)
+                        {
+                            //Console.WriteLine($"Writing {value} to socket");
+                            encoder.Convert(cPtr + charOffset, charsRemaining, bPtr, span.Length, final, out charsUsed, out bytesUsed, out completed);
+                        }
+                        writer.Advance(bytesUsed);
+                        totalBytes += bytesUsed;
+                        charOffset += charsUsed;
+                        charsRemaining -= charsUsed;
+
+                        if (charsRemaining <= 0)
+                        {
+                            if (charsRemaining < 0) throw new Exception("String encode went negative");
+                            if (completed) break; // fine
+                            if (final) throw new Exception("String encode failed to complete");
+                            final = true; // flush the encoder to one more span, then exit
+                        }
+                    }
+                }
+                if (totalBytes != expectedLength) throw new Exception("String encode length check failure");
             }
-            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         #endregion private methods
@@ -430,6 +540,7 @@ namespace babushka
         #region private fields
 
         private readonly Socket socket;
+        private readonly IDuplexPipe pipe;
         private readonly MessageContainer messageContainer = new();
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;

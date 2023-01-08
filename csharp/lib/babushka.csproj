@@ -5,6 +5,8 @@
     <RootNamespace>babushka</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
@@ -17,5 +19,7 @@
         <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
-
+  <ItemGroup>
+    <PackageReference Include="Pipelines.Sockets.Unofficial" />
+  </ItemGroup>
 </Project>

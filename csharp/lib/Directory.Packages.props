@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Packages we depend on for StackExchange.Redis, upgrades can create binding redirect pain! -->
+    <PackageVersion Include="Pipelines.Sockets.Unofficial" Version="2.2.2" />
+  </ItemGroup>
+</Project>

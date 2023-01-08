@@ -24,6 +24,7 @@ use ClosingReason::*;
 use PipeListeningResult::*;
 use std::collections::HashMap;
 use affinity::*;
+use tokio::time::{sleep, Duration};
 
 
 /// The socket file name
@@ -98,7 +99,7 @@ async fn write_to_output(writer: &Rc<Writer>) {
     let Ok(_guard) = writer.lock.try_lock() else {
         return;
     };
-
+    sleep(Duration::from_micros(100)).await; // TODO: fix it
     let mut output = writer.accumulated_outputs.take();
     loop {
         if output.is_empty() {

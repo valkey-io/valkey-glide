@@ -14,6 +14,12 @@ rust-version = "1.57"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+
+
+[profile.release]
+debug = 1
+
+
 [dependencies]
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for
