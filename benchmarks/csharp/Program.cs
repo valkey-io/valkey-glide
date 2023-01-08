@@ -242,6 +242,20 @@ public static class MainClass
             );
         }
 
+
+        if (clientsToRun == "all" || clientsToRun == "socket" || clientsToRun == "babushka")
+        {
+            var babushka_socket_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host));
+            await run_client(
+                async (key) => await babushka_socket_client.GetAsync(key),
+                async (key, value) => await babushka_socket_client.SetAsync(key, value),
+                "babushka socket",
+                total_commands,
+                data_size,
+                num_of_concurrent_tasks
+            );
+        }
+
         if (clientsToRun == "all")
         {
             using (var connection = ConnectionMultiplexer.Connect(getAddress(host)))
