@@ -1,40 +1,42 @@
 name: Install Redis
 
 inputs:
-  redis-version:
-    description: "redis version to install"
-    required: true
-    type: string
+    redis-version:
+        description: "redis version to install"
+        required: true
+        type: string
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 runs:
-  using: "composite"
+    using: "composite"
 
-  steps:
-    - run: mkdir ~/redis-binaries
-      shell: bash
+    steps:
+        - run: mkdir ~/redis-binaries
+          shell: bash
 
-    - uses: actions/checkout@v3
+        - uses: actions/checkout@v3
+          with:
+              submodules: recursive
 
-    - uses: actions/cache@v3
-      id: cache-redis
-      with:
-        path: |
-          ~/redis-binaries/redis-cli
-          ~/redis-binaries/redis-server
-        key: ${{ runner.os }}-install-redis
+        - uses: actions/cache@v3
+          id: cache-redis
+          with:
+              path: |
+                  ~/redis-binaries/redis-cli
+                  ~/redis-binaries/redis-server
+              key: ${{ runner.os }}-install-redis
 
-    - name: Install redis
-      shell: bash
-      if: steps.cache-redis.outputs.cache-hit != 'true'
-      run: |
-        sudo apt-get update
-        wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
-        tar -xzvf ${{ inputs.redis-version }}.tar.gz;
-        pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries && popd;
+        - name: Install redis
+          shell: bash
+          if: steps.cache-redis.outputs.cache-hit != 'true'
+          run: |
+              sudo apt-get update
+              wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
+              tar -xzvf ${{ inputs.redis-version }}.tar.gz;
+              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries && popd;
 
-    - name: Copy executable to place
-      shell: bash
-      run: sudo cp ~/redis-binaries/redis-server ~/redis-binaries/redis-cli /usr/bin/
+        - name: Copy executable to place
+          shell: bash
+          run: sudo cp ~/redis-binaries/redis-server ~/redis-binaries/redis-cli /usr/bin/
