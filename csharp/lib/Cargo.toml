@@ -10,7 +10,8 @@ license = "BSD-3-Clause"
 crate-type = ["cdylib"]
 
 [dependencies]
-redis = { path = "../../redis-rs", features = ["aio", "tokio-comp"] }
+redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp"] }
+babushka = { path = "../../babushka-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
