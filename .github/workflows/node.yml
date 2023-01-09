@@ -4,11 +4,13 @@ on:
     push:
         branches: ["main"]
         paths:
-            - redis-rs/**
+            - babushka-core/**
+            - submodules/**
             - node/**
     pull_request:
         paths:
-            - redis-rs/**
+            - babushka-core/**
+            - submodules/**
             - node/**
 
 env:
@@ -25,6 +27,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@v3
+              with:
+                submodules: recursive
 
             - name: Install redis
               uses: ./.github/workflows/install-redis
@@ -56,6 +60,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
+              with:
+                submodules: recursive
+
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./node/rust-client

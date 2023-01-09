@@ -1,8 +1,8 @@
+use babushka::headers::{RequestType, ResponseType, HEADER_END};
+use babushka::start_socket_listener;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use redis::aio::MultiplexedConnection;
-use redis::socket_listener::headers::{RequestType, ResponseType, HEADER_END};
-use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisResult};
 
 #[pyclass]
