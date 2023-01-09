@@ -1,5 +1,5 @@
+use babushka::start_socket_listener;
 use redis::aio::MultiplexedConnection;
-use redis::socket_listener::start_socket_listener;
 use redis::{AsyncCommands, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
