@@ -9,7 +9,7 @@ export const enum RequestType {
   /** Type of a get string request. */
   GetString = 2,
   /** Type of a set string request. */
-  SetString = 3,
+  SetString = 3
 }
 export const enum ResponseType {
   /** Type of a response that returns a null. */
@@ -19,7 +19,7 @@ export const enum ResponseType {
   /** Type of response containing an error that impacts a single request. */
   RequestError = 2,
   /** Type of response containing an error causes the connection to close. */
-  ClosingError = 3,
+  ClosingError = 3
 }
 export const HEADER_LENGTH_IN_BYTES: number
 export function StartSocketConnection(): Promise<string>
