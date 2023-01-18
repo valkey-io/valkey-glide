@@ -1,7 +1,7 @@
 import percentile from "percentile";
 import { stdev } from "stats-lite";
 import { createClient } from "redis";
-import { AsyncClient, SocketConnection } from "babushka-rs";
+import { AsyncClient, SocketConnection, setLoggerConfig } from "babushka-rs";
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
 
@@ -10,6 +10,8 @@ enum ChosenAction {
     GET_EXISTING,
     SET,
 }
+// Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
+setLoggerConfig("info", "first.log");
 
 function getAddress(host: string): string {
     const PORT = 6379;
@@ -23,7 +25,7 @@ const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
 let counter = 0;
 const running_tasks: Promise<void>[] = [];
-const bench_json_results: {}[] = [];
+const bench_json_results: object[] = [];
 
 interface IAsyncClient {
     set: (key: string, value: string) => Promise<any>;
@@ -72,7 +74,7 @@ async function redis_benchmark(
 ) {
     while (counter < total_commands) {
         const chosen_action = choose_action();
-        let tic = process.hrtime();
+        const tic = process.hrtime();
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
                 await client.get(generate_key_set());
@@ -84,7 +86,7 @@ async function redis_benchmark(
                 await client.set(generate_key_set(), data);
                 break;
         }
-        let toc = process.hrtime(tic);
+        const toc = process.hrtime(tic);
         const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
         counter += 1;
@@ -99,14 +101,14 @@ async function create_bench_tasks(
     action_latencies: Record<ChosenAction, number[]>
 ) {
     counter = 0;
-    let tic = process.hrtime();
+    const tic = process.hrtime();
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
             redis_benchmark(client, total_commands, data, action_latencies)
         );
     }
     await Promise.all(running_tasks);
-    let toc = process.hrtime(tic);
+    const toc = process.hrtime(tic);
     return toc[0] + toc[1] / 1000000000;
 }
 
@@ -260,7 +262,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             parseInt(data_size),
         ]);
         const address = getAddress(receivedOptions.host);
-        for (let [concurrent_tasks, data_size] of product) {
+        for (const [concurrent_tasks, data_size] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),
                 concurrent_tasks,

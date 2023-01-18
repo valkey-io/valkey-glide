@@ -4,10 +4,12 @@ on:
     push:
         branches: [main]
         paths:
+            - logger_core/**
             - babushka-core/**
             - submodules/**
     pull_request:
         paths:
+            - logger_core/**
             - babushka-core/**
             - submodules/**
 

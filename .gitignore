@@ -21,3 +21,10 @@ benchmarks/results
 
 yarn.lock
 package-lock.json
+
+node_modules/
+
+install_and_test_cp.sh
+
+logs/
+logger-rs.linux-x64-gnu.node

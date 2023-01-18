@@ -7,7 +7,14 @@ use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisError, RedisResult};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
-
+#[napi]
+pub enum Level {
+    Debug = 3,
+    Error = 0,
+    Info = 2,
+    Trace = 4,
+    Warn = 1,
+}
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]
 pub enum RequestType {
@@ -117,4 +124,41 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     });
 
     Ok(promise)
+}
+
+fn into_logger_level(level: Option<Level>) -> Option<logger_core::Level> {
+    match level {
+        None => None,
+        Some(Level::Debug) => Some(logger_core::Level::Debug),
+        Some(Level::Error) => Some(logger_core::Level::Error),
+        Some(Level::Warn) => Some(logger_core::Level::Warn),
+        Some(Level::Info) => Some(logger_core::Level::Info),
+        Some(Level::Trace) => Some(logger_core::Level::Trace),
+    }
+}
+
+fn into_level(level: logger_core::Level) -> Level {
+    match level {
+        logger_core::Level::Debug => Level::Debug,
+        logger_core::Level::Error => Level::Error,
+        logger_core::Level::Warn => Level::Warn,
+        logger_core::Level::Info => Level::Info,
+        logger_core::Level::Trace => Level::Trace,
+    }
+}
+
+#[napi]
+pub fn log(log_level: Option<Level>, log_identifier: String, message: String) {
+    logger_core::log(
+        into_logger_level(log_level).unwrap(),
+        &log_identifier,
+        &message,
+    );
+}
+
+#[napi(js_name = "InitInternalLogger")]
+pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
+    let logger_level = logger_core::init(into_logger_level(level), file_name);
+    let _ = tracing_subscriber::fmt::try_init();
+    return into_level(logger_level);
 }
