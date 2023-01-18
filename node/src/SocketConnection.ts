@@ -1,5 +1,6 @@
 import { BabushkaInternal } from "../";
 import * as net from "net";
+import { Logger } from "./Logger";
 const {
     StartSocketConnection,
     HEADER_LENGTH_IN_BYTES,
@@ -89,6 +90,9 @@ export class SocketConnection {
     }
 
     private constructor(socket: net.Socket) {
+        // Demo - if logger has been initialized by the external-user on info level this log will be shown
+        Logger.instance.log("info", "connection", `construct socket`);
+
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -193,7 +197,7 @@ export class SocketConnection {
             const headerLength = this.getHeaderLength(writeRequest);
             let argOffset = 0;
             const writtenLengths = [];
-            for (let arg of writeRequest.args) {
+            for (const arg of writeRequest.args) {
                 const argLength = this.encodeStringToWriteBuffer(
                     arg,
                     cursor + headerLength + argOffset
