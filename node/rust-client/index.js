@@ -11,7 +11,8 @@ function isMusl() {
   // For Node 10
   if (!process.report || typeof process.report.getReport !== 'function') {
     try {
-      return readFileSync('/usr/bin/ldd', 'utf8').includes('musl')
+      const lddPath = require('child_process').execSync('which ldd').toString().trim()
+      return readFileSync(lddPath, 'utf8').includes('musl')
     } catch (e) {
       return true
     }
@@ -95,6 +96,15 @@ switch (platform) {
     }
     break
   case 'darwin':
+    localFileExisted = existsSync(join(__dirname, 'babushka-rs-internal.darwin-universal.node'))
+    try {
+      if (localFileExisted) {
+        nativeBinding = require('./babushka-rs-internal.darwin-universal.node')
+      } else {
+        nativeBinding = require('babushka-rs-internal-darwin-universal')
+      }
+      break
+    } catch {}
     switch (arch) {
       case 'x64':
         localFileExisted = existsSync(join(__dirname, 'babushka-rs-internal.darwin-x64.node'))
@@ -218,10 +228,22 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { RequestType, ResponseType, HEADER_LENGTH_IN_BYTES, AsyncClient, StartSocketConnection } = nativeBinding
+const {
+  Level,
+  RequestType,
+  ResponseType,
+  HEADER_LENGTH_IN_BYTES,
+  AsyncClient,
+  StartSocketConnection,
+  log,
+  InitInternalLogger,
+} = nativeBinding
 
+module.exports.Level = Level
 module.exports.RequestType = RequestType
 module.exports.ResponseType = ResponseType
 module.exports.HEADER_LENGTH_IN_BYTES = HEADER_LENGTH_IN_BYTES
 module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
+module.exports.log = log
+module.exports.InitInternalLogger = InitInternalLogger
