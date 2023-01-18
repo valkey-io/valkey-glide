@@ -8,10 +8,14 @@
         "babushka-core/Cargo.toml",
         "python/Cargo.toml",
         "node/rust-client/Cargo.toml",
+        "logger_core/Cargo.toml",
         "csharp/lib/Cargo.toml",
         "submodules/redis-rs/Cargo.toml"
     ],
     "python.testing.pytestArgs": ["python"],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "[yaml]": {
+        "editor.tabSize": 4
+    }
 }
