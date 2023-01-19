@@ -341,30 +341,22 @@ async fn wait_for_server_address_create_conn(
 ) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
     match client_listener.next_values().await {
-        Closed(reason) => {
-            return Err(BabushkaError::CloseError(reason));
-        }
+        Closed(reason) => Err(BabushkaError::CloseError(reason)),
         ReceivedValues(received_requests) => {
-            if let Some(index) = (0..received_requests.len()).next() {
-                let request = received_requests
-                    .get(index)
-                    .ok_or_else(|| BabushkaError::BaseError("No received requests".to_string()))?;
+            if let Some(request) = received_requests.first() {
                 match request.request_type.clone() {
                     RequestRanges::ServerAddress {
                         address: address_range,
-                    } => return parse_address_create_conn(writer, request, address_range).await,
-                    _ => {
-                        return Err(BabushkaError::BaseError(
-                            "Received another request before receiving server address".to_string(),
-                        ))
-                    }
+                    } => parse_address_create_conn(writer, request, address_range).await,
+                    _ => Err(BabushkaError::BaseError(
+                        "Received another request before receiving server address".to_string(),
+                    )),
                 }
+            } else {
+                Err(BabushkaError::BaseError("No received requests".to_string()))
             }
         }
     }
-    Err(BabushkaError::BaseError(
-        "Failed to get the server's address".to_string(),
-    ))
 }
 
 fn update_notify_connected_clients(
