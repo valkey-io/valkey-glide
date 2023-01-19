@@ -75,13 +75,10 @@ pub fn init_console(minimal_level: Level) -> Level {
 // Initialize the global logger so that it will write the received logs to the console.
 // The logger will save only logs of the given level or above.
 pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
-    if minimal_level.is_none() {
-        return init_console(Level::Error);
-    }
-
+    let level = minimal_level.unwrap_or(Level::Warn);
     match file_name {
-        None => init_console(minimal_level.unwrap()),
-        _ => init_file(minimal_level.unwrap(), file_name.unwrap()),
+        None => init_console(level),
+        Some(file) => init_file(level, file),
     }
 }
 
