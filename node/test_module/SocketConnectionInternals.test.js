@@ -1,8 +1,8 @@
-const { SocketConnection, BabushkaInternal } = require("..");
-const net = require("net");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
+import { SocketConnection, BabushkaInternal } from "..";
+import net from "net";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const { HEADER_LENGTH_IN_BYTES, ResponseType, RequestType } = BabushkaInternal;
 
@@ -17,7 +17,7 @@ function sendResponse(socket, responseType, callbackIndex, message = "") {
     response[0] = length;
     response[1] = callbackIndex;
     response[2] = responseType;
-    encoder = new TextEncoder();
+    const encoder = new TextEncoder();
     encoder.encodeInto(message, new Uint8Array(buffer, HEADER_LENGTH_IN_BYTES));
     socket.write(new Uint8Array(buffer));
 }

@@ -1,5 +1,5 @@
-const redis = require("redis");
-const commandLineArgs = require("command-line-args");
+import redis from "redis";
+import commandLineArgs from "command-line-args";
 
 function getAddress(host) {
     const PORT = 6379;

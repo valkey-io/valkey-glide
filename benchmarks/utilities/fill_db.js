@@ -1,5 +1,5 @@
-const redis = require("redis");
-const commandLineArgs = require("command-line-args");
+import redis from "redis";
+import commandLineArgs from "command-line-args";
 
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
