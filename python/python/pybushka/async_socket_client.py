@@ -5,6 +5,7 @@ import async_timeout
 from pybushka.commands.core import CoreCommands
 from pybushka.config import ClientConfiguration
 from pybushka.utils import to_url
+from pybushka.Logger import Logger
 
 from .pybushka import (
     HEADER_LENGTH_IN_BYTES,
@@ -40,6 +41,9 @@ class RedisAsyncSocketClient(CoreCommands):
 
         start_socket_listener_external(init_callback=init_callback)
 
+        # will log if the logger was created (wrapper or costumer) on info level or higher
+        Logger.log("info", "connection info", "new connection established")
+
         # Wait for the socket listener to complete its initialization
         await init_future
         # Create UDS connection
@@ -49,6 +53,7 @@ class RedisAsyncSocketClient(CoreCommands):
         server_url = to_url(**self.config.config_args)
         # Set the server address
         await self.execute_command(int(PyRequestType.ServerAddress), server_url)
+
         return self
 
     async def _wait_for_init_complete(self):
@@ -130,16 +135,16 @@ class RedisAsyncSocketClient(CoreCommands):
             callback_index = self._get_callback_index()
             header_len = self._get_header_length(len(args))
             args_len_array = []
-            bytes_offest = header_len
+            bytes_offset = header_len
             for arg in args:
                 arg_in_bytes = arg.encode("UTF-8")
                 arg_len = len(arg_in_bytes)
                 # Adds the argument length to the array so we can add it to the header later
                 args_len_array.append(arg_len)
-                end_pos = bytes_offest + arg_len
-                # Write the arguement to the buffer
-                self.write_buffer[bytes_offest:end_pos] = arg_in_bytes
-                bytes_offest = end_pos
+                end_pos = bytes_offset + arg_len
+                # Write the argument to the buffer
+                self.write_buffer[bytes_offset:end_pos] = arg_in_bytes
+                bytes_offset = end_pos
 
             message_length = header_len + sum(len for len in args_len_array)
             # Write the header to the buffer
@@ -149,7 +154,7 @@ class RedisAsyncSocketClient(CoreCommands):
                 operation_type,
                 args_len_array,
             )
-            # Create a response future for this reqest and add it to the available futures map
+            # Create a response future for this request and add it to the available futures map
             response_future = asyncio.Future()
             self._writer.write(self.write_buffer[0:message_length])
             await self._writer.drain()
@@ -169,8 +174,8 @@ class RedisAsyncSocketClient(CoreCommands):
     def _parse_header(self, data):
         msg_length = int.from_bytes(data[0:4], "little")
         callback_idx = int.from_bytes(data[4:8], "little")
-        requset_type = int.from_bytes(data[8:12], "little")
-        return msg_length, callback_idx, requset_type
+        request_type = int.from_bytes(data[8:12], "little")
+        return msg_length, callback_idx, request_type
 
     async def _handle_read_data(self, data):
         length, callback_idx, type = self._parse_header(data)
