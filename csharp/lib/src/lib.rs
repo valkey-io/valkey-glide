@@ -2,7 +2,7 @@ use babushka::start_socket_listener;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult};
 use std::{
-    ffi::{c_void, CStr, CString},
+    ffi::{c_int, c_void, CStr, CString},
     os::raw::c_char,
 };
 use tokio::runtime::Builder;
@@ -67,7 +67,7 @@ pub extern "C" fn set(
     value: *const c_char,
 ) {
     let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
@@ -92,7 +92,7 @@ pub extern "C" fn set(
 #[no_mangle]
 pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key: *const c_char) {
     let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
@@ -113,7 +113,7 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
 }
 
 /// Receives a callback function which should be called with a single allocated pointer and a single null pointer.
-/// The first pointer is to a socket name address if startup was succesful, second pointer is to an error message if the process fails.
+/// The first pointer is to a socket name address if startup was successful, second pointer is to an error message if the process fails.
 #[no_mangle]
 pub extern "C" fn start_socket_listener_wrapper(
     init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
@@ -134,4 +134,68 @@ pub extern "C" fn start_socket_listener_wrapper(
             }
         };
     });
+}
+
+fn into_logger_level(level: i32) -> Option<logger_core::Level> {
+    match level {
+        0 => Some(logger_core::Level::Error),
+        1 => Some(logger_core::Level::Warn),
+        2 => Some(logger_core::Level::Info),
+        3 => Some(logger_core::Level::Debug),
+        4 => Some(logger_core::Level::Trace),
+        _ => None,
+    }
+}
+
+fn into_level(level: logger_core::Level) -> i32 {
+    match level {
+        logger_core::Level::Error => 0,
+        logger_core::Level::Warn => 1,
+        logger_core::Level::Info => 2,
+        logger_core::Level::Debug => 3,
+        logger_core::Level::Trace => 4,
+    }
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+pub extern "C" fn log(log_level: c_int, log_identifier: *const c_char, message: *const c_char) {
+    unsafe {
+        logger_core::log(
+            into_logger_level(log_level).unwrap(),
+            CStr::from_ptr(log_identifier)
+                .to_str()
+                .expect("Can not read string argument."),
+            CStr::from_ptr(message)
+                .to_str()
+                .expect("Can not read string argument."),
+        );
+    }
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+pub extern "C" fn init(level: c_int, file_name: *const c_char) -> i32 {
+    let file_name_as_str;
+    unsafe {
+        if file_name.is_null() {
+            println!(
+                "{}",
+                CStr::from_ptr(file_name)
+                    .to_str()
+                    .expect("Can not read string argument.")
+            );
+            file_name_as_str = None;
+        } else {
+            file_name_as_str = Some(
+                CStr::from_ptr(file_name)
+                    .to_str()
+                    .expect("Can not read string argument."),
+            );
+        }
+
+        let logger_level = logger_core::init(into_logger_level(level), file_name_as_str);
+        let _ = tracing_subscriber::fmt::try_init();
+        return into_level(logger_level);
+    }
 }
