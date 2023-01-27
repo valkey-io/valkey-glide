@@ -39,7 +39,7 @@ impl Level {
     }
 }
 
-// Initialize a logger that writes the received logs to a file under the babushka-logs folder. 
+// Initialize a logger that writes the received logs to a file under the babushka-logs folder.
 // The file name will be prefixed with the current timestamp, and will be replaced every hour.
 // This logger doesn't block the calling thread, and will save only logs of the given level or above.
 pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
@@ -88,7 +88,13 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 // Logs the given log, with log_identifier and log level prefixed. If the given log level is below the threshold of given when the logger was initialized, the log will be ignored.
 // log_identifier should be used to add context to a log, and make it easier to connect it to other relevant logs. For example, it can be used to pass a task identifier.
 // If this is called before a logger was initialized the log will not be registered.
+// If logger doesn't exist, create the default
 pub fn log(log_level: Level, log_identifier: &str, message: &str) {
+    unsafe {
+        if GUARD.is_none() {
+            init(None, None);
+        };
+    };
     let micro_time_stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
