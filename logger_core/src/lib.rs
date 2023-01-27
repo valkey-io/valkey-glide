@@ -75,13 +75,10 @@ pub fn init_console(minimal_level: Level) -> Level {
 // Initialize the global logger so that it will write the received logs to the console.
 // The logger will save only logs of the given level or above.
 pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
-    if minimal_level.is_none() {
-        return init_console(Level::Error);
-    }
-
+    let level = minimal_level.unwrap_or(Level::Warn);
     match file_name {
-        None => init_console(minimal_level.unwrap()),
-        _ => init_file(minimal_level.unwrap(), file_name.unwrap()),
+        None => init_console(level),
+        Some(file) => init_file(level, file),
     }
 }
 
@@ -89,36 +86,43 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 // log_identifier should be used to add context to a log, and make it easier to connect it to other relevant logs. For example, it can be used to pass a task identifier.
 // If this is called before a logger was initialized the log will not be registered.
 // If logger doesn't exist, create the default
-pub fn log(log_level: Level, log_identifier: &str, message: &str) {
+pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
+    log_level: Level,
+    log_identifier: Identifier,
+    message: Message,
+) {
     unsafe {
         if GUARD.is_none() {
             init(None, None);
         };
     };
+
     let micro_time_stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_micros();
+    let message_ref = message.as_ref();
+    let identifier_ref = log_identifier.as_ref();
     match log_level.to_tracing_level() {
         tracing::Level::DEBUG => event!(
             tracing::Level::DEBUG,
-            " - {log_identifier} - {message} - {micro_time_stamp}"
+            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
         ),
         tracing::Level::TRACE => event!(
             tracing::Level::TRACE,
-            " - {log_identifier} - {message} - {micro_time_stamp}"
+            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
         ),
         tracing::Level::INFO => event!(
             tracing::Level::INFO,
-            " - {log_identifier} - {message} - {micro_time_stamp}"
+            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
         ),
         tracing::Level::WARN => event!(
             tracing::Level::WARN,
-            " - {log_identifier} - {message} - {micro_time_stamp}"
+            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
         ),
         tracing::Level::ERROR => event!(
             tracing::Level::ERROR,
-            " - {log_identifier} - {message} - {micro_time_stamp}"
+            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
         ),
     }
 }
