@@ -126,7 +126,7 @@ async fn write_to_output(writer: &Rc<Writer>) {
                 }
                 Err(err) => {
                     // TODO - add proper error handling.
-                    panic!("received unexpected error {:?}", err);
+                    panic!("received unexpected error {err:?}");
                 }
             }
         }
@@ -147,7 +147,7 @@ fn write_response_header(
     vec.put_u32_le(response_type.to_u32().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Response type {:?} wasn't found", response_type),
+            format!("Response type {response_type:?} wasn't found"),
         )
     })?);
 
@@ -303,8 +303,8 @@ fn to_babushka_result<T, E: std::fmt::Display>(
 ) -> Result<T, BabushkaError> {
     result.map_err(|err: E| {
         BabushkaError::BaseError(match err_msg {
-            Some(msg) => format!("{}: {}", msg, err),
-            None => format!("{}", err),
+            Some(msg) => format!("{msg}: {err}"),
+            None => format!("{err}"),
         })
     })
 }
@@ -394,7 +394,7 @@ async fn listen_on_client_stream(
             return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
         }
         Err(BabushkaError::BaseError(err)) => {
-            println!("Recieved error: {:?}", err); // TODO: implement error protocol
+            println!("Recieved error: {err:?}"); // TODO: implement error protocol
             return;
         }
     };

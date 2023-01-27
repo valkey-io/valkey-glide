@@ -68,7 +68,7 @@ impl RotatingBuffer {
         let request_type = FromPrimitive::from_u32(request_type).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,
-                format!("failed to parse request type {}", request_type),
+                format!("failed to parse request type {request_type}"),
             )
         })?;
         Ok(ReadHeader {
