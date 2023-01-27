@@ -53,7 +53,7 @@ pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
             .with_writer(non_blocking)
             .finish(),
     );
-    return minimal_level;
+    minimal_level
 }
 
 // Initialize the global logger so that it will write the received logs to a file under the babushka-logs folder.
@@ -69,19 +69,19 @@ pub fn init_console(minimal_level: Level) -> Level {
             .with_max_level(level_filter)
             .finish(),
     );
-    return minimal_level;
+    minimal_level
 }
 
 // Initialize the global logger so that it will write the received logs to the console.
 // The logger will save only logs of the given level or above.
 pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
-    match minimal_level {
-        None => return init_console(Level::Error),
-        _ => (),
+    if minimal_level.is_none() {
+        return init_console(Level::Error);
     }
+
     match file_name {
-        None => return init_console(minimal_level.unwrap()),
-        _ => return init_file(minimal_level.unwrap(), file_name.unwrap()),
+        None => init_console(minimal_level.unwrap()),
+        _ => init_file(minimal_level.unwrap(), file_name.unwrap()),
     }
 }
 

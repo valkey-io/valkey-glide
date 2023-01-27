@@ -26,7 +26,7 @@ mod socket_listener {
     fn send_address(address: String, socket: &UnixStream) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 1;
-        let address = format!("redis://{}", address);
+        let address = format!("redis://{address}");
         let message_length = address.len() + HEADER_END;
         let mut buffer = Vec::with_capacity(message_length);
         buffer
@@ -446,7 +446,7 @@ mod socket_listener {
                 let index = i;
                 let cloned_lock = lock.clone();
                 scope.spawn(move || {
-                    let key = format!("hello{}", index);
+                    let key = format!("hello{index}");
                     let value = generate_random_bytes(VALUE_LENGTH);
 
                     {
