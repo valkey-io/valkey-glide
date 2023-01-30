@@ -54,52 +54,91 @@ fdescribe("Parsing", () => {
         expect(rustResult).toEqual(expected);
     };
 
-    const time = (prefix, array) => {
+    const time = async (prefix, array, iterations) => {
         const rustTiming = [0, 0];
         const nodeTiming = [0, 0];
 
+        let resolve = () => {};
         const rustParser = new RustParser();
         const nodeParser = new JavascriptRedisParser({
-            returnReply(_) {},
+            returnReply(_) {
+                resolve();
+            },
             returnError(err) {
                 throw err;
             },
         });
 
-        for (let i = 0; i < 10000; i++) {
-            let tic = process.hrtime();
-            rustParser.parse(array[i % array.length]);
-            let toc = process.hrtime(tic);
-            rustTiming[0] = rustTiming[0] + toc[0];
-            rustTiming[1] = rustTiming[1] + toc[1];
+        for (let i = 0; i < iterations; i++) {
+            const val = array[i % array.length];
+            try {
+                let tic = process.hrtime();
+                rustParser.parse(val);
+                let toc = process.hrtime(tic);
+                rustTiming[0] = rustTiming[0] + toc[0];
+                rustTiming[1] = rustTiming[1] + toc[1];
 
-            tic = process.hrtime();
-            nodeParser.execute(array[i % array.length]);
-            toc = process.hrtime(tic);
-            nodeTiming[0] = nodeTiming[0] + toc[0];
-            nodeTiming[1] = nodeTiming[1] + toc[1];
+                tic = process.hrtime();
+                await new Promise((resolvePromise) => {
+                    resolve = resolvePromise;
+                    nodeParser.execute(val);
+                });
+                toc = process.hrtime(tic);
+                nodeTiming[0] = nodeTiming[0] + toc[0];
+                nodeTiming[1] = nodeTiming[1] + toc[1];
+            } catch (exc) {
+                console.log(`Failed for ${val} - ${exc}`);
+                throw new Error(val);
+            }
         }
 
-        const rustMilliseconds = rustTiming[0] * 1000000 + rustTiming[1] / 1000;
-        const nodeMilliseconds = nodeTiming[0] * 1000000 + nodeTiming[1] / 1000;
+        const rustMilliseconds =
+            (rustTiming[0] * 1000000 + rustTiming[1] / 1000) / iterations;
+        const nodeMilliseconds =
+            (nodeTiming[0] * 1000000 + nodeTiming[1] / 1000) / iterations;
         console.log(
             `${prefix}  rust: ${rustMilliseconds}us, node: ${nodeMilliseconds}us`
         );
     };
 
-    it("timing", () => {
-        const randomString = (length) => {
-            let result = "+";
-            const chars =
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/!@#$%^&*()[]<>{}";
-            for (let i = 0; i < length; i++) {
-                result += chars.charAt(
-                    Math.floor(Math.random() * chars.length)
-                );
-            }
-            return result + "\r\n";
-        };
+    const randomString = (length) => {
+        let result = "+";
+        const chars =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result + "\r\n";
+    };
 
+    const createArray = (length, count) => {
+        let longArrayValue = `*${count}\r\n`;
+        for (let i = 0; i < count; i++) {
+            longArrayValue += randomString(length / count);
+        }
+        return longArrayValue;
+    };
+
+    const createBulk = (length, count) => {
+        let longArrayBulk = ``;
+        for (let i = 0; i < count; i++) {
+            longArrayBulk += randomString(length / count);
+        }
+        return `$${longArrayBulk.length}\r\n${longArrayBulk}\r\n`;
+    };
+
+    const createArrayOfValues = (length) => {
+        const longCount = length > 10000 ? 1000 : 100;
+        return [
+            randomString(length),
+            createBulk(length, longCount),
+            createBulk(length, 10),
+            createArray(length, longCount),
+            createArray(length, 10),
+        ].map((val) => encoder.encode(val));
+    };
+
+    it("timing", async () => {
         const array = [
             "$-1\r\n",
             randomString(10),
@@ -108,25 +147,9 @@ fdescribe("Parsing", () => {
             "$48\r\nhello\r\nhello\r\nhello\r\n汉字\r\nhello\r\nhello\r\nhello\r\n",
         ].map((val) => encoder.encode(val));
 
-        time("short", array);
-
-        const count = 1000;
-        let longArrayValue = `*${count}\r\n`;
-        for (let i = 0; i < count; i++) {
-            longArrayValue += randomString(500);
-        }
-        let longArrayBulk = ``;
-        for (let i = 0; i < count; i++) {
-            longArrayBulk += randomString(500);
-        }
-        longArrayBulk = `$${longArrayBulk.length}\r\n${longArrayBulk}\r\n`;
-        const longArray = [
-            randomString(20000),
-            longArrayValue,
-            longArrayBulk,
-        ].map((val) => encoder.encode(val));
-
-        time("long", longArray);
+        await time("short", array, 10000);
+        await time("medium", createArrayOfValues(1000), 10000);
+        await time("long", createArrayOfValues(20000), 100);
     });
 
     it("should parse nil", () => {
