@@ -1,10 +1,10 @@
 use babushka::headers::HEADER_END;
 use babushka::start_socket_listener;
-use napi::bindgen_prelude::ToNapiValue;
-use napi::{Env, Error, JsObject, Result, Status};
+use napi::bindgen_prelude::{Null, ToNapiValue, Uint8Array};
+use napi::{Env, Error, JsObject, JsUndefined, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, RedisError, RedisResult};
+use redis::{AsyncCommands, Parser, RedisError, RedisResult, Value};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
@@ -160,4 +160,35 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
     let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
     let _ = tracing_subscriber::fmt::try_init();
     return logger_level.into();
+}
+
+#[napi]
+struct RustParser {
+    parser: Parser,
+}
+
+#[napi]
+impl RustParser {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        RustParser {
+            parser: Parser::new(),
+        }
+    }
+
+    #[napi]
+    pub fn parse(&mut self, js_env: Env, array: Uint8Array) -> Result<JsObject> {
+        let result = self
+            .parser
+            .parse_value(array.as_ref())
+            .and_then(|redis_value| match redis_value {
+                Value::Nil => Null,
+                Value::Status(str) => js_env.create_string_from_std(str),
+                Value::Okay => js_env.create_string("OK"),
+                Value::Int(num) => js_env.create_int64(num),
+                Value::Data(data) => js_env.create_arraybuffer(data.len()), //TODO
+                Value::Bulk(bulk) => js_env.create_array_with_length(bulk.len()), //TODO
+            });
+        to_js_result(result)
+    }
 }
