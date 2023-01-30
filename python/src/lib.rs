@@ -13,11 +13,11 @@ struct AsyncClient {
 #[pyclass]
 #[derive(PartialEq, PartialOrd, Clone)]
 pub enum Level {
-    Debug = 3,
     Error = 0,
-    Info = 2,
-    Trace = 4,
     Warn = 1,
+    Info = 2,
+    Debug = 3,
+    Trace = 4,
 }
 
 #[allow(dead_code)]
@@ -148,7 +148,7 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Level>()?;
 
     #[pyfn(m)]
-    fn py_log(log_level: Option<Level>, log_identifier: String, message: String) {
+    fn py_log(log_level: Level, log_identifier: String, message: String) {
         log(log_level, log_identifier, message);
     }
 
@@ -179,43 +179,35 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
 
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
-        into_level(level)
+        match level {
+            logger_core::Level::Error => Level::Error,
+            logger_core::Level::Warn => Level::Warn,
+            logger_core::Level::Info => Level::Info,
+            logger_core::Level::Debug => Level::Debug,
+            logger_core::Level::Trace => Level::Trace,
+        }
     }
 }
 
-fn into_logger_level(level: Option<Level>) -> Option<logger_core::Level> {
-    match level {
-        None => None,
-        Some(Level::Debug) => Some(logger_core::Level::Debug),
-        Some(Level::Error) => Some(logger_core::Level::Error),
-        Some(Level::Warn) => Some(logger_core::Level::Warn),
-        Some(Level::Info) => Some(logger_core::Level::Info),
-        Some(Level::Trace) => Some(logger_core::Level::Trace),
-    }
-}
-
-fn into_level(level: logger_core::Level) -> Level {
-    match level {
-        logger_core::Level::Debug => Level::Debug,
-        logger_core::Level::Error => Level::Error,
-        logger_core::Level::Warn => Level::Warn,
-        logger_core::Level::Info => Level::Info,
-        logger_core::Level::Trace => Level::Trace,
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> logger_core::Level {
+        match level {
+            Level::Error => logger_core::Level::Error,
+            Level::Warn => logger_core::Level::Warn,
+            Level::Info => logger_core::Level::Info,
+            Level::Debug => logger_core::Level::Debug,
+            Level::Trace => logger_core::Level::Trace,
+        }
     }
 }
 
 #[pyfunction]
-pub fn log(log_level: Option<Level>, log_identifier: String, message: String) {
-    logger_core::log(
-        into_logger_level(log_level).unwrap(),
-        &log_identifier,
-        &message,
-    );
+pub fn log(log_level: Level, log_identifier: String, message: String) {
+    logger_core::log(log_level.into(), log_identifier, message);
 }
 
 #[pyfunction]
 pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
-    let logger_level = logger_core::init(into_logger_level(level), file_name);
-    let _ = tracing_subscriber::fmt::try_init();
-    return Level::from(logger_level);
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
+    logger_level.into()
 }

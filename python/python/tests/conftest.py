@@ -2,9 +2,13 @@ import pytest
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.async_socket_client import RedisAsyncSocketClient
 from pybushka.config import ClientConfiguration
+from pybushka.Logger import Level as logLevel
+from pybushka.Logger import set_logger_config
 
 default_host = "localhost"
 default_port = 6379
+
+set_logger_config(logLevel.INFO)
 
 
 def pytest_addoption(parser):

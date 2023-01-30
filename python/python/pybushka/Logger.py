@@ -1,6 +1,8 @@
-from .pybushka import Level as internalLevel, py_init, py_log
 from enum import Enum
 from typing import Optional
+
+from .pybushka import Level as internalLevel
+from .pybushka import py_init, py_log
 
 
 class Level(Enum):
@@ -21,8 +23,8 @@ class Logger(object):
     _instance = None
     logger_level = None
 
-    def __init__(self, level: Optional[Level], file_name: str = None) -> super:
-        if not (level == None):
+    def __init__(self, level: Optional[Level] = None, file_name: str = None) -> super:
+        if level is not None:
             level = level.value
         Logger.logger_level = py_init(level, file_name)
 
@@ -30,7 +32,7 @@ class Logger(object):
     # The logger will filter all logs with a level lower than the given level,
     # If given a file_name argument, will write the logs to files postfixed with file_name. If file_name isn't provided, the logs will be written to the console.
     @staticmethod
-    def init(level: Optional[Level], file_name: str = None) -> super:
+    def init(level: Optional[Level] = None, file_name: str = None) -> super:
         if Logger._instance:
             return Logger._instance
         Logger._instance = Logger(level, file_name)
@@ -50,7 +52,7 @@ class Logger(object):
     # the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
     # the file_name argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
     @staticmethod
-    def set_config(level: Optional[Level], file_name: str = None) -> super:
+    def set_config(level: Optional[Level] = None, file_name: str = None) -> super:
         Logger._instance = Logger(level, file_name)
         return
 
@@ -69,5 +71,5 @@ class Logger(object):
 
 # This function is the interface for logging that will be provided to external user
 # for more details see setConfig function above
-def set_logger_config(level: Optional[Level], file_name: str = None):
+def set_logger_config(level: Optional[Level] = None, file_name: str = None):
     Logger.set_config(level, file_name)
