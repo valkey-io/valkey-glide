@@ -54,38 +54,9 @@ fdescribe("Parsing", () => {
         expect(rustResult).toEqual(expected);
     };
 
-    const time = (rustFun, nodeFun) => {
+    const time = (prefix, array) => {
         const rustTiming = [0, 0];
         const nodeTiming = [0, 0];
-
-        for (let i = 0; i < 1000000; i++) {
-            let tic = process.hrtime();
-            rustFun(i);
-            let toc = process.hrtime(tic);
-            rustTiming[0] = rustTiming[0] + toc[0];
-            rustTiming[1] = rustTiming[1] + toc[1];
-
-            tic = process.hrtime();
-            nodeFun(i);
-            toc = process.hrtime(tic);
-            nodeTiming[0] = nodeTiming[0] + toc[0];
-            nodeTiming[1] = nodeTiming[1] + toc[1];
-        }
-
-        const rustMilliseconds = rustTiming[0] * 1000 + rustTiming[1] / 1000000;
-        const nodeMilliseconds = nodeTiming[0] * 1000 + nodeTiming[1] / 1000000;
-        console.log("rust: " + rustMilliseconds);
-        console.log("node: " + nodeMilliseconds);
-    };
-
-    it("timing", () => {
-        const array = [
-            "$-1\r\n",
-            "+OKdk\r\n",
-            ":1000\r\n",
-            "*5\r\n:11\r\n:222\r\n:3333\r\n:44444\r\n$7\r\nhello\r\n\r\n",
-            "$48\r\nhello\r\nhello\r\nhello\r\n汉字\r\nhello\r\nhello\r\nhello\r\n",
-        ].map((val) => encoder.encode(val));
 
         const rustParser = new RustParser();
         const nodeParser = new JavascriptRedisParser({
@@ -95,14 +66,67 @@ fdescribe("Parsing", () => {
             },
         });
 
-        time(
-            (index) => {
-                rustParser.parse(array[index % array.length]);
-            },
-            (index) => {
-                nodeParser.execute(array[index % array.length]);
-            }
+        for (let i = 0; i < 10000; i++) {
+            let tic = process.hrtime();
+            rustParser.parse(array[i % array.length]);
+            let toc = process.hrtime(tic);
+            rustTiming[0] = rustTiming[0] + toc[0];
+            rustTiming[1] = rustTiming[1] + toc[1];
+
+            tic = process.hrtime();
+            nodeParser.execute(array[i % array.length]);
+            toc = process.hrtime(tic);
+            nodeTiming[0] = nodeTiming[0] + toc[0];
+            nodeTiming[1] = nodeTiming[1] + toc[1];
+        }
+
+        const rustMilliseconds = rustTiming[0] * 1000000 + rustTiming[1] / 1000;
+        const nodeMilliseconds = nodeTiming[0] * 1000000 + nodeTiming[1] / 1000;
+        console.log(
+            `${prefix}  rust: ${rustMilliseconds}us, node: ${nodeMilliseconds}us`
         );
+    };
+
+    it("timing", () => {
+        const randomString = (length) => {
+            let result = "+";
+            const chars =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/!@#$%^&*()[]<>{}";
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(
+                    Math.floor(Math.random() * chars.length)
+                );
+            }
+            return result + "\r\n";
+        };
+
+        const array = [
+            "$-1\r\n",
+            randomString(10),
+            ":1000\r\n",
+            `*5\r\n:11\r\n:222\r\n:3333\r\n:44444\r\n$7\r\nhello\r\n\r\n`,
+            "$48\r\nhello\r\nhello\r\nhello\r\n汉字\r\nhello\r\nhello\r\nhello\r\n",
+        ].map((val) => encoder.encode(val));
+
+        time("short", array);
+
+        const count = 1000;
+        let longArrayValue = `*${count}\r\n`;
+        for (let i = 0; i < count; i++) {
+            longArrayValue += randomString(500);
+        }
+        let longArrayBulk = ``;
+        for (let i = 0; i < count; i++) {
+            longArrayBulk += randomString(500);
+        }
+        longArrayBulk = `$${longArrayBulk.length}\r\n${longArrayBulk}\r\n`;
+        const longArray = [
+            randomString(20000),
+            longArrayValue,
+            longArrayBulk,
+        ].map((val) => encoder.encode(val));
+
+        time("long", longArray);
     });
 
     it("should parse nil", () => {
