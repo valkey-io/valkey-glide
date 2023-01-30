@@ -126,39 +126,37 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
-fn into_logger_level(level: Option<Level>) -> Option<logger_core::Level> {
-    match level {
-        None => None,
-        Some(Level::Debug) => Some(logger_core::Level::Debug),
-        Some(Level::Error) => Some(logger_core::Level::Error),
-        Some(Level::Warn) => Some(logger_core::Level::Warn),
-        Some(Level::Info) => Some(logger_core::Level::Info),
-        Some(Level::Trace) => Some(logger_core::Level::Trace),
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::Error,
+            logger_core::Level::Warn => Level::Warn,
+            logger_core::Level::Info => Level::Info,
+            logger_core::Level::Debug => Level::Debug,
+            logger_core::Level::Trace => Level::Trace,
+        }
     }
 }
 
-fn into_level(level: logger_core::Level) -> Level {
-    match level {
-        logger_core::Level::Debug => Level::Debug,
-        logger_core::Level::Error => Level::Error,
-        logger_core::Level::Warn => Level::Warn,
-        logger_core::Level::Info => Level::Info,
-        logger_core::Level::Trace => Level::Trace,
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> logger_core::Level {
+        match level {
+            Level::Error => logger_core::Level::Error,
+            Level::Warn => logger_core::Level::Warn,
+            Level::Info => logger_core::Level::Info,
+            Level::Debug => logger_core::Level::Debug,
+            Level::Trace => logger_core::Level::Trace,
+        }
     }
 }
 
 #[napi]
-pub fn log(log_level: Option<Level>, log_identifier: String, message: String) {
-    logger_core::log(
-        into_logger_level(log_level).unwrap(),
-        &log_identifier,
-        &message,
-    );
+pub fn log(log_level: Level, log_identifier: String, message: String) {
+    logger_core::log(log_level.into(), log_identifier, message);
 }
 
 #[napi(js_name = "InitInternalLogger")]
 pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
-    let logger_level = logger_core::init(into_logger_level(level), file_name);
-    let _ = tracing_subscriber::fmt::try_init();
-    return into_level(logger_level);
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
+    logger_level.into()
 }
