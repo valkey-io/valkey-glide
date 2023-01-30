@@ -5,7 +5,7 @@ import async_timeout
 from pybushka.commands.core import CoreCommands
 from pybushka.config import ClientConfiguration
 from pybushka.utils import to_url
-from pybushka.Logger import Logger
+from pybushka.Logger import Logger, Level
 
 from .pybushka import (
     HEADER_LENGTH_IN_BYTES,
@@ -42,7 +42,7 @@ class RedisAsyncSocketClient(CoreCommands):
         start_socket_listener_external(init_callback=init_callback)
 
         # will log if the logger was created (wrapper or costumer) on info level or higher
-        Logger.log("info", "connection info", "new connection established")
+        Logger.log(Level.INFO, "connection info", "new connection established")
 
         # Wait for the socket listener to complete its initialization
         await init_future

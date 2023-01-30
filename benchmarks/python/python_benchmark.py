@@ -14,6 +14,7 @@ from pybushka import (
     RedisAsyncFFIClient,
     RedisAsyncSocketClient,
     set_logger_config,
+    Level,
 )
 
 
@@ -212,7 +213,7 @@ async def main(
     host,
 ):
     # Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
-    set_logger_config("info", "first.log")
+    set_logger_config(Level.INFO, "first.log")
 
     if clients_to_run == "all":
         # Redis-py
