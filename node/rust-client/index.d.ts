@@ -37,3 +37,7 @@ export class AsyncClient {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
 }
+export class RustParser {
+  constructor()
+  parse(array: Uint8Array): unknown
+}

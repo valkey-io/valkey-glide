@@ -1,7 +1,7 @@
 use babushka::headers::HEADER_END;
 use babushka::start_socket_listener;
-use napi::bindgen_prelude::{Null, ToNapiValue, Uint8Array};
-use napi::{Env, Error, JsObject, JsUndefined, Result, Status};
+use napi::bindgen_prelude::{ToNapiValue, Uint8Array};
+use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Parser, RedisError, RedisResult, Value};
@@ -170,6 +170,7 @@ struct RustParser {
 #[napi]
 impl RustParser {
     #[napi(constructor)]
+    #[allow(dead_code)]
     pub fn new() -> Self {
         RustParser {
             parser: Parser::new(),
@@ -177,18 +178,22 @@ impl RustParser {
     }
 
     #[napi]
-    pub fn parse(&mut self, js_env: Env, array: Uint8Array) -> Result<JsObject> {
-        let result = self
-            .parser
-            .parse_value(array.as_ref())
-            .and_then(|redis_value| match redis_value {
-                Value::Nil => Null,
-                Value::Status(str) => js_env.create_string_from_std(str),
-                Value::Okay => js_env.create_string("OK"),
-                Value::Int(num) => js_env.create_int64(num),
-                Value::Data(data) => js_env.create_arraybuffer(data.len()), //TODO
-                Value::Bulk(bulk) => js_env.create_array_with_length(bulk.len()), //TODO
-            });
-        to_js_result(result)
+    #[allow(dead_code)]
+    pub fn parse(&mut self, js_env: Env, array: Uint8Array) -> Result<JsUnknown> {
+        let result = to_js_result(self.parser.parse_value(array.as_ref()))?;
+        match result {
+            Value::Nil => js_env.get_undefined().map(|val| val.into_unknown()),
+            Value::Status(str) => js_env
+                .create_string_from_std(str)
+                .map(|val| val.into_unknown()),
+            Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
+            Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
+            Value::Data(data) => js_env
+                .create_arraybuffer(data.len())
+                .map(|val| val.into_unknown()), //TODO
+            Value::Bulk(bulk) => js_env
+                .create_array_with_length(bulk.len())
+                .map(|val| val.into_unknown()), //TODO
+        }
     }
 }
