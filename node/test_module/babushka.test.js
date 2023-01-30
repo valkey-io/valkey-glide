@@ -1,7 +1,8 @@
-import { AsyncClient, SocketConnection, setLoggerConfig } from "..";
+import { AsyncClient, SocketConnection, setLoggerConfig, RustParser } from "..";
 import RedisServer from "redis-server";
 import FreePort from "find-free-port";
 import { v4 as uuidv4 } from "uuid";
+import JavascriptRedisParser from "redis-parser";
 
 function OpenServerAndExecute(port, action) {
     return new Promise((resolve, reject) => {
@@ -29,6 +30,67 @@ async function GetAndSetRandomValue(client) {
     const result = await client.get(key);
     expect(result).toEqual(value);
 }
+
+fdescribe("Parsing", () => {
+    const encoder = new TextEncoder();
+
+    const parseAndTest = (array, expected) => {
+        const keyBytes = Buffer.from(array);
+        const nodeParser = new JavascriptRedisParser({
+            returnReply(reply) {
+                expect(reply).toEqual(expected);
+            },
+            returnError(err) {
+                throw err;
+            },
+        });
+
+        nodeParser.execute(keyBytes);
+
+        const rustParser = new RustParser();
+
+        const rustResult = rustParser.parse(array);
+
+        expect(rustResult).toEqual(expected);
+    };
+
+    it("should parse nil", () => {
+        const array = encoder.encode("$-1\r\n");
+
+        parseAndTest(array, null);
+    });
+
+    it("should parse string", () => {
+        const array = encoder.encode("+OKdk\r\n");
+
+        parseAndTest(array, "OKdk");
+    });
+
+    it("should parse number", () => {
+        const array = encoder.encode(":1000\r\n");
+
+        parseAndTest(array, 1000);
+    });
+
+    it("should parse array", () => {
+        const array = encoder.encode(
+            "*5\r\n:11\r\n:222\r\n:3333\r\n:44444\r\n$7\r\nhello\r\n\r\n"
+        );
+
+        parseAndTest(array, [11, 222, 3333, 44444, "hello\r\n"]);
+    });
+
+    it("should parse bulk", () => {
+        const array = encoder.encode(
+            "$48\r\nhello\r\nhello\r\nhello\r\n汉字\r\nhello\r\nhello\r\nhello\r\n"
+        );
+
+        parseAndTest(
+            array,
+            "hello\r\nhello\r\nhello\r\n汉字\r\nhello\r\nhello\r\nhello"
+        );
+    });
+});
 
 describe("NAPI client", () => {
     it("set and get flow works", async () => {

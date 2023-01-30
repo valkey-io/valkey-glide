@@ -50,11 +50,11 @@ struct AsyncClient {
     runtime: Runtime,
 }
 
-fn to_js_error(err: RedisError) -> Error {
+fn to_js_error(err: impl std::error::Error) -> Error {
     napi::Error::new(Status::Unknown, err.to_string())
 }
 
-fn to_js_result<T>(result: RedisResult<T>) -> Result<T> {
+fn to_js_result<T, E: std::error::Error>(result: std::result::Result<T, E>) -> Result<T> {
     result.map_err(to_js_error)
 }
 
@@ -177,23 +177,32 @@ impl RustParser {
         }
     }
 
-    #[napi]
-    #[allow(dead_code)]
-    pub fn parse(&mut self, js_env: Env, array: Uint8Array) -> Result<JsUnknown> {
-        let result = to_js_result(self.parser.parse_value(array.as_ref()))?;
-        match result {
-            Value::Nil => js_env.get_undefined().map(|val| val.into_unknown()),
+    fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
+        match val {
+            Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
             Value::Status(str) => js_env
                 .create_string_from_std(str)
                 .map(|val| val.into_unknown()),
             Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
             Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
-            Value::Data(data) => js_env
-                .create_arraybuffer(data.len())
-                .map(|val| val.into_unknown()), //TODO
-            Value::Bulk(bulk) => js_env
-                .create_array_with_length(bulk.len())
-                .map(|val| val.into_unknown()), //TODO
+            Value::Data(data) => {
+                let str = to_js_result(str::from_utf8(data.as_ref()))?;
+                js_env.create_string(str).map(|val| val.into_unknown())
+            }
+            Value::Bulk(bulk) => {
+                let mut js_array = js_env.create_array_with_length(bulk.len())?;
+                for (index, item) in bulk.into_iter().enumerate() {
+                    js_array.set_element(index as u32, Self::redis_value_to_js(item, js_env)?)?;
+                }
+                Ok(js_array.into_unknown())
+            }
         }
+    }
+
+    #[napi]
+    #[allow(dead_code)]
+    pub fn parse(&mut self, js_env: Env, array: Uint8Array) -> Result<JsUnknown> {
+        to_js_result(self.parser.parse_value(array.as_ref()))
+            .and_then(|val| Self::redis_value_to_js(val, js_env))
     }
 }

@@ -264,6 +264,7 @@
         "queue-microtask": "^1.2.3",
         "react-is": "^18.2.0",
         "read-pkg": "^3.0.0",
+        "redis-parser": "^3.0.0",
         "redis-server": "^1.2.2",
         "regexpp": "^3.2.0",
         "require-directory": "^2.1.1",
