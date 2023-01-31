@@ -2,11 +2,19 @@ use babushka::start_socket_listener;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult};
 use std::{
-    ffi::{c_int, c_void, CStr, CString},
+    ffi::{c_void, CStr, CString},
     os::raw::c_char,
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+
+pub enum Level {
+    Error = 0,
+    Warn = 1,
+    Info = 2,
+    Debug = 3,
+    Trace = 4,
+}
 
 pub struct Connection {
     connection: MultiplexedConnection,
@@ -136,66 +144,70 @@ pub extern "C" fn start_socket_listener_wrapper(
     });
 }
 
-fn into_logger_level(level: i32) -> Option<logger_core::Level> {
-    match level {
-        0 => Some(logger_core::Level::Error),
-        1 => Some(logger_core::Level::Warn),
-        2 => Some(logger_core::Level::Info),
-        3 => Some(logger_core::Level::Debug),
-        4 => Some(logger_core::Level::Trace),
-        _ => None,
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::Error,
+            logger_core::Level::Warn => Level::Warn,
+            logger_core::Level::Info => Level::Info,
+            logger_core::Level::Debug => Level::Debug,
+            logger_core::Level::Trace => Level::Trace,
+        }
     }
 }
 
-fn into_level(level: logger_core::Level) -> i32 {
-    match level {
-        logger_core::Level::Error => 0,
-        logger_core::Level::Warn => 1,
-        logger_core::Level::Info => 2,
-        logger_core::Level::Debug => 3,
-        logger_core::Level::Trace => 4,
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> logger_core::Level {
+        match level {
+            Level::Error => logger_core::Level::Error,
+            Level::Warn => logger_core::Level::Warn,
+            Level::Info => logger_core::Level::Info,
+            Level::Debug => logger_core::Level::Debug,
+            Level::Trace => logger_core::Level::Trace,
+        }
     }
 }
 
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-pub extern "C" fn log(log_level: c_int, log_identifier: *const c_char, message: *const c_char) {
+/// # Safety
+/// Unsafe function because creating string from pointer
+pub unsafe extern "C" fn log(
+    log_level: Level,
+    log_identifier: *const c_char,
+    message: *const c_char,
+) {
     unsafe {
         logger_core::log(
-            into_logger_level(log_level).unwrap(),
+            log_level.into(),
             CStr::from_ptr(log_identifier)
                 .to_str()
-                .expect("Can not read string argument."),
+                .expect("Can not read log_identifier argument."),
             CStr::from_ptr(message)
                 .to_str()
-                .expect("Can not read string argument."),
+                .expect("Can not read message argument."),
         );
     }
 }
 
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
-pub extern "C" fn init(level: c_int, file_name: *const c_char) -> i32 {
+/// # Safety
+/// Unsafe function because creating string from pointer
+pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
     let file_name_as_str;
     unsafe {
-        if file_name.is_null() {
-            println!(
-                "{}",
-                CStr::from_ptr(file_name)
-                    .to_str()
-                    .expect("Can not read string argument.")
-            );
-            file_name_as_str = None;
+        file_name_as_str = if file_name.is_null() {
+            None
         } else {
-            file_name_as_str = Some(
+            Some(
                 CStr::from_ptr(file_name)
                     .to_str()
                     .expect("Can not read string argument."),
-            );
-        }
+            )
+        };
 
-        let logger_level = logger_core::init(into_logger_level(level), file_name_as_str);
-        let _ = tracing_subscriber::fmt::try_init();
-        return into_level(logger_level);
+        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
+        logger_level.into()
     }
 }

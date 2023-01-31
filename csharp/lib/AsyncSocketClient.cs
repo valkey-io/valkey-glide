@@ -19,7 +19,7 @@ namespace babushka
             var socket = await GetSocketAsync(socketName, address);
 
             // if logger has been initialized by the external-user on info level this log will be shown
-            Logger.log("info", "connection info", "new connection established");
+            Logger.Log(Level.Info, "connection info", "new connection established");
             return new AsyncSocketClient(socket);
         }
 
