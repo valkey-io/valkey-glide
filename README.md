@@ -53,3 +53,8 @@ To solve this issue, you have two options -
 
 1. Allocate more storage to your'e machine. for me the case was allocating from 500 gb to 1000 gb.
 2. Go to benchmarks/install_and_test.sh and change the "dataSize="100 4000"" to a data-size that your machine can handle. try for example dataSize="100 1000".
+
+## Additional packages
+
+For python, run `sudo apt install python3.10-venv` (with the relevant python version), in order to be able to create a virtual environment.
+In order to run rust-analyzer through remote VScode, you need to run `sudo apt install pkg-config libssl-dev`.
