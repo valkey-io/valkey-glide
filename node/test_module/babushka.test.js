@@ -1,4 +1,4 @@
-import { AsyncClient, SocketConnection } from "..";
+import { AsyncClient, SocketConnection, setLoggerConfig } from "..";
 import RedisServer from "redis-server";
 import FreePort from "find-free-port";
 import { v4 as uuidv4 } from "uuid";
@@ -16,6 +16,10 @@ function OpenServerAndExecute(port, action) {
         });
     });
 }
+
+beforeAll(() => {
+    setLoggerConfig("info");
+});
 
 async function GetAndSetRandomValue(client) {
     const key = uuidv4();
