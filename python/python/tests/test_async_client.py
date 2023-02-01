@@ -4,6 +4,10 @@ import string
 from datetime import datetime
 
 import pytest
+from pybushka.Logger import Level as logLevel
+from pybushka.Logger import set_logger_config
+
+set_logger_config(logLevel.INFO)
 
 
 def get_random_string(length):

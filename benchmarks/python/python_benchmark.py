@@ -9,7 +9,13 @@ from enum import Enum
 from statistics import mean
 import numpy as np
 import redis.asyncio as redispy
-from pybushka import ClientConfiguration, RedisAsyncFFIClient, RedisAsyncSocketClient
+from pybushka import (
+    ClientConfiguration,
+    RedisAsyncFFIClient,
+    RedisAsyncSocketClient,
+    LogLevel,
+    set_logger_config,
+)
 
 
 class ChosenAction(Enum):
@@ -206,6 +212,9 @@ async def main(
     clients_to_run,
     host,
 ):
+    # Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
+    set_logger_config(LogLevel.INFO, "first.log")
+
     if clients_to_run == "all":
         # Redis-py
         redispy_client = await redispy.Redis(
