@@ -1,10 +1,14 @@
-import { SocketConnection, BabushkaInternal } from "..";
+import { SocketConnection, BabushkaInternal, setLoggerConfig } from "..";
 import net from "net";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
 const { HEADER_LENGTH_IN_BYTES, ResponseType, RequestType } = BabushkaInternal;
+
+beforeAll(() => {
+    setLoggerConfig("info");
+});
 
 function sendResponse(socket, responseType, callbackIndex, message = "") {
     const length = HEADER_LENGTH_IN_BYTES + message.length;
