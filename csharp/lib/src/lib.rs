@@ -33,7 +33,6 @@ fn create_connection_internal(
     let client = redis::Client::open(address_string)?;
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .worker_threads(1)
         .thread_name("Babushka C# thread")
         .build()?;
     let _runtime_handle = runtime.enter();
