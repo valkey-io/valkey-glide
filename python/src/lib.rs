@@ -11,6 +11,24 @@ struct AsyncClient {
 }
 
 #[pyclass]
+#[derive(PartialEq, PartialOrd, Clone)]
+pub enum Level {
+    Error = 0,
+    Warn = 1,
+    Info = 2,
+    Debug = 3,
+    Trace = 4,
+}
+
+#[allow(dead_code)]
+#[pymethods]
+impl Level {
+    fn is_lower(&self, level: &Level) -> bool {
+        self <= level
+    }
+}
+
+#[pyclass]
 enum PyRequestType {
     /// Type of a server address request
     ServerAddress = RequestType::ServerAddress as isize,
@@ -127,6 +145,17 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyRequestType>()?;
     m.add_class::<PyResponseType>()?;
     m.add("HEADER_LENGTH_IN_BYTES", HEADER_END).unwrap();
+    m.add_class::<Level>()?;
+
+    #[pyfn(m)]
+    fn py_log(log_level: Level, log_identifier: String, message: String) {
+        log(log_level, log_identifier, message);
+    }
+
+    #[pyfn(m)]
+    fn py_init(level: Option<Level>, file_name: Option<&str>) -> Level {
+        init(level, file_name)
+    }
 
     #[pyfn(m)]
     fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
@@ -146,4 +175,39 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     }
 
     Ok(())
+}
+
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::Error,
+            logger_core::Level::Warn => Level::Warn,
+            logger_core::Level::Info => Level::Info,
+            logger_core::Level::Debug => Level::Debug,
+            logger_core::Level::Trace => Level::Trace,
+        }
+    }
+}
+
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> logger_core::Level {
+        match level {
+            Level::Error => logger_core::Level::Error,
+            Level::Warn => logger_core::Level::Warn,
+            Level::Info => logger_core::Level::Info,
+            Level::Debug => logger_core::Level::Debug,
+            Level::Trace => logger_core::Level::Trace,
+        }
+    }
+}
+
+#[pyfunction]
+pub fn log(log_level: Level, log_identifier: String, message: String) {
+    logger_core::log(log_level.into(), log_identifier, message);
+}
+
+#[pyfunction]
+pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
+    let logger_level = logger_core::init(level.map(|level| level.into()), file_name);
+    logger_level.into()
 }
