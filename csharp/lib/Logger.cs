@@ -42,7 +42,7 @@ namespace babushka
         // Initialize a logger instance if none were initialized before - this method is meant to be used when there is no intention to replace an existing logger.
         // The logger will filter all logs with a level lower than the given level,
         // If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided, the logs will be written to the console.
-        internal static Logger Init(Level? level, string? filename)
+        internal static void Init(Level? level, string? filename = null)
         {
             if (Logger._instance is null)
             {
@@ -74,7 +74,7 @@ namespace babushka
         // 2. external user want to set the logger and we don't want to return to him the logger itself, just config it
         // the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
         // the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
-        public static void SetConfig(Level? level, string? fileName)
+        public static void SetConfig(Level? level, string? fileName = null)
         {
             Logger._instance = new Logger(level, fileName);
         }
