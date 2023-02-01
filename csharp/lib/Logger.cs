@@ -26,17 +26,8 @@ namespace babushka
     {
         #region private fields
 
-        private static Logger? _instance = null;
         private static Level? loggerLevel = null;
         #endregion private fields
-
-        #region private methods
-        private Logger(Level? level, string? filename)
-        {
-            var buffer = filename is null ? null : Encoding.UTF8.GetBytes(filename);
-            Logger.loggerLevel = InitInternalLogger(Convert.ToInt32(level), buffer);
-        }
-        #endregion private methods
 
         #region internal methods
         // Initialize a logger instance if none were initialized before - this method is meant to be used when there is no intention to replace an existing logger.
@@ -44,11 +35,10 @@ namespace babushka
         // If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided, the logs will be written to the console.
         internal static void Init(Level? level, string? filename = null)
         {
-            if (Logger._instance is null)
+            if (Logger.loggerLevel is null)
             {
-                Logger._instance = new Logger(level, filename);
+                SetConfig(level, filename);
             }
-            return Logger._instance;
         }
 
         // take the arguments from the user and provide to the core-logger (see ../logger-core)
@@ -58,9 +48,9 @@ namespace babushka
         // when the log is connect to certain task the identifier should be the task id, when the log is not part of specific task the identifier should give a context to the log - for example, "socket connection".
         internal static void Log(Level logLevel, string logIdentifier, string message)
         {
-            if (Logger._instance == null)
+            if (Logger.loggerLevel is null)
             {
-                Logger._instance = new Logger(null, null);
+                SetConfig(logLevel);
             }
             if (!(logLevel <= Logger.loggerLevel)) return;
             log(Convert.ToInt32(logLevel), Encoding.UTF8.GetBytes(logIdentifier), Encoding.UTF8.GetBytes(message));
@@ -74,9 +64,10 @@ namespace babushka
         // 2. external user want to set the logger and we don't want to return to him the logger itself, just config it
         // the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
         // the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
-        public static void SetConfig(Level? level, string? fileName = null)
+        public static void SetConfig(Level? level, string? filename = null)
         {
-            Logger._instance = new Logger(level, fileName);
+            var buffer = filename is null ? null : Encoding.UTF8.GetBytes(filename);
+            Logger.loggerLevel = InitInternalLogger(Convert.ToInt32(level), buffer);
         }
         #endregion public methods
 
