@@ -2,9 +2,8 @@
 
 namespace babushka
 {
-    public class AsyncClient
+    public class AsyncClient : IDisposable
     {
-
         #region public methods
         public AsyncClient(string address)
         {
@@ -31,6 +30,17 @@ namespace babushka
             var (message, task) = messageContainer.GetMessageForCall(key, null);
             GetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr);
             return task;
+        }
+
+        public void Dispose()
+        {
+            if (connectionPointer == IntPtr.Zero)
+            {
+                return;
+            }
+            messageContainer.DisposeWithError(null);
+            CloseConnectionFfi(connectionPointer);
+            connectionPointer = IntPtr.Zero;
         }
 
         #endregion public methods
@@ -60,11 +70,12 @@ namespace babushka
 
         ~AsyncClient()
         {
-            CloseConnectionFfi(connectionPointer);
+            Dispose();
         }
         #endregion private methods
 
         #region private fields
+
         /// Held as a measure to prevent the delegate being garbage collected. These are delegated once
         /// and held in order to prevent the cost of marshalling on each function call.
         private FailureAction failureCallbackDelegate;
@@ -74,7 +85,7 @@ namespace babushka
         private StringAction successCallbackDelegate;
 
         /// Raw pointer to the underlying native connection.
-        private readonly IntPtr connectionPointer;
+        private IntPtr connectionPointer;
 
         private readonly MessageContainer messageContainer = new();
 
@@ -96,6 +107,7 @@ namespace babushka
 
         [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_connection")]
         private static extern void CloseConnectionFfi(IntPtr connection);
+
         #endregion
     }
 }
