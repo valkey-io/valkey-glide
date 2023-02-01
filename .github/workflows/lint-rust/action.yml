@@ -36,7 +36,7 @@ runs:
         - run: |
               cargo install cargo-deny
               cd ${{ inputs.cargo-toml-folder }}
-              cargo deny check licenses
+              cargo deny check licenses --config ${GITHUB_WORKSPACE}/deny.toml
           shell: bash
 
         - name: doc
