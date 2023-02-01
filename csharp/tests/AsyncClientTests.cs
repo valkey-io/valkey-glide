@@ -51,6 +51,36 @@ public class AsyncClientTests
             Assert.That(result, Is.EqualTo(null));
         }
     }
+
+    [Test]
+    public async Task GetReturnsEmptyString()
+    {
+        using (var client = new AsyncClient("redis://localhost:6379"))
+        {
+            var key = Guid.NewGuid().ToString();
+            var value = "";
+            await client.SetAsync(key, value);
+            var result = await client.GetAsync(key);
+            Assert.That(result, Is.EqualTo(value));
+        }
+    }
+
+    [Test]
+    public async Task HandleVeryLargeInput()
+    {
+        using (var client = new AsyncClient("redis://localhost:6379"))
+        {
+            var key = Guid.NewGuid().ToString();
+            var value = Guid.NewGuid().ToString();
+            const int EXPECTED_SIZE = 2 << 23;
+            while (value.Length < EXPECTED_SIZE)
+            {
+                value += value;
+            }
+            await client.SetAsync(key, value);
+            var result = await client.GetAsync(key);
+            Assert.That(result, Is.EqualTo(value));
+        }
     }
 
     // This test is slow and hardly a unit test, but it caught timing and releasing issues in the past,
