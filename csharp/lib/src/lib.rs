@@ -8,6 +8,14 @@ use std::{
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 
+pub enum Level {
+    Error = 0,
+    Warn = 1,
+    Info = 2,
+    Debug = 3,
+    Trace = 4,
+}
+
 pub struct Connection {
     connection: MultiplexedConnection,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
@@ -67,7 +75,7 @@ pub extern "C" fn set(
     value: *const c_char,
 ) {
     let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
@@ -92,7 +100,7 @@ pub extern "C" fn set(
 #[no_mangle]
 pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key: *const c_char) {
     let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operrations have completed.
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = connection_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
@@ -113,7 +121,7 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
 }
 
 /// Receives a callback function which should be called with a single allocated pointer and a single null pointer.
-/// The first pointer is to a socket name address if startup was succesful, second pointer is to an error message if the process fails.
+/// The first pointer is to a socket name address if startup was successful, second pointer is to an error message if the process fails.
 #[no_mangle]
 pub extern "C" fn start_socket_listener_wrapper(
     init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
@@ -134,4 +142,72 @@ pub extern "C" fn start_socket_listener_wrapper(
             }
         };
     });
+}
+
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::Error,
+            logger_core::Level::Warn => Level::Warn,
+            logger_core::Level::Info => Level::Info,
+            logger_core::Level::Debug => Level::Debug,
+            logger_core::Level::Trace => Level::Trace,
+        }
+    }
+}
+
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> logger_core::Level {
+        match level {
+            Level::Error => logger_core::Level::Error,
+            Level::Warn => logger_core::Level::Warn,
+            Level::Info => logger_core::Level::Info,
+            Level::Debug => logger_core::Level::Debug,
+            Level::Trace => logger_core::Level::Trace,
+        }
+    }
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+/// # Safety
+/// Unsafe function because creating string from pointer
+pub unsafe extern "C" fn log(
+    log_level: Level,
+    log_identifier: *const c_char,
+    message: *const c_char,
+) {
+    unsafe {
+        logger_core::log(
+            log_level.into(),
+            CStr::from_ptr(log_identifier)
+                .to_str()
+                .expect("Can not read log_identifier argument."),
+            CStr::from_ptr(message)
+                .to_str()
+                .expect("Can not read message argument."),
+        );
+    }
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+/// # Safety
+/// Unsafe function because creating string from pointer
+pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) -> Level {
+    let file_name_as_str;
+    unsafe {
+        file_name_as_str = if file_name.is_null() {
+            None
+        } else {
+            Some(
+                CStr::from_ptr(file_name)
+                    .to_str()
+                    .expect("Can not read string argument."),
+            )
+        };
+
+        let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
+        logger_level.into()
+    }
 }

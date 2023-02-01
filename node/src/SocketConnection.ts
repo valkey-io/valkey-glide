@@ -90,7 +90,7 @@ export class SocketConnection {
     }
 
     private constructor(socket: net.Socket) {
-        // Demo - if logger has been initialized by the external-user on info level this log will be shown
+        // if logger has been initialized by the external-user on info level this log will be shown
         Logger.instance.log("info", "connection", `construct socket`);
 
         this.socket = socket;
