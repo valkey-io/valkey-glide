@@ -5,6 +5,11 @@ using babushka;
 // TODO - need to start a new redis server for each test?
 public class AsyncSocketClientTests
 {
+    [OneTimeSetUp]
+    public void Setup()
+    {
+        babushka.Logger.SetConfig(babushka.Level.Info);
+    }
     static Random randomizer = new();
 
     private async Task GetAndSetRandomValues(AsyncSocketClient client)
