@@ -190,14 +190,14 @@ public static class MainClass
             {ChosenAction.SET, new()},
         };
         var data = generate_value(data_size);
-        var ellapsed_milliseconds = await create_bench_tasks(
+        var elapsed_milliseconds = await create_bench_tasks(
             get, set,
             total_commands,
             data,
             num_of_concurrent_tasks,
             action_latencies
         );
-        var tps = Math.Round((double)counter / ((double)ellapsed_milliseconds / 1000));
+        var tps = Math.Round((double)counter / ((double)elapsed_milliseconds / 1000));
 
         var get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING];
         var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
@@ -280,6 +280,8 @@ public static class MainClass
 
     public static async Task Main(string[] args)
     {
+        // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
+        Logger.SetConfig(Level.Info, "first.log");
         CommandLineOptions options = new CommandLineOptions();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
