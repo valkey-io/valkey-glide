@@ -4,3 +4,4 @@ benchmarks/node/*.js
 node/build-ts/src/*.js
 /redis-rs/target/*
 node/rust-client/index.js
+logger_core/target/*
