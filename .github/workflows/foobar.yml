@@ -2,6 +2,9 @@ name: foobar
 on:
     push:
         branches: ["main"]
+    pull_request:
+        paths:
+            - ./github/workflows/**   
 
 env:
     CARGO_TERM_COLOR: always
