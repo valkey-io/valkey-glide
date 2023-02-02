@@ -22,9 +22,3 @@ jobs:
         run: echo "1"
       - name: print2        
         run: echo ${GITHUB_WORKSPACE}
-      - name: print3        
-        run: echo "2"
-      - name: print4        
-        run: echo "2"
-      - name: print5        
-        run: echo ${{GITHUB_WORKSPACE}}
