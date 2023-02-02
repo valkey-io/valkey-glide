@@ -59,8 +59,11 @@ impl AsyncClient {
     #[staticmethod]
     fn create_client(address: String, py: Python) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let client = redis::Client::open(address).unwrap();
-            let multiplexer = client.get_multiplexed_async_connection().await.unwrap();
+            let client = redis::Client::open(address).map_err(to_py_err)?;
+            let multiplexer = client
+                .get_multiplexed_async_connection()
+                .await
+                .map_err(to_py_err)?;
             let client = AsyncClient { multiplexer };
             Ok(Python::with_gil(|py| client.into_py(py)))
         })
