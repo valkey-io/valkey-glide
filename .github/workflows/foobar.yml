@@ -4,7 +4,7 @@ on:
         branches: ["main"]
     pull_request:
         paths:
-            - ./github/workflows/**   
+            - .github/workflows/**   
 
 env:
     CARGO_TERM_COLOR: always
