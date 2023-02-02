@@ -50,6 +50,10 @@ enum PyResponseType {
     ClosingError = ResponseType::ClosingError as isize,
 }
 
+fn to_py_err(err: impl std::error::Error) -> PyErr {
+    PyErr::new::<PyString, _>(err.to_string())
+}
+
 #[pymethods]
 impl AsyncClient {
     #[staticmethod]
@@ -66,13 +70,9 @@ impl AsyncClient {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result: RedisResult<Option<String>> = connection.get(key).await;
-            match result {
-                Ok(result) => match result {
-                    Some(result) => Ok(Python::with_gil(|py| result.into_py(py))),
-                    None => Ok(Python::with_gil(|py| py.None())),
-                },
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
-            }
+            result
+                .map_err(to_py_err)
+                .map(|result| Python::with_gil(|py| result.into_py(py)))
         })
     }
 
@@ -80,10 +80,9 @@ impl AsyncClient {
         let mut connection = self.multiplexer.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result: RedisResult<()> = connection.set(key, value).await;
-            match result {
-                Ok(_) => Ok(Python::with_gil(|py| py.None())),
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
-            }
+            result
+                .map_err(to_py_err)
+                .map(|_| Python::with_gil(|py| py.None()))
         })
     }
 
@@ -130,10 +129,9 @@ impl AsyncPipeline {
         let pipeline = self.internal_pipeline.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result: RedisResult<Vec<String>> = pipeline.query_async(&mut connection).await;
-            match result {
-                Ok(results) => Ok(Python::with_gil(|py| results.into_py(py))),
-                Err(err) => Err(PyErr::new::<PyString, _>(err.to_string())),
-            }
+            result
+                .map_err(to_py_err)
+                .map(|results| Python::with_gil(|py| results.into_py(py)))
         })
     }
 }
