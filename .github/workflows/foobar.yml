@@ -18,12 +18,13 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: print
-        run: |
-            echo "1"
-            echo "1"            
-            echo "1"            
-            echo ${GITHUB_WORKSPACE}
-            echo "1"            
-            echo "2"
-            echo ${{GITHUB_WORKSPACE}}
+      - name: print1
+        run: echo "1"
+      - name: print2        
+        run: echo ${GITHUB_WORKSPACE}
+      - name: print3        
+        run: echo "2"
+      - name: print4        
+        run: echo "2"
+      - name: print5        
+        run: echo ${{GITHUB_WORKSPACE}}
