@@ -37,3 +37,12 @@ export class AsyncClient {
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<void>
 }
+export class Parser {
+  constructor()
+  /**
+   * Parses the first Redis RESP value in the given view.
+   * If the given view is incomplete, and doesn't contain a whole value, an error will be returned.
+   * If the given view contains more than a single value, only the first value will be returned.
+   */
+  parse(arrayView: Uint8Array): null | string | number | any[]
+}

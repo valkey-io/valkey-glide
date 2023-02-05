@@ -237,6 +237,7 @@ const {
   StartSocketConnection,
   log,
   InitInternalLogger,
+  Parser,
 } = nativeBinding
 
 module.exports.Level = Level
@@ -247,3 +248,4 @@ module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log
 module.exports.InitInternalLogger = InitInternalLogger
+module.exports.Parser = Parser
