@@ -58,3 +58,31 @@ To solve this issue, you have two options -
 
 For python, run `sudo apt install python3.10-venv` (with the relevant python version), in order to be able to create a virtual environment.
 In order to run rust-analyzer through remote VScode, you need to run `sudo apt install pkg-config libssl-dev`.
+
+## Recommended VSCode extensions
+
+### General
+
+[GitLens](https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens)
+
+### Rust development
+
+[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language server.
+[CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb) - Debugger.
+[Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) - TOML language support.
+
+### C# development
+
+[C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) - lightweight language server and in-editor test runner.
+
+### TypeScript development
+
+[Prettier - Code formatter](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) -JavaScript / TypeScript formatter.
+[Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
+[Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
+[ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) - linter.
+
+### Python development
+
+[Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) - Language server
+[Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter) - Formatter
