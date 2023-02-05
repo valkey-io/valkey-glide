@@ -28,29 +28,25 @@ with open(output_file_name, "w+") as output_file:
         "set_average_latency",
         "set_std_dev",
     ]
-    python_fields = base_fields + ["loop"]
 
-    writer.writerow(python_fields)
+    writer.writerow(base_fields)
 
     for json_file_full_path in sys.argv[1:-1]:
         with open(json_file_full_path) as file:
-
             json_objects = json.load(file)
 
             json_file_name = os.path.basename(json_file_full_path)
 
             languages = ["csharp", "node", "python"]
             language = next(
-                (language for language in languages if language in json_file_name),
-                None
+                (language for language in languages if language in json_file_name), None
             )
 
             if not language:
                 raise "Unknown language for " + json_file_name
             for json_object in json_objects:
                 json_object["language"] = language
-                relevant_fields = python_fields if language == "python" else base_fields
-                values = [json_object[field] for field in relevant_fields]
+                values = [json_object[field] for field in base_fields]
                 writer.writerow(values)
 
 for json_file_full_path in sys.argv[1:-1]:
