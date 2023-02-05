@@ -26,5 +26,5 @@ node_modules/
 
 install_and_test_cp.sh
 
-logs/
+babushka-logs/
 logger-rs.linux-x64-gnu.node
