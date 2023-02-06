@@ -239,6 +239,8 @@ const {
   InitInternalLogger,
   valueFromPointer,
   stringFromPointer,
+  createLeakedValue,
+  createLeakedString,
 } = nativeBinding
 
 module.exports.Level = Level
@@ -251,3 +253,5 @@ module.exports.log = log
 module.exports.InitInternalLogger = InitInternalLogger
 module.exports.valueFromPointer = valueFromPointer
 module.exports.stringFromPointer = stringFromPointer
+module.exports.createLeakedValue = createLeakedValue
+module.exports.createLeakedString = createLeakedString

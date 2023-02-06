@@ -4,25 +4,44 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const { HEADER_LENGTH_IN_BYTES, ResponseType, RequestType } = BabushkaInternal;
+const {
+    HEADER_LENGTH_IN_BYTES,
+    ResponseType,
+    RequestType,
+    createLeakedString,
+    createLeakedValue,
+} = BabushkaInternal;
 
 beforeAll(() => {
     setLoggerConfig("info");
 });
 
-function sendResponse(socket, responseType, callbackIndex, message = "") {
-    const length = HEADER_LENGTH_IN_BYTES + message.length;
-    let bufferLength = length;
-    if (bufferLength % 4 !== 0) {
-        bufferLength += 4 - (bufferLength % 4);
-    }
-    const buffer = new ArrayBuffer(bufferLength);
+function sendResponse(
+    socket,
+    responseType,
+    callbackIndex,
+    message = undefined
+) {
+    const pointerLength = 8;
+    const length = HEADER_LENGTH_IN_BYTES + (message ? pointerLength : 0);
+    const buffer = new ArrayBuffer(length);
     const response = new Uint32Array(buffer);
     response[0] = length;
     response[1] = callbackIndex;
     response[2] = responseType;
-    const encoder = new TextEncoder();
-    encoder.encodeInto(message, new Uint8Array(buffer, HEADER_LENGTH_IN_BYTES));
+
+    if (message !== undefined) {
+        const view = new DataView(
+            buffer,
+            HEADER_LENGTH_IN_BYTES,
+            pointerLength
+        );
+        const pointer =
+            responseType === ResponseType.Value
+                ? createLeakedValue(message)
+                : createLeakedString(message);
+        view.setBigUint64(0, pointer, true);
+    }
     socket.write(new Uint8Array(buffer));
 }
 
@@ -109,7 +128,7 @@ describe("SocketConnectionInternals", () => {
 
                 sendResponse(
                     socket,
-                    ResponseType.String,
+                    ResponseType.Value,
                     uint32Array[1],
                     expected
                 );
