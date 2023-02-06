@@ -1,4 +1,4 @@
-use babushka::start_socket_listener;
+use babushka::socket_listener_legacy::start_socket_listener;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult};
 use std::{
