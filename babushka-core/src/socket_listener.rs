@@ -31,6 +31,7 @@ pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 #[derive(Clone)]
 struct SocketListener {
     socket_path: String,
+    cleanup_socket: bool,
 }
 
 /// struct containing all objects needed to read from a unix stream.
@@ -301,7 +302,7 @@ async fn handle_requests(
 }
 
 fn close_socket(socket_path: String) {
-    std::fs::remove_file(socket_path).expect("Failed to delete socket file");
+    let _ = std::fs::remove_file(socket_path);
 }
 
 fn to_babushka_result<T, E: std::fmt::Display>(
@@ -423,7 +424,9 @@ async fn listen_on_client_stream(
 
 impl Dispose for SocketListener {
     fn dispose(self) {
-        close_socket(self.socket_path);
+        if self.cleanup_socket {
+            close_socket(self.socket_path);
+        }
     }
 }
 
@@ -431,10 +434,11 @@ impl SocketListener {
     fn new() -> Self {
         SocketListener {
             socket_path: get_socket_path(),
+            cleanup_socket: true,
         }
     }
 
-    pub(crate) async fn listen_on_socket<InitCallback>(&self, init_callback: InitCallback)
+    pub(crate) async fn listen_on_socket<InitCallback>(&mut self, init_callback: InitCallback)
     where
         InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
     {
@@ -443,6 +447,8 @@ impl SocketListener {
             Ok(listener) => listener,
             Err(err) if err.kind() == AddrInUse => {
                 init_callback(Ok(self.socket_path.clone()));
+                // Don't cleanup the socket resources since the socket is being used
+                self.cleanup_socket = false;
                 return;
             }
             Err(err) => {
@@ -545,7 +551,7 @@ where
                 .build();
             match runtime {
                 Ok(runtime) => {
-                    let listener = Disposable::new(SocketListener::new());
+                    let mut listener = Disposable::new(SocketListener::new());
                     runtime.block_on(listener.listen_on_socket(init_callback));
                 }
                 Err(err) => init_callback(Err(err.into())),
