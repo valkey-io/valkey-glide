@@ -21,8 +21,8 @@ export const enum RequestType {
 export const enum ResponseType {
   /** Type of a response that returns a null. */
   Null = 0,
-  /** Type of a response that returns a string. */
-  String = 1,
+  /** Type of a response that returns a value which isn't an error. */
+  Value = 1,
   /** Type of response containing an error that impacts a single request. */
   RequestError = 2,
   /** Type of response containing an error causes the connection to close. */
@@ -32,6 +32,8 @@ export const HEADER_LENGTH_IN_BYTES: number
 export function StartSocketConnection(): Promise<string>
 export function log(logLevel: Level, logIdentifier: string, message: string): void
 export function InitInternalLogger(level?: Level | undefined | null, fileName?: string | undefined | null): Level
+export function valueFromPointer(pointerAsBigint: bigint): null | string | number | any[]
+export function stringFromPointer(pointerAsBigint: bigint): string
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
