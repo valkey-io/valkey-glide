@@ -45,8 +45,8 @@ pub enum RequestType {
 pub enum ResponseType {
     /// Type of a response that returns a null.
     Null = 0,
-    /// Type of a response that returns a string.
-    String = 1,
+    /// Type of a response that returns a redis value, and not an error.
+    Value = 1,
     /// Type of response containing an error that impacts a single request.
     RequestError = 2,
     /// Type of response containing an error causes the connection to close.
