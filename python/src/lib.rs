@@ -1,5 +1,5 @@
 use babushka::headers::{RequestType, ResponseType, HEADER_END};
-use babushka::start_socket_listener;
+use babushka::socket_listener_legacy::start_socket_listener;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use redis::aio::MultiplexedConnection;
