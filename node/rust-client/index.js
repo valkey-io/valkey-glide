@@ -237,6 +237,8 @@ const {
   StartSocketConnection,
   log,
   InitInternalLogger,
+  valueFromPointer,
+  stringFromPointer,
 } = nativeBinding
 
 module.exports.Level = Level
@@ -247,3 +249,5 @@ module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log
 module.exports.InitInternalLogger = InitInternalLogger
+module.exports.valueFromPointer = valueFromPointer
+module.exports.stringFromPointer = stringFromPointer

@@ -1,6 +1,7 @@
 import { BabushkaInternal } from "../";
 import * as net from "net";
 import { Logger } from "./Logger";
+import { stringFromPointer, valueFromPointer } from "babushka-rs-internal";
 const {
     StartSocketConnection,
     HEADER_LENGTH_IN_BYTES,
@@ -60,19 +61,19 @@ export class SocketConnection {
             if (responseType === ResponseType.Null) {
                 resolve(null);
             } else {
-                const valueLength = length - HEADER_LENGTH_IN_BYTES;
-                const keyBytes = Buffer.from(
+                const valuePointerLength = length - HEADER_LENGTH_IN_BYTES;
+                const valueBuffer = new DataView(
                     dataArray.buffer,
-                    counter + HEADER_LENGTH_IN_BYTES,
-                    valueLength
+                    dataArray.byteOffset + counter + HEADER_LENGTH_IN_BYTES,
+                    valuePointerLength
                 );
-                const message = keyBytes.toString("utf8");
-                if (responseType === ResponseType.String) {
-                    resolve(message);
+                const pointer = valueBuffer.getBigUint64(0, true);
+                if (responseType === ResponseType.Value) {
+                    resolve(valueFromPointer(pointer));
                 } else if (responseType === ResponseType.RequestError) {
-                    reject(message);
+                    reject(stringFromPointer(pointer));
                 } else if (responseType === ResponseType.ClosingError) {
-                    this.dispose(message);
+                    this.dispose(stringFromPointer(pointer));
                 }
             }
             counter = counter + length;
