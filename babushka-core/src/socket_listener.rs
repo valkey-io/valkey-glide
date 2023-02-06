@@ -27,11 +27,18 @@ use PipeListeningResult::*;
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 
-/// struct containing all objects needed to listen on a socket.
-#[derive(Clone)]
+/// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
     socket_path: String,
     cleanup_socket: bool,
+}
+
+impl Dispose for SocketListener {
+    fn dispose(self) {
+        if self.cleanup_socket {
+            close_socket(self.socket_path);
+        }
+    }
 }
 
 /// struct containing all objects needed to read from a unix stream.
@@ -67,7 +74,7 @@ impl UnixStreamListener {
             "new socket listener initiated",
         );
         let rotating_buffer = RotatingBuffer::new(2, 65_536);
-        UnixStreamListener {
+        Self {
             read_socket,
             rotating_buffer,
         }
@@ -422,14 +429,6 @@ async fn listen_on_client_stream(
     }
 }
 
-impl Dispose for SocketListener {
-    fn dispose(self) {
-        if self.cleanup_socket {
-            close_socket(self.socket_path);
-        }
-    }
-}
-
 impl SocketListener {
     fn new() -> Self {
         SocketListener {
@@ -519,16 +518,14 @@ async fn handle_signals() {
     // Handle Unix signals
     let mut signals =
         Signals::new([SIGTERM, SIGQUIT, SIGINT, SIGHUP]).expect("Failed creating signals");
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
-                logger_core::log(
-                    logger_core::Level::Info,
-                    "connection",
-                    "Signal received: closing the socket listener",
-                );
+    loop {
+        if let Some(signal) = signals.next().await {
+            match signal {
+                SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
+                    logger_core::log(logger_core::Level::Info, "connection", "Signal received");
+                }
+                _ => continue,
             }
-            sig => unreachable!("Received an unregistered signal `{}`", sig),
         }
     }
 }
