@@ -194,3 +194,18 @@ pub fn value_from_pointer(js_env: Env, pointer_as_bigint: BigInt) -> Result<JsUn
 pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
     *unsafe { Box::from_raw(pointer_as_bigint.get_u64().1 as *mut String) }
 }
+
+#[napi]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+pub fn create_leaked_value(message: String) -> usize {
+    let value = Value::Status(message);
+    Box::leak(Box::new(value)) as *mut Value as usize
+}
+
+#[napi]
+/// This function is for tests that require a string allocated on the heap.
+/// Should NOT be used in production.
+pub fn create_leaked_string(message: String) -> usize {
+    Box::leak(Box::new(message)) as *mut String as usize
+}

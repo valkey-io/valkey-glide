@@ -34,6 +34,16 @@ export function log(logLevel: Level, logIdentifier: string, message: string): vo
 export function InitInternalLogger(level?: Level | undefined | null, fileName?: string | undefined | null): Level
 export function valueFromPointer(pointerAsBigint: bigint): null | string | number | any[]
 export function stringFromPointer(pointerAsBigint: bigint): string
+/**
+ * This function is for tests that require a value allocated on the heap.
+ * Should NOT be used in production.
+ */
+export function createLeakedValue(message: string): bigint
+/**
+ * This function is for tests that require a string allocated on the heap.
+ * Should NOT be used in production.
+ */
+export function createLeakedString(message: string): bigint
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
