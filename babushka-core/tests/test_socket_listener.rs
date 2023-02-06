@@ -17,10 +17,20 @@ use utilities::*;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
+    use redis::Value;
+    use std::mem::size_of;
 
     struct TestBasics {
         _server: RedisServer,
         socket: UnixStream,
+    }
+
+    fn assert_value(buffer: &[u8], cursor: usize, expected: &[u8]) {
+        let pointer = (&buffer[cursor + HEADER_END..cursor + HEADER_END + size_of::<usize>()])
+            .read_u64::<LittleEndian>()
+            .unwrap() as *mut Value;
+        let received_value = unsafe { Box::from_raw(pointer) };
+        assert_eq!(*received_value, Value::Data(expected.to_owned()));
     }
 
     fn send_address(address: String, socket: &UnixStream) {
@@ -162,7 +172,7 @@ mod socket_listener {
         buffer.write_all(key.as_bytes()).unwrap();
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let expected_length = VALUE_LENGTH + HEADER_END;
+        let expected_length = size_of::<usize>() + HEADER_END;
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         unsafe { buffer.set_len(message_length) };
         let size = test_basics.socket.read(&mut buffer).unwrap();
@@ -183,9 +193,9 @@ mod socket_listener {
             (&buffer[CALLBACK_INDEX_END..HEADER_END])
                 .read_u32::<LittleEndian>()
                 .unwrap(),
-            ResponseType::String.to_u32().unwrap()
+            ResponseType::Value.to_u32().unwrap()
         );
-        assert_eq!(&buffer[HEADER_END..VALUE_LENGTH + HEADER_END], value);
+        assert_value(&buffer, 0, &value);
     }
 
     #[test]
@@ -318,7 +328,7 @@ mod socket_listener {
         buffer.write_all(key.as_bytes()).unwrap();
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let expected_length = VALUE_LENGTH + HEADER_END;
+        let expected_length = size_of::<usize>() + HEADER_END;
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         unsafe { buffer.set_len(message_length) };
         let mut size = 0;
@@ -344,9 +354,9 @@ mod socket_listener {
             (&buffer[CALLBACK_INDEX_END..HEADER_END])
                 .read_u32::<LittleEndian>()
                 .unwrap(),
-            ResponseType::String.to_u32().unwrap()
+            ResponseType::Value.to_u32().unwrap()
         );
-        assert_eq!(&buffer[HEADER_END..VALUE_LENGTH + HEADER_END], value);
+        assert_value(&buffer, 0, &value);
     }
 
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
@@ -408,15 +418,12 @@ mod socket_listener {
                                     assert_eq!(results[callback_index], State::Initial);
                                     results[callback_index] = State::ReceivedNull;
                                 }
-                                ResponseType::String => {
+                                ResponseType::Value => {
                                     assert_eq!(results[callback_index], State::ReceivedNull);
 
                                     let values = values_for_read.lock().unwrap();
 
-                                    assert_eq!(
-                                        &buffer[cursor + HEADER_END..cursor + length],
-                                        values[callback_index]
-                                    );
+                                    assert_value(&buffer, cursor, &values[callback_index]);
 
                                     results[callback_index] = State::ReceivedValue;
                                 }
