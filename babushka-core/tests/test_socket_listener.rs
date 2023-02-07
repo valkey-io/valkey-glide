@@ -69,6 +69,46 @@ mod socket_listener {
         buffer.write_all(value).unwrap();
     }
 
+    fn parse_header(buffer: &[u8]) -> (u32, u32, ResponseType) {
+        let message_length = (&buffer[..MESSAGE_LENGTH_END])
+            .read_u32::<LittleEndian>()
+            .unwrap();
+        let callback_index = (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
+            .read_u32::<LittleEndian>()
+            .unwrap();
+        let response_type = (&buffer[CALLBACK_INDEX_END..HEADER_END])
+            .read_u32::<LittleEndian>()
+            .unwrap();
+        let response_type = ResponseType::from_u32(response_type).unwrap();
+        (message_length, callback_index, response_type)
+    }
+
+    fn assert_header(
+        buffer: &[u8],
+        expected_callback: u32,
+        expected_size: usize,
+        expected_response_type: ResponseType,
+    ) {
+        let (message_length, callback_index, response_type) = parse_header(buffer);
+        assert_eq!(message_length, expected_size as u32);
+        assert_eq!(callback_index, expected_callback);
+        assert_eq!(response_type, expected_response_type);
+    }
+
+    fn assert_null_header(buffer: &[u8], expected_callback: u32) {
+        assert_header(buffer, expected_callback, HEADER_END, ResponseType::Null);
+    }
+
+    fn assert_received_value(buffer: &[u8], expected_callback: u32, expected_value: &[u8]) {
+        assert_header(
+            buffer,
+            expected_callback,
+            HEADER_END + size_of::<usize>(),
+            ResponseType::Value,
+        );
+        assert_value(buffer, 0, expected_value);
+    }
+
     fn send_address(address: String, socket: &UnixStream) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 1;
@@ -86,24 +126,7 @@ mod socket_listener {
         socket.write_all(&buffer).unwrap();
         let size = socket.read(&mut buffer).unwrap();
         assert_eq!(size, HEADER_END);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            HEADER_END as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Null.to_u32().unwrap()
-        );
+        assert_null_header(&buffer, CALLBACK_INDEX);
     }
 
     fn setup_test_basics() -> TestBasics {
@@ -168,24 +191,7 @@ mod socket_listener {
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
         assert_eq!(size, HEADER_END);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            HEADER_END as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK1_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Null.to_u32().unwrap()
-        );
+        assert_null_header(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -196,25 +202,7 @@ mod socket_listener {
         unsafe { buffer.set_len(message_length) };
         let size = test_basics.socket.read(&mut buffer).unwrap();
         assert_eq!(size, expected_length);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            (expected_length) as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK2_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Value.to_u32().unwrap()
-        );
-        assert_value(&buffer, 0, &value);
+        assert_received_value(&buffer, CALLBACK2_INDEX, &value);
     }
 
     #[test]
@@ -232,24 +220,7 @@ mod socket_listener {
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
         assert_eq!(size, HEADER_END);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            HEADER_END as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Null.to_u32().unwrap()
-        );
+        assert_null_header(&buffer, CALLBACK_INDEX);
     }
 
     #[test]
@@ -274,12 +245,8 @@ mod socket_listener {
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _ = test_basics.socket.read(&mut buffer).unwrap();
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::ClosingError.to_u32().unwrap()
-        );
+        let (_, _, response_type) = parse_header(&buffer);
+        assert_eq!(response_type, ResponseType::ClosingError);
     }
 
     #[test]
@@ -303,24 +270,7 @@ mod socket_listener {
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
         assert_eq!(size, HEADER_END);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            HEADER_END as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK1_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Null.to_u32().unwrap()
-        );
+        assert_null_header(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -336,25 +286,7 @@ mod socket_listener {
             size += next_read;
         }
         assert_eq!(size, expected_length);
-        assert_eq!(
-            (&buffer[..MESSAGE_LENGTH_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            (expected_length) as u32
-        );
-        assert_eq!(
-            (&buffer[MESSAGE_LENGTH_END..CALLBACK_INDEX_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            CALLBACK2_INDEX
-        );
-        assert_eq!(
-            (&buffer[CALLBACK_INDEX_END..HEADER_END])
-                .read_u32::<LittleEndian>()
-                .unwrap(),
-            ResponseType::Value.to_u32().unwrap()
-        );
-        assert_value(&buffer, 0, &value);
+        assert_received_value(&buffer, CALLBACK2_INDEX, &value);
     }
 
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
@@ -391,19 +323,10 @@ mod socket_listener {
                     let size = read_socket.read(&mut buffer[next_start..]).unwrap();
                     let mut cursor = 0;
                     while cursor < size {
-                        let length = (&buffer[cursor..cursor + MESSAGE_LENGTH_END])
-                            .read_u32::<LittleEndian>()
-                            .unwrap() as usize;
-                        let callback_index = (&buffer
-                            [cursor + MESSAGE_LENGTH_END..cursor + CALLBACK_INDEX_END])
-                            .read_u32::<LittleEndian>()
-                            .unwrap() as usize;
-                        let response_type = ResponseType::from_u32(
-                            (&buffer[cursor + CALLBACK_INDEX_END..cursor + TYPE_END])
-                                .read_u32::<LittleEndian>()
-                                .unwrap(),
-                        )
-                        .unwrap();
+                        let (length, callback_index, response_type) =
+                            parse_header(&buffer[cursor..cursor + TYPE_END]);
+                        let callback_index = callback_index as usize;
+                        let length = length as usize;
 
                         if cursor + length > size + next_start {
                             break;
