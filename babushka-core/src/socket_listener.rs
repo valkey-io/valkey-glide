@@ -1,14 +1,16 @@
 use super::{headers::*, rotating_buffer::RotatingBuffer};
+use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::BufMut;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use num_traits::ToPrimitive;
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, RedisResult};
+use redis::{AsyncCommands, RedisResult, Value};
 use redis::{Client, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
+use std::mem::size_of;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
@@ -183,9 +185,10 @@ fn write_null_response_header(
     )
 }
 
-fn write_slice_to_output(accumulated_outputs: &Cell<Vec<u8>>, bytes_to_write: &[u8]) {
+fn write_pointer_to_output<T>(accumulated_outputs: &Cell<Vec<u8>>, pointer_to_write: *mut T) {
     let mut vec = accumulated_outputs.take();
-    vec.extend_from_slice(bytes_to_write);
+    vec.write_u64::<LittleEndian>(pointer_to_write as u64)
+        .unwrap();
     accumulated_outputs.set(vec);
 }
 
@@ -205,6 +208,28 @@ async fn send_set_request(
     Ok(())
 }
 
+fn write_redis_value(
+    value: Value,
+    callback_index: u32,
+    writer: &Rc<Writer>,
+) -> Result<(), io::Error> {
+    if let Value::Nil = value {
+        // Since null values don't require any additional data, they can be sent without any extra effort.
+        write_null_response_header(&writer.accumulated_outputs, callback_index)?;
+    } else {
+        write_response_header(
+            &writer.accumulated_outputs,
+            callback_index,
+            ResponseType::Value,
+            HEADER_END + size_of::<usize>(),
+        )?;
+        // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
+        let pointer = Box::leak(Box::new(value));
+        write_pointer_to_output(&writer.accumulated_outputs, pointer);
+    }
+    Ok(())
+}
+
 async fn send_get_request(
     vec: SharedBuffer,
     key_range: Range<usize>,
@@ -212,22 +237,8 @@ async fn send_get_request(
     mut connection: MultiplexedConnection,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
-    let result: Option<Vec<u8>> = connection.get(&vec[key_range]).await?;
-    match result {
-        Some(result_bytes) => {
-            let length = HEADER_END + result_bytes.len();
-            write_response_header(
-                &writer.accumulated_outputs,
-                callback_index,
-                ResponseType::String,
-                length,
-            )?;
-            write_slice_to_output(&writer.accumulated_outputs, &result_bytes);
-        }
-        None => {
-            write_null_response_header(&writer.accumulated_outputs, callback_index)?;
-        }
-    };
+    let result: Value = connection.get(&vec[key_range]).await?;
+    write_redis_value(result, callback_index, &writer)?;
     write_to_output(&writer).await;
     Ok(())
 }
@@ -281,9 +292,7 @@ async fn write_error(
     writer: Rc<Writer>,
     response_type: ResponseType,
 ) {
-    let err_str = err.to_string();
-    let error_bytes = err_str.as_bytes();
-    let length = HEADER_END + error_bytes.len();
+    let length = HEADER_END + size_of::<usize>();
     write_response_header(
         &writer.accumulated_outputs,
         callback_index,
@@ -291,7 +300,11 @@ async fn write_error(
         length,
     )
     .expect("Failed writing error to vec");
-    write_slice_to_output(&writer.accumulated_outputs, error_bytes);
+    // Move the error string to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the error string, and drop the allocation.
+    write_pointer_to_output(
+        &writer.accumulated_outputs,
+        Box::leak(Box::new(err.to_string())),
+    );
     write_to_output(&writer).await;
 }
 
