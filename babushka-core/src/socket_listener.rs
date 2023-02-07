@@ -522,7 +522,12 @@ async fn handle_signals() {
         if let Some(signal) = signals.next().await {
             match signal {
                 SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
-                    logger_core::log(logger_core::Level::Info, "connection", "Signal received");
+                    logger_core::log(
+                        logger_core::Level::Info,
+                        "connection",
+                        format!("Signal {:?} received", signal),
+                    );
+                    return;
                 }
                 _ => continue,
             }
