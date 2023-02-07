@@ -1,5 +1,6 @@
 use super::{headers::*, rotating_buffer::RotatingBuffer};
 use bytes::BufMut;
+use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use num_traits::ToPrimitive;
 use redis::aio::MultiplexedConnection;
@@ -26,8 +27,22 @@ use PipeListeningResult::*;
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
 
-/// struct containing all objects needed to read from a socket.
+/// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
+    socket_path: String,
+    cleanup_socket: bool,
+}
+
+impl Dispose for SocketListener {
+    fn dispose(self) {
+        if self.cleanup_socket {
+            close_socket(self.socket_path);
+        }
+    }
+}
+
+/// struct containing all objects needed to read from a unix stream.
+struct UnixStreamListener {
     read_socket: Rc<UnixStream>,
     rotating_buffer: RotatingBuffer,
 }
@@ -50,7 +65,7 @@ impl From<ClosingReason> for PipeListeningResult {
     }
 }
 
-impl SocketListener {
+impl UnixStreamListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         // if the logger has been initialized by the user (external or internal) on info level this log will be shown
         logger_core::log(
@@ -59,7 +74,7 @@ impl SocketListener {
             "new socket listener initiated",
         );
         let rotating_buffer = RotatingBuffer::new(2, 65_536);
-        SocketListener {
+        Self {
             read_socket,
             rotating_buffer,
         }
@@ -293,8 +308,8 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-fn close_socket() {
-    std::fs::remove_file(get_socket_path()).expect("Failed to delete socket file");
+fn close_socket(socket_path: String) {
+    let _ = std::fs::remove_file(socket_path);
 }
 
 fn to_babushka_result<T, E: std::fmt::Display>(
@@ -336,7 +351,7 @@ async fn parse_address_create_conn(
 }
 
 async fn wait_for_server_address_create_conn(
-    client_listener: &mut SocketListener,
+    client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
 ) -> Result<MultiplexedConnection, BabushkaError> {
     // Wait for the server's address
@@ -379,7 +394,7 @@ async fn listen_on_client_stream(
     let socket = Rc::new(socket);
     // Spawn a new task to listen on this client's stream
     let write_lock = Mutex::new(());
-    let mut client_listener = SocketListener::new(socket.clone());
+    let mut client_listener = UnixStreamListener::new(socket.clone());
     let accumulated_outputs = Cell::new(Vec::new());
     let writer = Rc::new(Writer {
         socket,
@@ -414,50 +429,60 @@ async fn listen_on_client_stream(
     }
 }
 
-async fn listen_on_socket<InitCallback>(init_callback: InitCallback)
-where
-    InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
-{
-    // Bind to socket
-    let listener = match UnixListener::bind(get_socket_path()) {
-        Ok(listener) => listener,
-        Err(err) if err.kind() == AddrInUse => {
-            init_callback(Ok(get_socket_path()));
-            return;
+impl SocketListener {
+    fn new() -> Self {
+        SocketListener {
+            socket_path: get_socket_path(),
+            cleanup_socket: true,
         }
-        Err(err) => {
-            init_callback(Err(err.into()));
-            return;
-        }
-    };
-    let local = task::LocalSet::new();
-    let connected_clients = Arc::new(AtomicUsize::new(0));
-    let notify_close = Arc::new(Notify::new());
-    init_callback(Ok(get_socket_path()));
-    local.run_until(async move {
-        loop {
-            tokio::select! {
-                listen_v = listener.accept() => {
-                    if let Ok((stream, _addr)) = listen_v {
-                        // New client
-                        let cloned_close_notifier = notify_close.clone();
-                        let cloned_connected_clients = connected_clients.clone();
-                        cloned_connected_clients.fetch_add(1, Ordering::Relaxed);
-                        task::spawn_local(listen_on_client_stream(stream, cloned_close_notifier.clone(), cloned_connected_clients));
-                    } else if listen_v.is_err() {
-                        close_socket();
-                        return;
-                    }
-                },
-                // `notify_one` was called to indicate no more clients are connected,
-                // close the socket
-                _ = notify_close.notified() => {close_socket(); return;},
-                // Interrupt was received, close the socket
-                _ = handle_signals() => {close_socket(); return;}
+    }
+
+    pub(crate) async fn listen_on_socket<InitCallback>(&mut self, init_callback: InitCallback)
+    where
+        InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
+    {
+        // Bind to socket
+        let listener = match UnixListener::bind(self.socket_path.clone()) {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == AddrInUse => {
+                init_callback(Ok(self.socket_path.clone()));
+                // Don't cleanup the socket resources since the socket is being used
+                self.cleanup_socket = false;
+                return;
+            }
+            Err(err) => {
+                init_callback(Err(err.into()));
+                return;
             }
         };
-        })
-    .await;
+        let local = task::LocalSet::new();
+        let connected_clients = Arc::new(AtomicUsize::new(0));
+        let notify_close = Arc::new(Notify::new());
+        init_callback(Ok(self.socket_path.clone()));
+        local.run_until(async move {
+            loop {
+                tokio::select! {
+                    listen_v = listener.accept() => {
+                        if let Ok((stream, _addr)) = listen_v {
+                            // New client
+                            let cloned_close_notifier = notify_close.clone();
+                            let cloned_connected_clients = connected_clients.clone();
+                            cloned_connected_clients.fetch_add(1, Ordering::Relaxed);
+                            task::spawn_local(listen_on_client_stream(stream, cloned_close_notifier.clone(), cloned_connected_clients));
+                        } else if listen_v.is_err() {
+                            return
+                        }
+                    },
+                    // `notify_one` was called to indicate no more clients are connected,
+                    // close the socket
+                    _ = notify_close.notified() => continue, //TODO: socket listener shouldn't be closed, remove the notifier
+                    // Interrupt was received, close the socket
+                    _ = handle_signals() => return
+                }
+            };
+            })
+        .await;
+    }
 }
 
 #[derive(Debug)]
@@ -493,13 +518,19 @@ async fn handle_signals() {
     // Handle Unix signals
     let mut signals =
         Signals::new([SIGTERM, SIGQUIT, SIGINT, SIGHUP]).expect("Failed creating signals");
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
-                // Close the socket
-                close_socket();
+    loop {
+        if let Some(signal) = signals.next().await {
+            match signal {
+                SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
+                    logger_core::log(
+                        logger_core::Level::Info,
+                        "connection",
+                        format!("Signal {:?} received", signal),
+                    );
+                    return;
+                }
+                _ => continue,
             }
-            sig => unreachable!("Received an unregistered signal `{}`", sig),
         }
     }
 }
@@ -522,12 +553,10 @@ where
                 .build();
             match runtime {
                 Ok(runtime) => {
-                    runtime.block_on(listen_on_socket(init_callback));
+                    let mut listener = Disposable::new(SocketListener::new());
+                    runtime.block_on(listener.listen_on_socket(init_callback));
                 }
-                Err(err) => {
-                    close_socket();
-                    init_callback(Err(err.into()))
-                }
+                Err(err) => init_callback(Err(err.into())),
             };
         })
         .expect("Thread spawn failed. Cannot report error because callback was moved.");
