@@ -15,10 +15,11 @@ redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-co
 babushka = { path = "../../babushka-core" }
 tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
-napi = {version = "2.10", features = ["napi4"] }
+napi = {version = "2.10", features = ["napi4", "napi6"] }
 napi-derive = "2"
 logger_core = {path = "../../logger_core"}
 tracing-subscriber = "0.3.16"
+byteorder = "1.4.3"
 
 
 

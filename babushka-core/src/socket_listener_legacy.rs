@@ -204,7 +204,7 @@ async fn send_get_request(
             write_response_header(
                 &writer.accumulated_outputs,
                 callback_index,
-                ResponseType::String,
+                ResponseType::Value,
                 length,
             )?;
             write_slice_to_output(&writer.accumulated_outputs, &result_bytes);
