@@ -43,7 +43,7 @@ enum PyResponseType {
     /// Type of a response that returns a null.
     Null = ResponseType::Null as isize,
     /// Type of a response that returns a string.
-    String = ResponseType::String as isize,
+    String = ResponseType::Value as isize,
     /// Type of response containing an error that impacts a single request.
     RequestError = ResponseType::RequestError as isize,
     /// Type of response containing an error causes the connection to close.
