@@ -525,7 +525,7 @@ async fn handle_signals() {
                     logger_core::log(
                         logger_core::Level::Info,
                         "connection",
-                        format!("Signal {:?} received", signal),
+                        format!("Signal {signal:?} received"),
                     );
                     return;
                 }
