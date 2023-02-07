@@ -17,6 +17,7 @@ use utilities::*;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
+    use babushka::headers::HEADER_WITH_KEY_LENGTH_END;
     use redis::Value;
     use std::mem::size_of;
 
@@ -33,19 +34,53 @@ mod socket_listener {
         assert_eq!(*received_value, Value::Data(expected.to_owned()));
     }
 
+    fn write_header(
+        buffer: &mut Vec<u8>,
+        length: usize,
+        callback_index: u32,
+        request_type: RequestType,
+    ) {
+        buffer.write_u32::<LittleEndian>(length as u32).unwrap();
+        buffer.write_u32::<LittleEndian>(callback_index).unwrap();
+        buffer
+            .write_u32::<LittleEndian>(request_type.to_u32().unwrap())
+            .unwrap();
+    }
+
+    fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str) {
+        write_header(
+            buffer,
+            HEADER_END + key.len(),
+            callback_index,
+            RequestType::GetString,
+        );
+        buffer.write_all(key.as_bytes()).unwrap();
+    }
+
+    fn write_set(buffer: &mut Vec<u8>, callback_index: u32, key: &str, value: &Vec<u8>) {
+        write_header(
+            buffer,
+            HEADER_WITH_KEY_LENGTH_END + key.len() + value.len(),
+            callback_index,
+            RequestType::SetString,
+        );
+        buffer.write_u32::<LittleEndian>(key.len() as u32).unwrap();
+        buffer.write_all(key.as_bytes()).unwrap();
+        buffer.write_all(value).unwrap();
+    }
+
     fn send_address(address: String, socket: &UnixStream) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 1;
         let address = format!("redis://{address}");
         let message_length = address.len() + HEADER_END;
         let mut buffer = Vec::with_capacity(message_length);
-        buffer
-            .write_u32::<LittleEndian>(message_length as u32)
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::ServerAddress.to_u32().unwrap())
-            .unwrap();
+        write_header(
+            &mut buffer,
+            message_length,
+            CALLBACK_INDEX,
+            RequestType::ServerAddress,
+        );
         buffer.write_all(address.as_bytes()).unwrap();
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
@@ -128,16 +163,7 @@ mod socket_listener {
         // Send a set request
         let message_length = VALUE_LENGTH + key.len() + HEADER_END + MESSAGE_LENGTH_FIELD_LENGTH;
         let mut buffer = Vec::with_capacity(message_length);
-        buffer
-            .write_u32::<LittleEndian>(message_length as u32)
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK1_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::SetString.to_u32().unwrap())
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(5).unwrap();
-        buffer.write_all(key.as_bytes()).unwrap();
-        buffer.write_all(&value).unwrap();
+        write_set(&mut buffer, CALLBACK1_INDEX, key, &value);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
@@ -162,14 +188,7 @@ mod socket_listener {
         );
 
         buffer.clear();
-        buffer
-            .write_u32::<LittleEndian>((HEADER_END + key.len()) as u32)
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK2_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
-            .unwrap();
-        buffer.write_all(key.as_bytes()).unwrap();
+        write_get(&mut buffer, CALLBACK2_INDEX, key);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let expected_length = size_of::<usize>() + HEADER_END;
@@ -208,12 +227,7 @@ mod socket_listener {
         let mut test_basics = setup_test_basics();
         let key = "hello";
         let mut buffer = Vec::with_capacity(HEADER_END);
-        buffer.write_u32::<LittleEndian>(17_u32).unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
-            .unwrap();
-        buffer.write_all(key.as_bytes()).unwrap();
+        write_get(&mut buffer, CALLBACK_INDEX, key);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
@@ -284,16 +298,7 @@ mod socket_listener {
         // Send a set request
         let message_length = VALUE_LENGTH + key.len() + HEADER_END + MESSAGE_LENGTH_FIELD_LENGTH;
         let mut buffer = Vec::with_capacity(message_length);
-        buffer
-            .write_u32::<LittleEndian>(message_length as u32)
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK1_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::SetString.to_u32().unwrap())
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(5).unwrap();
-        buffer.write_all(key.as_bytes()).unwrap();
-        buffer.write_all(&value).unwrap();
+        write_set(&mut buffer, CALLBACK1_INDEX, key, &value);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let size = test_basics.socket.read(&mut buffer).unwrap();
@@ -318,14 +323,7 @@ mod socket_listener {
         );
 
         buffer.clear();
-        buffer
-            .write_u32::<LittleEndian>((HEADER_END + key.len()) as u32)
-            .unwrap();
-        buffer.write_u32::<LittleEndian>(CALLBACK2_INDEX).unwrap();
-        buffer
-            .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
-            .unwrap();
-        buffer.write_all(key.as_bytes()).unwrap();
+        write_get(&mut buffer, CALLBACK2_INDEX, key);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let expected_length = size_of::<usize>() + HEADER_END;
@@ -465,16 +463,7 @@ mod socket_listener {
                     let message_length =
                         VALUE_LENGTH + key.len() + HEADER_END + MESSAGE_LENGTH_FIELD_LENGTH;
                     let mut buffer = Vec::with_capacity(message_length);
-                    buffer
-                        .write_u32::<LittleEndian>(message_length as u32)
-                        .unwrap();
-                    buffer.write_u32::<LittleEndian>(index as u32).unwrap();
-                    buffer
-                        .write_u32::<LittleEndian>(RequestType::SetString.to_u32().unwrap())
-                        .unwrap();
-                    buffer.write_u32::<LittleEndian>(key.len() as u32).unwrap();
-                    buffer.write_all(key.as_bytes()).unwrap();
-                    buffer.write_all(&value).unwrap();
+                    write_set(&mut buffer, index as u32, &key, &value);
                     {
                         let _guard = cloned_lock.lock().unwrap();
                         write_socket.write_all(&buffer).unwrap();
@@ -482,15 +471,7 @@ mod socket_listener {
                     buffer.clear();
 
                     // Send a get request
-                    let message_length = key.len() + HEADER_END;
-                    buffer
-                        .write_u32::<LittleEndian>(message_length as u32)
-                        .unwrap();
-                    buffer.write_u32::<LittleEndian>(index as u32).unwrap();
-                    buffer
-                        .write_u32::<LittleEndian>(RequestType::GetString.to_u32().unwrap())
-                        .unwrap();
-                    buffer.write_all(key.as_bytes()).unwrap();
+                    write_get(&mut buffer, index as u32, &key);
                     {
                         let _guard = cloned_lock.lock().unwrap();
                         write_socket.write_all(&buffer).unwrap();
