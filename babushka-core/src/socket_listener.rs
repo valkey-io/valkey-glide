@@ -3,6 +3,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::BufMut;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
+use logger_core::{log, Level};
 use num_traits::ToPrimitive;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult, Value};
@@ -20,6 +21,7 @@ use std::{io, thread};
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::task;
@@ -54,6 +56,7 @@ struct Writer {
     socket: Rc<UnixStream>,
     lock: Mutex<()>,
     accumulated_outputs: Cell<Vec<u8>>,
+    closing_sender: Sender<ClosingReason>,
 }
 
 enum PipeListeningResult {
@@ -84,10 +87,9 @@ impl UnixStreamListener {
 
     pub(crate) async fn next_values(&mut self) -> PipeListeningResult {
         loop {
-            self.read_socket
-                .readable()
-                .await
-                .expect("Readable check failed");
+            if let Err(err) = self.read_socket.readable().await {
+                return ClosingReason::UnhandledError(err.into()).into();
+            }
 
             let read_result = self
                 .read_socket
@@ -126,11 +128,10 @@ async fn write_to_output(writer: &Rc<Writer>) {
         }
         let mut total_written_bytes = 0;
         while total_written_bytes < output.len() {
-            writer
-                .socket
-                .writable()
-                .await
-                .expect("Writable check failed");
+            if let Err(err) = writer.socket.writable().await {
+                let _ = writer.closing_sender.send(err.into()).await; // we ignore the error, because it means that the reader was dropped, which is ok.
+                return;
+            }
             match writer.socket.try_write(&output[total_written_bytes..]) {
                 Ok(written_bytes) => {
                     total_written_bytes += written_bytes;
@@ -142,8 +143,7 @@ async fn write_to_output(writer: &Rc<Writer>) {
                     continue;
                 }
                 Err(err) => {
-                    // TODO - add proper error handling.
-                    panic!("received unexpected error {err:?}");
+                    let _ = writer.closing_sender.send(err.into()).await; // we ignore the error, because it means that the reader was dropped, which is ok.
                 }
             }
         }
@@ -401,6 +401,23 @@ fn update_notify_connected_clients(
     }
 }
 
+async fn read_values_loop(
+    mut client_listener: UnixStreamListener,
+    connection: MultiplexedConnection,
+    writer: Rc<Writer>,
+) -> ClosingReason {
+    loop {
+        match client_listener.next_values().await {
+            Closed(reason) => {
+                return reason;
+            }
+            ReceivedValues(received_requests) => {
+                handle_requests(received_requests, &connection, &writer).await;
+            }
+        }
+    }
+}
+
 async fn listen_on_client_stream(
     socket: UnixStream,
     notify_close: Arc<Notify>,
@@ -411,10 +428,12 @@ async fn listen_on_client_stream(
     let write_lock = Mutex::new(());
     let mut client_listener = UnixStreamListener::new(socket.clone());
     let accumulated_outputs = Cell::new(Vec::new());
+    let (sender, mut receiver) = channel(1);
     let writer = Rc::new(Writer {
         socket,
         lock: write_lock,
         accumulated_outputs,
+        closing_sender: sender,
     });
     let connection = match wait_for_server_address_create_conn(&mut client_listener, &writer).await
     {
@@ -438,20 +457,19 @@ async fn listen_on_client_stream(
             return; // TODO: implement error protocol
         }
     };
-    loop {
-        match client_listener.next_values().await {
-            Closed(reason) => {
-                if let ClosingReason::UnhandledError(err) = reason {
-                    write_error(err, u32::MAX, writer.clone(), ResponseType::ClosingError).await;
+    tokio::select! {
+            reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
+                if let ClosingReason::UnhandledError(err) = reader_closing {
+                    write_error(err, u32::MAX, writer, ResponseType::ClosingError).await;
                 };
-                update_notify_connected_clients(connected_clients, notify_close);
-                return; // TODO: implement error protocol, handle error closing reasons
+            },
+            writer_closing = receiver.recv() => {
+                if let Some(ClosingReason::UnhandledError(err)) = writer_closing {
+                    log(Level::Error, "writer closing", err.to_string());
+                }
             }
-            ReceivedValues(received_requests) => {
-                handle_requests(received_requests, &connection, &writer).await;
-            }
-        }
     }
+    update_notify_connected_clients(connected_clients, notify_close);
 }
 
 impl SocketListener {
@@ -517,6 +535,12 @@ pub enum ClosingReason {
     ReadSocketClosed,
     /// The listener encounter an error it couldn't handle.
     UnhandledError(RedisError),
+}
+
+impl From<io::Error> for ClosingReason {
+    fn from(error: io::Error) -> Self {
+        UnhandledError(error.into())
+    }
 }
 
 /// Enum describing errors received during client creation.
