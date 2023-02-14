@@ -452,7 +452,7 @@ impl SocketListener {
 
     pub(crate) async fn listen_on_socket<InitCallback>(&mut self, init_callback: InitCallback)
     where
-        InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
+        InitCallback: FnOnce(Result<String, String>) + Send + 'static,
     {
         // Bind to socket
         let listener = match UnixListener::bind(self.socket_path.clone()) {
@@ -464,7 +464,7 @@ impl SocketListener {
                 return;
             }
             Err(err) => {
-                init_callback(Err(err.into()));
+                init_callback(Err(err.to_string()));
                 return;
             }
         };
@@ -555,7 +555,7 @@ async fn handle_signals() {
 /// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
 pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
 where
-    InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
+    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
 {
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
@@ -569,7 +569,7 @@ where
                     let mut listener = Disposable::new(SocketListener::new());
                     runtime.block_on(listener.listen_on_socket(init_callback));
                 }
-                Err(err) => init_callback(Err(err.into())),
+                Err(err) => init_callback(Err(err.to_string())),
             };
         })
         .expect("Thread spawn failed. Cannot report error because callback was moved.");

@@ -416,7 +416,7 @@ async fn listen_on_client_stream(
 
 async fn listen_on_socket<InitCallback>(init_callback: InitCallback)
 where
-    InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
+    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
 {
     // Bind to socket
     let listener = match UnixListener::bind(get_socket_path()) {
@@ -426,7 +426,7 @@ where
             return;
         }
         Err(err) => {
-            init_callback(Err(err.into()));
+            init_callback(Err(err.to_string()));
             return;
         }
     };
@@ -511,7 +511,7 @@ async fn handle_signals() {
 /// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
 pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
 where
-    InitCallback: FnOnce(Result<String, RedisError>) + Send + 'static,
+    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
 {
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
@@ -526,7 +526,7 @@ where
                 }
                 Err(err) => {
                     close_socket();
-                    init_callback(Err(err.into()))
+                    init_callback(Err(err.to_string()))
                 }
             };
         })

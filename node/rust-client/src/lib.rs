@@ -120,7 +120,7 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     start_socket_listener(move |result| {
         match result {
             Ok(path) => deferred.resolve(|_| Ok(path)),
-            Err(e) => deferred.reject(to_js_error(e)),
+            Err(error_message) => deferred.reject(napi::Error::new(Status::Unknown, error_message)),
         };
     });
 
