@@ -26,6 +26,7 @@ runNode=0
 runCsharp=0
 concurrentTasks="1 10 100 1000"
 dataSize="100 4000"
+clientCount="1"
 chosenClients="all"
 host="localhost"
 
@@ -39,7 +40,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
+  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
   # exit python virtualenv
   deactivate
   echo "done python benchmark"
@@ -53,14 +54,14 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host
+  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
 }
 
 function flushDB() {
@@ -95,13 +96,19 @@ function Help() {
     echo Multiple such flags can be passed.
     echo Pass -no-csv to skip analysis of the results.
     echo
-    echo Pass -d and then a space-delimited list of sizes for data.
-    echo Pass -f and then a space-delimited list of number of concurrent operations.
-    echo Example: passing as options \"-node -tasks 10 100 -data 500 20 -python\" will cause the node and python benchmarks to run, with the following configurations:
-    echo "         10 concurrent tasks and 500 bytes of data per value,"
-    echo "         10 concurrent tasks and 20 bytes of data per value, "
-    echo "         100 concurrent tasks and 500 bytes of data per value, "
-    echo "         100 concurrent tasks and 20 bytes of data per value, "
+    echo Pass -data and then a space-delimited list of sizes for data.
+    echo Pass -tasks and then a space-delimited list of number of concurrent operations.
+    echo pass -clients and then a space-delimited list of number of the number of clients to be used concurrently.
+    echo 
+    echo Example: passing as options \"-node -tasks 10 100 -data 500 20 -clients 1 2 -python\" will cause the node and python benchmarks to run, with the following configurations:
+    echo "         1 client, 10 concurrent tasks and 500 bytes of data per value,"
+    echo "         1 client, 10 concurrent tasks and 20 bytes of data per value, "
+    echo "         1 client, 100 concurrent tasks and 500 bytes of data per value, "
+    echo "         1 client, 100 concurrent tasks and 20 bytes of data per value, "
+    echo "         2 clients, 10 concurrent tasks and 500 bytes of data per value,"
+    echo "         2 clients, 10 concurrent tasks and 20 bytes of data per value, "
+    echo "         2 clients, 100 concurrent tasks and 500 bytes of data per value, "
+    echo "         2 clients, 100 concurrent tasks and 20 bytes of data per value, "    
     echo
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
@@ -140,6 +147,14 @@ do
                 shift
             done
             ;;
+        -clients) # set number of clients to use
+            clientCount=$2" "
+            shift
+            until [[ $2 =~ ^- ]] || [ -z $2 ]; do
+                clientCount+=$2"  "
+                shift
+            done
+            ;;            
         -python)  
             runAllBenchmarks=0
             runPython=1 

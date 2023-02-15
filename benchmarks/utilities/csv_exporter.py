@@ -11,6 +11,7 @@ with open(output_file_name, "w+") as output_file:
         "client",
         "num_of_tasks",
         "data_size",
+        "clientCount",
         "tps",
         "get_non_existing_p50_latency",
         "get_non_existing_p90_latency",

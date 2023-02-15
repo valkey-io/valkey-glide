@@ -23,7 +23,7 @@ const PROB_GET_EXISTING_KEY = 0.8;
 const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
-let counter = 0;
+let completed_tasks_counter = 0;
 const running_tasks: Promise<void>[] = [];
 const bench_json_results: object[] = [];
 
@@ -67,14 +67,15 @@ function print_results(resultsFile: string) {
 }
 
 async function redis_benchmark(
-    client: IAsyncClient,
+    clients: IAsyncClient[],
     total_commands: number,
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    while (counter < total_commands) {
+    while (completed_tasks_counter < total_commands) {
         const chosen_action = choose_action();
         const tic = process.hrtime();
+        const client = clients[completed_tasks_counter % clients.length];
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
                 await client.get(generate_key_set());
@@ -89,22 +90,22 @@ async function redis_benchmark(
         const toc = process.hrtime(tic);
         const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
-        counter += 1;
+        completed_tasks_counter += 1;
     }
 }
 
 async function create_bench_tasks(
-    client: IAsyncClient,
+    clients: IAsyncClient[],
     total_commands: number,
     num_of_concurrent_tasks: number,
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    counter = 0;
+    completed_tasks_counter = 0;
     const tic = process.hrtime();
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
-            redis_benchmark(client, total_commands, data, action_latencies)
+            redis_benchmark(clients, total_commands, data, action_latencies)
         );
     }
     await Promise.all(running_tasks);
@@ -127,8 +128,8 @@ function latency_results(
     return result;
 }
 
-async function run_client(
-    client: IAsyncClient,
+async function run_clients(
+    clients: IAsyncClient[],
     client_name: string,
     total_commands: number,
     num_of_concurrent_tasks: number,
@@ -137,7 +138,9 @@ async function run_client(
 ) {
     const now = new Date();
     console.log(
-        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} ${now.toLocaleTimeString()}`
+        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${
+            clients.length
+        } ${now.toLocaleTimeString()}`
     );
     const action_latencies = {
         [ChosenAction.SET]: [],
@@ -146,13 +149,13 @@ async function run_client(
     };
 
     const time = await create_bench_tasks(
-        client,
+        clients,
         total_commands,
         num_of_concurrent_tasks,
         data,
         action_latencies
     );
-    const tps = Math.round(counter / time);
+    const tps = Math.round(completed_tasks_counter / time);
 
     const get_non_existing_latencies =
         action_latencies[ChosenAction.GET_NON_EXISTING];
@@ -175,6 +178,7 @@ async function run_client(
         num_of_tasks: num_of_concurrent_tasks,
         data_size,
         tps,
+        clientCount: clients.length,
         ...set_latency_results,
         ...get_existing_latency_results,
         ...get_non_existing_latency_results,
@@ -182,12 +186,23 @@ async function run_client(
     bench_json_results.push(json_res);
 }
 
+function createClients(
+    clientCount: number,
+    createAction: () => Promise<IAsyncClient>
+): Promise<IAsyncClient[]> {
+    const creationActions = Array.from({ length: clientCount }, () =>
+        createAction()
+    );
+    return Promise.all(creationActions);
+}
+
 async function main(
     total_commands: number,
     num_of_concurrent_tasks: number,
     data_size: number,
     clients_to_run: "all" | "ffi" | "socket" | "babushka",
-    address: string
+    address: string,
+    clientCount: number
 ) {
     const data = generate_value(data_size);
     if (
@@ -195,9 +210,15 @@ async function main(
         clients_to_run == "all" ||
         clients_to_run == "babushka"
     ) {
-        const babushka_client = await AsyncClient.CreateConnection(address);
-        await run_client(
-            babushka_client,
+        const clients = await createClients(
+            clientCount,
+            () =>
+                new Promise((resolve) =>
+                    resolve(AsyncClient.CreateConnection(address))
+                )
+        );
+        await run_clients(
+            clients,
             "babushka FFI",
             total_commands,
             num_of_concurrent_tasks,
@@ -211,26 +232,30 @@ async function main(
         clients_to_run == "all" ||
         clients_to_run == "babushka"
     ) {
-        const babushka_socket_client = await SocketConnection.CreateConnection(
-            address
+        const clients = await createClients(clientCount, () =>
+            SocketConnection.CreateConnection(address)
         );
-        await run_client(
-            babushka_socket_client,
+        await run_clients(
+            clients,
             "babushka socket",
             total_commands,
             num_of_concurrent_tasks,
             data_size,
             data
         );
-        babushka_socket_client.dispose();
+        clients.forEach((client) => (client as SocketConnection).dispose());
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     if (clients_to_run == "all") {
         const node_redis_client = createClient({ url: address });
         await node_redis_client.connect();
-        await run_client(
-            node_redis_client,
+        await run_clients(
+            await createClients(clientCount, async () => {
+                const node_redis_client = createClient({ url: address });
+                await node_redis_client.connect();
+                return node_redis_client;
+            }),
             "node_redis",
             total_commands,
             num_of_concurrent_tasks,
@@ -246,29 +271,41 @@ const optionDefinitions = [
     { name: "concurrentTasks", type: String, multiple: true },
     { name: "clients", type: String },
     { name: "host", type: String },
+    { name: "clientCount", type: String, multiple: true },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
 const number_of_iterations = (num_of_concurrent_tasks: number) =>
-    Math.max(100000, num_of_concurrent_tasks * 10000);
+    Math.min(Math.max(100000, num_of_concurrent_tasks * 10000), 10000000);
 
 Promise.resolve() // just added to clean the indentation of the rest of the calls
     .then(async () => {
-        const data_size: string = receivedOptions.dataSize;
+        const data_size = parseInt(receivedOptions.dataSize);
         const concurrent_tasks: string[] = receivedOptions.concurrentTasks;
         const clients_to_run = receivedOptions.clients;
-        const product = concurrent_tasks.map((concurrentTasks: string) => [
-            parseInt(concurrentTasks),
-            parseInt(data_size),
-        ]);
+        const clientCount: string[] = receivedOptions.clientCount;
+        const lambda: (
+            numOfClients: string,
+            concurrentTasks: string
+        ) => [number, number, number] = (
+            numOfClients: string,
+            concurrentTasks: string
+        ) => [parseInt(concurrentTasks), data_size, parseInt(numOfClients)];
+        const product: [number, number, number][] = concurrent_tasks.flatMap(
+            (concurrentTasks: string) =>
+                clientCount.map((clientCount) =>
+                    lambda(clientCount, concurrentTasks)
+                )
+        );
         const address = getAddress(receivedOptions.host);
-        for (const [concurrent_tasks, data_size] of product) {
+        for (const [concurrent_tasks, data_size, clientCount] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),
                 concurrent_tasks,
                 data_size,
                 clients_to_run,
-                address
+                address,
+                clientCount
             );
         }
 
