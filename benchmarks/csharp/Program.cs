@@ -50,7 +50,7 @@ public static class MainClass
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
 
     private static readonly Random randomizer = new();
-    private static long counter = 0;
+    private static long completed_tasks_counter = 0;
     private static readonly List<Dictionary<string, object>> bench_json_results = new();
 
     private static string generate_value(int size)
@@ -118,7 +118,7 @@ public static class MainClass
         var stopwatch = new Stopwatch();
         do
         {
-            var index = (int)(counter % clients.Length);
+            var index = (int)(completed_tasks_counter % clients.Length);
             var client = clients[index];
             var action = choose_action();
             stopwatch.Start();
@@ -137,7 +137,7 @@ public static class MainClass
             stopwatch.Stop();
             var latency_list = action_latencies[action];
             latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
-        } while (Interlocked.Increment(ref counter) < total_commands);
+        } while (Interlocked.Increment(ref completed_tasks_counter) < total_commands);
     }
 
     private static async Task<long> create_bench_tasks(
@@ -148,7 +148,7 @@ public static class MainClass
         Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies
     )
     {
-        counter = 0;
+        completed_tasks_counter = 0;
         var stopwatch = Stopwatch.StartNew();
         var running_tasks = new List<Task>();
         for (var i = 0; i < num_of_concurrent_tasks; i++)
@@ -177,7 +177,7 @@ public static class MainClass
         };
     }
 
-    private static async Task run_client(
+    private static async Task run_clients(
         ClientWrapper[] clients,
         string client_name,
         int total_commands,
@@ -199,7 +199,7 @@ public static class MainClass
             num_of_concurrent_tasks,
             action_latencies
         );
-        var tps = Math.Round((double)counter / ((double)elapsed_milliseconds / 1000));
+        var tps = Math.Round((double)completed_tasks_counter / ((double)elapsed_milliseconds / 1000));
 
         var get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING];
         var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
@@ -277,7 +277,7 @@ public static class MainClass
                      () => babushka_client.Dispose()));
             });
 
-            await run_client(
+            await run_clients(
                 clients,
                 "babushka FFI",
                 total_commands,
@@ -296,7 +296,7 @@ public static class MainClass
                             async (key, value) => await babushka_client.SetAsync(key, value),
                             () => babushka_client.Dispose());
                 });
-            await run_client(
+            await run_clients(
                 clients,
                 "babushka socket",
                 total_commands,
@@ -321,7 +321,7 @@ public static class MainClass
                          async (key, value) => await db.StringSetAsync(key, value),
                          () => connection.Dispose()));
                 });
-            await run_client(
+            await run_clients(
                 clients,
                 "StackExchange.Redis",
                 total_commands,
