@@ -166,8 +166,8 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
                     Ok(path) => {
                         let _ = init_callback.call(py, (path, py.None()), None);
                     }
-                    Err(err) => {
-                        let _ = init_callback.call(py, (py.None(), err.to_string()), None);
+                    Err(error_message) => {
+                        let _ = init_callback.call(py, (py.None(), error_message), None);
                     }
                 };
             });

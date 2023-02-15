@@ -133,8 +133,8 @@ pub extern "C" fn start_socket_listener_wrapper(
                     init_callback(c_str.as_ptr(), std::ptr::null());
                 }
             }
-            Err(error) => {
-                let c_str = CString::new(error.to_string()).unwrap();
+            Err(error_message) => {
+                let c_str = CString::new(error_message).unwrap();
                 unsafe {
                     init_callback(std::ptr::null(), c_str.as_ptr());
                 }
