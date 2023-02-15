@@ -28,6 +28,9 @@ public static class MainClass
 
         [Option('h', "host", Required = true, HelpText = "What host to target")]
         public string host { get; set; } = "";
+
+        [Option('C', "clientCount", Required = true, HelpText = "Number of clients to run concurrently")]
+        public IEnumerable<int> clientCount { get; set; } = Enumerable.Empty<int>();
     }
 
     private const int PORT = 6379;
@@ -47,7 +50,7 @@ public static class MainClass
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
 
     private static readonly Random randomizer = new();
-    private static long counter = 0;
+    private static long completed_tasks_counter = 0;
     private static readonly List<Dictionary<string, object>> bench_json_results = new();
 
     private static string generate_value(int size)
@@ -107,8 +110,7 @@ public static class MainClass
     }
 
     private static async Task redis_benchmark(
-        Func<string, Task<string?>> get,
-        Func<string, string, Task> set,
+        ClientWrapper[] clients,
         long total_commands,
         string data,
         Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies)
@@ -116,42 +118,43 @@ public static class MainClass
         var stopwatch = new Stopwatch();
         do
         {
+            var index = (int)(completed_tasks_counter % clients.Length);
+            var client = clients[index];
             var action = choose_action();
             stopwatch.Start();
             switch (action)
             {
                 case ChosenAction.GET_EXISTING:
-                    await get(generate_key_set());
+                    await client.get(generate_key_set());
                     break;
                 case ChosenAction.GET_NON_EXISTING:
-                    await get(generate_key_get());
+                    await client.get(generate_key_get());
                     break;
                 case ChosenAction.SET:
-                    await set(generate_key_set(), data);
+                    await client.set(generate_key_set(), data);
                     break;
             }
             stopwatch.Stop();
             var latency_list = action_latencies[action];
             latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
-        } while (Interlocked.Increment(ref counter) < total_commands);
+        } while (Interlocked.Increment(ref completed_tasks_counter) < total_commands);
     }
 
     private static async Task<long> create_bench_tasks(
-        Func<string, Task<string?>> get,
-        Func<string, string, Task> set,
+        ClientWrapper[] clients,
         int total_commands,
         string data,
         int num_of_concurrent_tasks,
         Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies
     )
     {
-        counter = 0;
+        completed_tasks_counter = 0;
         var stopwatch = Stopwatch.StartNew();
         var running_tasks = new List<Task>();
         for (var i = 0; i < num_of_concurrent_tasks; i++)
         {
             running_tasks.Add(
-                redis_benchmark(get, set, total_commands, data, action_latencies)
+                redis_benchmark(clients, total_commands, data, action_latencies)
             );
         }
         await Task.WhenAll(running_tasks);
@@ -174,16 +177,15 @@ public static class MainClass
         };
     }
 
-    private static async Task run_client(
-        Func<string, Task<string?>> get,
-        Func<string, string, Task> set,
+    private static async Task run_clients(
+        ClientWrapper[] clients,
         string client_name,
         int total_commands,
         int data_size,
         int num_of_concurrent_tasks
     )
     {
-        Console.WriteLine($"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} {DateTime.UtcNow.ToString("HH:mm:ss")}");
+        Console.WriteLine($"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} client count: {clients.Length} {DateTime.UtcNow.ToString("HH:mm:ss")}");
         var action_latencies = new Dictionary<ChosenAction, ConcurrentBag<double>>() {
             {ChosenAction.GET_NON_EXISTING, new()},
             {ChosenAction.GET_EXISTING, new()},
@@ -191,13 +193,13 @@ public static class MainClass
         };
         var data = generate_value(data_size);
         var elapsed_milliseconds = await create_bench_tasks(
-            get, set,
+            clients,
             total_commands,
             data,
             num_of_concurrent_tasks,
             action_latencies
         );
-        var tps = Math.Round((double)counter / ((double)elapsed_milliseconds / 1000));
+        var tps = Math.Round((double)completed_tasks_counter / ((double)elapsed_milliseconds / 1000));
 
         var get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING];
         var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
@@ -214,6 +216,7 @@ public static class MainClass
             {"num_of_tasks", num_of_concurrent_tasks},
             {"data_size", data_size},
             {"tps", tps},
+            {"clientCount", clients.Length},
         };
         result = result
             .Concat(get_existing_latency_results)
@@ -223,18 +226,59 @@ public static class MainClass
         bench_json_results.Add(result);
     }
 
+    private class ClientWrapper : IDisposable
+    {
+        internal ClientWrapper(Func<string, Task<string?>> get, Func<string, string, Task> set, Action disposalFunction)
+        {
+            this.get = get;
+            this.set = set;
+            this.disposalFunction = disposalFunction;
+        }
+
+        public void Dispose()
+        {
+            this.disposalFunction();
+        }
+
+        internal Func<string, Task<string?>> get;
+        internal Func<string, string, Task> set;
+
+        private Action disposalFunction;
+    }
+
+    private async static Task<ClientWrapper[]> createClients(int clientCount,
+        Func<Task<(Func<string, Task<string?>>,
+                   Func<string, string, Task>,
+                   Action)>> clientCreation)
+    {
+        var tasks = Enumerable.Range(0, clientCount).Select(async (_) =>
+        {
+            var tuple = await clientCreation();
+            return new ClientWrapper(tuple.Item1, tuple.Item2, tuple.Item3);
+        });
+        return await Task.WhenAll(tasks);
+    }
+
     private static async Task run_with_parameters(int total_commands,
         int data_size,
         int num_of_concurrent_tasks,
         string clientsToRun,
-        string host)
+        string host,
+        int clientCount)
     {
         if (clientsToRun == "all" || clientsToRun == "ffi" || clientsToRun == "babushka")
         {
-            var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host));
-            await run_client(
-                async (key) => await babushka_client.GetAsync(key),
-                async (key, value) => await babushka_client.SetAsync(key, value),
+            var clients = await createClients(clientCount, () =>
+            {
+                var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host));
+                return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
+                    (async (key) => await babushka_client.GetAsync(key),
+                     async (key, value) => await babushka_client.SetAsync(key, value),
+                     () => babushka_client.Dispose()));
+            });
+
+            await run_clients(
+                clients,
                 "babushka FFI",
                 total_commands,
                 data_size,
@@ -245,30 +289,49 @@ public static class MainClass
 
         if (clientsToRun == "all" || clientsToRun == "socket" || clientsToRun == "babushka")
         {
-            var babushka_socket_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host));
-            await run_client(
-                async (key) => await babushka_socket_client.GetAsync(key),
-                async (key, value) => await babushka_socket_client.SetAsync(key, value),
+            var clients = await createClients(clientCount, async () =>
+                {
+                    var babushka_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host));
+                    return (async (key) => await babushka_client.GetAsync(key),
+                            async (key, value) => await babushka_client.SetAsync(key, value),
+                            () => babushka_client.Dispose());
+                });
+            await run_clients(
+                clients,
                 "babushka socket",
                 total_commands,
                 data_size,
                 num_of_concurrent_tasks
             );
+
+            foreach (var client in clients)
+            {
+                client.Dispose();
+            }
         }
 
         if (clientsToRun == "all")
         {
-            using (var connection = ConnectionMultiplexer.Connect(getAddress(host)))
+            var clients = await createClients(clientCount, () =>
+                {
+                    var connection = ConnectionMultiplexer.Connect(getAddress(host));
+                    var db = connection.GetDatabase();
+                    return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
+                        (async (key) => await db.StringGetAsync(key),
+                         async (key, value) => await db.StringSetAsync(key, value),
+                         () => connection.Dispose()));
+                });
+            await run_clients(
+                clients,
+                "StackExchange.Redis",
+                total_commands,
+                data_size,
+                num_of_concurrent_tasks
+            );
+
+            foreach (var client in clients)
             {
-                var db = connection.GetDatabase();
-                await run_client(
-                    async (key) => (await db.StringGetAsync(key)).ToString(),
-                    (key, value) => db.StringSetAsync(key, value),
-                    "StackExchange.Redis",
-                    total_commands,
-                    data_size,
-                    num_of_concurrent_tasks
-                );
+                client.Dispose();
             }
         }
     }
@@ -286,10 +349,11 @@ public static class MainClass
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
-        var product = options.concurrentTasks.Select(concurrentTasks => (concurrentTasks, options.dataSize));
-        foreach (var (concurrentTasks, dataSize) in product)
+        var product = options.concurrentTasks.SelectMany(concurrentTasks =>
+            options.clientCount.Select(clientCount => (concurrentTasks, options.dataSize, clientCount)));
+        foreach (var (concurrentTasks, dataSize, clientCount) in product)
         {
-            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host);
+            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount);
         }
 
         print_results(options.resultsFile);

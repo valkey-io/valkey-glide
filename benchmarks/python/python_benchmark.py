@@ -51,6 +51,12 @@ arguments_parser.add_argument(
     help="What host to target",
     required=True,
 )
+arguments_parser.add_argument(
+    "--clientCount",
+    help="Number of clients to run concurrently",
+    nargs="+",
+    required=True,
+)
 args = arguments_parser.parse_args()
 
 PORT = 6379
@@ -58,7 +64,7 @@ PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
-counter = 0
+completed_tasks_counter = 0
 running_tasks = set()
 bench_json_results = []
 
@@ -108,10 +114,11 @@ def timer(func):
     return wrapper
 
 
-async def execute_commands(client, total_commands, data_size, action_latencies):
-    global counter
-    while counter < total_commands:
+async def execute_commands(clients, total_commands, data_size, action_latencies):
+    global completed_tasks_counter
+    while completed_tasks_counter < total_commands:
         chosen_action = choose_action()
+        client = clients[completed_tasks_counter % len(clients)]
         tic = time.perf_counter()
         if chosen_action == ChosenAction.GET_EXISTING:
             await client.get(generate_key_set())
@@ -122,21 +129,21 @@ async def execute_commands(client, total_commands, data_size, action_latencies):
         toc = time.perf_counter()
         execution_time = toc - tic
         action_latencies[chosen_action].append(execution_time)
-        counter += 1
+        completed_tasks_counter += 1
     return True
 
 
 @timer
 async def create_and_run_concurrent_tasks(
-    client, total_commands, num_of_concurrent_tasks, data_size, action_latencies
+    clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
 ):
-    global counter
+    global completed_tasks_counter
     global get_latency
     global set_latency
-    counter = 0
+    completed_tasks_counter = 0
     for _ in range(num_of_concurrent_tasks):
         task = asyncio.create_task(
-            execute_commands(client, total_commands, data_size, action_latencies)
+            execute_commands(clients, total_commands, data_size, action_latencies)
         )
         running_tasks.add(task)
         task.add_done_callback(running_tasks.discard)
@@ -154,8 +161,12 @@ def latency_results(prefix, latencies):
     return result
 
 
-async def run_client(
-    client,
+async def create_clients(client_count, action):
+    return [await action() for _ in range(client_count)]
+
+
+async def run_clients(
+    clients,
     client_name,
     event_loop_name,
     total_commands,
@@ -164,7 +175,7 @@ async def run_client(
 ):
     now = datetime.now().strftime("%H:%M:%S")
     print(
-        f"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} {now}"
+        f"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} client count: {len(clients)} {now}"
     )
     action_latencies = {
         ChosenAction.GET_NON_EXISTING: list(),
@@ -172,9 +183,9 @@ async def run_client(
         ChosenAction.SET: list(),
     }
     time = await create_and_run_concurrent_tasks(
-        client, total_commands, num_of_concurrent_tasks, data_size, action_latencies
+        clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
     )
-    tps = int(counter / time)
+    tps = int(completed_tasks_counter / time)
     get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING]
     get_non_existing_latency_results = latency_results(
         "get_non_existing", get_non_existing_latencies
@@ -195,6 +206,7 @@ async def run_client(
             "num_of_tasks": num_of_concurrent_tasks,
             "data_size": data_size,
             "tps": tps,
+            "clientCount": len(clients),
         },
         **get_existing_latency_results,
         **get_non_existing_latency_results,
@@ -211,17 +223,19 @@ async def main(
     data_size,
     clients_to_run,
     host,
+    client_count,
 ):
     # Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
     set_logger_config(LogLevel.INFO, "first.log")
 
     if clients_to_run == "all":
-        # Redis-py
-        redispy_client = await redispy.Redis(
-            host=host, port=PORT, decode_responses=True
+        clients = await create_clients(
+            client_count,
+            lambda: redispy.Redis(host=host, port=PORT, decode_responses=True),
         )
-        await run_client(
-            redispy_client,
+
+        await run_clients(
+            clients,
             "redispy",
             event_loop_name,
             total_commands,
@@ -236,9 +250,12 @@ async def main(
     ):
         # Babushka FFI
         config = ClientConfiguration(host=host, port=PORT)
-        babushka_client = await RedisAsyncFFIClient.create(config)
-        await run_client(
-            babushka_client,
+        clients = await create_clients(
+            client_count,
+            lambda: RedisAsyncFFIClient.create(config),
+        )
+        await run_clients(
+            clients,
             "babushka-FFI",
             event_loop_name,
             total_commands,
@@ -253,9 +270,12 @@ async def main(
     ):
         # Babushka Socket
         config = ClientConfiguration(host=host, port=PORT)
-        babushka_socket_client = await RedisAsyncSocketClient.create(config)
-        await run_client(
-            babushka_socket_client,
+        clients = await create_clients(
+            client_count,
+            lambda: RedisAsyncSocketClient.create(config),
+        )
+        await run_clients(
+            clients,
             "babushka-socket",
             event_loop_name,
             total_commands,
@@ -272,14 +292,16 @@ if __name__ == "__main__":
     concurrent_tasks = args.concurrentTasks
     data_size = int(args.dataSize)
     clients_to_run = args.clients
+    client_count = args.clientCount
     host = args.host
 
     product_of_arguments = [
-        (data_size, int(num_of_concurrent_tasks))
+        (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
         for num_of_concurrent_tasks in concurrent_tasks
+        for number_of_clients in client_count
     ]
 
-    for (data_size, num_of_concurrent_tasks) in product_of_arguments:
+    for data_size, num_of_concurrent_tasks, number_of_clients in product_of_arguments:
         asyncio.run(
             main(
                 "asyncio",
@@ -288,6 +310,7 @@ if __name__ == "__main__":
                 data_size,
                 clients_to_run,
                 host,
+                number_of_clients,
             )
         )
 
