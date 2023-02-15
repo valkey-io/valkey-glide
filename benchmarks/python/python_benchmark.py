@@ -64,7 +64,7 @@ PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
-counter = 0
+completed_tasks_counter = 0
 running_tasks = set()
 bench_json_results = []
 
@@ -115,10 +115,10 @@ def timer(func):
 
 
 async def execute_commands(clients, total_commands, data_size, action_latencies):
-    global counter
-    while counter < total_commands:
+    global completed_tasks_counter
+    while completed_tasks_counter < total_commands:
         chosen_action = choose_action()
-        client = clients[counter % len(clients)]
+        client = clients[completed_tasks_counter % len(clients)]
         tic = time.perf_counter()
         if chosen_action == ChosenAction.GET_EXISTING:
             await client.get(generate_key_set())
@@ -129,7 +129,7 @@ async def execute_commands(clients, total_commands, data_size, action_latencies)
         toc = time.perf_counter()
         execution_time = toc - tic
         action_latencies[chosen_action].append(execution_time)
-        counter += 1
+        completed_tasks_counter += 1
     return True
 
 
@@ -137,10 +137,10 @@ async def execute_commands(clients, total_commands, data_size, action_latencies)
 async def create_and_run_concurrent_tasks(
     clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
 ):
-    global counter
+    global completed_tasks_counter
     global get_latency
     global set_latency
-    counter = 0
+    completed_tasks_counter = 0
     for _ in range(num_of_concurrent_tasks):
         task = asyncio.create_task(
             execute_commands(clients, total_commands, data_size, action_latencies)
@@ -165,7 +165,7 @@ async def create_clients(client_count, action):
     return [await action() for _ in range(client_count)]
 
 
-async def run_client(
+async def run_clients(
     clients,
     client_name,
     event_loop_name,
@@ -185,7 +185,7 @@ async def run_client(
     time = await create_and_run_concurrent_tasks(
         clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
     )
-    tps = int(counter / time)
+    tps = int(completed_tasks_counter / time)
     get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING]
     get_non_existing_latency_results = latency_results(
         "get_non_existing", get_non_existing_latencies
@@ -234,7 +234,7 @@ async def main(
             lambda: redispy.Redis(host=host, port=PORT, decode_responses=True),
         )
 
-        await run_client(
+        await run_clients(
             clients,
             "redispy",
             event_loop_name,
@@ -254,7 +254,7 @@ async def main(
             client_count,
             lambda: RedisAsyncFFIClient.create(config),
         )
-        await run_client(
+        await run_clients(
             clients,
             "babushka-FFI",
             event_loop_name,
@@ -274,7 +274,7 @@ async def main(
             client_count,
             lambda: RedisAsyncSocketClient.create(config),
         )
-        await run_client(
+        await run_clients(
             clients,
             "babushka-socket",
             event_loop_name,

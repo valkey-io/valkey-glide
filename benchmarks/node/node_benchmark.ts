@@ -23,7 +23,7 @@ const PROB_GET_EXISTING_KEY = 0.8;
 const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
-let counter = 0;
+let completed_tasks_counter = 0;
 const running_tasks: Promise<void>[] = [];
 const bench_json_results: object[] = [];
 
@@ -72,10 +72,10 @@ async function redis_benchmark(
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    while (counter < total_commands) {
+    while (completed_tasks_counter < total_commands) {
         const chosen_action = choose_action();
         const tic = process.hrtime();
-        const client = clients[counter % clients.length];
+        const client = clients[completed_tasks_counter % clients.length];
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
                 await client.get(generate_key_set());
@@ -90,7 +90,7 @@ async function redis_benchmark(
         const toc = process.hrtime(tic);
         const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
-        counter += 1;
+        completed_tasks_counter += 1;
     }
 }
 
@@ -101,7 +101,7 @@ async function create_bench_tasks(
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    counter = 0;
+    completed_tasks_counter = 0;
     const tic = process.hrtime();
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
@@ -128,7 +128,7 @@ function latency_results(
     return result;
 }
 
-async function run_client(
+async function run_clients(
     clients: IAsyncClient[],
     client_name: string,
     total_commands: number,
@@ -155,7 +155,7 @@ async function run_client(
         data,
         action_latencies
     );
-    const tps = Math.round(counter / time);
+    const tps = Math.round(completed_tasks_counter / time);
 
     const get_non_existing_latencies =
         action_latencies[ChosenAction.GET_NON_EXISTING];
@@ -217,7 +217,7 @@ async function main(
                     resolve(AsyncClient.CreateConnection(address))
                 )
         );
-        await run_client(
+        await run_clients(
             clients,
             "babushka FFI",
             total_commands,
@@ -235,7 +235,7 @@ async function main(
         const clients = await createClients(clientCount, () =>
             SocketConnection.CreateConnection(address)
         );
-        await run_client(
+        await run_clients(
             clients,
             "babushka socket",
             total_commands,
@@ -250,7 +250,7 @@ async function main(
     if (clients_to_run == "all") {
         const node_redis_client = createClient({ url: address });
         await node_redis_client.connect();
-        await run_client(
+        await run_clients(
             await createClients(clientCount, async () => {
                 const node_redis_client = createClient({ url: address });
                 await node_redis_client.connect();
