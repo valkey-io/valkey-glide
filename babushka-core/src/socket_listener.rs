@@ -328,9 +328,9 @@ fn close_socket(socket_path: String) {
 fn to_babushka_result<T, E: std::fmt::Display>(
     result: Result<T, E>,
     err_msg: Option<&str>,
-) -> Result<T, BabushkaError> {
+) -> Result<T, ClientCreationError> {
     result.map_err(|err: E| {
-        BabushkaError::BaseError(match err_msg {
+        ClientCreationError::UnhandledError(match err_msg {
             Some(msg) => format!("{msg}: {err}"),
             None => format!("{err}"),
         })
@@ -341,7 +341,7 @@ async fn parse_address_create_conn(
     writer: &Rc<Writer>,
     request: &WholeRequest,
     address_range: Range<usize>,
-) -> Result<MultiplexedConnection, BabushkaError> {
+) -> Result<MultiplexedConnection, ClientCreationError> {
     let address = &request.buffer[address_range];
     let address = to_babushka_result(
         std::str::from_utf8(address),
@@ -366,22 +366,24 @@ async fn parse_address_create_conn(
 async fn wait_for_server_address_create_conn(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
-) -> Result<MultiplexedConnection, BabushkaError> {
+) -> Result<MultiplexedConnection, ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values().await {
-        Closed(reason) => Err(BabushkaError::CloseError(reason)),
+        Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(received_requests) => {
             if let Some(request) = received_requests.first() {
                 match request.request_type.clone() {
                     RequestRanges::ServerAddress {
                         address: address_range,
                     } => parse_address_create_conn(writer, request, address_range).await,
-                    _ => Err(BabushkaError::BaseError(
+                    _ => Err(ClientCreationError::UnhandledError(
                         "Received another request before receiving server address".to_string(),
                     )),
                 }
             } else {
-                Err(BabushkaError::BaseError("No received requests".to_string()))
+                Err(ClientCreationError::UnhandledError(
+                    "No received requests".to_string(),
+                ))
             }
         }
     }
@@ -417,13 +419,23 @@ async fn listen_on_client_stream(
     let connection = match wait_for_server_address_create_conn(&mut client_listener, &writer).await
     {
         Ok(conn) => conn,
-        Err(BabushkaError::CloseError(_reason)) => {
+        Err(ClientCreationError::SocketListenerClosed(reason)) => {
             update_notify_connected_clients(connected_clients, notify_close);
+            logger_core::log(
+                logger_core::Level::Error,
+                "client creation",
+                format!("Socket listener closed due to {reason:?}"),
+            );
             return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
         }
-        Err(BabushkaError::BaseError(err)) => {
-            println!("Recieved error: {err:?}"); // TODO: implement error protocol
-            return;
+        Err(ClientCreationError::UnhandledError(err)) => {
+            update_notify_connected_clients(connected_clients, notify_close);
+            logger_core::log(
+                logger_core::Level::Error,
+                "client creation",
+                format!("Recieved error: {err}"),
+            );
+            return; // TODO: implement error protocol
         }
     };
     loop {
@@ -501,20 +513,18 @@ impl SocketListener {
 #[derive(Debug)]
 /// Enum describing the reason that a socket listener stopped listening on a socket.
 pub enum ClosingReason {
-    /// The socket was closed. This is usually the required way to close the listener.
+    /// The socket was closed. This is the expected way that the listener should be closed.
     ReadSocketClosed,
     /// The listener encounter an error it couldn't handle.
     UnhandledError(RedisError),
-    /// No clients left to handle, close the connection
-    AllConnectionsClosed,
 }
 
-/// Enum describing babushka errors
-pub enum BabushkaError {
-    /// Base error
-    BaseError(String),
-    /// Close error
-    CloseError(ClosingReason),
+/// Enum describing errors received during client creation.
+pub enum ClientCreationError {
+    /// An error was returned during the client creation process.
+    UnhandledError(String),
+    /// Socket listener was closed before receiving the server address.
+    SocketListenerClosed(ClosingReason),
 }
 
 /// Get the socket path as a string
