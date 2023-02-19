@@ -3,9 +3,10 @@ import commandLineArgs from "command-line-args";
 
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
-function getAddress(host) {
+function getAddress(host, tls) {
     const PORT = 6379;
-    return `redis://${host}:${PORT}`;
+    const protocol = tls ? "rediss" : "redis";
+    return `${protocol}://${host}:${PORT}`;
 }
 
 function generate_value(size) {
@@ -32,12 +33,13 @@ async function fill_database(data_size, address) {
 const optionDefinitions = [
     { name: "dataSize", type: String },
     { name: "host", type: String },
+    { name: "tls", type: Boolean },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
 Promise.resolve()
     .then(async () => {
-        const address = getAddress(receivedOptions.host);
+        const address = getAddress(receivedOptions.host, receivedOptions.tls);
         console.log(
             `Filling ${address} with data size ${receivedOptions.dataSize}`
         );

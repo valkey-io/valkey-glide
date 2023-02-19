@@ -13,9 +13,10 @@ enum ChosenAction {
 // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
 setLoggerConfig("info", "first.log");
 
-function getAddress(host: string): string {
+function getAddress(host: string, useTLS: boolean): string {
     const PORT = 6379;
-    return `redis://${host}:${PORT}`;
+    const protocol = useTLS ? "rediss" : "redis";
+    return `${protocol}://${host}:${PORT}`;
 }
 
 const PROB_GET = 0.8;
@@ -272,6 +273,7 @@ const optionDefinitions = [
     { name: "clients", type: String },
     { name: "host", type: String },
     { name: "clientCount", type: String, multiple: true },
+    { name: "tls", type: Boolean },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -297,7 +299,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                     lambda(clientCount, concurrentTasks)
                 )
         );
-        const address = getAddress(receivedOptions.host);
+        const address = getAddress(receivedOptions.host, receivedOptions.tls);
         for (const [concurrent_tasks, data_size, clientCount] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),
