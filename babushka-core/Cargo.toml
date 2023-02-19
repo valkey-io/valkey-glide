@@ -13,7 +13,7 @@ futures = "^0.3"
 lifeguard = "^0.6"
 num-derive = "^0.3"
 num-traits = "^0.2"
-redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp"] }
+redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp"] }
 signal-hook = "^0.3"
 signal-hook-tokio = {version = "^0.3", features = ["futures-v0_3"] }
 tokio = { version = "1", features = ["macros"] }
@@ -21,8 +21,8 @@ logger_core = {path = "../logger_core"}
 dispose = "0.4.0"
 
 [dev-dependencies]
-ntest = "0.9.0"
 rand = "0.8.5"
 rsevents = "0.3.1"
 socket2 = "0.4.7"
 tempfile = "3.3.0"
+rstest = "0.16.0"
