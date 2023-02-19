@@ -57,6 +57,9 @@ arguments_parser.add_argument(
     nargs="+",
     required=True,
 )
+arguments_parser.add_argument(
+    "--tls", help="Should benchmark a TLS server", action="store_true"
+)
 args = arguments_parser.parse_args()
 
 PORT = 6379
@@ -224,6 +227,7 @@ async def main(
     clients_to_run,
     host,
     client_count,
+    use_tls,
 ):
     # Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
     set_logger_config(LogLevel.INFO, "first.log")
@@ -231,7 +235,9 @@ async def main(
     if clients_to_run == "all":
         clients = await create_clients(
             client_count,
-            lambda: redispy.Redis(host=host, port=PORT, decode_responses=True),
+            lambda: redispy.Redis(
+                host=host, port=PORT, decode_responses=True, ssl=use_tls
+            ),
         )
 
         await run_clients(
@@ -249,7 +255,7 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka FFI
-        config = ClientConfiguration(host=host, port=PORT)
+        config = ClientConfiguration(host=host, port=PORT, tls_enabled=use_tls)
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncFFIClient.create(config),
@@ -269,7 +275,7 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
-        config = ClientConfiguration(host=host, port=PORT)
+        config = ClientConfiguration(host=host, port=PORT, tls_enabled=use_tls)
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncSocketClient.create(config),
@@ -294,6 +300,7 @@ if __name__ == "__main__":
     clients_to_run = args.clients
     client_count = args.clientCount
     host = args.host
+    use_tls = args.tls
 
     product_of_arguments = [
         (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
@@ -311,6 +318,7 @@ if __name__ == "__main__":
                 clients_to_run,
                 host,
                 number_of_clients,
+                use_tls,
             )
         )
 
