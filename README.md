@@ -28,12 +28,12 @@ sudo tar xzf {0}.tar.gz
 sudo rm {0}.tar.gz
 cd {0}
 sudo make distclean
-sudo make
+sudo make BUILD_TLS=yes
 sudo mkdir /etc/redis
 sudo cp src/redis-server src/redis-cli /usr/local/bin
 ```
 
-change {0} to the version you want. version names are available here: http://download.redis.io/releases/
+change {0} to the version you want, e.g. redis-6.2.5. version names are available here: http://download.redis.io/releases/
 recommended version - 6.2.5 ATM
 
 ### node 16 (or newer)
