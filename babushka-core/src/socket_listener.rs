@@ -276,7 +276,7 @@ fn handle_request(request: WholeRequest, connection: MultiplexedConnection, writ
         };
         if let Err(err) = result {
             write_error(
-                err,
+                &err.to_string(),
                 request.callback_index,
                 writer,
                 ResponseType::RequestError,
@@ -287,7 +287,7 @@ fn handle_request(request: WholeRequest, connection: MultiplexedConnection, writ
 }
 
 async fn write_error(
-    err: RedisError,
+    err: &String,
     callback_index: u32,
     writer: Rc<Writer>,
     response_type: ResponseType,
@@ -440,15 +440,20 @@ async fn listen_on_client_stream(
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
             update_notify_connected_clients(connected_clients, notify_close);
-            logger_core::log(
-                logger_core::Level::Error,
-                "client creation",
-                format!("Socket listener closed due to {reason:?}"),
-            );
+            let error_message = format!("Socket listener closed due to {reason:?}");
+            write_error(&error_message, u32::MAX, writer, ResponseType::ClosingError).await;
+            logger_core::log(logger_core::Level::Error, "client creation", error_message);
             return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
         }
         Err(ClientCreationError::UnhandledError(err)) => {
             update_notify_connected_clients(connected_clients, notify_close);
+            write_error(
+                &err.to_string(),
+                u32::MAX,
+                writer,
+                ResponseType::ClosingError,
+            )
+            .await;
             logger_core::log(
                 logger_core::Level::Error,
                 "client creation",
@@ -460,7 +465,7 @@ async fn listen_on_client_stream(
     tokio::select! {
             reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
-                    write_error(err, u32::MAX, writer, ResponseType::ClosingError).await;
+                    write_error(&err.to_string(), u32::MAX, writer, ResponseType::ClosingError).await;
                 };
             },
             writer_closing = receiver.recv() => {
