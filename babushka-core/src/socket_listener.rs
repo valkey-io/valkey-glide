@@ -3,7 +3,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::BufMut;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
-use logger_core::{log_error, log_info};
+use logger_core::{log_error, log_info, log_trace};
 use num_traits::ToPrimitive;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult, Value};
@@ -316,6 +316,7 @@ async fn handle_requests(
 }
 
 fn close_socket(socket_path: String) {
+    log_info("close_socket", format!("closing socket at {socket_path}"));
     let _ = std::fs::remove_file(socket_path);
 }
 
@@ -354,6 +355,10 @@ async fn parse_address_create_conn(
     write_null_response_header(&writer.accumulated_outputs, request.callback_index)
         .expect("Failed writing address response.");
     write_to_output(writer).await;
+    log_trace(
+        "client creation",
+        format!("Connection to {address} created"),
+    );
     Ok(connection)
 }
 
@@ -439,13 +444,17 @@ async fn listen_on_client_stream(socket: UnixStream) {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
                     write_error(&err.to_string(), u32::MAX, writer, ResponseType::ClosingError).await;
                 };
+                log_trace("client closing", "reader closed");
             },
             writer_closing = receiver.recv() => {
                 if let Some(ClosingReason::UnhandledError(err)) = writer_closing {
-                    log_error("writer closing", err.to_string());
+                    log_error("client closing", format!("Writer closed with error: {err}"));
+                } else {
+                    log_trace("client closing", "writer closed");
                 }
             }
     }
+    log_trace("client closing", "closing connection");
 }
 
 impl SocketListener {
