@@ -15,15 +15,12 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use std::{io, thread};
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
-use tokio::sync::Notify;
 use tokio::task;
 use ClosingReason::*;
 use PipeListeningResult::*;
@@ -389,18 +386,6 @@ async fn wait_for_server_address_create_conn(
     }
 }
 
-fn update_notify_connected_clients(
-    connected_clients: Arc<AtomicUsize>,
-    close_notifier: Arc<Notify>,
-) {
-    // Check if the entire socket listener should be closed before
-    // closing the client's connection task
-    if connected_clients.fetch_sub(1, Ordering::Relaxed) == 1 {
-        // No more clients connected, close the socket
-        close_notifier.notify_one();
-    }
-}
-
 async fn read_values_loop(
     mut client_listener: UnixStreamListener,
     connection: MultiplexedConnection,
@@ -418,11 +403,7 @@ async fn read_values_loop(
     }
 }
 
-async fn listen_on_client_stream(
-    socket: UnixStream,
-    notify_close: Arc<Notify>,
-    connected_clients: Arc<AtomicUsize>,
-) {
+async fn listen_on_client_stream(socket: UnixStream) {
     let socket = Rc::new(socket);
     // Spawn a new task to listen on this client's stream
     let write_lock = Mutex::new(());
@@ -439,14 +420,12 @@ async fn listen_on_client_stream(
     {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
-            update_notify_connected_clients(connected_clients, notify_close);
             let error_message = format!("Socket listener closed due to {reason:?}");
             write_error(&error_message, u32::MAX, writer, ResponseType::ClosingError).await;
             logger_core::log(logger_core::Level::Error, "client creation", error_message);
             return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
         }
         Err(ClientCreationError::UnhandledError(err)) => {
-            update_notify_connected_clients(connected_clients, notify_close);
             write_error(
                 &err.to_string(),
                 u32::MAX,
@@ -474,7 +453,6 @@ async fn listen_on_client_stream(
                 }
             }
     }
-    update_notify_connected_clients(connected_clients, notify_close);
 }
 
 impl SocketListener {
@@ -504,32 +482,25 @@ impl SocketListener {
             }
         };
         let local = task::LocalSet::new();
-        let connected_clients = Arc::new(AtomicUsize::new(0));
-        let notify_close = Arc::new(Notify::new());
         init_callback(Ok(self.socket_path.clone()));
-        local.run_until(async move {
-            loop {
-                tokio::select! {
-                    listen_v = listener.accept() => {
-                        if let Ok((stream, _addr)) = listen_v {
-                            // New client
-                            let cloned_close_notifier = notify_close.clone();
-                            let cloned_connected_clients = connected_clients.clone();
-                            cloned_connected_clients.fetch_add(1, Ordering::Relaxed);
-                            task::spawn_local(listen_on_client_stream(stream, cloned_close_notifier.clone(), cloned_connected_clients));
-                        } else if listen_v.is_err() {
-                            return
-                        }
-                    },
-                    // `notify_one` was called to indicate no more clients are connected,
-                    // close the socket
-                    _ = notify_close.notified() => continue, //TODO: socket listener shouldn't be closed, remove the notifier
-                    // Interrupt was received, close the socket
-                    _ = handle_signals() => return
+        local
+            .run_until(async move {
+                loop {
+                    tokio::select! {
+                        listen_v = listener.accept() => {
+                            if let Ok((stream, _addr)) = listen_v {
+                                // New client
+                                task::spawn_local(listen_on_client_stream(stream));
+                            } else if listen_v.is_err() {
+                                return
+                            }
+                        },
+                        // Interrupt was received, close the socket
+                        _ = handle_signals() => return
+                    }
                 }
-            };
             })
-        .await;
+            .await;
     }
 }
 
