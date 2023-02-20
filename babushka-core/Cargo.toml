@@ -16,12 +16,12 @@ num-traits = "^0.2"
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp"] }
 signal-hook = "^0.3"
 signal-hook-tokio = {version = "^0.3", features = ["futures-v0_3"] }
-tokio = { version = "1", features = ["macros"] }
+tokio = { version = "1", features = ["macros", "time"] }
 logger_core = {path = "../logger_core"}
 dispose = "0.4.0"
 tokio-util = {version = "^0.7", features = ["rt"]}
 num_cpus = "^1.15"
-
+rand = "0.8.5"
 
 [dev-dependencies]
 rand = "0.8.5"
