@@ -5,6 +5,7 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
 use num_traits::ToPrimitive;
+use rand::Rng;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult, Value};
 use redis::{Client, RedisError};
@@ -15,6 +16,7 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
+use std::time::Duration;
 use std::{io, thread};
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
@@ -27,7 +29,7 @@ use ClosingReason::*;
 use PipeListeningResult::*;
 
 /// The socket file name
-pub const SOCKET_FILE_NAME: &str = "babushka-socket";
+const SOCKET_FILE_NAME: &str = "babushka-socket";
 
 /// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
@@ -38,7 +40,7 @@ struct SocketListener {
 impl Dispose for SocketListener {
     fn dispose(self) {
         if self.cleanup_socket {
-            close_socket(self.socket_path);
+            close_socket(&self.socket_path);
         }
     }
 }
@@ -315,7 +317,7 @@ async fn handle_requests(
     task::yield_now().await;
 }
 
-fn close_socket(socket_path: String) {
+pub fn close_socket(socket_path: &String) {
     log_info("close_socket", format!("closing socket at {socket_path}"));
     let _ = std::fs::remove_file(socket_path);
 }
@@ -421,6 +423,14 @@ async fn listen_on_client_stream(socket: UnixStream) {
     let connection = match wait_for_server_address_create_conn(&mut client_listener, &writer).await
     {
         Ok(conn) => conn,
+        Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
+            // This isn't an error - it can happen when a new wrapper-client creates a connection in order to check whether something already listens on the socket.
+            log_trace(
+                "client creation",
+                "read socket closed before client was created.",
+            );
+            return;
+        }
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
             let error_message = format!("Socket listener closed due to {reason:?}");
             write_error(&error_message, u32::MAX, writer, ResponseType::ClosingError).await;
@@ -457,12 +467,74 @@ async fn listen_on_client_stream(socket: UnixStream) {
     log_trace("client closing", "closing connection");
 }
 
+enum SocketCreationResult {
+    // Socket creation was successful, returned a socket listener.
+    Created(UnixListener),
+    // There's an existing a socket listener.
+    PreExisting,
+    // Socket creation failed with an error.
+    Err(io::Error),
+}
+
 impl SocketListener {
-    fn new() -> Self {
+    fn new(socket_path: String) -> Self {
         SocketListener {
-            socket_path: get_socket_path(),
-            cleanup_socket: true,
+            socket_path,
+            // Don't cleanup the socket resources unless we know that the socket is in use, and owned by this listener.
+            cleanup_socket: false,
         }
+    }
+
+    /// Return true if it's possible to connect to socket.
+    async fn socket_is_available(&self) -> bool {
+        let mut rng = rand::thread_rng();
+        if UnixStream::connect(&self.socket_path).await.is_ok() {
+            return true;
+        }
+        const RETRY_COUNT: u8 = 3;
+        let mut retries = RETRY_COUNT;
+        while retries > 0 {
+            retries -= 1;
+
+            const BASE_SLEEP_DURATION: Duration = Duration::from_millis(5);
+            const JITTER_RANGE: Range<u64> = 1..5;
+            let sleep_jitter = Duration::from_millis(rng.gen_range(JITTER_RANGE));
+            tokio::time::sleep(BASE_SLEEP_DURATION + sleep_jitter).await;
+
+            if UnixStream::connect(&self.socket_path).await.is_ok() {
+                return true;
+            }
+        }
+        false
+    }
+
+    async fn get_socket_listener(&self) -> SocketCreationResult {
+        const RETRY_COUNT: u8 = 3;
+        let mut retries = RETRY_COUNT;
+        while retries > 0 {
+            match UnixListener::bind(self.socket_path.clone()) {
+                Ok(listener) => {
+                    return SocketCreationResult::Created(listener);
+                }
+                Err(err) if err.kind() == AddrInUse => {
+                    if self.socket_is_available().await {
+                        return SocketCreationResult::PreExisting;
+                    } else {
+                        // socket file might still exist, even if nothing is listening on it.
+                        close_socket(&self.socket_path);
+                        retries -= 1;
+                        continue;
+                    }
+                }
+                Err(err) => {
+                    return SocketCreationResult::Err(err);
+                }
+            }
+        }
+        SocketCreationResult::Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to connect to socket",
+        ))
     }
 
     pub(crate) async fn listen_on_socket<InitCallback>(&mut self, init_callback: InitCallback)
@@ -470,19 +542,20 @@ impl SocketListener {
         InitCallback: FnOnce(Result<String, String>) + Send + 'static,
     {
         // Bind to socket
-        let listener = match UnixListener::bind(self.socket_path.clone()) {
-            Ok(listener) => listener,
-            Err(err) if err.kind() == AddrInUse => {
-                init_callback(Ok(self.socket_path.clone()));
-                // Don't cleanup the socket resources since the socket is being used
-                self.cleanup_socket = false;
-                return;
-            }
-            Err(err) => {
+        let listener = match self.get_socket_listener().await {
+            SocketCreationResult::Created(listener) => listener,
+            SocketCreationResult::Err(err) => {
+                log_info("listen_on_socket", format!("failed with error: {err}"));
                 init_callback(Err(err.to_string()));
                 return;
             }
+            SocketCreationResult::PreExisting => {
+                init_callback(Ok(self.socket_path.clone()));
+                return;
+            }
         };
+
+        self.cleanup_socket = true;
         init_callback(Ok(self.socket_path.clone()));
         let local_set_pool = LocalPoolHandle::new(num_cpus::get());
         loop {
@@ -527,14 +600,18 @@ pub enum ClientCreationError {
     SocketListenerClosed(ClosingReason),
 }
 
-/// Get the socket path as a string
-fn get_socket_path() -> String {
-    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
+pub fn get_socket_path_from_name(socket_name: String) -> String {
     std::env::temp_dir()
         .join(socket_name)
         .into_os_string()
         .into_string()
         .expect("Couldn't create socket path")
+}
+
+/// Get the socket path as a string
+pub fn get_socket_path() -> String {
+    let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
+    get_socket_path_from_name(socket_name)
 }
 
 async fn handle_signals() {
@@ -554,6 +631,32 @@ async fn handle_signals() {
     }
 }
 
+/// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
+/// Avoid using this function, unless you explicitly want to test the behavior of the listener
+/// without using the sockets used by other tests.
+pub fn start_socket_listener_internal<InitCallback>(
+    init_callback: InitCallback,
+    socket_path: Option<String>,
+) where
+    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
+{
+    thread::Builder::new()
+        .name("socket_listener_thread".to_string())
+        .spawn(move || {
+            let runtime = Builder::new_current_thread().enable_all().build();
+            match runtime {
+                Ok(runtime) => {
+                    let mut listener = Disposable::new(SocketListener::new(
+                        socket_path.unwrap_or_else(get_socket_path),
+                    ));
+                    runtime.block_on(listener.listen_on_socket(init_callback));
+                }
+                Err(err) => init_callback(Err(err.to_string())),
+            };
+        })
+        .expect("Thread spawn failed. Cannot report error because callback was moved.");
+}
+
 /// Creates a new thread with a main loop task listening on the socket for new connections.
 /// Every new connection will be assigned with a client-listener task to handle their requests.
 ///
@@ -563,20 +666,5 @@ pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
 where
     InitCallback: FnOnce(Result<String, String>) + Send + 'static,
 {
-    thread::Builder::new()
-        .name("socket_listener_thread".to_string())
-        .spawn(move || {
-            let runtime = Builder::new_current_thread()
-                .enable_all()
-                .thread_name("socket_listener_thread")
-                .build();
-            match runtime {
-                Ok(runtime) => {
-                    let mut listener = Disposable::new(SocketListener::new());
-                    runtime.block_on(listener.listen_on_socket(init_callback));
-                }
-                Err(err) => init_callback(Err(err.to_string())),
-            };
-        })
-        .expect("Thread spawn failed. Cannot report error because callback was moved.");
+    start_socket_listener_internal(init_callback, None);
 }
