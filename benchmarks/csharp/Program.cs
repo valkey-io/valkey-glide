@@ -31,6 +31,9 @@ public static class MainClass
 
         [Option('C', "clientCount", Required = true, HelpText = "Number of clients to run concurrently")]
         public IEnumerable<int> clientCount { get; set; } = Enumerable.Empty<int>();
+
+        [Option('t', "tls", Default = false, HelpText = "Should benchmark a TLS server")]
+        public bool tls { get; set; } = false;
     }
 
     private const int PORT = 6379;
@@ -39,9 +42,15 @@ public static class MainClass
         return $"{host}:{PORT}";
     }
 
-    private static string getAddressWithRedisPrefix(string host)
+    private static string getAddressForStackExchangeRedis(string host, bool useTLS)
     {
-        return $"redis://{getAddress(host)}";
+        return $"{getAddress(host)},ssl={useTLS}";
+    }
+
+    private static string getAddressWithRedisPrefix(string host, bool useTLS)
+    {
+        var protocol = useTLS ? "rediss" : "redis";
+        return $"{protocol}://{getAddress(host)}";
     }
     private const double PROB_GET = 0.8;
 
@@ -264,13 +273,14 @@ public static class MainClass
         int num_of_concurrent_tasks,
         string clientsToRun,
         string host,
-        int clientCount)
+        int clientCount,
+        bool useTLS)
     {
         if (clientsToRun == "all" || clientsToRun == "ffi" || clientsToRun == "babushka")
         {
             var clients = await createClients(clientCount, () =>
             {
-                var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host));
+                var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host, useTLS));
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await babushka_client.GetAsync(key),
                      async (key, value) => await babushka_client.SetAsync(key, value),
@@ -291,7 +301,7 @@ public static class MainClass
         {
             var clients = await createClients(clientCount, async () =>
                 {
-                    var babushka_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host));
+                    var babushka_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host, useTLS));
                     return (async (key) => await babushka_client.GetAsync(key),
                             async (key, value) => await babushka_client.SetAsync(key, value),
                             () => babushka_client.Dispose());
@@ -314,7 +324,7 @@ public static class MainClass
         {
             var clients = await createClients(clientCount, () =>
                 {
-                    var connection = ConnectionMultiplexer.Connect(getAddress(host));
+                    var connection = ConnectionMultiplexer.Connect(getAddressForStackExchangeRedis(host, useTLS));
                     var db = connection.GetDatabase();
                     return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                         (async (key) => await db.StringGetAsync(key),
@@ -353,7 +363,7 @@ public static class MainClass
             options.clientCount.Select(clientCount => (concurrentTasks, options.dataSize, clientCount)));
         foreach (var (concurrentTasks, dataSize, clientCount) in product)
         {
-            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount);
+            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount, options.tls);
         }
 
         print_results(options.resultsFile);
