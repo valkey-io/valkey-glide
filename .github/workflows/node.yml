@@ -9,7 +9,7 @@ on:
             - node/**
     pull_request:
         paths:
-            - babushka-core/**
+            - babushka-core/src/**
             - submodules/**
             - node/**
 
