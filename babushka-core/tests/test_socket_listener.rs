@@ -4,7 +4,6 @@ use babushka::headers::{
 };
 use babushka::*;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use ntest::timeout;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::{distributions::Standard, thread_rng, Rng};
 use rsevents::{Awaitable, EventState, ManualResetEvent};
@@ -19,7 +18,8 @@ mod socket_listener {
     use super::*;
     use babushka::headers::HEADER_WITH_KEY_LENGTH_END;
     use redis::Value;
-    use std::mem::size_of;
+    use rstest::rstest;
+    use std::{mem::size_of, time::Duration};
 
     struct TestBasics {
         _server: RedisServer,
@@ -109,10 +109,14 @@ mod socket_listener {
         assert_value(buffer, 0, expected_value);
     }
 
-    fn send_address(address: String, socket: &UnixStream) {
+    fn send_address(address: String, socket: &UnixStream, use_tls: bool) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 1;
-        let address = format!("redis://{address}");
+        let address = if use_tls {
+            format!("rediss://{address}#insecure")
+        } else {
+            format!("redis://{address}")
+        };
         let message_length = address.len() + HEADER_END;
         let mut buffer = Vec::with_capacity(message_length);
         write_header(
@@ -129,10 +133,10 @@ mod socket_listener {
         assert_null_header(&buffer, CALLBACK_INDEX);
     }
 
-    fn setup_test_basics() -> TestBasics {
+    fn setup_test_basics(use_tls: bool) -> TestBasics {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
-        let context = TestContext::new();
+        let context = TestContext::new(ServerType::Tcp { tls: use_tls });
         let cloned_state = socket_listener_state.clone();
         let path_arc = Arc::new(std::sync::Mutex::new(None));
         let path_arc_clone = Arc::clone(&path_arc);
@@ -147,7 +151,7 @@ mod socket_listener {
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
         let address = context.server.get_client_addr().to_string();
-        send_address(address, &socket);
+        send_address(address, &socket, use_tls);
         TestBasics {
             _server: context.server,
             socket,
@@ -162,21 +166,9 @@ mod socket_listener {
             .collect()
     }
 
-    /// Check if the passed server type is TLS or UNIX
-    pub fn is_tls_or_unix() -> bool {
-        match std::env::var("REDISRS_SERVER_TYPE") {
-            Ok(env) => env.eq_ignore_ascii_case("tcp+tls") || env.eq_ignore_ascii_case("unix"),
-            Err(_) => false,
-        }
-    }
-
-    #[test]
-    fn test_socket_set_and_get() {
-        if is_tls_or_unix() {
-            // TODO: delete after we'll support passing configurations to socket
-            return;
-        }
-        let mut test_basics = setup_test_basics();
+    #[rstest]
+    fn test_socket_set_and_get(#[values(false, true)] use_tls: bool) {
+        let mut test_basics = setup_test_basics(use_tls);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -205,14 +197,10 @@ mod socket_listener {
         assert_received_value(&buffer, CALLBACK2_INDEX, &value);
     }
 
-    #[test]
-    fn test_socket_get_returns_null() {
-        if is_tls_or_unix() {
-            // TODO: delete after we'll support passing configurations to socket
-            return;
-        }
+    #[rstest]
+    fn test_socket_get_returns_null(#[values(false, true)] use_tls: bool) {
         const CALLBACK_INDEX: u32 = 99;
-        let mut test_basics = setup_test_basics();
+        let mut test_basics = setup_test_basics(use_tls);
         let key = "hello";
         let mut buffer = Vec::with_capacity(HEADER_END);
         write_get(&mut buffer, CALLBACK_INDEX, key);
@@ -223,13 +211,9 @@ mod socket_listener {
         assert_null_header(&buffer, CALLBACK_INDEX);
     }
 
-    #[test]
-    fn test_socket_report_error() {
-        if is_tls_or_unix() {
-            // TODO: delete after we'll support passing configurations to socket
-            return;
-        }
-        let mut test_basics = setup_test_basics();
+    #[rstest]
+    fn test_socket_report_error(#[values(false, true)] use_tls: bool) {
+        let mut test_basics = setup_test_basics(use_tls);
 
         const CALLBACK_INDEX: u32 = 99;
         let key = "a";
@@ -249,13 +233,9 @@ mod socket_listener {
         assert_eq!(response_type, ResponseType::ClosingError);
     }
 
-    #[test]
-    fn test_socket_handle_long_input() {
-        if is_tls_or_unix() {
-            // TODO: delete after we'll support passing configurations to socket
-            return;
-        }
-        let mut test_basics = setup_test_basics();
+    #[rstest]
+    fn test_socket_handle_long_input(#[values(false, true)] use_tls: bool) {
+        let mut test_basics = setup_test_basics(use_tls);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -291,20 +271,16 @@ mod socket_listener {
 
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
-    #[test]
-    #[timeout(10000)]
-    fn test_socket_handle_multiple_long_inputs() {
-        if is_tls_or_unix() {
-            // TODO: delete after we'll support passing configurations to socket
-            return;
-        }
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_socket_handle_multiple_long_inputs(#[values(false, true)] use_tls: bool) {
         #[derive(Clone, PartialEq, Eq, Debug)]
         enum State {
             Initial,
             ReceivedNull,
             ReceivedValue,
         }
-        let test_basics = setup_test_basics();
+        let test_basics = setup_test_basics(use_tls);
         const VALUE_LENGTH: usize = 1000000;
         const NUMBER_OF_THREADS: usize = 10;
         let values = Arc::new(Mutex::new(vec![Vec::<u8>::new(); NUMBER_OF_THREADS]));

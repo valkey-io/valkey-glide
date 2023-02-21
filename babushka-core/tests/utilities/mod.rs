@@ -11,7 +11,7 @@ use tempfile::TempDir;
 // Code copied from redis-rs
 
 #[derive(PartialEq)]
-enum ServerType {
+pub enum ServerType {
     Tcp { tls: bool },
     Unix,
 }
@@ -22,34 +22,16 @@ pub struct RedisServer {
     addr: redis::ConnectionAddr,
 }
 
-impl ServerType {
-    fn get_intended() -> ServerType {
-        match env::var("REDISRS_SERVER_TYPE")
-            .ok()
-            .as_ref()
-            .map(|x| &x[..])
-        {
-            Some("tcp") => ServerType::Tcp { tls: false },
-            Some("tcp+tls") => ServerType::Tcp { tls: true },
-            Some("unix") => ServerType::Unix,
-            val => {
-                println!("Unknown server type {val:?}");
-                ServerType::Tcp { tls: false }
-            }
-        }
-    }
-}
 pub enum Module {
     Json,
 }
 
 impl RedisServer {
-    pub fn new() -> RedisServer {
-        RedisServer::with_modules(&[])
+    pub fn new(server_type: ServerType) -> RedisServer {
+        RedisServer::with_modules(server_type, &[])
     }
 
-    pub fn with_modules(modules: &[Module]) -> RedisServer {
-        let server_type = ServerType::get_intended();
+    pub fn with_modules(server_type: ServerType, modules: &[Module]) -> RedisServer {
         let addr = match server_type {
             ServerType::Tcp { tls } => {
                 // this is technically a race but we can't do better with
@@ -196,12 +178,12 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    pub fn new() -> TestContext {
-        TestContext::with_modules(&[])
+    pub fn new(server_type: ServerType) -> TestContext {
+        TestContext::with_modules(server_type, &[])
     }
 
-    pub fn with_modules(modules: &[Module]) -> TestContext {
-        let server = RedisServer::with_modules(modules);
+    pub fn with_modules(server_type: ServerType, modules: &[Module]) -> TestContext {
+        let server = RedisServer::with_modules(server_type, modules);
 
         let client = redis::Client::open(redis::ConnectionInfo {
             addr: server.get_client_addr().clone(),

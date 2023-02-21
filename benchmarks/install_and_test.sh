@@ -40,7 +40,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
+  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
   # exit python virtualenv
   deactivate
   echo "done python benchmark"
@@ -54,26 +54,26 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount
+  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
 }
 
 function flushDB() {
   cd $utilitiesDir
   npm install
-  npm run flush -- --host $host
+  npm run flush -- --host $host $tlsFlag
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  npm run fill -- --dataSize $1 --host $host
+  npm run fill -- --dataSize $1 --host $host $tlsFlag
 }
 
 utilitiesDir=`pwd`/utilities
@@ -113,6 +113,7 @@ function Help() {
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
     echo Pass -only-babushka to only run Babushk clients.
+    echo Pass -tls to connect to server using transport level security \(TLS\).
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
 }
 
@@ -176,7 +177,10 @@ do
         -only-babushka)
             chosenClients="babushka"
             ;;                  
-        -no-csv) writeResultsCSV=0 ;;        
+        -no-csv) writeResultsCSV=0 ;;
+        -tls) 
+            tlsFlag="--tls"
+            ;;
     esac
     shift
 done
