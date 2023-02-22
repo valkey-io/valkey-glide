@@ -28,15 +28,6 @@ impl Level {
             Level::Error => LevelFilter::ERROR,
         }
     }
-    fn to_tracing_level(&self) -> tracing::Level {
-        match self {
-            Level::Trace => tracing::Level::TRACE,
-            Level::Debug => tracing::Level::DEBUG,
-            Level::Info => tracing::Level::INFO,
-            Level::Warn => tracing::Level::WARN,
-            Level::Error => tracing::Level::ERROR,
-        }
-    }
 }
 
 // Initialize a logger that writes the received logs to a file under the babushka-logs folder.
@@ -82,6 +73,38 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
     }
 }
 
+macro_rules! create_log {
+    ($name:ident, $uppercase_level:tt) => {
+        pub fn $name<Message: AsRef<str>, Identifier: AsRef<str>>(
+            log_identifier: Identifier,
+            message: Message,
+        ) {
+            unsafe {
+                if GUARD.is_none() {
+                    init(None, None);
+                };
+            };
+
+            let micro_time_stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_micros();
+            let message_ref = message.as_ref();
+            let identifier_ref = log_identifier.as_ref();
+            event!(
+                tracing::Level::$uppercase_level,
+                " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
+            )
+        }
+    };
+}
+
+create_log!(log_trace, TRACE);
+create_log!(log_debug, DEBUG);
+create_log!(log_info, INFO);
+create_log!(log_warn, WARN);
+create_log!(log_error, ERROR);
+
 // Logs the given log, with log_identifier and log level prefixed. If the given log level is below the threshold of given when the logger was initialized, the log will be ignored.
 // log_identifier should be used to add context to a log, and make it easier to connect it to other relevant logs. For example, it can be used to pass a task identifier.
 // If this is called before a logger was initialized the log will not be registered.
@@ -91,38 +114,11 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
     log_identifier: Identifier,
     message: Message,
 ) {
-    unsafe {
-        if GUARD.is_none() {
-            init(None, None);
-        };
-    };
-
-    let micro_time_stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_micros();
-    let message_ref = message.as_ref();
-    let identifier_ref = log_identifier.as_ref();
-    match log_level.to_tracing_level() {
-        tracing::Level::DEBUG => event!(
-            tracing::Level::DEBUG,
-            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
-        ),
-        tracing::Level::TRACE => event!(
-            tracing::Level::TRACE,
-            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
-        ),
-        tracing::Level::INFO => event!(
-            tracing::Level::INFO,
-            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
-        ),
-        tracing::Level::WARN => event!(
-            tracing::Level::WARN,
-            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
-        ),
-        tracing::Level::ERROR => event!(
-            tracing::Level::ERROR,
-            " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
-        ),
+    match log_level {
+        Level::Debug => log_debug(log_identifier, message),
+        Level::Trace => log_trace(log_identifier, message),
+        Level::Info => log_info(log_identifier, message),
+        Level::Warn => log_warn(log_identifier, message),
+        Level::Error => log_error(log_identifier, message),
     }
 }
