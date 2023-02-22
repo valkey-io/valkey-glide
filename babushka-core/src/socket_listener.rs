@@ -3,7 +3,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::BufMut;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
-use logger_core::{log, Level};
+use logger_core::{log_error, log_info};
 use num_traits::ToPrimitive;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult, Value};
@@ -70,11 +70,7 @@ impl From<ClosingReason> for PipeListeningResult {
 impl UnixStreamListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         // if the logger has been initialized by the user (external or internal) on info level this log will be shown
-        logger_core::log(
-            logger_core::Level::Info,
-            "connection",
-            "new socket listener initiated",
-        );
+        log_info("connection", "new socket listener initiated");
         let rotating_buffer = RotatingBuffer::new(2, 65_536);
         Self {
             read_socket,
@@ -422,7 +418,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
             let error_message = format!("Socket listener closed due to {reason:?}");
             write_error(&error_message, u32::MAX, writer, ResponseType::ClosingError).await;
-            logger_core::log(logger_core::Level::Error, "client creation", error_message);
+            log_error("client creation", error_message);
             return; // TODO: implement error protocol, handle closing reasons different from ReadSocketClosed
         }
         Err(ClientCreationError::UnhandledError(err)) => {
@@ -433,11 +429,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
                 ResponseType::ClosingError,
             )
             .await;
-            logger_core::log(
-                logger_core::Level::Error,
-                "client creation",
-                format!("Recieved error: {err}"),
-            );
+            log_error("client creation", format!("Recieved error: {err}"));
             return; // TODO: implement error protocol
         }
     };
@@ -449,7 +441,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             },
             writer_closing = receiver.recv() => {
                 if let Some(ClosingReason::UnhandledError(err)) = writer_closing {
-                    log(Level::Error, "writer closing", err.to_string());
+                    log_error("writer closing", err.to_string());
                 }
             }
     }
@@ -545,11 +537,7 @@ async fn handle_signals() {
         if let Some(signal) = signals.next().await {
             match signal {
                 SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
-                    logger_core::log(
-                        logger_core::Level::Info,
-                        "connection",
-                        format!("Signal {signal:?} received"),
-                    );
+                    log_info("connection", format!("Signal {signal:?} received"));
                     return;
                 }
                 _ => continue,
