@@ -13,10 +13,19 @@ enum ChosenAction {
 // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
 setLoggerConfig("info", "first.log");
 
-function getAddress(host: string, useTLS: boolean): string {
+function getAddress(host: string, port?: number): string {
+    const PORT = 6379;
+    return `${host}:${port === undefined ? PORT : port}`;
+}
+
+function getAddressWithProtocol(
+    host: string,
+    useTLS: boolean,
+    port?: number
+): string {
     const PORT = 6379;
     const protocol = useTLS ? "rediss" : "redis";
-    return `${protocol}://${host}:${PORT}`;
+    return `${protocol}://${getAddress(host, port)}`;
 }
 
 const PROB_GET = 0.8;
@@ -202,8 +211,9 @@ async function main(
     num_of_concurrent_tasks: number,
     data_size: number,
     clients_to_run: "all" | "ffi" | "socket" | "babushka",
-    address: string,
-    clientCount: number
+    host: string,
+    clientCount: number,
+    useTLS: boolean
 ) {
     const data = generate_value(data_size);
     if (
@@ -215,7 +225,11 @@ async function main(
             clientCount,
             () =>
                 new Promise((resolve) =>
-                    resolve(AsyncClient.CreateConnection(address))
+                    resolve(
+                        AsyncClient.CreateConnection(
+                            getAddressWithProtocol(host, useTLS)
+                        )
+                    )
                 )
         );
         await run_clients(
@@ -234,7 +248,10 @@ async function main(
         clients_to_run == "babushka"
     ) {
         const clients = await createClients(clientCount, () =>
-            SocketConnection.CreateConnection(address)
+            SocketConnection.CreateConnection({
+                addresses: [{ address: host }],
+                useTLS,
+            })
         );
         await run_clients(
             clients,
@@ -249,11 +266,11 @@ async function main(
     }
 
     if (clients_to_run == "all") {
-        const node_redis_client = createClient({ url: address });
-        await node_redis_client.connect();
         await run_clients(
             await createClients(clientCount, async () => {
-                const node_redis_client = createClient({ url: address });
+                const node_redis_client = createClient({
+                    url: getAddressWithProtocol(host, useTLS),
+                });
                 await node_redis_client.connect();
                 return node_redis_client;
             }),
@@ -299,15 +316,16 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                     lambda(clientCount, concurrentTasks)
                 )
         );
-        const address = getAddress(receivedOptions.host, receivedOptions.tls);
+
         for (const [concurrent_tasks, data_size, clientCount] of product) {
             await main(
                 number_of_iterations(concurrent_tasks),
                 concurrent_tasks,
                 data_size,
                 clients_to_run,
-                address,
-                clientCount
+                receivedOptions.host,
+                clientCount,
+                receivedOptions.tls
             );
         }
 
