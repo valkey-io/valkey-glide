@@ -53,11 +53,7 @@ impl From<ClosingReason> for PipeListeningResult {
 impl SocketListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         // if the logger has been initialized by the user (external or internal) on info level this log will be shown
-        logger_core::log(
-            logger_core::Level::Info,
-            "connection",
-            "new socket listener initiated",
-        );
+        logger_core::log_info("connection", "new socket listener initiated");
         let rotating_buffer = RotatingBuffer::new(2, 65_536);
         SocketListener {
             read_socket,
