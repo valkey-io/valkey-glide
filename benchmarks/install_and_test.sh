@@ -29,6 +29,7 @@ dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
+tlsFlag="--tls"
 
 function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
@@ -113,7 +114,7 @@ function Help() {
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
     echo Pass -only-babushka to only run Babushk clients.
-    echo Pass -tls to connect to server using transport level security \(TLS\).
+    echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
 }
 
@@ -178,8 +179,8 @@ do
             chosenClients="babushka"
             ;;                  
         -no-csv) writeResultsCSV=0 ;;
-        -tls) 
-            tlsFlag="--tls"
+        -no-tls) 
+            tlsFlag=
             ;;
     esac
     shift
