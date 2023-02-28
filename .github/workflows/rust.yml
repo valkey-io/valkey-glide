@@ -47,7 +47,7 @@ jobs:
 
             - name: Run tests
               working-directory: ./babushka-core
-              run: cargo test
+              run: cargo test -- -Z unstable-options --report-time
 
             - name: Check features
               working-directory: ./babushka-core

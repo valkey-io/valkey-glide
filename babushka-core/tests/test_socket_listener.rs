@@ -167,6 +167,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[timeout(Duration::from_millis(5000))]
     fn test_socket_set_and_get(#[values(false, true)] use_tls: bool) {
         let mut test_basics = setup_test_basics(use_tls);
 
@@ -198,6 +199,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[timeout(Duration::from_millis(5000))]
     fn test_socket_get_returns_null(#[values(false, true)] use_tls: bool) {
         const CALLBACK_INDEX: u32 = 99;
         let mut test_basics = setup_test_basics(use_tls);
@@ -212,6 +214,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[timeout(Duration::from_millis(5000))]
     fn test_socket_report_error(#[values(false, true)] use_tls: bool) {
         let mut test_basics = setup_test_basics(use_tls);
 
@@ -234,6 +237,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[timeout(Duration::from_millis(5000))]
     fn test_socket_handle_long_input(#[values(false, true)] use_tls: bool) {
         let mut test_basics = setup_test_basics(use_tls);
 
@@ -272,7 +276,7 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(Duration::from_millis(15000))]
     fn test_socket_handle_multiple_long_inputs(#[values(false, true)] use_tls: bool) {
         #[derive(Clone, PartialEq, Eq, Debug)]
         enum State {
