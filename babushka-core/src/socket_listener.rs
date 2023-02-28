@@ -24,6 +24,8 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::Retry;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
@@ -344,14 +346,28 @@ async fn parse_address_create_conn(
         std::str::from_utf8(address),
         Some("Failed to parse address"),
     )?;
-    let client = to_babushka_result(
-        Client::open(address),
-        Some("Failed to open redis-rs client"),
-    )?;
-    let connection = to_babushka_result(
-        client.get_multiplexed_async_connection().await,
-        Some("Failed to create a multiplexed connection"),
-    )?;
+
+    // TODO - should be a configuration sent over the socket.
+    const BASE: u64 = 10;
+    const FACTOR: u64 = 5;
+    const NUMBER_OF_RETRIES: usize = 3;
+    let retry_strategy = ExponentialBackoff::from_millis(BASE)
+        .factor(FACTOR)
+        .map(jitter) // tokio-retry doesn't support additive jitter.
+        .take(NUMBER_OF_RETRIES);
+
+    let action = || async move {
+        let client = to_babushka_result(
+            Client::open(address),
+            Some("Failed to open redis-rs client"),
+        )?;
+        to_babushka_result(
+            client.get_multiplexed_async_connection().await,
+            Some("Failed to create a multiplexed connection"),
+        )
+    };
+
+    let connection = Retry::spawn(retry_strategy, action).await?;
 
     // Send response
     write_null_response_header(&writer.accumulated_outputs, request.callback_index)
