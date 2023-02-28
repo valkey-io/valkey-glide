@@ -24,7 +24,7 @@ const PROB_GET_EXISTING_KEY = 0.8;
 const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
-let completed_tasks_counter = 0;
+let started_tasks_counter = 0;
 const running_tasks: Promise<void>[] = [];
 const bench_json_results: object[] = [];
 
@@ -73,10 +73,11 @@ async function redis_benchmark(
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    while (completed_tasks_counter < total_commands) {
+    while (started_tasks_counter < total_commands) {
+        started_tasks_counter += 1;
         const chosen_action = choose_action();
         const tic = process.hrtime();
-        const client = clients[completed_tasks_counter % clients.length];
+        const client = clients[started_tasks_counter % clients.length];
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
                 await client.get(generate_key_set());
@@ -91,7 +92,6 @@ async function redis_benchmark(
         const toc = process.hrtime(tic);
         const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
-        completed_tasks_counter += 1;
     }
 }
 
@@ -102,7 +102,7 @@ async function create_bench_tasks(
     data: string,
     action_latencies: Record<ChosenAction, number[]>
 ) {
-    completed_tasks_counter = 0;
+    started_tasks_counter = 0;
     const tic = process.hrtime();
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
@@ -156,7 +156,7 @@ async function run_clients(
         data,
         action_latencies
     );
-    const tps = Math.round(completed_tasks_counter / time);
+    const tps = Math.round(started_tasks_counter / time);
 
     const get_non_existing_latencies =
         action_latencies[ChosenAction.GET_NON_EXISTING];

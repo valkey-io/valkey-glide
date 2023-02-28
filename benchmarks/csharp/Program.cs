@@ -59,7 +59,7 @@ public static class MainClass
     private const int SIZE_SET_KEYSPACE = 3000000; // 3 million
 
     private static readonly Random randomizer = new();
-    private static long completed_tasks_counter = 0;
+    private static long started_tasks_counter = 0;
     private static readonly List<Dictionary<string, object>> bench_json_results = new();
 
     private static string generate_value(int size)
@@ -127,7 +127,8 @@ public static class MainClass
         var stopwatch = new Stopwatch();
         do
         {
-            var index = (int)(completed_tasks_counter % clients.Length);
+            Interlocked.Increment(ref started_tasks_counter);
+            var index = (int)(started_tasks_counter % clients.Length);
             var client = clients[index];
             var action = choose_action();
             stopwatch.Start();
@@ -146,7 +147,7 @@ public static class MainClass
             stopwatch.Stop();
             var latency_list = action_latencies[action];
             latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
-        } while (Interlocked.Increment(ref completed_tasks_counter) < total_commands);
+        } while (started_tasks_counter < total_commands);
     }
 
     private static async Task<long> create_bench_tasks(
@@ -157,7 +158,7 @@ public static class MainClass
         Dictionary<ChosenAction, ConcurrentBag<double>> action_latencies
     )
     {
-        completed_tasks_counter = 0;
+        started_tasks_counter = 0;
         var stopwatch = Stopwatch.StartNew();
         var running_tasks = new List<Task>();
         for (var i = 0; i < num_of_concurrent_tasks; i++)
@@ -208,7 +209,7 @@ public static class MainClass
             num_of_concurrent_tasks,
             action_latencies
         );
-        var tps = Math.Round((double)completed_tasks_counter / ((double)elapsed_milliseconds / 1000));
+        var tps = Math.Round((double)started_tasks_counter / ((double)elapsed_milliseconds / 1000));
 
         var get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING];
         var get_non_existing_latency_results = latency_results("get_non_existing", get_non_existing_latencies);
