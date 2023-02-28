@@ -5,12 +5,12 @@ on:
         branches: ["main"]
         paths:
             - python/**
-            - babushka-core/**
+            - babushka-core/src/**
             - submodules/**
     pull_request:
         paths:
             - python/**
-            - babushka-core/**
+            - babushka-core/src/**
             - submodules/**
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
         steps:
             - uses: actions/checkout@v3
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - name: Install redis
               uses: ./.github/workflows/install-redis
@@ -82,7 +82,7 @@ jobs:
         steps:
             - uses: actions/checkout@v3
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - uses: ./.github/workflows/lint-rust
               with:
