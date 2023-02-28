@@ -269,8 +269,18 @@ namespace babushka
                 {
                     return new ArraySegment<byte>(buffer, counter, messageLength - counter);
                 }
-                var message = messageContainer.GetMessage((int)header.callbackIndex);
-                ResolveMessage(message, header, buffer, counter);
+
+                if (header.responseType == ResponseType.ClosingError)
+                {
+                    var stringLength = header.length - HEADER_LENGTH_IN_BYTES;
+                    var result = Encoding.UTF8.GetString(new Span<byte>(buffer, counter + HEADER_LENGTH_IN_BYTES, (int)stringLength));
+                    DisposeWithError(new Exception(result));
+                }
+                else
+                {
+                    var message = messageContainer.GetMessage((int)header.callbackIndex);
+                    ResolveMessage(message, header, buffer, counter);
+                }
 
                 counter += (int)header.length;
             }

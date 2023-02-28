@@ -221,7 +221,7 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should all requests when receiving a closing error", async () => {
+    it("should close all requests when receiving a closing error", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
             socket.once("data", (data) => {
@@ -233,6 +233,29 @@ describe("SocketConnectionInternals", () => {
                     socket,
                     ResponseType.ClosingError,
                     request.callbackIdx,
+                    error
+                );
+            });
+            const request1 = connection.get("foo");
+            const request2 = connection.get("bar");
+
+            await expect(request1).rejects.toMatch(error);
+            await expect(request2).rejects.toMatch(error);
+        });
+    });
+
+    it("should handle receiving a closing error with an unknown callback index", async () => {
+        await testWithResources(async (connection, socket) => {
+            const error = "check";
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.args.length).toEqual(1);
+                sendResponse(
+                    socket,
+                    ResponseType.ClosingError,
+                    Number.MAX_SAFE_INTEGER,
                     error
                 );
             });
