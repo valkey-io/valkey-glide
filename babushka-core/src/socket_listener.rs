@@ -5,7 +5,6 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
 use num_traits::ToPrimitive;
-use rand::Rng;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, RedisResult, Value};
 use redis::{Client, RedisError};
@@ -16,7 +15,6 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::rc::Rc;
 use std::str;
-use std::time::Duration;
 use std::{io, thread};
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
@@ -24,7 +22,7 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::strategy::{jitter, ExponentialBackoff, FixedInterval};
 use tokio_retry::Retry;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
@@ -503,25 +501,23 @@ impl SocketListener {
 
     /// Return true if it's possible to connect to socket.
     async fn socket_is_available(&self) -> bool {
-        let mut rng = rand::thread_rng();
         if UnixStream::connect(&self.socket_path).await.is_ok() {
             return true;
         }
-        const RETRY_COUNT: u8 = 3;
-        let mut retries = RETRY_COUNT;
-        while retries > 0 {
-            retries -= 1;
+        const NUMBER_OF_RETRIES: usize = 3;
+        const SLEEP_DURATION_IN_MILLISECONDS: u64 = 10;
+        let retry_strategy = FixedInterval::from_millis(SLEEP_DURATION_IN_MILLISECONDS)
+            .map(jitter) // tokio-retry doesn't support additive jitter.
+            .take(NUMBER_OF_RETRIES);
 
-            const BASE_SLEEP_DURATION: Duration = Duration::from_millis(5);
-            const JITTER_RANGE: Range<u64> = 1..5;
-            let sleep_jitter = Duration::from_millis(rng.gen_range(JITTER_RANGE));
-            tokio::time::sleep(BASE_SLEEP_DURATION + sleep_jitter).await;
-
-            if UnixStream::connect(&self.socket_path).await.is_ok() {
-                return true;
-            }
-        }
-        false
+        let action = || async {
+            UnixStream::connect(&self.socket_path)
+                .await
+                .map(|_| ())
+                .map_err(|_| ())
+        };
+        let result = Retry::spawn(retry_strategy, action).await;
+        result.is_ok()
     }
 
     async fn get_socket_listener(&self) -> SocketCreationResult {
