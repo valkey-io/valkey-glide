@@ -20,9 +20,10 @@ mod socket_listener {
     use redis::Value;
     use rstest::rstest;
     use std::{mem::size_of, time::Duration};
+    use tokio::{net::UnixListener, runtime::Builder};
 
     struct TestBasics {
-        _server: RedisServer,
+        _server: Arc<RedisServer>,
         socket: UnixStream,
     }
 
@@ -133,29 +134,52 @@ mod socket_listener {
         assert_null_header(&buffer, CALLBACK_INDEX);
     }
 
-    fn setup_test_basics(use_tls: bool) -> TestBasics {
+    fn setup_test_basics_with_server_and_socket_path(
+        use_tls: bool,
+        socket_path: Option<String>,
+        redis_server: Arc<RedisServer>,
+    ) -> TestBasics {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
-        let context = TestContext::new(ServerType::Tcp { tls: use_tls });
         let cloned_state = socket_listener_state.clone();
         let path_arc = Arc::new(std::sync::Mutex::new(None));
         let path_arc_clone = Arc::clone(&path_arc);
-        start_socket_listener(move |res| {
-            let path: String = res.expect("Failed to initialize the socket listener");
-            let mut path_arc_clone = path_arc_clone.lock().unwrap();
-            *path_arc_clone = Some(path);
-            cloned_state.set();
-        });
+
+        start_socket_listener_internal(
+            move |res| {
+                let path: String = res.expect("Failed to initialize the socket listener");
+                let mut path_arc_clone = path_arc_clone.lock().unwrap();
+                *path_arc_clone = Some(path);
+                cloned_state.set();
+            },
+            socket_path,
+        );
         socket_listener_state.wait();
         let path = path_arc.lock().unwrap();
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
-        let address = context.server.get_client_addr().to_string();
+        let address = redis_server.get_client_addr().to_string();
         send_address(address, &socket, use_tls);
         TestBasics {
-            _server: context.server,
+            _server: redis_server,
             socket,
         }
+    }
+
+    fn setup_test_basics_with_socket_path(
+        use_tls: bool,
+        socket_path: Option<String>,
+    ) -> TestBasics {
+        let context = TestContext::new(ServerType::Tcp { tls: use_tls });
+        setup_test_basics_with_server_and_socket_path(
+            use_tls,
+            socket_path,
+            Arc::new(context.server),
+        )
+    }
+
+    fn setup_test_basics(use_tls: bool) -> TestBasics {
+        setup_test_basics_with_socket_path(use_tls, None)
     }
 
     fn generate_random_bytes(length: usize) -> Vec<u8> {
@@ -164,6 +188,69 @@ mod socket_listener {
             .take(length)
             .map(u8::from)
             .collect()
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(5000))]
+    fn test_working_after_socket_listener_was_dropped() {
+        let socket_path =
+            get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
+        close_socket(&socket_path);
+        // create a socket listener and drop it, to simulate a panic in a previous iteration.
+        Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let _ = UnixListener::bind(socket_path.clone()).unwrap();
+            });
+
+        const CALLBACK_INDEX: u32 = 99;
+        let mut test_basics = setup_test_basics_with_socket_path(false, Some(socket_path.clone()));
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(HEADER_END);
+        write_get(&mut buffer, CALLBACK_INDEX, key);
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let size = test_basics.socket.read(&mut buffer).unwrap();
+        assert_eq!(size, HEADER_END);
+        assert_null_header(&buffer, CALLBACK_INDEX);
+        close_socket(&socket_path);
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(5000))]
+    fn test_multiple_listeners_competing_for_the_socket() {
+        let socket_path = get_socket_path_from_name(
+            "test_multiple_listeners_competing_for_the_socket".to_string(),
+        );
+        close_socket(&socket_path);
+        let server = Arc::new(TestContext::new(ServerType::Tcp { tls: false }).server);
+
+        thread::scope(|scope| {
+            for i in 0..20 {
+                thread::Builder::new()
+                    .name(format!("test-{i}"))
+                    .spawn_scoped(scope, || {
+                        const CALLBACK_INDEX: u32 = 99;
+                        let mut test_basics = setup_test_basics_with_server_and_socket_path(
+                            false,
+                            Some(socket_path.clone()),
+                            server.clone(),
+                        );
+                        let key = "hello";
+                        let mut buffer = Vec::with_capacity(HEADER_END);
+                        write_get(&mut buffer, CALLBACK_INDEX, key);
+                        test_basics.socket.write_all(&buffer).unwrap();
+
+                        let size = test_basics.socket.read(&mut buffer).unwrap();
+                        assert_eq!(size, HEADER_END);
+                        assert_null_header(&buffer, CALLBACK_INDEX);
+                    })
+                    .unwrap();
+            }
+        });
+        close_socket(&socket_path);
     }
 
     #[rstest]
