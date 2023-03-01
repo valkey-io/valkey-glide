@@ -3,7 +3,10 @@ use babushka::start_socket_listener;
 use napi::bindgen_prelude::{BigInt, ToNapiValue};
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
+#[cfg(not(feature = "bcore-connection"))]
 use redis::aio::MultiplexedConnection;
+#[cfg(feature = "bcore-connection")]
+use babushka::async_connections::SimpleAsyncConnection;
 use redis::{AsyncCommands, Value};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -47,7 +50,10 @@ pub const HEADER_LENGTH_IN_BYTES: u32 = HEADER_END as u32;
 #[napi]
 struct AsyncClient {
     #[allow(dead_code)]
+    #[cfg(not(feature = "bcore-connection"))]
     connection: MultiplexedConnection,
+    #[cfg(feature = "bcore-connection")]
+    connection: SimpleAsyncConnection,    
     runtime: Runtime,
 }
 
@@ -57,6 +63,17 @@ fn to_js_error(err: impl std::error::Error) -> Error {
 
 fn to_js_result<T, E: std::error::Error>(result: std::result::Result<T, E>) -> Result<T> {
     result.map_err(to_js_error)
+}
+
+#[cfg(feature = "bcore-connection")]
+fn create_connection(runtime: &Runtime, connection_address: String) -> SimpleAsyncConnection {
+    runtime.block_on(SimpleAsyncConnection::open(connection_address)).unwrap()
+}
+
+#[cfg(not(feature = "bcore-connection"))]
+fn create_connection(runtime: &Runtime, connection_address: String) -> MultiplexedConnection {
+    let client = redis::Client::open(connection_address).unwrap();
+    runtime.block_on(client.get_multiplexed_async_connection()).unwrap()
 }
 
 #[napi]
@@ -70,8 +87,7 @@ impl AsyncClient {
             .thread_name("Babushka node thread")
             .build()?;
         let _runtime_handle = runtime.enter();
-        let client = to_js_result(redis::Client::open(connection_address))?;
-        let connection = to_js_result(runtime.block_on(client.get_multiplexed_async_connection()))?;
+        let connection = create_connection(&runtime, connection_address);
         Ok(AsyncClient {
             connection,
             runtime,

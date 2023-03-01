@@ -27,6 +27,7 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
+use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
 
@@ -504,26 +505,24 @@ impl SocketListener {
                 return;
             }
         };
-        let local = task::LocalSet::new();
         init_callback(Ok(self.socket_path.clone()));
-        local
-            .run_until(async move {
-                loop {
-                    tokio::select! {
-                        listen_v = listener.accept() => {
-                            if let Ok((stream, _addr)) = listen_v {
-                                // New client
-                                task::spawn_local(listen_on_client_stream(stream));
-                            } else if listen_v.is_err() {
-                                return
-                            }
-                        },
-                        // Interrupt was received, close the socket
-                        _ = handle_signals() => return
+        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
+        loop {
+            tokio::select! {
+                listen_v = listener.accept() => {
+                    if let Ok((stream, _addr)) = listen_v {
+                        // New client
+                        local_set_pool.spawn_pinned(move || {
+                            listen_on_client_stream(stream)
+                        });
+                    } else if listen_v.is_err() {
+                        return
                     }
-                }
-            })
-            .await;
+                },
+                // Interrupt was received, close the socket
+                _ = handle_signals() => return
+            }
+        }
     }
 }
 
