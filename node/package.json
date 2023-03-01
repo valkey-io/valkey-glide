@@ -346,7 +346,9 @@
     },
     "scripts": {
         "build": "npm run build-internal && npm run build-external",
+        "build.redisrs": "npm run build-internal.redisrs && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
+        "build-internal.redisrs": "cd rust-client && npm run build.redisrs",
         "build-external": "rm -rf build-ts && npx tsc",
         "test": "jest"
     },

@@ -21,7 +21,9 @@ logger_core = {path = "../../logger_core"}
 tracing-subscriber = "0.3.16"
 byteorder = "1.4.3"
 
-
+[features]
+default = []
+bcore-connection = [ "babushka/bcore-connection" ]
 
 [build-dependencies]
 napi-build = "2.0.1"

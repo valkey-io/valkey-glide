@@ -5,9 +5,14 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info};
 use num_traits::ToPrimitive;
+#[cfg(not(feature = "bcore-connection"))]
 use redis::aio::MultiplexedConnection;
+#[cfg(not(feature = "bcore-connection"))]
+use redis::Client;
+#[cfg(feature = "bcore-connection")]
+use crate::async_connections::SimpleAsyncConnection;
 use redis::{AsyncCommands, RedisResult, Value};
-use redis::{Client, RedisError};
+use redis::RedisError;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
@@ -27,6 +32,16 @@ use PipeListeningResult::*;
 
 /// The socket file name
 pub const SOCKET_FILE_NAME: &str = "babushka-socket";
+
+#[cfg(feature = "bcore-connection")]
+macro_rules! connection_type {
+    () => {SimpleAsyncConnection};
+}
+
+#[cfg(not(feature = "bcore-connection"))]
+macro_rules! connection_type {
+    () => {MultiplexedConnection}
+}
 
 /// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
@@ -190,7 +205,7 @@ async fn send_set_request(
     key_range: Range<usize>,
     value_range: Range<usize>,
     callback_index: u32,
-    mut connection: MultiplexedConnection,
+    mut connection: connection_type!(),
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
     connection
@@ -227,7 +242,7 @@ async fn send_get_request(
     vec: SharedBuffer,
     key_range: Range<usize>,
     callback_index: u32,
-    mut connection: MultiplexedConnection,
+    mut connection: connection_type!(),
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
     let result: Value = connection.get(&vec[key_range]).await?;
@@ -236,7 +251,10 @@ async fn send_get_request(
     Ok(())
 }
 
-fn handle_request(request: WholeRequest, connection: MultiplexedConnection, writer: Rc<Writer>) {
+fn handle_request(
+    request: WholeRequest,
+    connection: connection_type!(),
+    writer: Rc<Writer>) {
     task::spawn_local(async move {
         let result = match request.request_type {
             RequestRanges::Get { key: key_range } => {
@@ -303,7 +321,7 @@ async fn write_error(
 
 async fn handle_requests(
     received_requests: Vec<WholeRequest>,
-    connection: &MultiplexedConnection,
+    connection: &connection_type!(),
     writer: &Rc<Writer>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
@@ -330,36 +348,49 @@ fn to_babushka_result<T, E: std::fmt::Display>(
     })
 }
 
-async fn parse_address_create_conn(
-    writer: &Rc<Writer>,
-    request: &WholeRequest,
-    address_range: Range<usize>,
-) -> Result<MultiplexedConnection, ClientCreationError> {
-    let address = &request.buffer[address_range];
-    let address = to_babushka_result(
-        std::str::from_utf8(address),
-        Some("Failed to parse address"),
-    )?;
+#[cfg(feature = "bcore-connection")]
+async fn create_connection(connection_address: &str) -> Result<SimpleAsyncConnection, ClientCreationError>  {
+    to_babushka_result(
+        SimpleAsyncConnection::open(connection_address).await, 
+        Some("Failed to create a multiplexed connection"))
+}
+
+#[cfg(not(feature = "bcore-connection"))]
+async fn create_connection(connection_address: &str) -> Result<MultiplexedConnection, ClientCreationError> {
     let client = to_babushka_result(
-        Client::open(address),
+        Client::open(connection_address),
         Some("Failed to open redis-rs client"),
     )?;
     let connection = to_babushka_result(
         client.get_multiplexed_async_connection().await,
         Some("Failed to create a multiplexed connection"),
     )?;
+    Ok(connection)
+}
+
+async fn parse_address_create_conn (
+    writer: &Rc<Writer>,
+    request: &WholeRequest,
+    address_range: Range<usize>,
+) -> Result<connection_type!(), ClientCreationError> {
+    let address = &request.buffer[address_range];
+    let address = to_babushka_result(
+        std::str::from_utf8(address),
+        Some("Failed to parse address"),
+    )?;
+    let connection = create_connection(address).await?;
 
     // Send response
     write_null_response_header(&writer.accumulated_outputs, request.callback_index)
         .expect("Failed writing address response.");
     write_to_output(writer).await;
-    Ok(connection)
+    Ok::<connection_type!(), ClientCreationError>(connection)
 }
 
 async fn wait_for_server_address_create_conn(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
-) -> Result<MultiplexedConnection, ClientCreationError> {
+) -> Result<connection_type!(), ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
@@ -384,7 +415,7 @@ async fn wait_for_server_address_create_conn(
 
 async fn read_values_loop(
     mut client_listener: UnixStreamListener,
-    connection: MultiplexedConnection,
+    connection: connection_type!(),
     writer: Rc<Writer>,
 ) -> ClosingReason {
     loop {

@@ -29,6 +29,8 @@ dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
+namePrefix="final"
+buildSuffix=""
 tlsFlag="--tls"
 
 function runPythonBenchmark(){
@@ -51,7 +53,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm install
   rm -rf build-ts
-  npm run build
+  npm run build$buildSuffix
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
@@ -137,6 +139,10 @@ do
             namePrefix=$2-
             shift
             ;;
+        -build)
+            buildSuffix="."$2
+            shift
+            ;;
         -host)
             host=$2
             shift
@@ -219,7 +225,7 @@ flushDB
 if [ $writeResultsCSV == 1 ]; 
 then
     cd ${BENCH_FOLDER}
-    finalCSV=results/$namePrefix""final-$identifier.csv
-    $pythonCommand $utilitiesDir/csv_exporter.py $resultFiles$finalCSV
+    finalCSV=results/$namePrefix$identifier.csv
+    $pythonCommand $utilitiesDir/csv_exporter.py $resultFiles $finalCSV
     echo results are in $finalCSV
 fi
