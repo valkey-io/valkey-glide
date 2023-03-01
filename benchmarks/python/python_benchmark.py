@@ -67,7 +67,7 @@ PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
-completed_tasks_counter = 0
+started_tasks_counter = 0
 running_tasks = set()
 bench_json_results = []
 
@@ -118,10 +118,11 @@ def timer(func):
 
 
 async def execute_commands(clients, total_commands, data_size, action_latencies):
-    global completed_tasks_counter
-    while completed_tasks_counter < total_commands:
+    global started_tasks_counter
+    while started_tasks_counter < total_commands:
+        started_tasks_counter += 1
         chosen_action = choose_action()
-        client = clients[completed_tasks_counter % len(clients)]
+        client = clients[started_tasks_counter % len(clients)]
         tic = time.perf_counter()
         if chosen_action == ChosenAction.GET_EXISTING:
             await client.get(generate_key_set())
@@ -132,7 +133,6 @@ async def execute_commands(clients, total_commands, data_size, action_latencies)
         toc = time.perf_counter()
         execution_time = toc - tic
         action_latencies[chosen_action].append(execution_time)
-        completed_tasks_counter += 1
     return True
 
 
@@ -140,10 +140,10 @@ async def execute_commands(clients, total_commands, data_size, action_latencies)
 async def create_and_run_concurrent_tasks(
     clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
 ):
-    global completed_tasks_counter
+    global started_tasks_counter
     global get_latency
     global set_latency
-    completed_tasks_counter = 0
+    started_tasks_counter = 0
     for _ in range(num_of_concurrent_tasks):
         task = asyncio.create_task(
             execute_commands(clients, total_commands, data_size, action_latencies)
@@ -188,7 +188,7 @@ async def run_clients(
     time = await create_and_run_concurrent_tasks(
         clients, total_commands, num_of_concurrent_tasks, data_size, action_latencies
     )
-    tps = int(completed_tasks_counter / time)
+    tps = int(started_tasks_counter / time)
     get_non_existing_latencies = action_latencies[ChosenAction.GET_NON_EXISTING]
     get_non_existing_latency_results = latency_results(
         "get_non_existing", get_non_existing_latencies
