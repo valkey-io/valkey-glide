@@ -1,3 +1,4 @@
+use super::client::BabushkaClient;
 use super::{headers::*, rotating_buffer::RotatingBuffer};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
@@ -151,7 +152,7 @@ async fn write_to_output(writer: &Rc<Writer>) {
 
 async fn send_set_request(
     request: &Request,
-    mut connection: MultiplexedConnection,
+    mut connection: impl BabushkaClient,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
     assert_eq!(request.request_type, RequestType::SetString as u32);
@@ -217,7 +218,7 @@ async fn write_response(
 
 async fn send_get_request(
     request: &Request,
-    mut connection: MultiplexedConnection,
+    mut connection: impl BabushkaClient,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
     assert_eq!(request.request_type, RequestType::GetString as u32);
@@ -227,7 +228,7 @@ async fn send_get_request(
     Ok(())
 }
 
-fn handle_request(request: Request, connection: MultiplexedConnection, writer: Rc<Writer>) {
+fn handle_request(request: Request, connection: impl BabushkaClient + 'static, writer: Rc<Writer>) {
     task::spawn_local(async move {
         let request_type =
             FromPrimitive::from_u32(request.request_type).unwrap_or(RequestType::InvalidRequest);
@@ -258,7 +259,7 @@ fn handle_request(request: Request, connection: MultiplexedConnection, writer: R
 
 async fn handle_requests(
     received_requests: Vec<Request>,
-    connection: &MultiplexedConnection,
+    connection: &(impl BabushkaClient + 'static),
     writer: &Rc<Writer>,
 ) {
     // TODO - can use pipeline here, if we're fine with the added latency.
@@ -358,7 +359,7 @@ async fn wait_for_server_address_create_conn(
 
 async fn read_values_loop(
     mut client_listener: UnixStreamListener,
-    connection: MultiplexedConnection,
+    connection: impl BabushkaClient + 'static,
     writer: Rc<Writer>,
 ) -> ClosingReason {
     loop {
