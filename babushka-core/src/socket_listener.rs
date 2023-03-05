@@ -29,9 +29,6 @@ use PipeListeningResult::*;
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "babushka-socket";
 
-/// Result type for responses
-type ResponseResult = Result<Value, Box<dyn std::error::Error>>;
-
 /// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
     socket_path: String,
@@ -158,17 +155,26 @@ async fn send_set_request(
     let args = &request.args;
     assert_eq!(args.len(), 2); // TODO: delete it in the chunks implementation
     let result: RedisResult<Value> = connection.set(&args[0], &args[1]).await;
-    if result.is_ok() {
-        write_response(Ok(Value::Nil), request.callback_idx, &writer).await?; // TODO: remove this after we change SET response to OK instead of null
-    } else {
-        write_response(to_response_result(result), request.callback_idx, &writer).await?;
-    }
+    let result = result.map(|_| Value::Nil); // TODO: remove this after we change SET response to OK instead of null
+    write_result(result, request.callback_idx, &writer).await?;
+
     Ok(())
 }
 
+async fn write_closing_error(
+    err: ClosingError,
+    callback_index: u32,
+    writer: &Rc<Writer>,
+) -> Result<(), io::Error> {
+    let mut response = Response::new();
+    response.callback_idx = callback_index;
+    response.value = Some(pb_message::response::Value::ClosingError(err.to_string()));
+    write_to_writer(response, writer).await
+}
+
 /// Create response and write it to the writer
-async fn write_response(
-    resp_result: ResponseResult,
+async fn write_result(
+    resp_result: RedisResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
 ) -> Result<(), io::Error> {
@@ -186,14 +192,13 @@ async fn write_response(
         }
         Err(err) => {
             log_error("response error", err.to_string());
-            if err.is::<ClosingError>() {
-                response.value = Some(pb_message::response::Value::ClosingError(err.to_string()))
-            } else {
-                response.value = Some(pb_message::response::Value::RequestError(err.to_string()))
-            }
+            response.value = Some(pb_message::response::Value::RequestError(err.to_string()))
         }
     }
+    write_to_writer(response, writer).await
+}
 
+async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), io::Error> {
     let mut vec = writer.accumulated_outputs.take();
     let encode_result = response.write_length_delimited_to_vec(&mut vec);
 
@@ -223,7 +228,7 @@ async fn send_get_request(
     assert_eq!(request.request_type, RequestType::GetString as u32);
     assert_eq!(request.args.len(), 1); // TODO: delete it in the chunks implementation
     let result: RedisResult<Value> = connection.get(request.args.first().unwrap()).await;
-    write_response(to_response_result(result), request.callback_idx, &writer).await?;
+    write_result(result, request.callback_idx, &writer).await?;
     Ok(())
 }
 
@@ -241,8 +246,8 @@ fn handle_request(request: Request, connection: MultiplexedConnection, writer: R
             _ => {
                 let err_message =
                     format!("Recieved invalid request type: {}", request.request_type);
-                let _res = write_response(
-                    Err(ClosingError { err: err_message }.into()),
+                let _res = write_closing_error(
+                    ClosingError { err: err_message },
                     request.callback_idx,
                     &writer,
                 )
@@ -251,7 +256,7 @@ fn handle_request(request: Request, connection: MultiplexedConnection, writer: R
             }
         };
         if let Err(err) = result {
-            let _res = write_response(Err(err.into()), request.callback_idx, &writer).await;
+            let _res = write_result(Err(err), request.callback_idx, &writer).await;
         }
     });
 }
@@ -286,14 +291,6 @@ fn to_babushka_result<T, E: std::fmt::Display>(
     })
 }
 
-// TODO: refactor the response code with more careful use of the type system
-fn to_response_result<E>(res: Result<Value, E>) -> ResponseResult
-where
-    E: std::error::Error + 'static,
-{
-    res.map_err(|err: E| -> Box<_> { err.into() })
-}
-
 async fn parse_address_create_conn(
     writer: &Rc<Writer>,
     request: &Request,
@@ -322,7 +319,7 @@ async fn parse_address_create_conn(
     let connection = Retry::spawn(retry_strategy, action).await?;
 
     // Send response
-    write_response(Ok(Value::Nil), request.callback_idx, writer)
+    write_result(Ok(Value::Nil), request.callback_idx, writer)
         .await
         .map_err(|err| ClientCreationError::UnhandledError(err.to_string()))?;
     log_trace(
@@ -399,11 +396,10 @@ async fn listen_on_client_stream(socket: UnixStream) {
         }
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
             let error_message = format!("Socket listener closed due to {reason:?}");
-            let _res = write_response(
-                Err(ClosingError {
+            let _res = write_closing_error(
+                ClosingError {
                     err: error_message.clone(),
-                }
-                .into()),
+                },
                 u32::MAX,
                 &writer,
             )
@@ -411,20 +407,15 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(ClientCreationError::UnhandledError(err)) => {
-            let _res = write_response(
-                Err(ClosingError { err: err.clone() }.into()),
-                u32::MAX,
-                &writer,
-            )
-            .await;
+            let _res =
+                write_closing_error(ClosingError { err: err.clone() }, u32::MAX, &writer).await;
             return;
         }
     };
     tokio::select! {
             reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
-                    let err = ClosingError{err: err.to_string()}.into();
-                    let _res = write_response(Err(err), u32::MAX, &writer).await;
+                    let _res = write_closing_error(ClosingError{err: err.to_string()}, u32::MAX, &writer).await;
                 };
                 log_trace("client closing", "reader closed");
             },
