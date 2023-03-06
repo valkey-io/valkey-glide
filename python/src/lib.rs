@@ -1,5 +1,5 @@
-use babushka::headers::{RequestType, ResponseType, HEADER_END};
-use babushka::socket_listener_legacy::start_socket_listener;
+use babushka::headers_legacy::{RequestType, ResponseType, HEADER_END};
+use babushka::start_legacy_socket_listener;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use redis::aio::MultiplexedConnection;
@@ -11,7 +11,7 @@ struct AsyncClient {
 }
 
 #[pyclass]
-#[derive(PartialEq, PartialOrd, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Clone)]
 pub enum Level {
     Error = 0,
     Warn = 1,
@@ -160,7 +160,7 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
 
     #[pyfn(m)]
     fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
-        start_socket_listener(move |socket_path| {
+        start_legacy_socket_listener(move |socket_path| {
             Python::with_gil(|py| {
                 match socket_path {
                     Ok(path) => {
