@@ -44,6 +44,8 @@ function sendResponse(
         response.requestError = message;
     } else if (responseType == ResponseType.Null) {
         // do nothing
+    } else if (responseType == ResponseType.OK) {
+        response.constantResponse = pb_message.ConstantResponse.OK;
     } else {
         throw new Error("Got unknown response type: ", responseType);
     }
@@ -155,6 +157,21 @@ describe("SocketConnectionInternals", () => {
             });
             const result = await connection.get("foo");
             expect(result).toBeNull();
+        });
+    });
+
+    it("should pass OK returned from socket", async () => {
+        await testWithResources(async (connection, socket) => {
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.SetString);
+                expect(request.args.length).toEqual(2);
+
+                sendResponse(socket, ResponseType.OK, request.callbackIdx);
+            });
+            const result = await connection.set("foo", "bar");
+            expect(result).toEqual("OK");
         });
     });
 

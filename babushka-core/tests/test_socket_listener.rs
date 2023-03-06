@@ -16,7 +16,7 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 mod socket_listener {
     use super::*;
     include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
-    use pb_message::{Request, Response};
+    use pb_message::{response, ConstantResponse, Request, Response};
     use protobuf::Message;
     use rand::distributions::Alphanumeric;
     use redis::Value;
@@ -321,7 +321,7 @@ mod socket_listener {
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_null_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -375,7 +375,7 @@ mod socket_listener {
         let response = assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
         assert_eq!(
             response.closing_error(),
-            format!("Recieved invalid request type: {request_type}")
+            format!("Received invalid request type: {request_type}")
         );
     }
 
@@ -399,7 +399,7 @@ mod socket_listener {
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_null_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -467,11 +467,12 @@ mod socket_listener {
                             let callback_index = response.callback_idx as usize;
                             let mut results = results_for_read.lock().unwrap();
                             match response.value {
-                                None => {
+                                Some(response::Value::ConstantResponse(constant)) => {
+                                    assert_eq!(constant, ConstantResponse::OK.into());
                                     assert_eq!(results[callback_index], State::Initial);
                                     results[callback_index] = State::ReceivedNull;
                                 }
-                                Some(pb_message::response::Value::RespPointer(pointer)) => {
+                                Some(response::Value::RespPointer(pointer)) => {
                                     assert_eq!(results[callback_index], State::ReceivedNull);
 
                                     let values = values_for_read.lock().unwrap();

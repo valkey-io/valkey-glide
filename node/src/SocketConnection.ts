@@ -61,6 +61,10 @@ export class SocketConnection {
                 } else {
                     resolve(valueFromSplitPointer(pointer.high, pointer.low));
                 }
+            } else if (
+                message.constantResponse === pb_message.ConstantResponse.OK
+            ) {
+                resolve("OK");
             } else {
                 resolve(null);
             }
@@ -130,7 +134,7 @@ export class SocketConnection {
         });
     }
 
-    public set(key: string, value: string): Promise<void> {
+    public set(key: string, value: string): Promise<"OK"> {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];

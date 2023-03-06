@@ -88,7 +88,7 @@ impl AsyncClient {
         self.runtime.spawn(async move {
             let result: Result<()> = to_js_result(connection.set(key, value).await);
             match result {
-                Ok(_) => deferred.resolve(|_| Ok(())),
+                Ok(_) => deferred.resolve(|_| Ok("OK")),
                 Err(e) => deferred.reject(e),
             }
         });

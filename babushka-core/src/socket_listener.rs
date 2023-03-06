@@ -158,11 +158,7 @@ async fn send_set_request(
     let args = &request.args;
     assert_eq!(args.len(), 2); // TODO: delete it in the chunks implementation
     let result: RedisResult<Value> = connection.set(&args[0], &args[1]).await;
-    if result.is_ok() {
-        write_response(Ok(Value::Nil), request.callback_idx, &writer).await?; // TODO: remove this after we change SET response to OK instead of null
-    } else {
-        write_response(to_response_result(result), request.callback_idx, &writer).await?;
-    }
+    write_response(to_response_result(result), request.callback_idx, &writer).await?;
     Ok(())
 }
 
@@ -175,6 +171,11 @@ async fn write_response(
     let mut response = Response::new();
     response.callback_idx = callback_index;
     match resp_result {
+        Ok(Value::Okay) => {
+            response.value = Some(pb_message::response::Value::ConstantResponse(
+                pb_message::ConstantResponse::OK.into(),
+            ))
+        }
         Ok(value) => {
             if value != Value::Nil {
                 // Since null values don't require any additional data, they can be sent without any extra effort.
@@ -240,7 +241,7 @@ fn handle_request(request: Request, connection: MultiplexedConnection, writer: R
             ))),
             _ => {
                 let err_message =
-                    format!("Recieved invalid request type: {}", request.request_type);
+                    format!("Received invalid request type: {}", request.request_type);
                 let _res = write_response(
                     Err(ClosingError { err: err_message }.into()),
                     request.callback_idx,
