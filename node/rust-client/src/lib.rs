@@ -16,6 +16,7 @@ pub enum Level {
     Trace = 4,
     Warn = 1,
 }
+
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]
 pub enum RequestType {
@@ -25,19 +26,6 @@ pub enum RequestType {
     GetString = 2,
     /// Type of a set string request.
     SetString = 3,
-}
-
-// TODO - this repetition will become unmaintainable. We need to do this in macros.
-#[napi]
-pub enum ResponseType {
-    /// Type of a response that returns a null.
-    Null = 0,
-    /// Type of a response that returns a value which isn't an error.
-    Value = 1,
-    /// Type of response containing an error that impacts a single request.
-    RequestError = 2,
-    /// Type of response containing an error causes the connection to close.
-    ClosingError = 3,
 }
 
 #[napi]
