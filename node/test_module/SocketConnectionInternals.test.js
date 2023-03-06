@@ -6,11 +6,21 @@ import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 
-const {
-    ResponseType,
-    RequestType,
-    createLeakedValue,
-} = BabushkaInternal;
+const { RequestType, createLeakedValue } = BabushkaInternal;
+
+// TODO: use TS enums when tests are in TS.
+const ResponseType = {
+    /** Type of a response that returns a null. */
+    Null: 0,
+    /** Type of a response that returns a value which isn't an error. */
+    Value: 1,
+    /** Type of response containing an error that impacts a single request. */
+    RequestError: 2,
+    /** Type of response containing an error causes the connection to close. */
+    ClosingError: 3,
+    /** Type of response containing the string "OK". */
+    OK: 4,
+};
 
 beforeAll(() => {
     setLoggerConfig("info");
