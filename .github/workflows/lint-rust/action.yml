@@ -13,7 +13,7 @@ runs:
         - uses: actions/checkout@v3
           with:
               submodules: recursive
-
+        
         - uses: actions-rs/toolchain@v1
           with:
               profile: minimal
@@ -22,7 +22,11 @@ runs:
               components: rustfmt, clippy
 
         - uses: Swatinem/rust-cache@v1
-
+        
+        - run: |
+            sudo apt update
+            sudo apt install protobuf-compiler
+          shell: bash
         - uses: actions-rs/cargo@v1
           with:
               command: fmt
@@ -32,7 +36,7 @@ runs:
           with:
               command: clippy
               args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
-
+        
         - run: |
               cargo install cargo-deny
               cd ${{ inputs.cargo-toml-folder }}

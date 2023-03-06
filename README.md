@@ -1,6 +1,8 @@
 # babushka
 
 ## pre-requirements:
+Install protobuf compiler, for ubuntu:
+`sudo apt install protobuf-compiler`
 
 ### git submodule -
 
