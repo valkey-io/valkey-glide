@@ -10,7 +10,7 @@ use tempfile::TempDir;
 
 // Code copied from redis-rs
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum ServerType {
     Tcp { tls: bool },
     Unix,
