@@ -1,4 +1,4 @@
-use super::{headers::*, rotating_buffer::RotatingBuffer};
+use super::{headers_legacy::*, rotating_buffer_legacy::RotatingBuffer};
 use bytes::BufMut;
 use futures::stream::StreamExt;
 use num_traits::ToPrimitive;
@@ -505,7 +505,7 @@ async fn handle_signals() {
 ///
 /// # Arguments
 /// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
-pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
+pub fn start_legacy_socket_listener<InitCallback>(init_callback: InitCallback)
 where
     InitCallback: FnOnce(Result<String, String>) + Send + 'static,
 {
