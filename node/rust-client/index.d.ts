@@ -31,7 +31,7 @@ export const enum ResponseType {
 export function StartSocketConnection(): Promise<string>
 export function log(logLevel: Level, logIdentifier: string, message: string): void
 export function InitInternalLogger(level?: Level | undefined | null, fileName?: string | undefined | null): Level
-export function valueFromPointer(pointerAsBigint: bigint): null | string | number | any[]
+export function valueFromSplitPointer(highBits: number, lowBits: number): null | string | number | any[]
 export function stringFromPointer(pointerAsBigint: bigint): string
 /**
  * This function is for tests that require a value allocated on the heap.
