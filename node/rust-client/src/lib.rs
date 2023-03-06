@@ -1,4 +1,5 @@
 use babushka::start_socket_listener;
+use byteorder::{LittleEndian, WriteBytesExt};
 use napi::bindgen_prelude::{BigInt, ToNapiValue};
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
@@ -180,8 +181,16 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
 }
 
 #[napi(ts_return_type = "null | string | number | any[]")]
-pub fn value_from_pointer(js_env: Env, pointer_as_bigint: BigInt) -> Result<JsUnknown> {
-    let value = unsafe { Box::from_raw(pointer_as_bigint.get_u64().1 as *mut Value) };
+pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
+    let mut bytes = [0_u8; 8];
+    (&mut bytes[..4])
+        .write_u32::<LittleEndian>(low_bits)
+        .unwrap();
+    (&mut bytes[4..])
+        .write_u32::<LittleEndian>(high_bits)
+        .unwrap();
+    let pointer = u64::from_le_bytes(bytes);
+    let value = unsafe { Box::from_raw(pointer as *mut Value) };
     redis_value_to_js(*value, js_env)
 }
 
