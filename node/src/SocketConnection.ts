@@ -1,14 +1,11 @@
 import { BabushkaInternal } from "../";
 import * as net from "net";
 import { Logger } from "./Logger";
-import { valueFromPointer } from "babushka-rs-internal";
+import { valueFromSplitPointer } from "babushka-rs-internal";
 import { pb_message } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader } from "protobufjs";
 
-const {
-    StartSocketConnection,
-    RequestType,
-} = BabushkaInternal;
+const { StartSocketConnection, RequestType } = BabushkaInternal;
 
 type RequestType = BabushkaInternal.RequestType;
 type PromiseFunction = (value?: any) => void;
@@ -25,10 +22,12 @@ export class SocketConnection {
     private remainingReadData: Uint8Array | undefined;
 
     private handleReadData(data: Buffer) {
-        const buf = this.remainingReadData ? Buffer.concat([this.remainingReadData, data]) : data;
+        const buf = this.remainingReadData
+            ? Buffer.concat([this.remainingReadData, data])
+            : data;
         let lastPos = 0;
         const reader = Reader.create(buf);
-          while (reader.pos < reader.len) {
+        while (reader.pos < reader.len) {
             lastPos = reader.pos;
             let message = undefined;
             try {
@@ -57,14 +56,17 @@ export class SocketConnection {
                 reject(message.requestError);
             } else if (message.respPointer) {
                 const pointer = message.respPointer;
-                const bigIntPointer = BigInt(pointer.toString()); // TODO - check if this conversion can be made faster
-                resolve(valueFromPointer(bigIntPointer)); // TODO - check if this can be done directly from the Long type.
+                if (typeof pointer === "number") {
+                    resolve(valueFromSplitPointer(0, pointer));
+                } else {
+                    resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                }
             } else {
                 resolve(null);
             }
-          }
-          this.remainingReadData = undefined;
-      }
+        }
+        this.remainingReadData = undefined;
+    }
 
     private constructor(socket: net.Socket) {
         // if logger has been initialized by the external-user on info level this log will be shown
@@ -86,7 +88,6 @@ export class SocketConnection {
         );
     }
 
-
     private writeBufferedRequestsToSocket() {
         this.writeInProgress = true;
         const requests = this.requestWriter.finish();
@@ -101,11 +102,15 @@ export class SocketConnection {
         });
     }
 
-    private writeOrBufferRequest(callbackIdx: number, requestType: number, args: string[]) {
+    private writeOrBufferRequest(
+        callbackIdx: number,
+        requestType: number,
+        args: string[]
+    ) {
         const message = pb_message.Request.create({
             callbackIdx: callbackIdx,
             requestType: requestType,
-            args: args
+            args: args,
         });
 
         pb_message.Request.encodeDelimited(message, this.requestWriter);
@@ -119,7 +124,9 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.GetString, [key]);
+            this.writeOrBufferRequest(callbackIndex, RequestType.GetString, [
+                key,
+            ]);
         });
     }
 
@@ -127,7 +134,10 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.SetString, [key, value]);
+            this.writeOrBufferRequest(callbackIndex, RequestType.SetString, [
+                key,
+                value,
+            ]);
         });
     }
 
@@ -135,7 +145,11 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.ServerAddress, [address]);
+            this.writeOrBufferRequest(
+                callbackIndex,
+                RequestType.ServerAddress,
+                [address]
+            );
         });
     }
 
