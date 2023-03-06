@@ -1,0 +1,17 @@
+syntax = "proto3";
+package pb_message;
+
+message Request {
+    uint32 callback_idx = 1;
+    uint32 request_type = 2; // TODO: convert to enum
+    repeated string args = 3;
+}
+
+message Response {
+    uint32 callback_idx = 1;
+    oneof value {
+        uint64 resp_pointer = 2;
+        string request_error = 4;
+        string closing_error = 5;
+    }
+}
