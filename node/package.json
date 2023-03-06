@@ -260,6 +260,8 @@
         "pretty-format": "^28.1.3",
         "promise-queue": "^2.2.5",
         "prompts": "^2.4.2",
+        "protobufjs": "^7.2.2",
+        "protobufjs-cli": "^1.1.1",
         "punycode": "^2.1.1",
         "queue-microtask": "^1.2.3",
         "react-is": "^18.2.0",
@@ -345,14 +347,18 @@
         "yargs-parser": "^21.0.1"
     },
     "scripts": {
-        "build": "npm run build-internal && npm run build-external",
+        "build": "npm run build-internal &&  npm run build-protobuf && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
         "build-external": "rm -rf build-ts && npx tsc",
+        "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
+        "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/pb_message.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
+        "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "jest"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
-        "babel-jest": "^28.1.3"
+        "babel-jest": "^28.1.3",
+        "replace": "^1.2.2"
     },
     "author": "",
     "license": "MIT"

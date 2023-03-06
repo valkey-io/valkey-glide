@@ -3,12 +3,12 @@ import net from "net";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { pb_message } from "../src/ProtobufMessage";
+import { Reader } from "protobufjs";
 
 const {
-    HEADER_LENGTH_IN_BYTES,
     ResponseType,
     RequestType,
-    createLeakedString,
     createLeakedValue,
 } = BabushkaInternal;
 
@@ -22,27 +22,23 @@ function sendResponse(
     callbackIndex,
     message = undefined
 ) {
-    const pointerLength = 8;
-    const length = HEADER_LENGTH_IN_BYTES + (message ? pointerLength : 0);
-    const buffer = new ArrayBuffer(length);
-    const response = new Uint32Array(buffer);
-    response[0] = length;
-    response[1] = callbackIndex;
-    response[2] = responseType;
-
-    if (message !== undefined) {
-        const view = new DataView(
-            buffer,
-            HEADER_LENGTH_IN_BYTES,
-            pointerLength
-        );
-        const pointer =
-            responseType === ResponseType.Value
-                ? createLeakedValue(message)
-                : createLeakedString(message);
-        view.setBigUint64(0, pointer, true);
+    var response = pb_message.Response.create();
+    response.callbackIdx = callbackIndex;
+    if (responseType == ResponseType.Value) {
+        const pointer = createLeakedValue(message);
+        const pointer_number = Number(pointer.toString())
+        response.respPointer = pointer_number;
+    } else if (responseType == ResponseType.ClosingError) {
+        response.closingError = message;
+    } else if (responseType == ResponseType.RequestError) {
+        response.requestError = message;
+    } else if (responseType == ResponseType.Null) {
+        // do nothing
+    } else {
+        throw new Error("Got unknown response type: ", responseType);
     }
-    socket.write(new Uint8Array(buffer));
+    let response_bytes = pb_message.Response.encodeDelimited(response).finish();
+    socket.write(response_bytes);
 }
 
 function getConnectionAndSocket() {
@@ -55,13 +51,11 @@ function getConnectionAndSocket() {
         const server = net
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
-                    const uint32Array = new Uint32Array(data.buffer, 0, 3);
+                    const reader = Reader.create(data);
+                    const request = pb_message.Request.decodeDelimited(reader);
+                    expect(request.requestType).toEqual(RequestType.ServerAddress);
 
-                    expect(data.byteLength).toEqual(HEADER_LENGTH_IN_BYTES);
-                    expect(uint32Array[0]).toEqual(HEADER_LENGTH_IN_BYTES); // length of message when empty string is the address
-                    expect(uint32Array[2]).toEqual(RequestType.ServerAddress);
-
-                    sendResponse(socket, ResponseType.Null, uint32Array[1]);
+                    sendResponse(socket, ResponseType.Null, request.callbackIdx);
                 });
 
                 const connection = await connectionPromise;
@@ -122,14 +116,15 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             const expected = "bar";
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(data.buffer, 0, 3);
-                expect(uint32Array[0]).toEqual(15);
-                expect(uint32Array[2]).toEqual(RequestType.GetString);
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.args.length).toEqual(1);
 
                 sendResponse(
                     socket,
                     ResponseType.Value,
-                    uint32Array[1],
+                    request.callbackIdx,
                     expected
                 );
             });
@@ -141,11 +136,12 @@ describe("SocketConnectionInternals", () => {
     it("should pass null returned from socket", async () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(data.buffer, 0, 3);
-                expect(uint32Array[0]).toEqual(15);
-                expect(uint32Array[2]).toEqual(RequestType.GetString);
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.args.length).toEqual(1);
 
-                sendResponse(socket, ResponseType.Null, uint32Array[1]);
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
             const result = await connection.get("foo");
             expect(result).toBeNull();
@@ -156,11 +152,14 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(data.buffer, 0, 3);
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.args.length).toEqual(1);
                 sendResponse(
                     socket,
                     ResponseType.RequestError,
-                    uint32Array[1],
+                    request.callbackIdx,
                     error
                 );
             });
@@ -174,11 +173,14 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
             socket.once("data", (data) => {
-                const uint32Array = new Uint32Array(data.buffer, 0, 3);
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.args.length).toEqual(1);
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
-                    uint32Array[1],
+                    request.callbackIdx,
                     error
                 );
             });

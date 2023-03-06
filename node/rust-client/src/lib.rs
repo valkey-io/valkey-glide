@@ -1,4 +1,3 @@
-use babushka::headers::HEADER_END;
 use babushka::start_socket_listener;
 use napi::bindgen_prelude::{BigInt, ToNapiValue};
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
@@ -39,10 +38,6 @@ pub enum ResponseType {
     /// Type of response containing an error causes the connection to close.
     ClosingError = 3,
 }
-
-// TODO - this repetition will become unmaintainable. We need to do this in macros.
-#[napi]
-pub const HEADER_LENGTH_IN_BYTES: u32 = HEADER_END as u32;
 
 #[napi]
 struct AsyncClient {
@@ -201,11 +196,4 @@ pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
 pub fn create_leaked_value(message: String) -> usize {
     let value = Value::Status(message);
     Box::leak(Box::new(value)) as *mut Value as usize
-}
-
-#[napi]
-/// This function is for tests that require a string allocated on the heap.
-/// Should NOT be used in production.
-pub fn create_leaked_string(message: String) -> usize {
-    Box::leak(Box::new(message)) as *mut String as usize
 }

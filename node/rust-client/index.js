@@ -11,8 +11,7 @@ function isMusl() {
   // For Node 10
   if (!process.report || typeof process.report.getReport !== 'function') {
     try {
-      const lddPath = require('child_process').execSync('which ldd').toString().trim()
-      return readFileSync(lddPath, 'utf8').includes('musl')
+      return readFileSync('/usr/bin/ldd', 'utf8').includes('musl')
     } catch (e) {
       return true
     }
@@ -96,15 +95,6 @@ switch (platform) {
     }
     break
   case 'darwin':
-    localFileExisted = existsSync(join(__dirname, 'babushka-rs-internal.darwin-universal.node'))
-    try {
-      if (localFileExisted) {
-        nativeBinding = require('./babushka-rs-internal.darwin-universal.node')
-      } else {
-        nativeBinding = require('babushka-rs-internal-darwin-universal')
-      }
-      break
-    } catch {}
     switch (arch) {
       case 'x64':
         localFileExisted = existsSync(join(__dirname, 'babushka-rs-internal.darwin-x64.node'))
@@ -232,7 +222,6 @@ const {
   Level,
   RequestType,
   ResponseType,
-  HEADER_LENGTH_IN_BYTES,
   AsyncClient,
   StartSocketConnection,
   log,
@@ -240,13 +229,11 @@ const {
   valueFromPointer,
   stringFromPointer,
   createLeakedValue,
-  createLeakedString,
 } = nativeBinding
 
 module.exports.Level = Level
 module.exports.RequestType = RequestType
 module.exports.ResponseType = ResponseType
-module.exports.HEADER_LENGTH_IN_BYTES = HEADER_LENGTH_IN_BYTES
 module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log
@@ -254,4 +241,3 @@ module.exports.InitInternalLogger = InitInternalLogger
 module.exports.valueFromPointer = valueFromPointer
 module.exports.stringFromPointer = stringFromPointer
 module.exports.createLeakedValue = createLeakedValue
-module.exports.createLeakedString = createLeakedString

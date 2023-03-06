@@ -133,3 +133,6 @@ dist
 *babushka*.node
 build-ts/**
 yarn.lock
+
+# Protobuf
+src/ProtobufMessage*
