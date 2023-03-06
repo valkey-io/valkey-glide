@@ -6,7 +6,7 @@ use logger_core::{log_error, log_info, log_trace};
 use pb_message::{Request, RequestType, Response};
 use protobuf::Message;
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, ErrorKind, RedisResult, Value};
+use redis::{cmd, AsyncCommands, ErrorKind, RedisResult, Value};
 use redis::{Client, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
@@ -154,8 +154,11 @@ async fn send_set_request(
 ) -> RedisResult<()> {
     assert_eq!(request.request_type, RequestType::SetString.into());
     let args = &request.args;
-    assert_eq!(args.len(), 2); // TODO: delete it in the chunks implementation
-    let result: RedisResult<Value> = connection.set(&args[0], &args[1]).await;
+    let mut cmd = cmd("SET");
+    for arg in args.iter() {
+        cmd.arg(arg);
+    }
+    let result = cmd.query_async(&mut connection).await;
     write_result(result, request.callback_idx, &writer).await?;
     Ok(())
 }

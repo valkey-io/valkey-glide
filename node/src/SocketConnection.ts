@@ -254,12 +254,46 @@ export class SocketConnection {
         }
     ): Promise<"OK" | string | null> {
         return new Promise((resolve, reject) => {
+            const args = [key, value];
+            if (options) {
+                if (options.conditionalSet === "onlyIfExists") {
+                    args.push("XX");
+                } else if (options.conditionalSet === "onlyIfDoesNotExist") {
+                    args.push("NX");
+                }
+                if (options.returnOldValue) {
+                    args.push("GET");
+                }
+                if (
+                    options.expiry &&
+                    options.expiry !== "keepExisting" &&
+                    !Number.isInteger(options.expiry.count)
+                ) {
+                    reject(
+                        `Received expiry '${JSON.stringify(
+                            options.expiry
+                        )}'. Count must be an integer`
+                    );
+                }
+                if (options.expiry === "keepExisting") {
+                    args.push("KEEPTTL");
+                } else if (options.expiry?.type === "seconds") {
+                    args.push("EX " + options.expiry.count);
+                } else if (options.expiry?.type === "milliseconds") {
+                    args.push("PX " + options.expiry.count);
+                } else if (options.expiry?.type === "unixSeconds") {
+                    args.push("EXAT " + options.expiry.count);
+                } else if (options.expiry?.type === "unixMilliseconds") {
+                    args.push("PXAT " + options.expiry.count);
+                }
+            }
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.SetString, [
-                key,
-                value,
-            ]);
+            this.writeOrBufferRequest(
+                callbackIndex,
+                RequestType.SetString,
+                args
+            );
         });
     }
 
@@ -286,7 +320,6 @@ export class SocketConnection {
         address: string,
         connectedSocket: net.Socket
     ): Promise<SocketConnection> {
-        console.log(address);
         const connection = new SocketConnection(connectedSocket);
         await connection.setServerAddress(address);
         return connection;
