@@ -1,7 +1,7 @@
 import { BabushkaInternal } from "../";
 import * as net from "net";
 import { Logger } from "./Logger";
-import { valueFromPointer } from "babushka-rs-internal";
+import { valueFromSplitPointer } from "babushka-rs-internal";
 import { pb_message } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader } from "protobufjs";
 
@@ -57,8 +57,11 @@ export class SocketConnection {
                 reject(message.requestError);
             } else if (message.respPointer) {
                 const pointer = message.respPointer;
-                const bigIntPointer = BigInt(pointer.toString()); // TODO - check if this conversion can be made faster
-                resolve(valueFromPointer(bigIntPointer)); // TODO - check if this can be done directly from the Long type.
+                if (typeof pointer === "number") {
+                    resolve(valueFromSplitPointer(0, pointer));
+                } else {
+                    resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                }
             } else {
                 resolve(null);
             }
