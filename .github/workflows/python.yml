@@ -34,6 +34,11 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
+            
+            - name: Install protoc
+              run: |
+                sudo apt update
+                sudo apt install protobuf-compiler
 
             - name: Set up Python 3.10
               uses: actions/setup-python@v3
