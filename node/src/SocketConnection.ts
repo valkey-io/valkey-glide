@@ -5,9 +5,9 @@ import { valueFromSplitPointer } from "babushka-rs-internal";
 import { pb_message } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader } from "protobufjs";
 
-const { StartSocketConnection, RequestType } = BabushkaInternal;
+const { StartSocketConnection } = BabushkaInternal;
+const { RequestType } = pb_message;
 
-type RequestType = BabushkaInternal.RequestType;
 type PromiseFunction = (value?: any) => void;
 
 type AuthenticationOptions =

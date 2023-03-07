@@ -8,15 +8,7 @@ export const enum Level {
   Error = 0,
   Info = 2,
   Trace = 4,
-  Warn = 1
-}
-export const enum RequestType {
-  /** Type of a server address request */
-  ServerAddress = 1,
-  /** Type of a get string request. */
-  GetString = 2,
-  /** Type of a set string request. */
-  SetString = 3
+  Warn = 1,
 }
 export function StartSocketConnection(): Promise<string>
 export function log(logLevel: Level, logIdentifier: string, message: string): void
