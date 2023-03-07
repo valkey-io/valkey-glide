@@ -19,6 +19,7 @@ env:
 jobs:
     build:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         strategy:
             fail-fast: false
             matrix:
@@ -28,17 +29,17 @@ jobs:
         steps:
             - uses: actions/checkout@v3
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - name: Install redis
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
-            
+
             - name: Install protoc
               run: |
-                sudo apt update
-                sudo apt install protobuf-compiler
+                  sudo apt update
+                  sudo apt install protobuf-compiler
 
             - name: Use Node.js 16.x
               uses: actions/setup-node@v3
@@ -62,11 +63,12 @@ jobs:
               working-directory: ./node
 
     lint-rust:
+        timeout-minutes: 10
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - uses: ./.github/workflows/lint-rust
               with:

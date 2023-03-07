@@ -18,6 +18,7 @@ permissions:
 
 jobs:
     run-tests:
+        timeout-minutes: 10
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
@@ -53,6 +54,7 @@ jobs:
               run: dotnet test
 
     lint-rust:
+        timeout-minutes: 10
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
