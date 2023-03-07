@@ -6,7 +6,13 @@ import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 
-const { RequestType, createLeakedValue } = BabushkaInternal;
+const { createLeakedValue } = BabushkaInternal;
+
+const { RequestType } = pb_message;
+
+beforeAll(() => {
+    setLoggerConfig("info");
+});
 
 // TODO: use TS enums when tests are in TS.
 const ResponseType = {
@@ -21,10 +27,6 @@ const ResponseType = {
     /** Type of response containing the string "OK". */
     OK: 4,
 };
-
-beforeAll(() => {
-    setLoggerConfig("info");
-});
 
 function sendResponse(
     socket,
