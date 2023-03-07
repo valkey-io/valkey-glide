@@ -1,6 +1,7 @@
 # babushka
 
 ## pre-requirements:
+
 Install protobuf compiler, for ubuntu:
 `sudo apt install protobuf-compiler`
 
@@ -25,18 +26,18 @@ https://redis.io/docs/getting-started/
 ```
 sudo yum -y install gcc make wget
 cd /usr/local/src
-sudo wget http://download.redis.io/releases/{0}.tar.gz
-sudo tar xzf {0}.tar.gz
-sudo rm {0}.tar.gz
-cd {0}
+sudo wget http://download.redis.io/releases/redis-{0}.tar.gz
+sudo tar xzf redis-{0}.tar.gz
+sudo rm redis-{0}.tar.gz
+cd redis-{0}
 sudo make distclean
 sudo make BUILD_TLS=yes
 sudo mkdir /etc/redis
 sudo cp src/redis-server src/redis-cli /usr/local/bin
 ```
 
-change {0} to the version you want, e.g. redis-6.2.5. version names are available here: http://download.redis.io/releases/
-recommended version - 6.2.5 ATM
+change {0} to the version you want, e.g. 7.0.7. version names are available here: http://download.redis.io/releases/
+recommended version - 7.0.7 ATM
 
 ### node 16 (or newer)
 
