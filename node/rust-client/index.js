@@ -230,7 +230,6 @@ if (!nativeBinding) {
 
 const {
   Level,
-  RequestType,
   ResponseType,
   AsyncClient,
   StartSocketConnection,
@@ -242,7 +241,6 @@ const {
 } = nativeBinding
 
 module.exports.Level = Level
-module.exports.RequestType = RequestType
 module.exports.ResponseType = ResponseType
 module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection

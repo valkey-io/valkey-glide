@@ -6,11 +6,9 @@ import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 
-const {
-    ResponseType,
-    RequestType,
-    createLeakedValue,
-} = BabushkaInternal;
+const { ResponseType, createLeakedValue } = BabushkaInternal;
+
+const { RequestType } = pb_message;
 
 beforeAll(() => {
     setLoggerConfig("info");
@@ -26,7 +24,7 @@ function sendResponse(
     response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
         const pointer = createLeakedValue(message);
-        const pointer_number = Number(pointer.toString())
+        const pointer_number = Number(pointer.toString());
         response.respPointer = pointer_number;
     } else if (responseType == ResponseType.ClosingError) {
         response.closingError = message;
@@ -53,9 +51,15 @@ function getConnectionAndSocket() {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
                     const request = pb_message.Request.decodeDelimited(reader);
-                    expect(request.requestType).toEqual(RequestType.ServerAddress);
+                    expect(request.requestType).toEqual(
+                        RequestType.ServerAddress
+                    );
 
-                    sendResponse(socket, ResponseType.Null, request.callbackIdx);
+                    sendResponse(
+                        socket,
+                        ResponseType.Null,
+                        request.callbackIdx
+                    );
                 });
 
                 const connection = await connectionPromise;

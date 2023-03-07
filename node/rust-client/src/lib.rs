@@ -16,16 +16,6 @@ pub enum Level {
     Trace = 4,
     Warn = 1,
 }
-// TODO - this repetition will become unmaintainable. We need to do this in macros.
-#[napi]
-pub enum RequestType {
-    /// Type of a server address request
-    ServerAddress = 1,
-    /// Type of a get string request.
-    GetString = 2,
-    /// Type of a set string request.
-    SetString = 3,
-}
 
 // TODO - this repetition will become unmaintainable. We need to do this in macros.
 #[napi]

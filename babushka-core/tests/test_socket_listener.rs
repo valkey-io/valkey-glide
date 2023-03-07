@@ -1,4 +1,3 @@
-use babushka::headers::RequestType;
 use babushka::*;
 use rand::Rng;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
@@ -16,8 +15,8 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 mod socket_listener {
     use super::*;
     include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
-    use pb_message::{Request, Response};
-    use protobuf::Message;
+    use pb_message::{Request, RequestType, Response};
+    use protobuf::{EnumOrUnknown, Message};
     use rand::distributions::Alphanumeric;
     use redis::Value;
     use rstest::rstest;
@@ -113,7 +112,7 @@ mod socket_listener {
         buffer: &mut Vec<u8>,
         callback_index: u32,
         args: Vec<String>,
-        request_type: u32,
+        request_type: EnumOrUnknown<RequestType>,
     ) -> u32 {
         let mut request = Request::new();
         request.callback_idx = callback_index;
@@ -131,7 +130,7 @@ mod socket_listener {
             buffer,
             callback_index,
             vec![key.to_string()],
-            RequestType::GetString as u32,
+            RequestType::GetString.into(),
         )
     }
 
@@ -140,7 +139,7 @@ mod socket_listener {
             buffer,
             callback_index,
             vec![key.to_string(), value],
-            RequestType::SetString as u32,
+            RequestType::SetString.into(),
         )
     }
 
@@ -162,7 +161,7 @@ mod socket_listener {
             &mut buffer,
             CALLBACK_INDEX,
             vec![address],
-            RequestType::ServerAddress as u32,
+            RequestType::ServerAddress.into(),
         );
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
@@ -342,7 +341,7 @@ mod socket_listener {
 
         const CALLBACK_INDEX: u32 = 99;
         let key = "a";
-        let request_type = u32::MAX; // here we send an erroneous enum
+        let request_type = i32::MAX; // here we send an erroneous enum
                                      // Send a set request
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -350,7 +349,7 @@ mod socket_listener {
             &mut buffer,
             CALLBACK_INDEX,
             vec![key.to_string()],
-            request_type,
+            EnumOrUnknown::from_i32(request_type),
         );
         test_basics.socket.write_all(&buffer).unwrap();
         let mut buffer = [0; 50];
