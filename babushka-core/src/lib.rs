@@ -1,3 +1,4 @@
+pub mod client;
 /// Contains information that determines how the request and response headers are shaped.
 pub mod headers;
 pub mod headers_legacy;
