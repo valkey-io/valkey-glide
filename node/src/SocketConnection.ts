@@ -10,6 +10,97 @@ const { StartSocketConnection, RequestType } = BabushkaInternal;
 type RequestType = BabushkaInternal.RequestType;
 type PromiseFunction = (value?: any) => void;
 
+type AuthenticationOptions =
+    | {
+          /// The username that will be passed to the cluster's Access Control Layer.
+          /// If not supplied, "default" will be used.
+          // TODO - implement usage
+          username?: string;
+          /// The password that will be passed to the cluster's Access Control Layer.
+          password: string;
+      }
+    | {
+          /// a callback that allows the client to receive new pairs of username/password. Should be used when connecting to a server that might change the required credentials, such as AWS IAM.
+          // TODO - implement usage
+          credentialsProvider: () => [string, string];
+      };
+
+type ConnectionRetryStrategy = {
+    /// The client will add a random number of milliseconds between 0 and this value to the wait between each connection attempt, in order to prevent the server from receiving multiple connections at the same time, and causing a connection storm.
+    /// if not set, will be set to DEFAULT_CONNECTION_RETRY_JITTER.
+    /// Value must be an integer.
+    // TODO - implement usage
+    jitter?: number;
+    /// Number of retry attempts that the client should perform when disconnected from the server.
+    /// Value must be an integer.
+    numberOfRetries: number;
+} & (
+    | {
+          /// A retry strategy where the time between attempts is the same, regardless of the number of performed connection attempts.
+          type: "linear";
+          /// Number of milliseconds that the client should wait between connection attempts.
+          /// Value must be an integer.
+          waitDuration: number;
+      }
+    | {
+          /// A retry strategy where the time between attempts grows exponentially, to the formula baselineWaitDuration * (exponentBase ^ N), where N is the number of failed attempts.
+          type: "exponentialBackoff";
+          /// Value must be an integer.
+          baselineWaitDuration: number;
+          /// Value must be an integer.
+          exponentBase: number;
+      }
+);
+
+export const DEFAULT_RESPONSE_TIMEOUT = 2000;
+export const DEFAULT_CONNECTION_TIMEOUT = 2000;
+export const DEFAULT_CONNECTION_RETRY_JITTER = 10;
+export const DEFAULT_CONNECTION_RETRY_STRATEGY: ConnectionRetryStrategy = {
+    type: "exponentialBackoff",
+    numberOfRetries: 5,
+    jitter: DEFAULT_CONNECTION_RETRY_JITTER,
+    baselineWaitDuration: 10,
+    exponentBase: 10,
+};
+
+type ConnectionOptions = {
+    /// DNS Addresses and ports of known nodes in the cluster.
+    /// If the server has Cluster Mode Enabled the list can be partial, as the client will attempt to map out the cluster and find all nodes.
+    /// If the server has Cluster Mode Disabled, only nodes whose addresses were provided will be used by the client.
+    /// For example, [{address:sample-address-0001.use1.cache.amazonaws.com, port:6379}, {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}].
+    // TODO - implement usage of multiple addresses
+    addresses: {
+        address: string;
+        port?: number; /// If port isn't supplied, 6379 will be used
+    }[];
+    /// True if communication with the cluster should use Transport Level Security.
+    useTLS?: boolean;
+    /// Credentials for authentication process.
+    /// If none are set, the client will not authenticate itself with the server.
+    // TODO - implement usage
+    credentials?: AuthenticationOptions;
+    /// Number of milliseconds that the client should wait for response before determining that the connection has been severed.
+    /// If not set, DEFAULT_RESPONSE_TIMEOUT will be used.
+    // TODO - implement usage
+    /// Value must be an integer.
+    responseTimeout?: number;
+    /// Number of milliseconds that the client should wait for connection before determining that the connection has been severed.
+    /// If not set, DEFAULT_CONNECTION_TIMEOUT will be used.
+    // TODO - implement usage
+    /// Value must be an integer.
+    connectionTimeout?: number;
+    /// Strategy used to determine how and when to retry connecting, in case of connection failures.
+    /// If not set, DEFAULT_CONNECTION_RETRY_STRATEGY will be used.
+    // TODO - implement usage
+    connectionRetryStrategy?: ConnectionRetryStrategy;
+    /// If not set, `alwaysFromPrimary` will be used.
+    readFromReplicaStrategy?:
+        | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data. // TODO - implement usage
+        | "roundRobin" /// Spread the request load between all replicas evenly. // TODO - implement usage
+        | "lowestLatency" /// Send requests to the replica with the lowest latency. // TODO - implement usage
+        | "azAffinity"; /// Send requests to the replica which is in the same AZ as the EC2 instance, otherwise behaves like `lowestLatency`. Only available on AWS ElastiCache. // TODO - implement usage
+};
+
 export class SocketConnection {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -168,6 +259,7 @@ export class SocketConnection {
         address: string,
         connectedSocket: net.Socket
     ): Promise<SocketConnection> {
+        console.log(address);
         const connection = new SocketConnection(connectedSocket);
         await connection.setServerAddress(address);
         return connection;
@@ -183,11 +275,21 @@ export class SocketConnection {
         });
     }
 
+    private static finalAddresses(options: ConnectionOptions): string[] {
+        const protocol = options.useTLS ? "rediss://" : "redis://";
+        return options.addresses.map(
+            (address) => `${protocol}${address.address}:${address.port ?? 6379}`
+        );
+    }
+
     public static async CreateConnection(
-        address: string
+        options: ConnectionOptions
     ): Promise<SocketConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__CreateConnection(address, socket);
+        return await this.__CreateConnection(
+            SocketConnection.finalAddresses(options)[0],
+            socket
+        );
     }
 }
