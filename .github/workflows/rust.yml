@@ -19,6 +19,7 @@ env:
 jobs:
     build:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         strategy:
             fail-fast: false
             matrix:
@@ -35,11 +36,11 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
-            
+
             - name: Install protoc
               run: |
-                sudo apt update
-                sudo apt install protobuf-compiler
+                  sudo apt update
+                  sudo apt install protobuf-compiler
 
             - name: Install toolchain
               uses: actions-rs/toolchain@v1
@@ -62,6 +63,7 @@ jobs:
 
     lint:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         steps:
             - uses: actions/checkout@v3
               with:
