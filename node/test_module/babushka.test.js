@@ -194,6 +194,69 @@ describe("socket client", () => {
         });
     });
 
+    it("set and with return of old value works", async () => {
+        const port = await FreePort(3000).then(([free_port]) => free_port);
+        await OpenServerAndExecute(port, async () => {
+            const client = await SocketConnection.CreateConnection(
+                getOptions(port)
+            );
+
+            const key = uuidv4();
+            // Adding random repetition, to prevent the inputs from always having the same alignment.
+            const value = uuidv4() + "0".repeat(Math.random() * 7);
+
+            let result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            result = await client.set(key, "", {
+                returnOldValue: true,
+            });
+            expect(result).toEqual(value);
+
+            result = await client.get(key);
+            expect(result).toEqual("");
+
+            client.dispose();
+        });
+    });
+
+    it("conditional set works", async () => {
+        const port = await FreePort(3000).then(([free_port]) => free_port);
+        await OpenServerAndExecute(port, async () => {
+            const client = await SocketConnection.CreateConnection(
+                getOptions(port)
+            );
+
+            const key = uuidv4();
+            // Adding random repetition, to prevent the inputs from always having the same alignment.
+            const value = uuidv4() + "0".repeat(Math.random() * 7);
+            let result = await client.set(key, value, {
+                conditionalSet: "onlyIfExists",
+            });
+            expect(result).toEqual(null);
+
+            result = await client.set(key, value, {
+                conditionalSet: "onlyIfDoesNotExist",
+            });
+            expect(result).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
+
+            result = await client.set(key, "foobar", {
+                conditionalSet: "onlyIfDoesNotExist",
+            });
+            expect(result).toEqual(null);
+
+            result = await client.set(key, "foobar", {
+                conditionalSet: "onlyIfExists",
+            });
+            expect(result).toEqual("OK");
+
+            expect(await client.get(key)).toEqual("foobar");
+
+            client.dispose();
+        });
+    });
+
     it("can handle non-ASCII unicode", async () => {
         const port = await FreePort(3000).then(([free_port]) => free_port);
         await OpenServerAndExecute(port, async () => {
