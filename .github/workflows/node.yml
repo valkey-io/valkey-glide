@@ -46,20 +46,20 @@ jobs:
               with:
                   node-version: 16.x
 
-            - run: |
+            - name: npm install and test
+              run: |
                   rm -rf node_modules && npm install --frozen-lockfile
                   npm install
               working-directory: ./node/rust-client
 
-            - run: |
+            - name: build
+              run: |
                   rm -rf node_modules && npm install --frozen-lockfile
-                  npm install
                   npm run build
               working-directory: ./node
 
-            - run: |
-                  rm -rf node_modules && npm install --frozen-lockfile
-                  npm test
+            - name: test
+              run: npm test
               working-directory: ./node
 
     lint-rust:
