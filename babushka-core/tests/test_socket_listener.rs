@@ -327,7 +327,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK2_INDEX, key);
         test_basics.socket.write_all(&buffer).unwrap();
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        unsafe { buffer.set_len(approx_message_length) };
+        buffer.resize(approx_message_length, 0);
         let _size = test_basics.socket.read(&mut buffer).unwrap();
         assert_response(
             &buffer,
@@ -408,7 +408,7 @@ mod socket_listener {
         let response_header_length = u32::required_space(size_of::<usize>() as u32);
         let expected_length = size_of::<usize>() + response_header_length + 2; // 2 bytes for callbackIdx and value type
                                                                                // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        unsafe { buffer.set_len(approx_message_length) };
+        buffer.resize(approx_message_length, 0);
         let mut size = 0;
         while size < expected_length {
             let next_read = test_basics.socket.read(&mut buffer[size..]).unwrap();
