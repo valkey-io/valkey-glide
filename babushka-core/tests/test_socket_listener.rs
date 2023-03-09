@@ -16,7 +16,7 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 mod socket_listener {
     use super::*;
     include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
-    use pb_message::{Request, Response};
+    use pb_message::{response, ConstantResponse, Request, Response};
     use protobuf::Message;
     use rand::distributions::Alphanumeric;
     use redis::Value;
@@ -42,12 +42,11 @@ mod socket_listener {
         socket: UnixStream,
     }
 
-    fn assert_value(pointer: u64, expected_value: Option<&[u8]>) {
+    fn assert_value(pointer: u64, expected_value: Option<Value>) {
         let pointer = pointer as *mut Value;
         let received_value = unsafe { Box::from_raw(pointer) };
         assert!(expected_value.is_some());
-        let expected_value = expected_value.unwrap();
-        assert_eq!(*received_value, Value::Data(expected_value.to_owned()));
+        assert_eq!(*received_value, expected_value.unwrap());
     }
 
     fn decode_response(buffer: &[u8], cursor: usize, message_length: usize) -> Response {
@@ -67,6 +66,16 @@ mod socket_listener {
         assert_response(buffer, 0, expected_callback, None, ResponseType::Null);
     }
 
+    fn assert_ok_response(buffer: &[u8], expected_callback: u32) {
+        assert_response(
+            buffer,
+            0,
+            expected_callback,
+            Some(Value::Okay),
+            ResponseType::Value,
+        );
+    }
+
     fn assert_error_response(
         buffer: &[u8],
         expected_callback: u32,
@@ -79,21 +88,29 @@ mod socket_listener {
         buffer: &[u8],
         cursor: usize,
         expected_callback: u32,
-        expected_value: Option<&[u8]>,
+        expected_value: Option<Value>,
         response_type: ResponseType,
     ) -> Response {
         let (message_length, header_bytes) = parse_header(buffer);
         let response = decode_response(buffer, cursor + header_bytes, message_length as usize);
         assert_eq!(response.callback_idx, expected_callback);
         match response.value {
-            Some(pb_message::response::Value::RespPointer(pointer)) => {
+            Some(response::Value::RespPointer(pointer)) => {
                 assert_value(pointer, expected_value);
             }
-            Some(pb_message::response::Value::ClosingError(ref _err)) => {
+            Some(response::Value::ClosingError(ref _err)) => {
                 assert_eq!(response_type, ResponseType::ClosingError);
             }
-            Some(pb_message::response::Value::RequestError(ref _err)) => {
+            Some(response::Value::RequestError(ref _err)) => {
                 assert_eq!(response_type, ResponseType::RequestError);
+            }
+            Some(response::Value::ConstantResponse(enum_value)) => {
+                let enum_value = enum_value.unwrap();
+                if enum_value == ConstantResponse::OK {
+                    assert_eq!(expected_value.unwrap(), Value::Okay);
+                } else {
+                    unreachable!()
+                }
             }
             None => {
                 assert!(expected_value.is_none());
@@ -304,7 +321,7 @@ mod socket_listener {
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_null_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -316,7 +333,7 @@ mod socket_listener {
             &buffer,
             0,
             CALLBACK2_INDEX,
-            Some(value.as_bytes()),
+            Some(Value::Data(value.into_bytes())),
             ResponseType::Value,
         );
     }
@@ -358,7 +375,7 @@ mod socket_listener {
         let response = assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
         assert_eq!(
             response.closing_error(),
-            format!("Recieved invalid request type: {request_type}")
+            format!("Received invalid request type: {request_type}")
         );
     }
 
@@ -382,7 +399,7 @@ mod socket_listener {
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_null_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key);
@@ -402,7 +419,7 @@ mod socket_listener {
             &buffer,
             0,
             CALLBACK2_INDEX,
-            Some(value.as_bytes()),
+            Some(Value::Data(value.into_bytes())),
             ResponseType::Value,
         );
     }
@@ -450,16 +467,20 @@ mod socket_listener {
                             let callback_index = response.callback_idx as usize;
                             let mut results = results_for_read.lock().unwrap();
                             match response.value {
-                                None => {
+                                Some(response::Value::ConstantResponse(constant)) => {
+                                    assert_eq!(constant, ConstantResponse::OK.into());
                                     assert_eq!(results[callback_index], State::Initial);
                                     results[callback_index] = State::ReceivedNull;
                                 }
-                                Some(pb_message::response::Value::RespPointer(pointer)) => {
+                                Some(response::Value::RespPointer(pointer)) => {
                                     assert_eq!(results[callback_index], State::ReceivedNull);
 
                                     let values = values_for_read.lock().unwrap();
 
-                                    assert_value(pointer, Some(&values[callback_index]));
+                                    assert_value(
+                                        pointer,
+                                        Some(Value::Data(values[callback_index].clone())),
+                                    );
                                     results[callback_index] = State::ReceivedValue;
                                 }
                                 _ => unreachable!(),

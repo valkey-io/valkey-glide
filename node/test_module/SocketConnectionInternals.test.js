@@ -6,11 +6,21 @@ import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 
-const {
-    ResponseType,
-    RequestType,
-    createLeakedValue,
-} = BabushkaInternal;
+const { RequestType, createLeakedValue } = BabushkaInternal;
+
+// TODO: use TS enums when tests are in TS.
+const ResponseType = {
+    /** Type of a response that returns a null. */
+    Null: 0,
+    /** Type of a response that returns a value which isn't an error. */
+    Value: 1,
+    /** Type of response containing an error that impacts a single request. */
+    RequestError: 2,
+    /** Type of response containing an error causes the connection to close. */
+    ClosingError: 3,
+    /** Type of response containing the string "OK". */
+    OK: 4,
+};
 
 beforeAll(() => {
     setLoggerConfig("info");
@@ -26,7 +36,7 @@ function sendResponse(
     response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
         const pointer = createLeakedValue(message);
-        const pointer_number = Number(pointer.toString())
+        const pointer_number = Number(pointer.toString());
         response.respPointer = pointer_number;
     } else if (responseType == ResponseType.ClosingError) {
         response.closingError = message;
@@ -34,6 +44,8 @@ function sendResponse(
         response.requestError = message;
     } else if (responseType == ResponseType.Null) {
         // do nothing
+    } else if (responseType == ResponseType.OK) {
+        response.constantResponse = pb_message.ConstantResponse.OK;
     } else {
         throw new Error("Got unknown response type: ", responseType);
     }
@@ -53,9 +65,15 @@ function getConnectionAndSocket() {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
                     const request = pb_message.Request.decodeDelimited(reader);
-                    expect(request.requestType).toEqual(RequestType.ServerAddress);
+                    expect(request.requestType).toEqual(
+                        RequestType.ServerAddress
+                    );
 
-                    sendResponse(socket, ResponseType.Null, request.callbackIdx);
+                    sendResponse(
+                        socket,
+                        ResponseType.Null,
+                        request.callbackIdx
+                    );
                 });
 
                 const connection = await connectionPromise;
@@ -145,6 +163,21 @@ describe("SocketConnectionInternals", () => {
             });
             const result = await connection.get("foo");
             expect(result).toBeNull();
+        });
+    });
+
+    it("should pass OK returned from socket", async () => {
+        await testWithResources(async (connection, socket) => {
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.SetString);
+                expect(request.args.length).toEqual(2);
+
+                sendResponse(socket, ResponseType.OK, request.callbackIdx);
+            });
+            const result = await connection.set("foo", "bar");
+            expect(result).toEqual("OK");
         });
     });
 
