@@ -24,6 +24,7 @@ num_cpus = "^1.15"
 tokio-retry = "0.3.0"
 protobuf = "3"
 integer-encoding = "3.0.4"
+thiserror = "1"
 
 [dev-dependencies]
 rand = "0.8.5"
