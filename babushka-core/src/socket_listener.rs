@@ -15,6 +15,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::{fmt, str};
 use std::{io, thread};
+use thiserror::Error;
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -323,9 +324,7 @@ async fn parse_address_create_conn(
     let connection = Retry::spawn(retry_strategy, action).await?;
 
     // Send response
-    write_result(Ok(Value::Nil), request.callback_idx, writer)
-        .await
-        .map_err(|err| ClientCreationError::UnhandledError(err.to_string()))?;
+    write_result(Ok(Value::Nil), request.callback_idx, writer).await?;
     log_trace(
         "client creation",
         format!("Connection to {address} created"),
@@ -410,9 +409,15 @@ async fn listen_on_client_stream(socket: UnixStream) {
             .await;
             return;
         }
-        Err(ClientCreationError::UnhandledError(err)) => {
-            let _res =
-                write_closing_error(ClosingError { err: err.clone() }, u32::MAX, &writer).await;
+        Err(e @ ClientCreationError::UnhandledError(_)) | Err(e @ ClientCreationError::IO(_)) => {
+            let _res = write_closing_error(
+                ClosingError {
+                    err: format!("{}", e),
+                },
+                u32::MAX,
+                &writer,
+            )
+            .await;
             return;
         }
     };
@@ -558,15 +563,20 @@ impl From<io::Error> for ClosingReason {
 }
 
 /// Enum describing errors received during client creation.
+#[derive(Debug, Error)]
 pub enum ClientCreationError {
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
     /// An error was returned during the client creation process.
+    #[error("Unhandled error: {0}")]
     UnhandledError(String),
     /// Socket listener was closed before receiving the server address.
+    #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),
 }
 
 /// Defines errors caused the connection to close.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 struct ClosingError {
     /// A string describing the closing reason
     err: String,
@@ -577,8 +587,6 @@ impl fmt::Display for ClosingError {
         write!(f, "{}", self.err)
     }
 }
-
-impl std::error::Error for ClosingError {}
 
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     std::env::temp_dir()
