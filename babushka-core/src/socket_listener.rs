@@ -6,7 +6,7 @@ use logger_core::{log_error, log_info, log_trace};
 use pb_message::{Request, RequestType, Response};
 use protobuf::Message;
 use redis::aio::MultiplexedConnection;
-use redis::{cmd, AsyncCommands, ErrorKind, RedisResult, Value};
+use redis::{cmd, RedisResult, Value};
 use redis::{Client, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
@@ -147,22 +147,6 @@ async fn write_to_output(writer: &Rc<Writer>) {
     }
 }
 
-async fn send_set_request(
-    request: &Request,
-    mut connection: impl BabushkaClient,
-    writer: Rc<Writer>,
-) -> RedisResult<()> {
-    assert_eq!(request.request_type, RequestType::SetString.into());
-    let args = &request.args;
-    let mut cmd = cmd("SET");
-    for arg in args.iter() {
-        cmd.arg(arg);
-    }
-    let result = cmd.query_async(&mut connection).await;
-    write_result(result, request.callback_idx, &writer).await?;
-    Ok(())
-}
-
 async fn write_closing_error(
     err: ClosingError,
     callback_index: u32,
@@ -227,42 +211,55 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-async fn send_get_request(
-    request: &Request,
-    mut connection: impl BabushkaClient,
+fn get_command_name(request: &Request) -> Option<&str> {
+    let request_enum = request
+        .request_type
+        .enum_value_or(RequestType::InvalidRequest);
+    match request_enum {
+        RequestType::GetString => Some("GET"),
+        RequestType::SetString => Some("SET"),
+        _ => None,
+    }
+}
+
+async fn send_redis_command(
+    command_name: &str,
+    args: &[String],
+    callback_idx: u32,
+    mut connection: impl BabushkaClient + 'static,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
-    assert_eq!(request.request_type, RequestType::GetString.into());
-    assert_eq!(request.args.len(), 1); // TODO: delete it in the chunks implementation
-    let result: RedisResult<Value> = connection.get(request.args.first().unwrap()).await;
-    write_result(result, request.callback_idx, &writer).await?;
+    let mut cmd = cmd(command_name);
+    for arg in args.iter() {
+        cmd.arg(arg);
+    }
+    let result = cmd.query_async(&mut connection).await;
+    write_result(result, callback_idx, &writer).await?;
     Ok(())
 }
 
 fn handle_request(request: Request, connection: impl BabushkaClient + 'static, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        let request_type = request
-            .request_type
-            .enum_value_or(RequestType::InvalidRequest);
-        let result = match request_type {
-            RequestType::GetString => send_get_request(&request, connection, writer.clone()).await,
-            RequestType::SetString => send_set_request(&request, connection, writer.clone()).await,
-            RequestType::ServerAddress => Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Server address can only be sent once",
-            ))),
-            _ => {
+        let Some(command_name) = get_command_name(&request) else {
                 let err_message =
                     format!("Received invalid request type: {:?}", request.request_type);
                 let _res = write_closing_error(
                     ClosingError { err: err_message },
                     request.callback_idx,
-                    &writer,
+                    &writer.clone(),
                 )
                 .await;
                 return;
-            }
         };
+
+        let result = send_redis_command(
+            command_name,
+            &request.args,
+            request.callback_idx,
+            connection,
+            writer.clone(),
+        )
+        .await;
         if let Err(err) = result {
             let _res = write_result(Err(err), request.callback_idx, &writer).await;
         }
@@ -413,14 +410,8 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_)) | Err(e @ ClientCreationError::IO(_)) => {
-            let _res = write_closing_error(
-                ClosingError {
-                    err: format!("{}", e),
-                },
-                u32::MAX,
-                &writer,
-            )
-            .await;
+            let _res =
+                write_closing_error(ClosingError { err: e.to_string() }, u32::MAX, &writer).await;
             return;
         }
     };
