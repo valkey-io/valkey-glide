@@ -3,8 +3,19 @@ package pb_message;
 
 message Request {
     uint32 callback_idx = 1;
-    uint32 request_type = 2; // TODO: convert to enum
+    RequestType request_type = 2;
     repeated string args = 3;
+}
+
+enum RequestType {
+    /// Invalid request type
+    InvalidRequest = 0;
+    /// Type of a server address request
+    ServerAddress = 1;
+    /// Type of a get string request.
+    GetString = 2;
+    /// Type of a set string request.
+    SetString = 3;
 }
 
 message Response {

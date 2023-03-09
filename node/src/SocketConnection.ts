@@ -5,9 +5,9 @@ import { valueFromSplitPointer } from "babushka-rs-internal";
 import { pb_message } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader } from "protobufjs";
 
-const { StartSocketConnection, RequestType } = BabushkaInternal;
+const { StartSocketConnection } = BabushkaInternal;
+const { RequestType } = pb_message;
 
-type RequestType = BabushkaInternal.RequestType;
 type PromiseFunction = (value?: any) => void;
 
 type AuthenticationOptions =
@@ -215,7 +215,9 @@ export class SocketConnection {
         this.writeBufferedRequestsToSocket();
     }
 
-    public get(key: string): Promise<string> {
+    /// Get the value associated with the given key, or null if no such value exists.
+    /// See https://redis.io/commands/get/ for details.
+    public get(key: string): Promise<string | null> {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
@@ -225,14 +227,73 @@ export class SocketConnection {
         });
     }
 
-    public set(key: string, value: string): Promise<"OK"> {
+    /// Set the given key with the given value. Return value is dependent on the passed options.
+    /// See https://redis.io/commands/set/ for details.
+    public set(
+        key: string,
+        value: string,
+        options?: {
+            /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
+            /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
+            /// if `conditional` is not set the value will be set regardless of prior value existence.
+            /// If value isn't set because of the condition, return null.
+            conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+            /// Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string. Equivalent to `GET` in the Redis API.
+            returnOldValue?: boolean;
+            /// If not set, no expiry time will be set for the value.
+            expiry?:
+                | "keepExisting" /// Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+                | {
+                      type:
+                          | "seconds" /// Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+                          | "milliseconds" ///  Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+                          | "unixSeconds" /// Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+                          | "unixMilliseconds"; /// Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+                      count: number;
+                  };
+        }
+    ): Promise<"OK" | string | null> {
         return new Promise((resolve, reject) => {
+            const args = [key, value];
+            if (options) {
+                if (options.conditionalSet === "onlyIfExists") {
+                    args.push("XX");
+                } else if (options.conditionalSet === "onlyIfDoesNotExist") {
+                    args.push("NX");
+                }
+                if (options.returnOldValue) {
+                    args.push("GET");
+                }
+                if (
+                    options.expiry &&
+                    options.expiry !== "keepExisting" &&
+                    !Number.isInteger(options.expiry.count)
+                ) {
+                    reject(
+                        `Received expiry '${JSON.stringify(
+                            options.expiry
+                        )}'. Count must be an integer`
+                    );
+                }
+                if (options.expiry === "keepExisting") {
+                    args.push("KEEPTTL");
+                } else if (options.expiry?.type === "seconds") {
+                    args.push("EX " + options.expiry.count);
+                } else if (options.expiry?.type === "milliseconds") {
+                    args.push("PX " + options.expiry.count);
+                } else if (options.expiry?.type === "unixSeconds") {
+                    args.push("EXAT " + options.expiry.count);
+                } else if (options.expiry?.type === "unixMilliseconds") {
+                    args.push("PXAT " + options.expiry.count);
+                }
+            }
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.SetString, [
-                key,
-                value,
-            ]);
+            this.writeOrBufferRequest(
+                callbackIndex,
+                RequestType.SetString,
+                args
+            );
         });
     }
 
@@ -259,7 +320,6 @@ export class SocketConnection {
         address: string,
         connectedSocket: net.Socket
     ): Promise<SocketConnection> {
-        console.log(address);
         const connection = new SocketConnection(connectedSocket);
         await connection.setServerAddress(address);
         return connection;

@@ -6,7 +6,13 @@ import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 
-const { RequestType, createLeakedValue } = BabushkaInternal;
+const { createLeakedValue } = BabushkaInternal;
+
+const { RequestType } = pb_message;
+
+beforeAll(() => {
+    setLoggerConfig("info");
+});
 
 // TODO: use TS enums when tests are in TS.
 const ResponseType = {
@@ -21,10 +27,6 @@ const ResponseType = {
     /** Type of response containing the string "OK". */
     OK: 4,
 };
-
-beforeAll(() => {
-    setLoggerConfig("info");
-});
 
 function sendResponse(
     socket,
@@ -222,6 +224,31 @@ describe("SocketConnectionInternals", () => {
 
             await expect(request1).rejects.toMatch(error);
             await expect(request2).rejects.toMatch(error);
+        });
+    });
+
+    it("should pass SET arguments", async () => {
+        await testWithResources(async (connection, socket) => {
+            const error = "check";
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.SetString);
+                expect(request.args.length).toEqual(5);
+                expect(request.args[0]).toEqual("foo");
+                expect(request.args[1]).toEqual("bar");
+                expect(request.args[2]).toEqual("XX");
+                expect(request.args[3]).toEqual("GET");
+                expect(request.args[4]).toEqual("EX 10");
+                sendResponse(socket, ResponseType.OK, request.callbackIdx);
+            });
+            const request1 = connection.set("foo", "bar", {
+                conditionalSet: "onlyIfExists",
+                returnOldValue: true,
+                expiry: { type: "seconds", count: 10 },
+            });
+
+            await expect(await request1).toMatch("OK");
         });
     });
 });

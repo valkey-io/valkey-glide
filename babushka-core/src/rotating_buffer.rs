@@ -108,6 +108,7 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pb_message::RequestType;
     use rand::{distributions::Alphanumeric, Rng};
     use std::io::Write;
 
@@ -118,10 +119,14 @@ mod tests {
         u32::encode_var(length, &mut buffer[new_len - required_space..]);
     }
 
-    fn create_request(callback_index: u32, args: Vec<String>, request_type: u32) -> Request {
+    fn create_request(
+        callback_index: u32,
+        args: Vec<String>,
+        request_type: RequestType,
+    ) -> Request {
         let mut request = Request::new();
         request.callback_idx = callback_index;
-        request.request_type = request_type;
+        request.request_type = request_type.into();
         request.args = args;
         request
     }
@@ -130,7 +135,7 @@ mod tests {
         buffer: &mut Vec<u8>,
         callback_index: u32,
         args: Vec<String>,
-        request_type: u32,
+        request_type: RequestType,
     ) {
         let request = create_request(callback_index, args, request_type);
         let message_length = request.compute_size() as usize;
@@ -143,7 +148,7 @@ mod tests {
             buffer,
             callback_index,
             vec![key.to_string()],
-            RequestType::GetString as u32,
+            RequestType::GetString,
         );
     }
 
@@ -152,17 +157,17 @@ mod tests {
             buffer,
             callback_index,
             vec![key.to_string(), value],
-            RequestType::SetString as u32,
+            RequestType::SetString,
         );
     }
 
     fn assert_request(
         request: &Request,
-        expected_type: u32,
+        expected_type: RequestType,
         expected_index: u32,
         expected_args: Vec<String>,
     ) {
-        assert_eq!(request.request_type, expected_type);
+        assert_eq!(request.request_type, expected_type.into());
         assert_eq!(request.callback_idx, expected_index);
         assert_eq!(request.args, expected_args);
     }
@@ -197,13 +202,13 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key".to_string()],
         );
         assert_request(
             &requests[1],
-            RequestType::SetString as u32,
+            RequestType::SetString,
             5,
             vec!["key".to_string(), "value".to_string()],
         );
@@ -217,7 +222,7 @@ mod tests {
         let requests = rotating_buffer.get_requests().unwrap();
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key".to_string()],
         );
@@ -231,7 +236,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::SetString as u32,
+            RequestType::SetString,
             5,
             vec!["key".to_string(), "value".to_string()],
         );
@@ -247,7 +252,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key".to_string()],
         );
@@ -259,7 +264,7 @@ mod tests {
         }
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key".to_string()],
         );
@@ -279,7 +284,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key1".to_string()],
         );
@@ -290,7 +295,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             101,
             vec!["key2".to_string()],
         );
@@ -315,7 +320,7 @@ mod tests {
         buffer.append(&mut request_bytes[NUM_OF_LENGTH_BYTES..].into());
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
-        assert_request(&requests[0], RequestType::GetString as u32, 100, vec![key]);
+        assert_request(&requests[0], RequestType::GetString, 100, vec![key]);
     }
 
     #[test]
@@ -336,7 +341,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString as u32,
+            RequestType::GetString,
             100,
             vec!["key1".to_string()],
         );
@@ -345,6 +350,6 @@ mod tests {
         buffer.append(&mut request_bytes[NUM_OF_LENGTH_BYTES..].into());
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
-        assert_request(&requests[0], RequestType::GetString as u32, 101, vec![key2]);
+        assert_request(&requests[0], RequestType::GetString, 101, vec![key2]);
     }
 }

@@ -3,11 +3,10 @@ use super::{headers::*, rotating_buffer::RotatingBuffer};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
-use num_traits::FromPrimitive;
-use pb_message::{Request, Response};
+use pb_message::{Request, RequestType, Response};
 use protobuf::Message;
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, ErrorKind, RedisResult, Value};
+use redis::{cmd, AsyncCommands, ErrorKind, RedisResult, Value};
 use redis::{Client, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
@@ -153,10 +152,13 @@ async fn send_set_request(
     mut connection: impl BabushkaClient,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
-    assert_eq!(request.request_type, RequestType::SetString as u32);
+    assert_eq!(request.request_type, RequestType::SetString.into());
     let args = &request.args;
-    assert_eq!(args.len(), 2); // TODO: delete it in the chunks implementation
-    let result: RedisResult<Value> = connection.set(&args[0], &args[1]).await;
+    let mut cmd = cmd("SET");
+    for arg in args.iter() {
+        cmd.arg(arg);
+    }
+    let result = cmd.query_async(&mut connection).await;
     write_result(result, request.callback_idx, &writer).await?;
     Ok(())
 }
@@ -230,7 +232,7 @@ async fn send_get_request(
     mut connection: impl BabushkaClient,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
-    assert_eq!(request.request_type, RequestType::GetString as u32);
+    assert_eq!(request.request_type, RequestType::GetString.into());
     assert_eq!(request.args.len(), 1); // TODO: delete it in the chunks implementation
     let result: RedisResult<Value> = connection.get(request.args.first().unwrap()).await;
     write_result(result, request.callback_idx, &writer).await?;
@@ -239,8 +241,9 @@ async fn send_get_request(
 
 fn handle_request(request: Request, connection: impl BabushkaClient + 'static, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        let request_type =
-            FromPrimitive::from_u32(request.request_type).unwrap_or(RequestType::InvalidRequest);
+        let request_type = request
+            .request_type
+            .enum_value_or(RequestType::InvalidRequest);
         let result = match request_type {
             RequestType::GetString => send_get_request(&request, connection, writer.clone()).await,
             RequestType::SetString => send_set_request(&request, connection, writer.clone()).await,
@@ -250,7 +253,7 @@ fn handle_request(request: Request, connection: impl BabushkaClient + 'static, w
             ))),
             _ => {
                 let err_message =
-                    format!("Received invalid request type: {}", request.request_type);
+                    format!("Received invalid request type: {:?}", request.request_type);
                 let _res = write_closing_error(
                     ClosingError { err: err_message },
                     request.callback_idx,
@@ -341,7 +344,7 @@ async fn wait_for_server_address_create_conn(
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(received_requests) => {
             if let Some(request) = received_requests.first() {
-                match FromPrimitive::from_u32(request.request_type).unwrap() {
+                match request.request_type.unwrap() {
                     RequestType::ServerAddress => parse_address_create_conn(writer, request).await,
                     _ => Err(ClientCreationError::UnhandledError(
                         "Received another request before receiving server address".to_string(),
