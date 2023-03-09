@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{self, event};
 use tracing_appender::{
@@ -8,7 +9,7 @@ use tracing_appender::{
 use tracing_subscriber::{self, filter::LevelFilter};
 
 // Guard is in charge of making sure that the logs been collected when program stop
-pub static mut GUARD: Option<WorkerGuard> = None;
+pub static GUARD: RwLock<Option<WorkerGuard>> = RwLock::new(None);
 
 #[derive(Debug)]
 pub enum Level {
@@ -36,7 +37,8 @@ impl Level {
 pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
     let file_appender = RollingFileAppender::new(Rotation::HOURLY, "babushka-logs", file_name);
     let (non_blocking, _guard) = non_blocking(file_appender);
-    unsafe { GUARD = Some(_guard) }
+    let mut guard = GUARD.write().unwrap();
+    *guard = Some(_guard);
     let level_filter = minimal_level.to_filter();
     let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
@@ -53,7 +55,8 @@ pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
 pub fn init_console(minimal_level: Level) -> Level {
     let level_filter = minimal_level.to_filter();
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
-    unsafe { GUARD = Some(_guard) }
+    let mut guard = GUARD.write().unwrap();
+    *guard = Some(_guard);
     let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
             .with_writer(non_blocking)
@@ -79,10 +82,8 @@ macro_rules! create_log {
             log_identifier: Identifier,
             message: Message,
         ) {
-            unsafe {
-                if GUARD.is_none() {
-                    init(None, None);
-                };
+            if GUARD.read().unwrap().is_none() {
+                init(None, None);
             };
 
             let micro_time_stamp = SystemTime::now()
