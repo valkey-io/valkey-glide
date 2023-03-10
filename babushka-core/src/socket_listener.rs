@@ -1,9 +1,10 @@
 use super::client::BabushkaClient;
-use super::{headers::*, rotating_buffer::RotatingBuffer};
+use super::rotating_buffer::RotatingBuffer;
+use crate::pb_message;
+use crate::pb_message::{Request, RequestType, Response};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
-use pb_message::{Request, RequestType, Response};
 use protobuf::Message;
 use redis::aio::MultiplexedConnection;
 use redis::{cmd, AsyncCommands, ErrorKind, RedisResult, Value};
@@ -413,14 +414,8 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_)) | Err(e @ ClientCreationError::IO(_)) => {
-            let _res = write_closing_error(
-                ClosingError {
-                    err: format!("{}", e),
-                },
-                u32::MAX,
-                &writer,
-            )
-            .await;
+            let _res =
+                write_closing_error(ClosingError { err: e.to_string() }, u32::MAX, &writer).await;
             return;
         }
     };
