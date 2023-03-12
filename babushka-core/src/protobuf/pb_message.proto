@@ -25,6 +25,12 @@ enum RequestType {
     SetString = 3;
 }
 
+message ConnectionRetryStrategy {
+    uint32 number_of_retries = 1;
+    uint32 factor = 2;
+    uint32 exponent_base = 3;
+}
+
 message Response {
     uint32 callback_idx = 1;
     oneof value {

@@ -26,43 +26,9 @@ type AuthenticationOptions =
           credentialsProvider: () => [string, string];
       };
 
-type ConnectionRetryStrategy = {
-    /// The client will add a random number of milliseconds between 0 and this value to the wait between each connection attempt, in order to prevent the server from receiving multiple connections at the same time, and causing a connection storm.
-    /// if not set, will be set to DEFAULT_CONNECTION_RETRY_JITTER.
-    /// Value must be an integer.
-    // TODO - implement usage
-    jitter?: number;
-    /// Number of retry attempts that the client should perform when disconnected from the server.
-    /// Value must be an integer.
-    numberOfRetries: number;
-} & (
-    | {
-          /// A retry strategy where the time between attempts is the same, regardless of the number of performed connection attempts.
-          type: "linear";
-          /// Number of milliseconds that the client should wait between connection attempts.
-          /// Value must be an integer.
-          waitDuration: number;
-      }
-    | {
-          /// A retry strategy where the time between attempts grows exponentially, to the formula baselineWaitDuration * (exponentBase ^ N), where N is the number of failed attempts.
-          type: "exponentialBackoff";
-          /// Value must be an integer.
-          baselineWaitDuration: number;
-          /// Value must be an integer.
-          exponentBase: number;
-      }
-);
-
 export const DEFAULT_RESPONSE_TIMEOUT = 2000;
 export const DEFAULT_CONNECTION_TIMEOUT = 2000;
 export const DEFAULT_CONNECTION_RETRY_JITTER = 10;
-export const DEFAULT_CONNECTION_RETRY_STRATEGY: ConnectionRetryStrategy = {
-    type: "exponentialBackoff",
-    numberOfRetries: 5,
-    jitter: DEFAULT_CONNECTION_RETRY_JITTER,
-    baselineWaitDuration: 10,
-    exponentBase: 10,
-};
 
 type ConnectionOptions = {
     /// DNS Addresses and ports of known nodes in the cluster.
@@ -91,9 +57,17 @@ type ConnectionOptions = {
     /// Value must be an integer.
     connectionTimeout?: number;
     /// Strategy used to determine how and when to retry connecting, in case of connection failures.
-    /// If not set, DEFAULT_CONNECTION_RETRY_STRATEGY will be used.
-    // TODO - implement usage
-    connectionRetryStrategy?: ConnectionRetryStrategy;
+    /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
+    /// If not set, a default backoff strategy will be used.
+    connectionBackoff?: {
+        /// Number of retry attempts that the client should perform when disconnected from the server.
+        /// Value must be an integer.
+        numberOfRetries: number;
+        /// Value must be an integer.
+        factor: number;
+        /// Value must be an integer.
+        exponentBase: number;
+    };
     /// If not set, `alwaysFromPrimary` will be used.
     readFromReplicaStrategy?:
         | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data. // TODO - implement usage
