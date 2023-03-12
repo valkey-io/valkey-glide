@@ -1,5 +1,6 @@
 import { AsyncClient, SocketConnection, setLoggerConfig } from "..";
 import RedisServer from "redis-server";
+/* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 import { v4 as uuidv4 } from "uuid";
 import { pb_message } from "../src/ProtobufMessage";
@@ -117,8 +118,8 @@ describe("NAPI client", () => {
                 }
                 return id;
             };
-            let key = getLongUUID();
-            let value = getLongUUID();
+            const key = getLongUUID();
+            const value = getLongUUID();
             await client.set(key, value);
             const result = await client.get(key);
 
@@ -139,7 +140,7 @@ describe("NAPI client", () => {
                 if (index % 2 === 0) {
                     await GetAndSetRandomValue(client);
                 } else {
-                    var result = await client.get(uuidv4());
+                    const result = await client.get(uuidv4());
                     expect(result).toEqual(null);
                 }
             };
@@ -171,12 +172,12 @@ describe("socket client", () => {
         // files has been corrected and the encoding/decoding works as expected.
         // See "Manually compile protobuf files" in node/README.md to get more info about the fix.
         const writer = new BufferWriter();
-        var request = {
+        const request = {
             callbackIdx: 1,
             requestType: 2,
             args: ["bar1", "bar2"],
         };
-        var request2 = {
+        const request2 = {
             callbackIdx: 3,
             requestType: 4,
             args: ["bar3", "bar4"],
@@ -186,12 +187,12 @@ describe("socket client", () => {
         const buffer = writer.finish();
         const reader = new BufferReader(buffer);
 
-        let dec_msg1 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg1 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
         expect(dec_msg1.args).toEqual(["bar1", "bar2"]);
 
-        let dec_msg2 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg2 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
         expect(dec_msg2.args).toEqual(["bar3", "bar4"]);
@@ -351,8 +352,8 @@ describe("socket client", () => {
                 }
                 return id;
             };
-            let key = getLongUUID();
-            let value = getLongUUID();
+            const key = getLongUUID();
+            const value = getLongUUID();
             await client.set(key, value);
             const result = await client.get(key);
 
@@ -375,7 +376,7 @@ describe("socket client", () => {
                 if (index % 2 === 0) {
                     await GetAndSetRandomValue(client);
                 } else {
-                    var result = await client.get(uuidv4());
+                    const result = await client.get(uuidv4());
                     expect(result).toEqual(null);
                 }
             };
