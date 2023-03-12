@@ -14,7 +14,6 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
     use pb_message::{response, ConstantResponse, Request, RequestType, Response};
     use protobuf::{EnumOrUnknown, Message};
     use rand::distributions::Alphanumeric;
@@ -111,6 +110,7 @@ mod socket_listener {
                     unreachable!()
                 }
             }
+            Some(_) => unreachable!(),
             None => {
                 assert!(expected_value.is_none());
             }
