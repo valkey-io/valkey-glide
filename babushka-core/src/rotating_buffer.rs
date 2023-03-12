@@ -1,10 +1,14 @@
-use super::headers::*;
+use crate::pb_message::Request;
 use integer_encoding::VarInt;
-use lifeguard::{pool, Pool, StartingSize, Supplier};
+use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use logger_core::log_error;
-use pb_message::Request;
 use protobuf::Message;
 use std::{io, mem, rc::Rc};
+
+type Buffer = RcRecycled<Vec<u8>>;
+/// Buffer needs to be wrapped in Rc, because RcRecycled's clone implementation
+/// involves copying the array.
+type SharedBuffer = Rc<Buffer>;
 
 /// An object handling a arranging read buffers, and parsing the data in the buffers into requests.
 pub(super) struct RotatingBuffer {
@@ -108,7 +112,7 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pb_message::RequestType;
+    use crate::pb_message::RequestType;
     use rand::{distributions::Alphanumeric, Rng};
     use std::io::Write;
 
