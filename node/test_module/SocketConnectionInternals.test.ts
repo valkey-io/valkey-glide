@@ -35,10 +35,10 @@ function sendResponse(
     callbackIndex: number,
     message?: string
 ) {
-    var response = pb_message.Response.create();
+    const response = pb_message.Response.create();
     response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
-        const pointer = createLeakedValue(message!!);
+        const pointer = createLeakedValue(message!);
         const pointer_number = Number(pointer.toString());
         response.respPointer = pointer_number;
     } else if (responseType == ResponseType.ClosingError) {
@@ -52,7 +52,8 @@ function sendResponse(
     } else {
         throw new Error("Got unknown response type: " + responseType);
     }
-    let response_bytes = pb_message.Response.encodeDelimited(response).finish();
+    const response_bytes =
+        pb_message.Response.encodeDelimited(response).finish();
     socket.write(response_bytes);
 }
 
@@ -84,7 +85,7 @@ function getConnectionAndSocket(): Promise<{
                     );
                 });
 
-                const connection = await connectionPromise!!;
+                const connection = await connectionPromise!;
                 resolve({
                     connection,
                     socket,
@@ -245,7 +246,6 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass SET arguments", async () => {
         await testWithResources(async (connection, socket) => {
-            const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
