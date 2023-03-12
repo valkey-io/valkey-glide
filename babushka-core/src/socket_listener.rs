@@ -2,6 +2,7 @@ use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
 use crate::pb_message;
 use crate::pb_message::{Request, RequestType, Response};
+use crate::retry_strategies::{get_fixed_interval_backoff, RetryStrategy};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
@@ -22,7 +23,6 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
-use tokio_retry::strategy::{jitter, ExponentialBackoff, FixedInterval};
 use tokio_retry::Retry;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
@@ -324,10 +324,7 @@ async fn parse_address_create_conn(
     const BASE: u64 = 10;
     const FACTOR: u64 = 5;
     const NUMBER_OF_RETRIES: usize = 3;
-    let retry_strategy = ExponentialBackoff::from_millis(BASE)
-        .factor(FACTOR)
-        .map(jitter) // tokio-retry doesn't support additive jitter.
-        .take(NUMBER_OF_RETRIES);
+    let retry_strategy = RetryStrategy::new(&None);
 
     let action = || async move {
         let client = to_babushka_result(
@@ -340,7 +337,7 @@ async fn parse_address_create_conn(
         )
     };
 
-    let connection = Retry::spawn(retry_strategy, action).await?;
+    let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
 
     // Send response
     write_result(Ok(Value::Nil), request.callback_idx, writer).await?;
@@ -477,11 +474,8 @@ impl SocketListener {
         if UnixStream::connect(&self.socket_path).await.is_ok() {
             return true;
         }
-        const NUMBER_OF_RETRIES: usize = 3;
-        const SLEEP_DURATION_IN_MILLISECONDS: u64 = 10;
-        let retry_strategy = FixedInterval::from_millis(SLEEP_DURATION_IN_MILLISECONDS)
-            .map(jitter) // tokio-retry doesn't support additive jitter.
-            .take(NUMBER_OF_RETRIES);
+
+        let retry_strategy = get_fixed_interval_backoff(10, 3);
 
         let action = || async {
             UnixStream::connect(&self.socket_path)
@@ -489,7 +483,7 @@ impl SocketListener {
                 .map(|_| ())
                 .map_err(|_| ())
         };
-        let result = Retry::spawn(retry_strategy, action).await;
+        let result = Retry::spawn(retry_strategy.get_iterator(), action).await;
         result.is_ok()
     }
 
