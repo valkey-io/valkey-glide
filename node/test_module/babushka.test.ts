@@ -8,7 +8,7 @@ import RedisServer from "redis-server";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 import { v4 as uuidv4 } from "uuid";
-import { pb_message } from "../src/ProtobufMessage";
+import { redis_request } from "../src/ProtobufMessage";
 import { BufferWriter, BufferReader } from "protobufjs";
 import { describe, expect, beforeAll, it } from "@jest/globals";
 
@@ -180,28 +180,28 @@ describe("socket client", () => {
         const request = {
             callbackIdx: 1,
             requestType: 2,
-            argsArray: pb_message.RedisRequest.ArgsArray.create({
+            argsArray: redis_request.RedisRequest.ArgsArray.create({
                 args: ["bar1", "bar2"],
             }),
         };
         const request2 = {
             callbackIdx: 3,
             requestType: 4,
-            argsArray: pb_message.RedisRequest.ArgsArray.create({
+            argsArray: redis_request.RedisRequest.ArgsArray.create({
                 args: ["bar3", "bar4"],
             }),
         };
-        pb_message.RedisRequest.encodeDelimited(request, writer);
-        pb_message.RedisRequest.encodeDelimited(request2, writer);
+        redis_request.RedisRequest.encodeDelimited(request, writer);
+        redis_request.RedisRequest.encodeDelimited(request2, writer);
         const buffer = writer.finish();
         const reader = new BufferReader(buffer);
 
-        const dec_msg1 = pb_message.RedisRequest.decodeDelimited(reader);
+        const dec_msg1 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
         expect(dec_msg1.argsArray!.args).toEqual(["bar1", "bar2"]);
 
-        const dec_msg2 = pb_message.RedisRequest.decodeDelimited(reader);
+        const dec_msg2 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
         expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);

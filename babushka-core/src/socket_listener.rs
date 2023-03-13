@@ -1,7 +1,10 @@
 use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
-use crate::pb_message;
-use crate::pb_message::{ConnectionRequest, RedisRequest, RequestType, Response};
+use crate::connection_request::ConnectionRequest;
+use crate::redis_request::redis_request;
+use crate::redis_request::{RedisRequest, RequestType};
+use crate::response;
+use crate::response::Response;
 use crate::retry_strategies::{get_fixed_interval_backoff, RetryStrategy};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
@@ -159,7 +162,7 @@ async fn write_closing_error(
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
-    response.value = Some(pb_message::response::Value::ClosingError(err.to_string()));
+    response.value = Some(response::response::Value::ClosingError(err.to_string()));
     write_to_writer(response, writer).await
 }
 
@@ -173,8 +176,8 @@ async fn write_result(
     response.callback_idx = callback_index;
     match resp_result {
         Ok(Value::Okay) => {
-            response.value = Some(pb_message::response::Value::ConstantResponse(
-                pb_message::ConstantResponse::OK.into(),
+            response.value = Some(response::response::Value::ConstantResponse(
+                response::ConstantResponse::OK.into(),
             ))
         }
         Ok(value) => {
@@ -183,12 +186,12 @@ async fn write_result(
                 // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
                 let pointer = Box::leak(Box::new(value));
                 let raw_pointer = pointer as *mut redis::Value;
-                response.value = Some(pb_message::response::Value::RespPointer(raw_pointer as u64))
+                response.value = Some(response::response::Value::RespPointer(raw_pointer as u64))
             }
         }
         Err(err) => {
             log_error("response error", err.to_string());
-            response.value = Some(pb_message::response::Value::RequestError(err.to_string()))
+            response.value = Some(response::response::Value::RequestError(err.to_string()))
         }
     }
     write_to_writer(response, writer).await
@@ -235,8 +238,8 @@ async fn send_redis_command(
 ) -> RedisResult<()> {
     let res;
     let args = match &request.args {
-        Some(pb_message::redis_request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
-        Some(pb_message::redis_request::Args::ArgsVecPointer(pointer)) => {
+        Some(redis_request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
+        Some(redis_request::Args::ArgsVecPointer(pointer)) => {
             res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
             Ok(&res)
         }
