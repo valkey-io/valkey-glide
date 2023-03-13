@@ -23,5 +23,5 @@ export function createLeakedValue(message: string): bigint
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<void>
+  set(key: string, value: string): Promise<string | 'OK' | null>
 }

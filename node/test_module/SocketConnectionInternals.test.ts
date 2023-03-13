@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
+import { describe, expect, beforeAll, it } from "@jest/globals";
 
 const { createLeakedValue } = BabushkaInternal;
 
@@ -15,29 +16,29 @@ beforeAll(() => {
 });
 
 // TODO: use TS enums when tests are in TS.
-const ResponseType = {
+enum ResponseType {
     /** Type of a response that returns a null. */
-    Null: 0,
+    Null = 0,
     /** Type of a response that returns a value which isn't an error. */
-    Value: 1,
+    Value = 1,
     /** Type of response containing an error that impacts a single request. */
-    RequestError: 2,
+    RequestError = 2,
     /** Type of response containing an error causes the connection to close. */
-    ClosingError: 3,
+    ClosingError = 3,
     /** Type of response containing the string "OK". */
-    OK: 4,
-};
+    OK = 4,
+}
 
 function sendResponse(
-    socket,
-    responseType,
-    callbackIndex,
-    message = undefined
+    socket: net.Socket,
+    responseType: ResponseType,
+    callbackIndex: number,
+    message?: string
 ) {
-    var response = pb_message.Response.create();
+    const response = pb_message.Response.create();
     response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
-        const pointer = createLeakedValue(message);
+        const pointer = createLeakedValue(message!);
         const pointer_number = Number(pointer.toString());
         response.respPointer = pointer_number;
     } else if (responseType == ResponseType.ClosingError) {
@@ -49,19 +50,25 @@ function sendResponse(
     } else if (responseType == ResponseType.OK) {
         response.constantResponse = pb_message.ConstantResponse.OK;
     } else {
-        throw new Error("Got unknown response type: ", responseType);
+        throw new Error("Got unknown response type: " + responseType);
     }
-    let response_bytes = pb_message.Response.encodeDelimited(response).finish();
+    const response_bytes =
+        pb_message.Response.encodeDelimited(response).finish();
     socket.write(response_bytes);
 }
 
-function getConnectionAndSocket() {
+function getConnectionAndSocket(): Promise<{
+    socket: net.Socket;
+    connection: SocketConnection;
+    server: net.Server;
+}> {
     return new Promise((resolve) => {
         const temporaryFolder = fs.mkdtempSync(
             path.join(os.tmpdir(), `socket_listener`)
         );
         const socketName = path.join(temporaryFolder, "read");
-        let connectionPromise = undefined;
+        let connectionPromise: Promise<SocketConnection> | undefined =
+            undefined;
         const server = net
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
@@ -78,7 +85,7 @@ function getConnectionAndSocket() {
                     );
                 });
 
-                const connection = await connectionPromise;
+                const connection = await connectionPromise!;
                 resolve({
                     connection,
                     socket,
@@ -99,13 +106,22 @@ function getConnectionAndSocket() {
     });
 }
 
-function closeTestResources(connection, server, socket) {
+function closeTestResources(
+    connection: SocketConnection,
+    server: net.Server,
+    socket: net.Socket
+) {
     connection.dispose();
     server.close();
     socket.end();
 }
 
-async function testWithResources(testFunction) {
+async function testWithResources(
+    testFunction: (
+        connection: SocketConnection,
+        socket: net.Socket
+    ) => Promise<void>
+) {
     const { connection, server, socket } = await getConnectionAndSocket();
 
     await testFunction(connection, socket);
@@ -118,13 +134,14 @@ describe("SocketConnectionInternals", () => {
         await testWithResources((connection, socket) => {
             expect(connection).toEqual(expect.anything());
             expect(socket).toEqual(expect.anything());
+            return Promise.resolve();
         });
     });
 
     it("should close socket on dispose", async () => {
         await testWithResources(async (connection, socket) => {
             const endReceived = new Promise((resolve) => {
-                socket.once("end", resolve(true));
+                socket.once("end", () => resolve(true));
             });
             connection.dispose();
 
@@ -229,7 +246,6 @@ describe("SocketConnectionInternals", () => {
 
     it("should pass SET arguments", async () => {
         await testWithResources(async (connection, socket) => {
-            const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);

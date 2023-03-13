@@ -1,14 +1,16 @@
 import { AsyncClient, SocketConnection, setLoggerConfig } from "..";
 import RedisServer from "redis-server";
-import FreePort from "find-free-port";
+/* eslint-disable @typescript-eslint/no-var-requires */
+const FreePort = require("find-free-port");
 import { v4 as uuidv4 } from "uuid";
 import { pb_message } from "../src/ProtobufMessage";
 import { BufferWriter, BufferReader } from "protobufjs";
+import { describe, expect, beforeAll, it } from "@jest/globals";
 
-function OpenServerAndExecute(port, action) {
-    return new Promise((resolve, reject) => {
+function OpenServerAndExecute(port: number, action: () => Promise<void>) {
+    return new Promise<void>((resolve, reject) => {
         const server = new RedisServer(port);
-        server.open(async (err) => {
+        server.open(async (err: Error | null) => {
             if (err) {
                 reject(err);
             }
@@ -23,7 +25,10 @@ beforeAll(() => {
     setLoggerConfig("info");
 });
 
-async function GetAndSetRandomValue(client) {
+async function GetAndSetRandomValue(client: {
+    set: (key: string, value: string) => Promise<string | "OK" | null>;
+    get: (key: string) => Promise<string | null>;
+}) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
     const value = uuidv4() + "0".repeat(Math.random() * 7);
@@ -35,7 +40,9 @@ async function GetAndSetRandomValue(client) {
 
 describe("NAPI client", () => {
     it("set and get flow works", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
@@ -46,7 +53,9 @@ describe("NAPI client", () => {
     });
 
     it("can handle non-ASCII unicode", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
@@ -61,7 +70,9 @@ describe("NAPI client", () => {
     });
 
     it("get for missing key returns null", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
@@ -74,7 +85,9 @@ describe("NAPI client", () => {
     });
 
     it("get for empty string", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
@@ -89,7 +102,9 @@ describe("NAPI client", () => {
     });
 
     it("send very large values", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
@@ -103,8 +118,8 @@ describe("NAPI client", () => {
                 }
                 return id;
             };
-            let key = getLongUUID();
-            let value = getLongUUID();
+            const key = getLongUUID();
+            const value = getLongUUID();
             await client.set(key, value);
             const result = await client.get(key);
 
@@ -113,22 +128,24 @@ describe("NAPI client", () => {
     });
 
     it("can handle concurrent operations", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port
             );
 
-            const singleOp = async (index) => {
+            const singleOp = async (index: number) => {
                 if (index % 2 === 0) {
                     await GetAndSetRandomValue(client);
                 } else {
-                    var result = await client.get(uuidv4());
+                    const result = await client.get(uuidv4());
                     expect(result).toEqual(null);
                 }
             };
 
-            const operations = [];
+            const operations: Promise<void>[] = [];
 
             for (let i = 0; i < 100; ++i) {
                 operations.push(singleOp(i));
@@ -140,11 +157,11 @@ describe("NAPI client", () => {
 });
 
 describe("socket client", () => {
-    const getAddress = (port) => {
+    const getAddress = (port: number) => {
         return [{ address: "localhost", port }];
     };
 
-    const getOptions = (port) => {
+    const getOptions = (port: number) => {
         return {
             addresses: getAddress(port),
         };
@@ -155,12 +172,12 @@ describe("socket client", () => {
         // files has been corrected and the encoding/decoding works as expected.
         // See "Manually compile protobuf files" in node/README.md to get more info about the fix.
         const writer = new BufferWriter();
-        var request = {
+        const request = {
             callbackIdx: 1,
             requestType: 2,
             args: ["bar1", "bar2"],
         };
-        var request2 = {
+        const request2 = {
             callbackIdx: 3,
             requestType: 4,
             args: ["bar3", "bar4"],
@@ -170,19 +187,21 @@ describe("socket client", () => {
         const buffer = writer.finish();
         const reader = new BufferReader(buffer);
 
-        let dec_msg1 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg1 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
         expect(dec_msg1.args).toEqual(["bar1", "bar2"]);
 
-        let dec_msg2 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg2 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
         expect(dec_msg2.args).toEqual(["bar3", "bar4"]);
     });
 
     it("set and get flow works", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -195,7 +214,9 @@ describe("socket client", () => {
     });
 
     it("set and with return of old value works", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -221,7 +242,9 @@ describe("socket client", () => {
     });
 
     it("conditional set works", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -258,7 +281,9 @@ describe("socket client", () => {
     });
 
     it("can handle non-ASCII unicode", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -275,7 +300,9 @@ describe("socket client", () => {
     });
 
     it("get for missing key returns null", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -290,7 +317,9 @@ describe("socket client", () => {
     });
 
     it("get for empty string", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -307,7 +336,9 @@ describe("socket client", () => {
     });
 
     it("send very large values", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
@@ -321,8 +352,8 @@ describe("socket client", () => {
                 }
                 return id;
             };
-            let key = getLongUUID();
-            let value = getLongUUID();
+            const key = getLongUUID();
+            const value = getLongUUID();
             await client.set(key, value);
             const result = await client.get(key);
 
@@ -333,22 +364,24 @@ describe("socket client", () => {
     });
 
     it("can handle concurrent operations", async () => {
-        const port = await FreePort(3000).then(([free_port]) => free_port);
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
         await OpenServerAndExecute(port, async () => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
             );
 
-            const singleOp = async (index) => {
+            const singleOp = async (index: number) => {
                 if (index % 2 === 0) {
                     await GetAndSetRandomValue(client);
                 } else {
-                    var result = await client.get(uuidv4());
+                    const result = await client.get(uuidv4());
                     expect(result).toEqual(null);
                 }
             };
 
-            const operations = [];
+            const operations: Promise<void>[] = [];
 
             for (let i = 0; i < 100; ++i) {
                 operations.push(singleOp(i));

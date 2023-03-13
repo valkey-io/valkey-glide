@@ -68,7 +68,7 @@ impl AsyncClient {
         Ok(promise)
     }
 
-    #[napi(ts_return_type = "Promise<void>")]
+    #[napi(ts_return_type = "Promise<string | \"OK\" | null>")]
     #[allow(dead_code)]
     pub fn set(&self, env: Env, key: String, value: String) -> Result<JsObject> {
         let (deferred, promise) = env.create_deferred()?;
