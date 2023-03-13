@@ -1,4 +1,9 @@
-import { AsyncClient, SocketConnection, setLoggerConfig } from "..";
+import {
+    AsyncClient,
+    SocketConnection,
+    setLoggerConfig,
+    ConnectionOptions,
+} from "..";
 import RedisServer from "redis-server";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
@@ -158,10 +163,10 @@ describe("NAPI client", () => {
 
 describe("socket client", () => {
     const getAddress = (port: number) => {
-        return [{ address: "localhost", port }];
+        return [{ host: "localhost", port }];
     };
 
-    const getOptions = (port: number) => {
+    const getOptions = (port: number): ConnectionOptions => {
         return {
             addresses: getAddress(port),
         };
@@ -175,24 +180,28 @@ describe("socket client", () => {
         const request = {
             callbackIdx: 1,
             requestType: 2,
-            argsArray: pb_message.Request.ArgsArray.create({args: ["bar1", "bar2"]}),
+            argsArray: pb_message.RedisRequest.ArgsArray.create({
+                args: ["bar1", "bar2"],
+            }),
         };
         const request2 = {
             callbackIdx: 3,
             requestType: 4,
-            argsArray: pb_message.Request.ArgsArray.create({args: ["bar3", "bar4"]}),
+            argsArray: pb_message.RedisRequest.ArgsArray.create({
+                args: ["bar3", "bar4"],
+            }),
         };
-        pb_message.Request.encodeDelimited(request, writer);
-        pb_message.Request.encodeDelimited(request2, writer);
+        pb_message.RedisRequest.encodeDelimited(request, writer);
+        pb_message.RedisRequest.encodeDelimited(request2, writer);
         const buffer = writer.finish();
         const reader = new BufferReader(buffer);
 
-        const dec_msg1 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg1 = pb_message.RedisRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
         expect(dec_msg1.argsArray!.args).toEqual(["bar1", "bar2"]);
 
-        const dec_msg2 = pb_message.Request.decodeDelimited(reader);
+        const dec_msg2 = pb_message.RedisRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
         expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);

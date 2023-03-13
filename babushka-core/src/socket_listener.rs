@@ -1,7 +1,7 @@
 use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
 use crate::pb_message;
-use crate::pb_message::{Request, RequestType, Response};
+use crate::pb_message::{ConnectionRequest, RedisRequest, RequestType, Response};
 use crate::retry_strategies::{get_fixed_interval_backoff, RetryStrategy};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
@@ -27,24 +27,6 @@ use tokio_retry::Retry;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
-
-macro_rules! get_request_args {
-    // TODO: remove this macro when a dedicated conf message is added
-    (let $var:ident <- $request:expr) => {
-        let res;
-        let $var = match &$request.args {
-            Some(pb_message::request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
-            Some(pb_message::request::Args::ArgsVecPointer(pointer)) => {
-                res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
-                Ok(&res)
-            }
-            None => Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Failed to get request arguemnts, no arguments are set",
-            ))),
-        };
-    };
-}
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "babushka-socket";
@@ -81,12 +63,12 @@ struct Writer {
     closing_sender: Sender<ClosingReason>,
 }
 
-enum PipeListeningResult {
+enum PipeListeningResult<TRequest: Message> {
     Closed(ClosingReason),
-    ReceivedValues(Vec<Request>),
+    ReceivedValues(Vec<TRequest>),
 }
 
-impl From<ClosingReason> for PipeListeningResult {
+impl<T: Message> From<ClosingReason> for PipeListeningResult<T> {
     fn from(result: ClosingReason) -> Self {
         Closed(result)
     }
@@ -103,7 +85,7 @@ impl UnixStreamListener {
         }
     }
 
-    pub(crate) async fn next_values(&mut self) -> PipeListeningResult {
+    pub(crate) async fn next_values<TRequest: Message>(&mut self) -> PipeListeningResult<TRequest> {
         loop {
             if let Err(err) = self.read_socket.readable().await {
                 return ClosingReason::UnhandledError(err.into()).into();
@@ -234,7 +216,7 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-fn get_command_name(request: &Request) -> Option<&str> {
+fn get_command_name(request: &RedisRequest) -> Option<&str> {
     let request_enum = request
         .request_type
         .enum_value_or(RequestType::InvalidRequest);
@@ -247,11 +229,22 @@ fn get_command_name(request: &Request) -> Option<&str> {
 
 async fn send_redis_command(
     command_name: &str,
-    request: &Request,
+    request: &RedisRequest,
     mut connection: impl BabushkaClient + 'static,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
-    get_request_args!(let args <- request);
+    let res;
+    let args = match &request.args {
+        Some(pb_message::redis_request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
+        Some(pb_message::redis_request::Args::ArgsVecPointer(pointer)) => {
+            res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
+            Ok(&res)
+        }
+        None => Err(RedisError::from((
+            ErrorKind::ClientError,
+            "Failed to get request arguemnts, no arguments are set",
+        ))),
+    };
     let args = args?;
     let mut cmd = cmd(command_name);
     for arg in args.iter() {
@@ -262,7 +255,11 @@ async fn send_redis_command(
     Ok(())
 }
 
-fn handle_request(request: Request, connection: impl BabushkaClient + 'static, writer: Rc<Writer>) {
+fn handle_request(
+    request: RedisRequest,
+    connection: impl BabushkaClient + 'static,
+    writer: Rc<Writer>,
+) {
     task::spawn_local(async move {
         let Some(command_name) = get_command_name(&request) else {
                 let err_message =
@@ -284,7 +281,7 @@ fn handle_request(request: Request, connection: impl BabushkaClient + 'static, w
 }
 
 async fn handle_requests(
-    received_requests: Vec<Request>,
+    received_requests: Vec<RedisRequest>,
     connection: &(impl BabushkaClient + 'static),
     writer: &Rc<Writer>,
 ) {
@@ -313,22 +310,21 @@ fn to_babushka_result<T, E: std::fmt::Display>(
     })
 }
 
-async fn parse_address_create_conn(
-    writer: &Rc<Writer>,
-    request: &Request,
-) -> Result<MultiplexedConnection, ClientCreationError> {
-    get_request_args!(let args <- request);
-    let args = args?;
-    let address = args.first().unwrap();
-    // TODO - should be a configuration sent over the socket.
-    const BASE: u64 = 10;
-    const FACTOR: u64 = 5;
-    const NUMBER_OF_RETRIES: usize = 3;
-    let retry_strategy = RetryStrategy::new(&None);
+fn get_address(request: &ConnectionRequest) -> String {
+    let address = request.addresses.first().unwrap(); // TODO - use all received addresses.
+    let protocol = if request.use_tls { "rediss" } else { "redis" };
+    let port = if address.port > 0 { address.port } else { 6379 };
+    let insecure = if address.insecure { "#insecure" } else { "" };
+    format!("{protocol}://{}:{port}{insecure}", address.host)
+}
 
+async fn try_connecting_to_server(
+    address: &str,
+    retry_strategy: RetryStrategy,
+) -> Result<MultiplexedConnection, ClientCreationError> {
     let action = || async move {
         let client = to_babushka_result(
-            Client::open(address.as_str()),
+            Client::open(address),
             Some("Failed to open redis-rs client"),
         )?;
         to_babushka_result(
@@ -337,10 +333,25 @@ async fn parse_address_create_conn(
         )
     };
 
-    let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
+    Retry::spawn(retry_strategy.get_iterator(), action).await
+}
+
+async fn create_connection(
+    writer: &Rc<Writer>,
+    request: &ConnectionRequest,
+) -> Result<MultiplexedConnection, ClientCreationError> {
+    let address = get_address(request);
+    log_trace(
+        "client creation",
+        format!("Connection to {address} created"),
+    );
+
+    let retry_strategy = RetryStrategy::new(&request.connection_retry_strategy.0);
+
+    let connection = try_connecting_to_server(&address, retry_strategy).await?;
 
     // Send response
-    write_result(Ok(Value::Nil), request.callback_idx, writer).await?;
+    write_result(Ok(Value::Nil), 0, writer).await?;
     log_trace(
         "client creation",
         format!("Connection to {address} created"),
@@ -353,16 +364,11 @@ async fn wait_for_server_address_create_conn(
     writer: &Rc<Writer>,
 ) -> Result<MultiplexedConnection, ClientCreationError> {
     // Wait for the server's address
-    match client_listener.next_values().await {
+    match client_listener.next_values::<ConnectionRequest>().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(received_requests) => {
             if let Some(request) = received_requests.first() {
-                match request.request_type.unwrap() {
-                    RequestType::ServerAddress => parse_address_create_conn(writer, request).await,
-                    _ => Err(ClientCreationError::UnhandledError(
-                        "Received another request before receiving server address".to_string(),
-                    )),
-                }
+                create_connection(writer, request).await
             } else {
                 Err(ClientCreationError::UnhandledError(
                     "No received requests".to_string(),
