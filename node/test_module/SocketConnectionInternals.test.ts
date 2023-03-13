@@ -73,16 +73,10 @@ function getConnectionAndSocket(): Promise<{
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
-                    const request = pb_message.Request.decodeDelimited(reader);
-                    expect(request.requestType).toEqual(
-                        RequestType.ServerAddress
-                    );
+                    const request =
+                        pb_message.ConnectionRequest.decodeDelimited(reader);
 
-                    sendResponse(
-                        socket,
-                        ResponseType.Null,
-                        request.callbackIdx
-                    );
+                    sendResponse(socket, ResponseType.Null, 0);
                 });
 
                 const connection = await connectionPromise!;
@@ -97,7 +91,9 @@ function getConnectionAndSocket(): Promise<{
             const socket = new net.Socket();
             socket.connect(socketName).once("connect", async () => {
                 const connection = await SocketConnection.__CreateConnection(
-                    "",
+                    {
+                        addresses: [{ host: "foo" }],
+                    },
                     socket
                 );
                 resolve(connection);
@@ -154,7 +150,7 @@ describe("SocketConnectionInternals", () => {
             const expected = "bar";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsArray!.args!.length).toEqual(1);
 
@@ -174,7 +170,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsArray!.args!.length).toEqual(1);
 
@@ -189,7 +185,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.SetString);
                 expect(request.argsArray!.args!.length).toEqual(2);
 
@@ -205,7 +201,7 @@ describe("SocketConnectionInternals", () => {
             const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsArray!.args!.length).toEqual(1);
                 sendResponse(
@@ -226,7 +222,7 @@ describe("SocketConnectionInternals", () => {
             const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsArray!.args!.length).toEqual(1);
                 sendResponse(
@@ -249,9 +245,8 @@ describe("SocketConnectionInternals", () => {
             const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.args.length).toEqual(1);
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
@@ -271,7 +266,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.SetString);
                 const args = request.argsArray!.args!;
                 expect(args.length).toEqual(5);
@@ -296,22 +291,17 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsVecPointer).not.toBeNull();
                 expect(request.argsArray).toBeNull();
 
-                sendResponse(
-                    socket,
-                    ResponseType.Null,
-                    request.callbackIdx
-                );
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
             const key = "0".repeat(MAX_REQUEST_ARGS_LEN);
             const result = await connection.get(key);
 
             expect(result).toBeNull();
-
         });
     });
 
@@ -319,22 +309,17 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = pb_message.Request.decodeDelimited(reader);
+                const request = pb_message.RedisRequest.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
                 expect(request.argsArray).not.toBeNull();
                 expect(request.argsVecPointer).toBeNull();
 
-                sendResponse(
-                    socket,
-                    ResponseType.Null,
-                    request.callbackIdx
-                );
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
             const key = "0".repeat(MAX_REQUEST_ARGS_LEN - 1);
             const result = await connection.get(key);
 
             expect(result).toBeNull();
-
         });
     });
 });

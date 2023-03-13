@@ -1,7 +1,16 @@
 syntax = "proto3";
 package pb_message;
 
-message Request {
+enum RequestType {
+    /// Invalid request type
+    InvalidRequest = 0;
+    /// Type of a get string request.
+    GetString = 1;
+    /// Type of a set string request.
+    SetString = 2;
+}
+
+message RedisRequest {
     message ArgsArray {
         repeated string args = 1;
     }
@@ -14,15 +23,27 @@ message Request {
     }
 }
 
-enum RequestType {
-    /// Invalid request type
-    InvalidRequest = 0;
-    /// Type of a server address request
-    ServerAddress = 1;
-    /// Type of a get string request.
-    GetString = 2;
-    /// Type of a set string request.
-    SetString = 3;
+message AddressInfo {
+    string host = 1;
+    uint32 port = 2;
+    bool insecure = 3;
+}
+
+enum ReadFromReplicaStrategy {
+    AlwaysFromPrimary = 0;
+    RoundRobin = 1;
+    LowestLatency = 2;
+    AZAffinity = 3;
+}
+
+message ConnectionRequest {
+    repeated AddressInfo addresses = 1;
+    bool use_tls = 2;
+    uint32 response_timeout = 3;
+    uint32 connection_timeout = 4;
+    // credentials - TODO - implement
+    ReadFromReplicaStrategy read_from_replica_strategy = 5;
+    ConnectionRetryStrategy connection_retry_strategy = 6;
 }
 
 message ConnectionRetryStrategy {
