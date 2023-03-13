@@ -1,4 +1,4 @@
-use crate::pb_message::ConnectionRetryStrategy;
+use crate::connection_request::ConnectionRetryStrategy;
 use std::time::Duration;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
