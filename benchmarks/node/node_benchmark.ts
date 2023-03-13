@@ -25,7 +25,7 @@ function getAddressWithProtocol(
 ): string {
     const PORT = 6379;
     const protocol = useTLS ? "rediss" : "redis";
-    return `${protocol}://${getAddress(host, port)}`;
+    return `${protocol}://${getAddress(host, port ?? PORT)}`;
 }
 
 const PROB_GET = 0.8;
@@ -38,7 +38,7 @@ const running_tasks: Promise<void>[] = [];
 const bench_json_results: object[] = [];
 
 interface IAsyncClient {
-    set: (key: string, value: string) => Promise<any>;
+    set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
 }
 
