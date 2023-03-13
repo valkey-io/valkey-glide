@@ -110,8 +110,8 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pb_message::redis_request::{Args, ArgsArray};
-    use crate::pb_message::{RedisRequest, RequestType};
+    use crate::redis_request::redis_request::{Args, ArgsArray};
+    use crate::redis_request::{RedisRequest, RequestType};
     use rand::{distributions::Alphanumeric, Rng};
     use rstest::rstest;
     use std::io::Write;

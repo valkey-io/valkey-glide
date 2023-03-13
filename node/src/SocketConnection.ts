@@ -2,13 +2,13 @@ import { BabushkaInternal } from "../";
 import * as net from "net";
 import { Logger } from "./Logger";
 import { valueFromSplitPointer } from "babushka-rs-internal";
-import { pb_message } from "./ProtobufMessage";
+import { redis_request, response, connection_request } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader, Writer } from "protobufjs";
 import Long from "long";
 
 const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } =
     BabushkaInternal;
-const { RequestType } = pb_message;
+const { RequestType } = redis_request;
 
 type PromiseFunction = (value?: any) => void;
 
@@ -90,7 +90,7 @@ export class SocketConnection {
             lastPos = reader.pos;
             let message = undefined;
             try {
-                message = pb_message.Response.decodeDelimited(reader);
+                message = response.Response.decodeDelimited(reader);
             } catch (err) {
                 if (err instanceof RangeError) {
                     // Partial response received, more data is required
@@ -121,7 +121,7 @@ export class SocketConnection {
                     resolve(valueFromSplitPointer(pointer.high, pointer.low));
                 }
             } else if (
-                message.constantResponse === pb_message.ConstantResponse.OK
+                message.constantResponse === response.ConstantResponse.OK
             ) {
                 resolve("OK");
             } else {
@@ -181,7 +181,7 @@ export class SocketConnection {
         requestType: number,
         args: string[]
     ) {
-        const message = pb_message.RedisRequest.create({
+        const message = redis_request.RedisRequest.create({
             callbackIdx: callbackIdx,
             requestType: requestType,
         });
@@ -191,15 +191,15 @@ export class SocketConnection {
             const pointer = new Long(pointerArr[0], pointerArr[1]);
             message.argsVecPointer = pointer;
         } else {
-            message.argsArray = pb_message.RedisRequest.ArgsArray.create({
+            message.argsArray = redis_request.RedisRequest.ArgsArray.create({
                 args: args,
             });
         }
 
         this.writeOrBufferRequest(
             message,
-            (message: pb_message.RedisRequest, writer: Writer) => {
-                pb_message.RedisRequest.encodeDelimited(message, writer);
+            (message: redis_request.RedisRequest, writer: Writer) => {
+                redis_request.RedisRequest.encodeDelimited(message, writer);
             }
         );
     }
@@ -301,12 +301,13 @@ export class SocketConnection {
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
         ReadFromReplicaStrategy,
-        pb_message.ReadFromReplicaStrategy
+        connection_request.ReadFromReplicaStrategy
     > = {
-        alwaysFromPrimary: pb_message.ReadFromReplicaStrategy.AlwaysFromPrimary,
-        roundRobin: pb_message.ReadFromReplicaStrategy.RoundRobin,
-        azAffinity: pb_message.ReadFromReplicaStrategy.AZAffinity,
-        lowestLatency: pb_message.ReadFromReplicaStrategy.LowestLatency,
+        alwaysFromPrimary:
+            connection_request.ReadFromReplicaStrategy.AlwaysFromPrimary,
+        roundRobin: connection_request.ReadFromReplicaStrategy.RoundRobin,
+        azAffinity: connection_request.ReadFromReplicaStrategy.AZAffinity,
+        lowestLatency: connection_request.ReadFromReplicaStrategy.LowestLatency,
     };
 
     private connectToServer(options: ConnectionOptions): Promise<void> {
@@ -318,7 +319,7 @@ export class SocketConnection {
                       options.readFromReplicaStrategy
                   ]
                 : undefined;
-            const configuration: pb_message.IConnectionRequest = {
+            const configuration: connection_request.IConnectionRequest = {
                 addresses: options.addresses,
                 useTls: options.useTLS,
                 responseTimeout: options.responseTimeout,
@@ -327,12 +328,16 @@ export class SocketConnection {
                 connectionRetryStrategy: options.connectionBackoff,
             };
 
-            const message = pb_message.ConnectionRequest.create(configuration);
+            const message =
+                connection_request.ConnectionRequest.create(configuration);
 
             this.writeOrBufferRequest(
                 message,
-                (message: pb_message.ConnectionRequest, writer: Writer) => {
-                    pb_message.ConnectionRequest.encodeDelimited(
+                (
+                    message: connection_request.ConnectionRequest,
+                    writer: Writer
+                ) => {
+                    connection_request.ConnectionRequest.encodeDelimited(
                         message,
                         writer
                     );

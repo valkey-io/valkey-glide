@@ -1,0 +1,16 @@
+syntax = "proto3";
+package response;
+
+message Response {
+    uint32 callback_idx = 1;
+    oneof value {
+        uint64 resp_pointer = 2;
+        ConstantResponse constant_response = 3;
+        string request_error = 4;
+        string closing_error = 5;
+    }
+}
+
+enum ConstantResponse {
+  OK = 0;
+}

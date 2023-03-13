@@ -14,12 +14,13 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use babushka::pb_message::redis_request::{Args, ArgsArray};
-    use babushka::pb_message::{response, ConstantResponse, RedisRequest, RequestType, Response};
-    use babushka::pb_message::{AddressInfo, ConnectionRequest};
+    use babushka::connection_request::{AddressInfo, ConnectionRequest};
+    use babushka::redis_request::redis_request::{Args, ArgsArray};
+    use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
     use rand::distributions::Alphanumeric;
     use redis::{ConnectionAddr, Value};
+    use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
     use std::{mem::size_of, time::Duration};
     use tokio::{net::UnixListener, runtime::Builder};
