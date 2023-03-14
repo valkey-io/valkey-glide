@@ -175,12 +175,12 @@ describe("socket client", () => {
         const request = {
             callbackIdx: 1,
             requestType: 2,
-            args: ["bar1", "bar2"],
+            argsArray: pb_message.Request.ArgsArray.create({args: ["bar1", "bar2"]}),
         };
         const request2 = {
             callbackIdx: 3,
             requestType: 4,
-            args: ["bar3", "bar4"],
+            argsArray: pb_message.Request.ArgsArray.create({args: ["bar3", "bar4"]}),
         };
         pb_message.Request.encodeDelimited(request, writer);
         pb_message.Request.encodeDelimited(request2, writer);
@@ -190,12 +190,12 @@ describe("socket client", () => {
         const dec_msg1 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
-        expect(dec_msg1.args).toEqual(["bar1", "bar2"]);
+        expect(dec_msg1.argsArray!.args).toEqual(["bar1", "bar2"]);
 
         const dec_msg2 = pb_message.Request.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
-        expect(dec_msg2.args).toEqual(["bar3", "bar4"]);
+        expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);
     });
 
     it("set and get flow works", async () => {
