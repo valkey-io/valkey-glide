@@ -2,9 +2,16 @@ syntax = "proto3";
 package pb_message;
 
 message Request {
+    message ArgsArray {
+        repeated string args = 1;
+    }
+    
     uint32 callback_idx = 1;
     RequestType request_type = 2;
-    repeated string args = 3;
+    oneof args {
+        ArgsArray args_array = 3;
+        uint64 args_vec_pointer = 4;
+    }
 }
 
 enum RequestType {

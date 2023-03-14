@@ -8,7 +8,7 @@ use logger_core::{log_error, log_info, log_trace};
 use protobuf::Message;
 use redis::aio::MultiplexedConnection;
 use redis::{cmd, RedisResult, Value};
-use redis::{Client, RedisError};
+use redis::{Client, ErrorKind, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
@@ -28,8 +28,30 @@ use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
 
+macro_rules! get_request_args {
+    // TODO: remove this macro when a dedicated conf message is added
+    (let $var:ident <- $request:expr) => {
+        let res;
+        let $var = match &$request.args {
+            Some(pb_message::request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
+            Some(pb_message::request::Args::ArgsVecPointer(pointer)) => {
+                res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
+                Ok(&res)
+            }
+            None => Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Failed to get request arguemnts, no arguments are set",
+            ))),
+        };
+    };
+}
+
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "babushka-socket";
+
+/// The maximum length of a request's arguments to be passed as a vector of
+/// strings instead of a pointer
+pub const MAX_REQUEST_ARGS_LENGTH: usize = 2_i32.pow(12) as usize; // TODO: find the right number
 
 /// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
@@ -225,17 +247,18 @@ fn get_command_name(request: &Request) -> Option<&str> {
 
 async fn send_redis_command(
     command_name: &str,
-    args: &[String],
-    callback_idx: u32,
+    request: &Request,
     mut connection: impl BabushkaClient + 'static,
     writer: Rc<Writer>,
 ) -> RedisResult<()> {
+    get_request_args!(let args <- request);
+    let args = args?;
     let mut cmd = cmd(command_name);
     for arg in args.iter() {
         cmd.arg(arg);
     }
     let result = cmd.query_async(&mut connection).await;
-    write_result(result, callback_idx, &writer).await?;
+    write_result(result, request.callback_idx, &writer).await?;
     Ok(())
 }
 
@@ -253,14 +276,7 @@ fn handle_request(request: Request, connection: impl BabushkaClient + 'static, w
                 return;
         };
 
-        let result = send_redis_command(
-            command_name,
-            &request.args,
-            request.callback_idx,
-            connection,
-            writer.clone(),
-        )
-        .await;
+        let result = send_redis_command(command_name, &request, connection, writer.clone()).await;
         if let Err(err) = result {
             let _res = write_result(Err(err), request.callback_idx, &writer).await;
         }
@@ -301,7 +317,9 @@ async fn parse_address_create_conn(
     writer: &Rc<Writer>,
     request: &Request,
 ) -> Result<MultiplexedConnection, ClientCreationError> {
-    let address = request.args.first().unwrap();
+    get_request_args!(let args <- request);
+    let args = args?;
+    let address = args.first().unwrap();
     // TODO - should be a configuration sent over the socket.
     const BASE: u64 = 10;
     const FACTOR: u64 = 5;
@@ -410,7 +428,9 @@ async fn listen_on_client_stream(socket: UnixStream) {
             .await;
             return;
         }
-        Err(e @ ClientCreationError::UnhandledError(_)) | Err(e @ ClientCreationError::IO(_)) => {
+        Err(e @ ClientCreationError::UnhandledError(_))
+        | Err(e @ ClientCreationError::IO(_))
+        | Err(e @ ClientCreationError::RedisError(_)) => {
             let _res =
                 write_closing_error(ClosingError { err: e.to_string() }, u32::MAX, &writer).await;
             return;
@@ -562,6 +582,8 @@ impl From<io::Error> for ClosingReason {
 pub enum ClientCreationError {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
+    #[error("Redis error: {0}")]
+    RedisError(#[from] RedisError),
     /// An error was returned during the client creation process.
     #[error("Unhandled error: {0}")]
     UnhandledError(String),
