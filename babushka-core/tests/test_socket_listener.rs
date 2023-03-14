@@ -14,7 +14,8 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use pb_message::{response, ConstantResponse, Request, RequestType, Response};
+    use crate::pb_message::request::{Args, ArgsArray};
+    use crate::pb_message::{response, ConstantResponse, Request, RequestType, Response};
     use protobuf::{EnumOrUnknown, Message};
     use rand::distributions::Alphanumeric;
     use redis::Value;
@@ -130,11 +131,20 @@ mod socket_listener {
         callback_index: u32,
         args: Vec<String>,
         request_type: EnumOrUnknown<RequestType>,
+        args_pointer: bool,
     ) -> u32 {
         let mut request = Request::new();
         request.callback_idx = callback_index;
         request.request_type = request_type;
-        request.args = args;
+        if args_pointer {
+            request.args = Some(Args::ArgsVecPointer(
+                Box::leak(Box::new(args)) as *mut Vec<String> as u64,
+            ));
+        } else {
+            let mut args_array = ArgsArray::new();
+            args_array.args = args;
+            request.args = Some(Args::ArgsArray(args_array));
+        }
         let message_length = request.compute_size() as u32;
 
         write_header(buffer, message_length);
@@ -142,21 +152,29 @@ mod socket_listener {
         message_length
     }
 
-    fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str) -> u32 {
+    fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str, args_pointer: bool) -> u32 {
         write_request(
             buffer,
             callback_index,
             vec![key.to_string()],
             RequestType::GetString.into(),
+            args_pointer,
         )
     }
 
-    fn write_set(buffer: &mut Vec<u8>, callback_index: u32, key: &str, value: String) -> u32 {
+    fn write_set(
+        buffer: &mut Vec<u8>,
+        callback_index: u32,
+        key: &str,
+        value: String,
+        args_pointer: bool,
+    ) -> u32 {
         write_request(
             buffer,
             callback_index,
             vec![key.to_string(), value],
             RequestType::SetString.into(),
+            args_pointer,
         )
     }
 
@@ -179,6 +197,7 @@ mod socket_listener {
             CALLBACK_INDEX,
             vec![address],
             RequestType::ServerAddress.into(),
+            false,
         );
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
@@ -260,7 +279,7 @@ mod socket_listener {
         let key = "hello";
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_get(&mut buffer, CALLBACK_INDEX, key);
+        write_get(&mut buffer, CALLBACK_INDEX, key, false);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
@@ -291,7 +310,7 @@ mod socket_listener {
                         let key = "hello";
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
-                        write_get(&mut buffer, CALLBACK_INDEX, key);
+                        write_get(&mut buffer, CALLBACK_INDEX, key, false);
                         test_basics.socket.write_all(&buffer).unwrap();
 
                         let _size = test_basics.socket.read(&mut buffer).unwrap();
@@ -305,7 +324,14 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(Duration::from_millis(10000))]
-    fn test_socket_set_and_get(#[values(false, true)] use_tls: bool) {
+    fn test_socket_set_and_get(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_test_basics(use_tls);
 
         const CALLBACK1_INDEX: u32 = 100;
@@ -316,14 +342,20 @@ mod socket_listener {
         // Send a set request
         let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_set(&mut buffer, CALLBACK1_INDEX, key, value.clone());
+        write_set(
+            &mut buffer,
+            CALLBACK1_INDEX,
+            key,
+            value.clone(),
+            args_pointer,
+        );
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key);
+        write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
         // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         buffer.resize(approx_message_length, 0);
@@ -339,12 +371,19 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(Duration::from_millis(10000))]
-    fn test_socket_get_returns_null(#[values(false, true)] use_tls: bool) {
+    fn test_socket_get_returns_null(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
         const CALLBACK_INDEX: u32 = 99;
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_test_basics(use_tls);
         let key = "hello";
         let mut buffer = Vec::with_capacity(key.len() * 2);
-        write_get(&mut buffer, CALLBACK_INDEX, key);
+        write_get(&mut buffer, CALLBACK_INDEX, key, args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
@@ -367,6 +406,7 @@ mod socket_listener {
             CALLBACK_INDEX,
             vec![key.to_string()],
             EnumOrUnknown::from_i32(request_type),
+            false,
         );
         test_basics.socket.write_all(&buffer).unwrap();
         let mut buffer = [0; 50];
@@ -380,7 +420,14 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(Duration::from_millis(10000))]
-    fn test_socket_handle_long_input(#[values(false, true)] use_tls: bool) {
+    fn test_socket_handle_long_input(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_test_basics(use_tls);
 
         const CALLBACK1_INDEX: u32 = 100;
@@ -394,14 +441,20 @@ mod socket_listener {
             + u32::required_space(VALUE_LENGTH as u32)
             + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_set(&mut buffer, CALLBACK1_INDEX, key, value.clone());
+        write_set(
+            &mut buffer,
+            CALLBACK1_INDEX,
+            key,
+            value.clone(),
+            args_pointer,
+        );
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = test_basics.socket.read(&mut buffer).unwrap();
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key);
+        write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let response_header_length = u32::required_space(size_of::<usize>() as u32);
@@ -427,13 +480,20 @@ mod socket_listener {
     // verifies that the outputs match the inputs.
     #[rstest]
     #[timeout(Duration::from_millis(15000))]
-    fn test_socket_handle_multiple_long_inputs(#[values(false, true)] use_tls: bool) {
+    fn test_socket_handle_multiple_long_inputs(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
         #[derive(Clone, PartialEq, Eq, Debug)]
         enum State {
             Initial,
             ReceivedNull,
             ReceivedValue,
         }
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
         let test_basics = setup_test_basics(use_tls);
         const VALUE_LENGTH: usize = 1000000;
         const NUMBER_OF_THREADS: usize = 10;
@@ -520,7 +580,7 @@ mod socket_listener {
                     // Send a set request
                     let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
                     let mut buffer = Vec::with_capacity(approx_message_length);
-                    write_set(&mut buffer, index as u32, &key, value);
+                    write_set(&mut buffer, index as u32, &key, value, args_pointer);
                     {
                         let _guard = cloned_lock.lock().unwrap();
                         write_socket.write_all(&buffer).unwrap();
@@ -528,7 +588,7 @@ mod socket_listener {
                     buffer.clear();
 
                     // Send a get request
-                    write_get(&mut buffer, index as u32, &key);
+                    write_get(&mut buffer, index as u32, &key, args_pointer);
                     {
                         let _guard = cloned_lock.lock().unwrap();
                         write_socket.write_all(&buffer).unwrap();

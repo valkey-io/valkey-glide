@@ -7,7 +7,7 @@ import { pb_message } from "../src/ProtobufMessage";
 import { Reader } from "protobufjs";
 import { describe, expect, beforeAll, it } from "@jest/globals";
 
-const { createLeakedValue } = BabushkaInternal;
+const { createLeakedValue, MAX_REQUEST_ARGS_LEN } = BabushkaInternal;
 
 const { RequestType } = pb_message;
 
@@ -156,7 +156,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.args.length).toEqual(1);
+                expect(request.argsArray!.args!.length).toEqual(1);
 
                 sendResponse(
                     socket,
@@ -176,7 +176,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.args.length).toEqual(1);
+                expect(request.argsArray!.args!.length).toEqual(1);
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
@@ -191,7 +191,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.SetString);
-                expect(request.args.length).toEqual(2);
+                expect(request.argsArray!.args!.length).toEqual(2);
 
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
@@ -207,7 +207,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.args.length).toEqual(1);
+                expect(request.argsArray!.args!.length).toEqual(1);
                 sendResponse(
                     socket,
                     ResponseType.RequestError,
@@ -228,7 +228,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.args.length).toEqual(1);
+                expect(request.argsArray!.args!.length).toEqual(1);
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
@@ -250,12 +250,13 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = pb_message.Request.decodeDelimited(reader);
                 expect(request.requestType).toEqual(RequestType.SetString);
-                expect(request.args.length).toEqual(5);
-                expect(request.args[0]).toEqual("foo");
-                expect(request.args[1]).toEqual("bar");
-                expect(request.args[2]).toEqual("XX");
-                expect(request.args[3]).toEqual("GET");
-                expect(request.args[4]).toEqual("EX 10");
+                const args = request.argsArray!.args!;
+                expect(args.length).toEqual(5);
+                expect(args[0]).toEqual("foo");
+                expect(args[1]).toEqual("bar");
+                expect(args[2]).toEqual("XX");
+                expect(args[3]).toEqual("GET");
+                expect(args[4]).toEqual("EX 10");
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const request1 = connection.set("foo", "bar", {
@@ -265,6 +266,52 @@ describe("SocketConnectionInternals", () => {
             });
 
             await expect(await request1).toMatch("OK");
+        });
+    });
+
+    it("should send pointer for request with large size arguments", async () => {
+        await testWithResources(async (connection, socket) => {
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.argsVecPointer).not.toBeNull();
+                expect(request.argsArray).toBeNull();
+
+                sendResponse(
+                    socket,
+                    ResponseType.Null,
+                    request.callbackIdx
+                );
+            });
+            const key = "0".repeat(MAX_REQUEST_ARGS_LEN);
+            const result = await connection.get(key);
+
+            expect(result).toBeNull();
+
+        });
+    });
+
+    it("should send vector of strings for request with small size arguments", async () => {
+        await testWithResources(async (connection, socket) => {
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = pb_message.Request.decodeDelimited(reader);
+                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.argsArray).not.toBeNull();
+                expect(request.argsVecPointer).toBeNull();
+
+                sendResponse(
+                    socket,
+                    ResponseType.Null,
+                    request.callbackIdx
+                );
+            });
+            const key = "0".repeat(MAX_REQUEST_ARGS_LEN - 1);
+            const result = await connection.get(key);
+
+            expect(result).toBeNull();
+
         });
     });
 });
