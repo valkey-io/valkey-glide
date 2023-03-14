@@ -2,7 +2,7 @@ use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
 use crate::pb_message;
 use crate::pb_message::{Request, RequestType, Response};
-use crate::retry_strategies::{get_fixed_interval_backoff, get_retry_strategy};
+use crate::retry_strategies::{get_fixed_interval_backoff, RetryStrategy};
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
@@ -307,7 +307,7 @@ async fn parse_address_create_conn(
     const BASE: u64 = 10;
     const FACTOR: u64 = 5;
     const NUMBER_OF_RETRIES: usize = 3;
-    let retry_strategy = get_retry_strategy(None);
+    let retry_strategy = RetryStrategy::new(&None);
 
     let action = || async move {
         let client = to_babushka_result(

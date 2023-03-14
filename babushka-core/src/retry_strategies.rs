@@ -1,8 +1,91 @@
+use crate::pb_message::{connection_retry_strategy, ConnectionRetryStrategy};
 use std::time::Duration;
-
 use tokio_retry::strategy::{ExponentialBackoff, FixedInterval};
 
-use crate::pb_message::{connection_retry_strategy, ConnectionRetryStrategy};
+#[derive(Clone, Debug)]
+enum RetryStrategyEnum {
+    Fixed(FixedInterval),
+    Exponential(ExponentialBackoff),
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct RetryStrategy {
+    base_strategy: RetryStrategyEnum,
+    max_jitter: Duration,
+    remaining_tries: usize,
+}
+
+impl RetryStrategy {
+    pub(super) fn new(data: &Option<Box<ConnectionRetryStrategy>>) -> Self {
+        match data {
+            Some(ref strategy) => {
+                let strategy = strategy.as_ref();
+                let number_of_retries = strategy.number_of_retries as usize;
+                let max_jitter = Duration::from_millis(strategy.max_jitter_in_millis as u64);
+                match strategy.value {
+                    Some(ref strategy) => match strategy {
+                        connection_retry_strategy::Value::Exponential(exponent) => {
+                            get_exponential_backoff(
+                                exponent.exponent_base as u64,
+                                exponent.factor as u64,
+                                number_of_retries,
+                                max_jitter,
+                            )
+                        }
+                        connection_retry_strategy::Value::Fixed(fixed) => {
+                            get_fixed_interval_backoff(
+                                Duration::from_millis(fixed.duration_in_millis as u64),
+                                number_of_retries,
+                                max_jitter,
+                            )
+                        }
+                    },
+                    None => get_exponential_backoff(
+                        EXPONENT_BASE,
+                        FACTOR,
+                        number_of_retries,
+                        max_jitter,
+                    ),
+                }
+            }
+            None => get_exponential_backoff(
+                EXPONENT_BASE,
+                FACTOR,
+                NUMBER_OF_RETRIES,
+                MAX_JITTER_IN_MILLIS,
+            ),
+        }
+    }
+}
+
+impl Iterator for RetryStrategy {
+    type Item = Duration;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining_tries == 0 {
+            return None;
+        }
+
+        let next_duration = match &mut self.base_strategy {
+            RetryStrategyEnum::Fixed(ref mut fixed) => fixed.next(),
+            RetryStrategyEnum::Exponential(ref mut exponential) => exponential.next(),
+        }?;
+
+        self.remaining_tries -= 1;
+
+        Some(apply_jitter(next_duration, self.max_jitter))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining_tries, Some(self.remaining_tries))
+    }
+}
+
+impl ExactSizeIterator for RetryStrategy {
+    fn len(&self) -> usize {
+        self.remaining_tries
+    }
+}
 
 fn apply_jitter(duration: Duration, max_jitter: Duration) -> Duration {
     let multiplier = (rand::random::<f64>() * 2.0) - 1.0;
@@ -25,7 +108,7 @@ fn get_exponential_backoff(
     factor: u64,
     number_of_retries: usize,
     max_jitter: Duration,
-) -> Box<dyn Iterator<Item = Duration>> {
+) -> RetryStrategy {
     let exponent_base = if exponent_base > 0 {
         exponent_base
     } else {
@@ -33,71 +116,24 @@ fn get_exponential_backoff(
     };
     let factor = if factor > 0 { factor } else { FACTOR };
 
-    finalize_strategy(
-        ExponentialBackoff::from_millis(exponent_base).factor(factor),
-        number_of_retries,
+    RetryStrategy {
+        base_strategy: RetryStrategyEnum::Exponential(
+            ExponentialBackoff::from_millis(exponent_base).factor(factor),
+        ),
+        remaining_tries: number_of_retries,
         max_jitter,
-    )
+    }
 }
 
 pub(crate) fn get_fixed_interval_backoff(
     fixed_interval: Duration,
     number_of_retries: usize,
     max_jitter: Duration,
-) -> Box<dyn Iterator<Item = Duration>> {
-    finalize_strategy(
-        FixedInterval::new(fixed_interval),
-        number_of_retries,
+) -> RetryStrategy {
+    RetryStrategy {
+        base_strategy: RetryStrategyEnum::Fixed(FixedInterval::new(fixed_interval)),
+        remaining_tries: number_of_retries,
         max_jitter,
-    )
-}
-
-fn finalize_strategy(
-    strategy: impl Iterator<Item = Duration> + 'static,
-    number_of_retries: usize,
-    max_jitter: Duration,
-) -> Box<dyn Iterator<Item = Duration>> {
-    Box::new(
-        strategy
-            .map(move |time| apply_jitter(time, max_jitter))
-            .take(number_of_retries),
-    )
-}
-
-pub(crate) fn get_retry_strategy(
-    data: Option<ConnectionRetryStrategy>,
-) -> Box<dyn Iterator<Item = Duration>> {
-    match data {
-        Some(ref strategy) => {
-            let number_of_retries = strategy.number_of_retries as usize;
-            let max_jitter = Duration::from_millis(strategy.max_jitter_in_millis as u64);
-            match strategy.value {
-                Some(ref strategy) => match strategy {
-                    connection_retry_strategy::Value::Exponential(exponent) => {
-                        get_exponential_backoff(
-                            exponent.exponent_base as u64,
-                            exponent.factor as u64,
-                            number_of_retries,
-                            max_jitter,
-                        )
-                    }
-                    connection_retry_strategy::Value::Fixed(fixed) => get_fixed_interval_backoff(
-                        Duration::from_millis(fixed.duration_in_millis as u64),
-                        number_of_retries,
-                        max_jitter,
-                    ),
-                },
-                None => {
-                    get_exponential_backoff(EXPONENT_BASE, FACTOR, number_of_retries, max_jitter)
-                }
-            }
-        }
-        None => get_exponential_backoff(
-            EXPONENT_BASE,
-            FACTOR,
-            NUMBER_OF_RETRIES,
-            MAX_JITTER_IN_MILLIS,
-        ),
     }
 }
 
