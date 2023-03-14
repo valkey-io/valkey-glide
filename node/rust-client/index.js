@@ -230,6 +230,7 @@ if (!nativeBinding) {
 
 const {
   Level,
+  MAX_REQUEST_ARGS_LEN,
   AsyncClient,
   StartSocketConnection,
   log,
@@ -237,13 +238,15 @@ const {
   valueFromSplitPointer,
   stringFromPointer,
   createLeakedValue,
+  createLeakedStringVec,
 } = nativeBinding
 
 module.exports.Level = Level
-module.exports.AsyncClient = AsyncClient
+module.exports.MAX_REQUEST_ARGS_LEN = MAX_REQUEST_ARGS_LEN
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log
 module.exports.InitInternalLogger = InitInternalLogger
 module.exports.valueFromSplitPointer = valueFromSplitPointer
 module.exports.stringFromPointer = stringFromPointer
 module.exports.createLeakedValue = createLeakedValue
+module.exports.createLeakedStringVec = createLeakedStringVec

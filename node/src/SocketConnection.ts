@@ -4,8 +4,9 @@ import { Logger } from "./Logger";
 import { valueFromSplitPointer } from "babushka-rs-internal";
 import { pb_message } from "./ProtobufMessage";
 import { BufferWriter, Buffer, Reader } from "protobufjs";
+import Long from "long";
 
-const { StartSocketConnection } = BabushkaInternal;
+const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } = BabushkaInternal;
 const { RequestType } = pb_message;
 
 type PromiseFunction = (value?: any) => void;
@@ -197,16 +198,30 @@ export class SocketConnection {
         });
     }
 
-    private writeOrBufferRequest(
-        callbackIdx: number,
-        requestType: number,
-        args: string[]
-    ) {
+    private is_a_large_request(args: string[]) {
+        let len_sum = 0;
+        for (const arg of args) {
+            len_sum += arg.length;
+            if (len_sum >= MAX_REQUEST_ARGS_LEN) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private writeOrBufferRequest(callbackIdx: number, requestType: number, args: string[]) {
         const message = pb_message.Request.create({
             callbackIdx: callbackIdx,
             requestType: requestType,
-            args: args,
         });
+        if (this.is_a_large_request(args)) {
+        // pass as a pointer
+        const pointerArr = createLeakedStringVec(args);
+        const pointer = new Long(pointerArr[0], pointerArr[1]);
+            message.argsVecPointer = pointer;
+        } else {
+            message.argsArray = pb_message.Request.ArgsArray.create({args: args});
+        }
 
         pb_message.Request.encodeDelimited(message, this.requestWriter);
         if (this.writeInProgress) {
@@ -221,9 +236,7 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.GetString, [
-                key,
-            ]);
+            this.writeOrBufferRequest(callbackIndex, RequestType.GetString, [key]);
         });
     }
 
@@ -301,11 +314,7 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(
-                callbackIndex,
-                RequestType.ServerAddress,
-                [address]
-            );
+            this.writeOrBufferRequest(callbackIndex, RequestType.ServerAddress, [address]);
         });
     }
 

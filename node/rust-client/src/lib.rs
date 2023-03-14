@@ -1,4 +1,5 @@
 use babushka::start_socket_listener;
+use babushka::MAX_REQUEST_ARGS_LENGTH;
 use byteorder::{LittleEndian, WriteBytesExt};
 use napi::bindgen_prelude::{BigInt, ToNapiValue};
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
@@ -16,6 +17,9 @@ pub enum Level {
     Trace = 4,
     Warn = 1,
 }
+
+#[napi]
+pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[napi]
 struct AsyncClient {
@@ -182,4 +186,12 @@ pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
 pub fn create_leaked_value(message: String) -> usize {
     let value = Value::Status(message);
     Box::leak(Box::new(value)) as *mut Value as usize
+}
+
+#[napi(ts_return_type = "[number, number]")]
+pub fn create_leaked_string_vec(message: Vec<String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(message)) as *mut Vec<String> as u64;
+    let bytes = u64::to_le_bytes(pointer);
+    let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
+    [lower, higher]
 }
