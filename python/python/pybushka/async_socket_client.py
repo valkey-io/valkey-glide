@@ -85,9 +85,8 @@ class RedisAsyncSocketClient(CoreCommands):
                 pass
 
     def close(self, err=""):
-        if err:
-            for response_future in self._availableFutures.values():
-                response_future.set_exception(err)
+        for response_future in self._availableFutures.values():
+            response_future.set_exception(err)
         self.__del__()
 
     def _get_header_length(self, num_of_args: int) -> int:
@@ -180,6 +179,14 @@ class RedisAsyncSocketClient(CoreCommands):
 
     async def _handle_read_data(self, data):
         length, callback_idx, type = self._parse_header(data)
+        if type == int(PyResponseType.ClosingError):
+            msg_length = length - HEADER_LENGTH_IN_BYTES
+            # Wait for the rest of the message
+            message = await self._reader.readexactly(msg_length)
+            response = message[:msg_length].decode("UTF-8")
+            self.close(f"The server closed the connection with error: {response}")
+            return
+
         res_future = self._availableFutures.get(callback_idx)
         if not res_future:
             raise Exception(f"found invalid callback index: {callback_idx}")
