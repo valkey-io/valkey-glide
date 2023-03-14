@@ -8,8 +8,9 @@ export const enum Level {
   Error = 0,
   Info = 2,
   Trace = 4,
-  Warn = 1,
+  Warn = 1
 }
+export const MAX_REQUEST_ARGS_LEN: number
 export function StartSocketConnection(): Promise<string>
 export function log(logLevel: Level, logIdentifier: string, message: string): void
 export function InitInternalLogger(level?: Level | undefined | null, fileName?: string | undefined | null): Level
@@ -20,8 +21,9 @@ export function stringFromPointer(pointerAsBigint: bigint): string
  * Should NOT be used in production.
  */
 export function createLeakedValue(message: string): bigint
+export function createLeakedStringVec(message: Array<string>): [number, number]
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<string | 'OK' | null>
+  set(key: string, value: string): Promise<string | "OK" | null>
 }
