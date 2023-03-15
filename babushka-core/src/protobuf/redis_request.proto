@@ -1,0 +1,24 @@
+syntax = "proto3";
+package redis_request;
+
+enum RequestType {
+    /// Invalid request type
+    InvalidRequest = 0;
+    /// Type of a get string request.
+    GetString = 1;
+    /// Type of a set string request.
+    SetString = 2;
+}
+
+message RedisRequest {
+    message ArgsArray {
+        repeated string args = 1;
+    }
+    
+    uint32 callback_idx = 1;
+    RequestType request_type = 2;
+    oneof args {
+        ArgsArray args_array = 3;
+        uint64 args_vec_pointer = 4;
+    }
+}

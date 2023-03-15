@@ -1,0 +1,31 @@
+syntax = "proto3";
+package connection_request;
+
+message AddressInfo {
+    string host = 1;
+    uint32 port = 2;
+    bool insecure = 3;
+}
+
+enum ReadFromReplicaStrategy {
+    AlwaysFromPrimary = 0;
+    RoundRobin = 1;
+    LowestLatency = 2;
+    AZAffinity = 3;
+}
+
+message ConnectionRequest {
+    repeated AddressInfo addresses = 1;
+    bool use_tls = 2;
+    uint32 response_timeout = 3;
+    uint32 connection_timeout = 4;
+    // credentials - TODO - implement
+    ReadFromReplicaStrategy read_from_replica_strategy = 5;
+    ConnectionRetryStrategy connection_retry_strategy = 6;
+}
+
+message ConnectionRetryStrategy {
+    uint32 number_of_retries = 1;
+    uint32 factor = 2;
+    uint32 exponent_base = 3;
+}

@@ -243,6 +243,7 @@ const {
 
 module.exports.Level = Level
 module.exports.MAX_REQUEST_ARGS_LEN = MAX_REQUEST_ARGS_LEN
+module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log
 module.exports.InitInternalLogger = InitInternalLogger

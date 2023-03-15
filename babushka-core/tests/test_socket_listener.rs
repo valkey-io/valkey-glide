@@ -14,11 +14,13 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use crate::pb_message::request::{Args, ArgsArray};
-    use crate::pb_message::{response, ConstantResponse, Request, RequestType, Response};
+    use babushka::connection_request::{AddressInfo, ConnectionRequest};
+    use babushka::redis_request::redis_request::{Args, ArgsArray};
+    use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
     use rand::distributions::Alphanumeric;
-    use redis::Value;
+    use redis::{ConnectionAddr, Value};
+    use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
     use std::{mem::size_of, time::Duration};
     use tokio::{net::UnixListener, runtime::Builder};
@@ -126,6 +128,14 @@ mod socket_listener {
         u32::encode_var(length, &mut buffer[new_len - required_space..]);
     }
 
+    fn write_message(buffer: &mut Vec<u8>, request: impl Message) -> u32 {
+        let message_length = request.compute_size() as u32;
+
+        write_header(buffer, message_length);
+        let _res = buffer.write_all(&request.write_to_bytes().unwrap());
+        message_length
+    }
+
     fn write_request(
         buffer: &mut Vec<u8>,
         callback_index: u32,
@@ -133,7 +143,7 @@ mod socket_listener {
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     ) -> u32 {
-        let mut request = Request::new();
+        let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
         request.request_type = request_type;
         if args_pointer {
@@ -145,11 +155,8 @@ mod socket_listener {
             args_array.args = args;
             request.args = Some(Args::ArgsArray(args_array));
         }
-        let message_length = request.compute_size() as u32;
 
-        write_header(buffer, message_length);
-        let _res = buffer.write_all(&request.write_to_bytes().unwrap());
-        message_length
+        write_message(buffer, request)
     }
 
     fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str, args_pointer: bool) -> u32 {
@@ -182,23 +189,38 @@ mod socket_listener {
         u32::decode_var(buffer).unwrap()
     }
 
-    fn send_address(address: String, socket: &UnixStream, use_tls: bool) {
+    fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
+        let mut address_info = AddressInfo::new();
+        match address {
+            ConnectionAddr::Tcp(host, port) => {
+                address_info.host = host.clone();
+                address_info.port = *port as u32;
+            }
+            ConnectionAddr::TcpTls {
+                host,
+                port,
+                insecure,
+            } => {
+                address_info.host = host.clone();
+                address_info.port = *port as u32;
+                address_info.insecure = *insecure;
+            }
+            ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
+        }
+        address_info
+    }
+
+    fn send_address(address: &ConnectionAddr, socket: &UnixStream, use_tls: bool) {
         // Send the server address
-        const CALLBACK_INDEX: u32 = 1;
-        let address = if use_tls {
-            format!("rediss://{address}#insecure")
-        } else {
-            format!("redis://{address}")
-        };
-        let approx_message_length = address.len() + APPROX_RESP_HEADER_LEN;
+        const CALLBACK_INDEX: u32 = 0;
+
+        let address_info = get_address_info(address);
+        let approx_message_length = address_info.compute_size() as usize + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_request(
-            &mut buffer,
-            CALLBACK_INDEX,
-            vec![address],
-            RequestType::ServerAddress.into(),
-            false,
-        );
+        let mut connection_request = ConnectionRequest::new();
+        connection_request.addresses = vec![address_info];
+        connection_request.use_tls = use_tls;
+        write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
         let _size = socket.read(&mut buffer).unwrap();
@@ -228,7 +250,7 @@ mod socket_listener {
         let path = path_arc.lock().unwrap();
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
-        let address = redis_server.get_client_addr().to_string();
+        let address = redis_server.get_client_addr();
         send_address(address, &socket, use_tls);
         TestBasics {
             _server: redis_server,

@@ -25,9 +25,9 @@ tokio-retry = "0.3.0"
 protobuf = "3"
 integer-encoding = "3.0.4"
 thiserror = "1"
+rand = "0.8.5"
 
 [dev-dependencies]
-rand = "0.8.5"
 rsevents = "0.3.1"
 socket2 = "0.4.7"
 tempfile = "3.3.0"
