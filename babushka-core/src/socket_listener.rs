@@ -14,7 +14,6 @@ use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::Duration;
 use std::{fmt, str};
 use std::{io, thread};
 use thiserror::Error;
@@ -320,7 +319,7 @@ async fn parse_address_create_conn(
         )
     };
 
-    let connection = Retry::spawn(retry_strategy, action).await?;
+    let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
 
     // Send response
     write_result(Ok(Value::Nil), request.callback_idx, writer).await?;
@@ -456,8 +455,7 @@ impl SocketListener {
             return true;
         }
 
-        let retry_strategy =
-            get_fixed_interval_backoff(Duration::from_millis(10), 3, Duration::from_millis(5));
+        let retry_strategy = get_fixed_interval_backoff(10, 3);
 
         let action = || async {
             UnixStream::connect(&self.socket_path)
@@ -465,7 +463,7 @@ impl SocketListener {
                 .map(|_| ())
                 .map_err(|_| ())
         };
-        let result = Retry::spawn(retry_strategy, action).await;
+        let result = Retry::spawn(retry_strategy.get_iterator(), action).await;
         result.is_ok()
     }
 

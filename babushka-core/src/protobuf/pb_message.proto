@@ -18,22 +18,10 @@ enum RequestType {
     SetString = 3;
 }
 
-message ExponentialBackoff {
-    uint32 factor = 1;
-    uint32 exponent_base = 2;
-}
-
-message FixedIntervalBackoff {
-    uint32 duration_in_millis = 1;
-}
-
 message ConnectionRetryStrategy {
     uint32 number_of_retries = 1;
-    uint32 max_jitter_in_millis = 2; 
-    oneof value {
-        ExponentialBackoff exponential = 3;
-        FixedIntervalBackoff fixed = 4;
-    }
+    uint32 factor = 2;
+    uint32 exponent_base = 3;
 }
 
 message Response {
