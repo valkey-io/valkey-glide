@@ -1,4 +1,3 @@
-use crate::pb_message::Request;
 use integer_encoding::VarInt;
 use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use logger_core::log_error;
@@ -64,12 +63,12 @@ impl RotatingBuffer {
     }
 
     /// Parses the requests in the buffer.
-    pub(super) fn get_requests(&mut self) -> io::Result<Vec<Request>> {
+    pub(super) fn get_requests<T: Message>(&mut self) -> io::Result<Vec<T>> {
         // We replace the buffer on every call, because we want to prevent the next read from affecting existing results.
         let new_buffer = self.get_new_buffer();
         let backing_buffer = Rc::new(mem::replace(&mut self.current_read_buffer, new_buffer));
         let buffer = backing_buffer.as_slice();
-        let mut results: Vec<Request> = vec![];
+        let mut results: Vec<T> = vec![];
         let mut prev_position = 0;
         let buffer_len = backing_buffer.len();
         while prev_position < buffer_len {
@@ -78,9 +77,8 @@ impl RotatingBuffer {
                 if (start_pos + request_len as usize) > buffer_len {
                     break;
                 } else {
-                    match Request::parse_from_bytes(
-                        &buffer[start_pos..start_pos + request_len as usize],
-                    ) {
+                    match T::parse_from_bytes(&buffer[start_pos..start_pos + request_len as usize])
+                    {
                         Ok(request) => {
                             prev_position += request_len as usize + bytes_read;
                             results.push(request);
@@ -112,8 +110,8 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pb_message::request::{Args, ArgsArray};
-    use crate::pb_message::RequestType;
+    use crate::redis_request::redis_request::{Args, ArgsArray};
+    use crate::redis_request::{RedisRequest, RequestType};
     use rand::{distributions::Alphanumeric, Rng};
     use rstest::rstest;
     use std::io::Write;
@@ -130,8 +128,8 @@ mod tests {
         args: Vec<String>,
         request_type: RequestType,
         args_pointer: bool,
-    ) -> Request {
-        let mut request = Request::new();
+    ) -> RedisRequest {
+        let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
         request.request_type = request_type.into();
         if args_pointer {
@@ -186,7 +184,7 @@ mod tests {
     }
 
     fn assert_request(
-        request: &Request,
+        request: &RedisRequest,
         expected_type: RequestType,
         expected_index: u32,
         expected_args: Vec<String>,
@@ -359,7 +357,7 @@ mod tests {
         let required_varint_length = u32::required_space(KEY_LENGTH as u32);
         assert!(required_varint_length > 1); // so we could split the write of the varint
         buffer.append(&mut request_bytes[..NUM_OF_LENGTH_BYTES].into());
-        let requests = rotating_buffer.get_requests().unwrap();
+        let requests = rotating_buffer.get_requests::<RedisRequest>().unwrap();
         assert_eq!(requests.len(), 0);
         let buffer = rotating_buffer.current_buffer();
         buffer.append(&mut request_bytes[NUM_OF_LENGTH_BYTES..].into());

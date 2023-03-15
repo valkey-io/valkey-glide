@@ -2,12 +2,13 @@ import { BabushkaInternal } from "../";
 import * as net from "net";
 import { Logger } from "./Logger";
 import { valueFromSplitPointer } from "babushka-rs-internal";
-import { pb_message } from "./ProtobufMessage";
-import { BufferWriter, Buffer, Reader } from "protobufjs";
+import { redis_request, response, connection_request } from "./ProtobufMessage";
+import { BufferWriter, Buffer, Reader, Writer } from "protobufjs";
 import Long from "long";
 
-const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } = BabushkaInternal;
-const { RequestType } = pb_message;
+const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } =
+    BabushkaInternal;
+const { RequestType } = redis_request;
 
 type PromiseFunction = (value?: any) => void;
 
@@ -15,91 +16,57 @@ type AuthenticationOptions =
     | {
           /// The username that will be passed to the cluster's Access Control Layer.
           /// If not supplied, "default" will be used.
-          // TODO - implement usage
           username?: string;
           /// The password that will be passed to the cluster's Access Control Layer.
           password: string;
       }
     | {
           /// a callback that allows the client to receive new pairs of username/password. Should be used when connecting to a server that might change the required credentials, such as AWS IAM.
-          // TODO - implement usage
           credentialsProvider: () => [string, string];
       };
 
-type ConnectionRetryStrategy = {
-    /// The client will add a random number of milliseconds between 0 and this value to the wait between each connection attempt, in order to prevent the server from receiving multiple connections at the same time, and causing a connection storm.
-    /// if not set, will be set to DEFAULT_CONNECTION_RETRY_JITTER.
-    /// Value must be an integer.
-    // TODO - implement usage
-    jitter?: number;
-    /// Number of retry attempts that the client should perform when disconnected from the server.
-    /// Value must be an integer.
-    numberOfRetries: number;
-} & (
-    | {
-          /// A retry strategy where the time between attempts is the same, regardless of the number of performed connection attempts.
-          type: "linear";
-          /// Number of milliseconds that the client should wait between connection attempts.
-          /// Value must be an integer.
-          waitDuration: number;
-      }
-    | {
-          /// A retry strategy where the time between attempts grows exponentially, to the formula baselineWaitDuration * (exponentBase ^ N), where N is the number of failed attempts.
-          type: "exponentialBackoff";
-          /// Value must be an integer.
-          baselineWaitDuration: number;
-          /// Value must be an integer.
-          exponentBase: number;
-      }
-);
+type ReadFromReplicaStrategy =
+    | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data.
+    | "roundRobin" /// Spread the request load between all replicas evenly.
+    | "lowestLatency" /// Send requests to the replica with the lowest latency.
+    | "azAffinity"; /// Send requests to the replica which is in the same AZ as the EC2 instance, otherwise behaves like `lowestLatency`. Only available on AWS ElastiCache.
 
-export const DEFAULT_RESPONSE_TIMEOUT = 2000;
-export const DEFAULT_CONNECTION_TIMEOUT = 2000;
-export const DEFAULT_CONNECTION_RETRY_JITTER = 10;
-export const DEFAULT_CONNECTION_RETRY_STRATEGY: ConnectionRetryStrategy = {
-    type: "exponentialBackoff",
-    numberOfRetries: 5,
-    jitter: DEFAULT_CONNECTION_RETRY_JITTER,
-    baselineWaitDuration: 10,
-    exponentBase: 10,
-};
-
-type ConnectionOptions = {
+export type ConnectionOptions = {
     /// DNS Addresses and ports of known nodes in the cluster.
     /// If the server has Cluster Mode Enabled the list can be partial, as the client will attempt to map out the cluster and find all nodes.
     /// If the server has Cluster Mode Disabled, only nodes whose addresses were provided will be used by the client.
     /// For example, [{address:sample-address-0001.use1.cache.amazonaws.com, port:6379}, {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}].
-    // TODO - implement usage of multiple addresses
     addresses: {
-        address: string;
+        host: string;
         port?: number; /// If port isn't supplied, 6379 will be used
     }[];
     /// True if communication with the cluster should use Transport Level Security.
     useTLS?: boolean;
     /// Credentials for authentication process.
     /// If none are set, the client will not authenticate itself with the server.
-    // TODO - implement usage
     credentials?: AuthenticationOptions;
     /// Number of milliseconds that the client should wait for response before determining that the connection has been severed.
-    /// If not set, DEFAULT_RESPONSE_TIMEOUT will be used.
-    // TODO - implement usage
+    /// If not set, a default value will be used.
     /// Value must be an integer.
     responseTimeout?: number;
     /// Number of milliseconds that the client should wait for connection before determining that the connection has been severed.
-    /// If not set, DEFAULT_CONNECTION_TIMEOUT will be used.
-    // TODO - implement usage
+    /// If not set, a default value will be used.
     /// Value must be an integer.
     connectionTimeout?: number;
     /// Strategy used to determine how and when to retry connecting, in case of connection failures.
-    /// If not set, DEFAULT_CONNECTION_RETRY_STRATEGY will be used.
-    // TODO - implement usage
-    connectionRetryStrategy?: ConnectionRetryStrategy;
+    /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
+    /// If not set, a default backoff strategy will be used.
+    connectionBackoff?: {
+        /// Number of retry attempts that the client should perform when disconnected from the server.
+        /// Value must be an integer.
+        numberOfRetries: number;
+        /// Value must be an integer.
+        factor: number;
+        /// Value must be an integer.
+        exponentBase: number;
+    };
     /// If not set, `alwaysFromPrimary` will be used.
-    readFromReplicaStrategy?:
-        | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data. // TODO - implement usage
-        | "roundRobin" /// Spread the request load between all replicas evenly. // TODO - implement usage
-        | "lowestLatency" /// Send requests to the replica with the lowest latency. // TODO - implement usage
-        | "azAffinity"; /// Send requests to the replica which is in the same AZ as the EC2 instance, otherwise behaves like `lowestLatency`. Only available on AWS ElastiCache. // TODO - implement usage
+    readFromReplicaStrategy?: ReadFromReplicaStrategy;
 };
 
 export class SocketConnection {
@@ -123,7 +90,7 @@ export class SocketConnection {
             lastPos = reader.pos;
             let message = undefined;
             try {
-                message = pb_message.Response.decodeDelimited(reader);
+                message = response.Response.decodeDelimited(reader);
             } catch (err) {
                 if (err instanceof RangeError) {
                     // Partial response received, more data is required
@@ -154,7 +121,7 @@ export class SocketConnection {
                     resolve(valueFromSplitPointer(pointer.high, pointer.low));
                 }
             } else if (
-                message.constantResponse === pb_message.ConstantResponse.OK
+                message.constantResponse === response.ConstantResponse.OK
             ) {
                 resolve("OK");
             } else {
@@ -209,21 +176,39 @@ export class SocketConnection {
         return false;
     }
 
-    private writeOrBufferRequest(callbackIdx: number, requestType: number, args: string[]) {
-        const message = pb_message.Request.create({
+    private writeOrBufferRedisRequest(
+        callbackIdx: number,
+        requestType: number,
+        args: string[]
+    ) {
+        const message = redis_request.RedisRequest.create({
             callbackIdx: callbackIdx,
             requestType: requestType,
         });
         if (this.is_a_large_request(args)) {
-        // pass as a pointer
-        const pointerArr = createLeakedStringVec(args);
-        const pointer = new Long(pointerArr[0], pointerArr[1]);
+            // pass as a pointer
+            const pointerArr = createLeakedStringVec(args);
+            const pointer = new Long(pointerArr[0], pointerArr[1]);
             message.argsVecPointer = pointer;
         } else {
-            message.argsArray = pb_message.Request.ArgsArray.create({args: args});
+            message.argsArray = redis_request.RedisRequest.ArgsArray.create({
+                args: args,
+            });
         }
 
-        pb_message.Request.encodeDelimited(message, this.requestWriter);
+        this.writeOrBufferRequest(
+            message,
+            (message: redis_request.RedisRequest, writer: Writer) => {
+                redis_request.RedisRequest.encodeDelimited(message, writer);
+            }
+        );
+    }
+
+    private writeOrBufferRequest<TRequest>(
+        message: TRequest,
+        encodeDelimited: (message: TRequest, writer: Writer) => void
+    ) {
+        encodeDelimited(message, this.requestWriter);
         if (this.writeInProgress) {
             return;
         }
@@ -236,7 +221,11 @@ export class SocketConnection {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.GetString, [key]);
+            this.writeOrBufferRedisRequest(
+                callbackIndex,
+                RequestType.GetString,
+                [key]
+            );
         });
     }
 
@@ -302,7 +291,7 @@ export class SocketConnection {
             }
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(
+            this.writeOrBufferRedisRequest(
                 callbackIndex,
                 RequestType.SetString,
                 args
@@ -310,11 +299,50 @@ export class SocketConnection {
         });
     }
 
-    private setServerAddress(address: string): Promise<void> {
+    private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
+        ReadFromReplicaStrategy,
+        connection_request.ReadFromReplicaStrategy
+    > = {
+        alwaysFromPrimary:
+            connection_request.ReadFromReplicaStrategy.AlwaysFromPrimary,
+        roundRobin: connection_request.ReadFromReplicaStrategy.RoundRobin,
+        azAffinity: connection_request.ReadFromReplicaStrategy.AZAffinity,
+        lowestLatency: connection_request.ReadFromReplicaStrategy.LowestLatency,
+    };
+
+    private connectToServer(options: ConnectionOptions): Promise<void> {
         return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRequest(callbackIndex, RequestType.ServerAddress, [address]);
+            this.promiseCallbackFunctions[0] = [resolve, reject];
+
+            const readFromReplicaStrategy = options.readFromReplicaStrategy
+                ? this.MAP_READ_FROM_REPLICA_STRATEGY[
+                      options.readFromReplicaStrategy
+                  ]
+                : undefined;
+            const configuration: connection_request.IConnectionRequest = {
+                addresses: options.addresses,
+                useTls: options.useTLS,
+                responseTimeout: options.responseTimeout,
+                connectionTimeout: options.connectionTimeout,
+                readFromReplicaStrategy,
+                connectionRetryStrategy: options.connectionBackoff,
+            };
+
+            const message =
+                connection_request.ConnectionRequest.create(configuration);
+
+            this.writeOrBufferRequest(
+                message,
+                (
+                    message: connection_request.ConnectionRequest,
+                    writer: Writer
+                ) => {
+                    connection_request.ConnectionRequest.encodeDelimited(
+                        message,
+                        writer
+                    );
+                }
+            );
         });
     }
 
@@ -326,11 +354,11 @@ export class SocketConnection {
     }
 
     static async __CreateConnection(
-        address: string,
+        options: ConnectionOptions,
         connectedSocket: net.Socket
     ): Promise<SocketConnection> {
         const connection = new SocketConnection(connectedSocket);
-        await connection.setServerAddress(address);
+        await connection.connectToServer(options);
         return connection;
     }
 
@@ -344,21 +372,11 @@ export class SocketConnection {
         });
     }
 
-    private static finalAddresses(options: ConnectionOptions): string[] {
-        const protocol = options.useTLS ? "rediss://" : "redis://";
-        return options.addresses.map(
-            (address) => `${protocol}${address.address}:${address.port ?? 6379}`
-        );
-    }
-
     public static async CreateConnection(
         options: ConnectionOptions
     ): Promise<SocketConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__CreateConnection(
-            SocketConnection.finalAddresses(options)[0],
-            socket
-        );
+        return await this.__CreateConnection(options, socket);
     }
 }
