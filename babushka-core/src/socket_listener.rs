@@ -190,8 +190,12 @@ async fn write_result(
             }
         }
         Err(err) => {
-            log_error("response error", err.to_string());
-            response.value = Some(response::response::Value::RequestError(err.to_string()))
+            response.value = if err.is_connection_dropped() || err.is_connection_refusal() {
+                log_error("response error", err.to_string());
+                Some(response::response::Value::ClosingError(err.to_string()))
+            } else {
+                Some(response::response::Value::RequestError(err.to_string()))
+            };
         }
     }
     write_to_writer(response, writer).await
