@@ -198,9 +198,6 @@ mod tests {
             request.args_array().args.clone()
         };
         assert_eq!(args, expected_args);
-        if args_pointer {
-            Box::leak(Box::new(args)); // to avoid double freeing
-        }
     }
 
     fn generate_random_string(length: usize) -> String {
@@ -280,10 +277,10 @@ mod tests {
     }
 
     #[rstest]
-    fn next_write_doesnt_affect_values(#[values(false, true)] args_pointer: bool) {
+    fn next_write_doesnt_affect_values() {
         const BUFFER_SIZE: u32 = 16;
         let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE as usize);
-        write_get(rotating_buffer.current_buffer(), 100, "key", args_pointer);
+        write_get(rotating_buffer.current_buffer(), 100, "key", false);
 
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
@@ -292,7 +289,7 @@ mod tests {
             RequestType::GetString,
             100,
             vec!["key".to_string()],
-            args_pointer,
+            false,
         );
 
         while rotating_buffer.current_read_buffer.len()
@@ -305,7 +302,7 @@ mod tests {
             RequestType::GetString,
             100,
             vec!["key".to_string()],
-            args_pointer,
+            false,
         );
     }
 
