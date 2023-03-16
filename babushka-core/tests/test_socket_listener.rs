@@ -39,7 +39,7 @@ mod socket_listener {
     }
 
     struct TestBasics {
-        _server: RedisServer,
+        server: RedisServer,
         socket: UnixStream,
     }
 
@@ -261,10 +261,7 @@ mod socket_listener {
         server: RedisServer,
     ) -> TestBasics {
         let socket = setup_socket(use_tls, socket_path, &server);
-        TestBasics {
-            _server: server,
-            socket,
-        }
+        TestBasics { server, socket }
     }
 
     fn setup_test_basics_with_socket_path(
@@ -624,5 +621,24 @@ mod socket_listener {
         for i in 0..NUMBER_OF_THREADS {
             assert_eq!(State::ReceivedValue, results[i]);
         }
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_close_when_server_closes() {
+        let mut test_basics = setup_test_basics(false);
+        let server = test_basics.server;
+
+        drop(server);
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(100);
+        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        buffer.resize(100, 0);
+        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
     }
 }
