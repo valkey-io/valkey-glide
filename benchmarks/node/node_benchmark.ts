@@ -310,12 +310,16 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             numOfClients: string,
             concurrentTasks: string
         ) => [parseInt(concurrentTasks), data_size, parseInt(numOfClients)];
-        const product: [number, number, number][] = concurrent_tasks.flatMap(
-            (concurrentTasks: string) =>
+        const product: [number, number, number][] = concurrent_tasks
+            .flatMap((concurrentTasks: string) =>
                 clientCount.map((clientCount) =>
                     lambda(clientCount, concurrentTasks)
                 )
-        );
+            )
+            .filter(
+                ([concurrent_tasks, _, clientCount]) =>
+                    clientCount <= concurrent_tasks
+            );
 
         for (const [concurrent_tasks, data_size, clientCount] of product) {
             await main(

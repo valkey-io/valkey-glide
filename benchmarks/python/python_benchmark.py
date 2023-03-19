@@ -306,6 +306,7 @@ if __name__ == "__main__":
         (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
         for num_of_concurrent_tasks in concurrent_tasks
         for number_of_clients in client_count
+        if int(number_of_clients) <= int(num_of_concurrent_tasks)
     ]
 
     for data_size, num_of_concurrent_tasks, number_of_clients in product_of_arguments:
