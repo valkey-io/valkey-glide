@@ -249,7 +249,7 @@ async function main(
     ) {
         const clients = await createClients(clientCount, () =>
             SocketConnection.CreateConnection({
-                addresses: [{ address: host }],
+                addresses: [{ host }],
                 useTLS,
             })
         );
