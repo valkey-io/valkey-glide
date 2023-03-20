@@ -361,7 +361,7 @@ public static class MainClass
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
         var product = options.concurrentTasks.SelectMany(concurrentTasks =>
-            options.clientCount.Select(clientCount => (concurrentTasks, options.dataSize, clientCount)));
+            options.clientCount.Select(clientCount => (concurrentTasks: concurrentTasks, dataSize: options.dataSize, clientCount: clientCount))).Where(tuple => tuple.concurrentTasks >= tuple.clientCount);
         foreach (var (concurrentTasks, dataSize, clientCount) in product)
         {
             await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount, options.tls);
