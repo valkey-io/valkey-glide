@@ -13,7 +13,7 @@ futures = "^0.3"
 lifeguard = "^0.6"
 num-derive = "^0.3"
 num-traits = "^0.2"
-redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp"] }
+redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp", "connection-manager"] }
 signal-hook = "^0.3"
 signal-hook-tokio = {version = "^0.3", features = ["futures-v0_3"] }
 tokio = { version = "1", features = ["macros", "time"] }
@@ -32,7 +32,12 @@ rsevents = "0.3.1"
 socket2 = "0.4.7"
 tempfile = "3.3.0"
 rstest = "0.16.0"
+criterion = { version = "0.4", features = ["html_reports", "async_tokio"] }
 
 [build-dependencies]
 protobuf-codegen = "3"
 protoc-rust = "^2.0"
+
+[[bench]]
+name = "connections_benchmark"
+harness = false

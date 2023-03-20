@@ -1,5 +1,6 @@
-use redis::aio::{ConnectionLike, MultiplexedConnection};
+use redis::aio::{ConnectionLike, ConnectionManager, MultiplexedConnection};
 
-pub(super) trait BabushkaClient: ConnectionLike + Send + Clone {}
+pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 
 impl BabushkaClient for MultiplexedConnection {}
+impl BabushkaClient for ConnectionManager {}
