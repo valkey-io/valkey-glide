@@ -39,7 +39,7 @@ mod socket_listener {
     }
 
     struct TestBasics {
-        _server: Arc<RedisServer>,
+        server: RedisServer,
         socket: UnixStream,
     }
 
@@ -227,11 +227,11 @@ mod socket_listener {
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
 
-    fn setup_test_basics_with_server_and_socket_path(
+    fn setup_socket(
         use_tls: bool,
         socket_path: Option<String>,
-        redis_server: Arc<RedisServer>,
-    ) -> TestBasics {
+        redis_server: &RedisServer,
+    ) -> UnixStream {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
         let cloned_state = socket_listener_state.clone();
@@ -252,10 +252,16 @@ mod socket_listener {
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
         let address = redis_server.get_client_addr();
         send_address(address, &socket, use_tls);
-        TestBasics {
-            _server: redis_server,
-            socket,
-        }
+        socket
+    }
+
+    fn setup_test_basics_with_server_and_socket_path(
+        use_tls: bool,
+        socket_path: Option<String>,
+        server: RedisServer,
+    ) -> TestBasics {
+        let socket = setup_socket(use_tls, socket_path, &server);
+        TestBasics { server, socket }
     }
 
     fn setup_test_basics_with_socket_path(
@@ -263,11 +269,7 @@ mod socket_listener {
         socket_path: Option<String>,
     ) -> TestBasics {
         let context = TestContext::new(ServerType::Tcp { tls: use_tls });
-        setup_test_basics_with_server_and_socket_path(
-            use_tls,
-            socket_path,
-            Arc::new(context.server),
-        )
+        setup_test_basics_with_server_and_socket_path(use_tls, socket_path, context.server)
     }
 
     fn setup_test_basics(use_tls: bool) -> TestBasics {
@@ -324,18 +326,14 @@ mod socket_listener {
                     .name(format!("test-{i}"))
                     .spawn_scoped(scope, || {
                         const CALLBACK_INDEX: u32 = 99;
-                        let mut test_basics = setup_test_basics_with_server_and_socket_path(
-                            false,
-                            Some(socket_path.clone()),
-                            server.clone(),
-                        );
+                        let mut socket = setup_socket(false, Some(socket_path.clone()), &server);
                         let key = "hello";
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
                         write_get(&mut buffer, CALLBACK_INDEX, key, false);
-                        test_basics.socket.write_all(&buffer).unwrap();
+                        socket.write_all(&buffer).unwrap();
 
-                        let _size = test_basics.socket.read(&mut buffer).unwrap();
+                        let _size = socket.read(&mut buffer).unwrap();
                         assert_null_response(&buffer, CALLBACK_INDEX);
                     })
                     .unwrap();
@@ -623,5 +621,24 @@ mod socket_listener {
         for i in 0..NUMBER_OF_THREADS {
             assert_eq!(State::ReceivedValue, results[i]);
         }
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_close_when_server_closes() {
+        let mut test_basics = setup_test_basics(false);
+        let server = test_basics.server;
+
+        drop(server);
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(100);
+        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        buffer.resize(100, 0);
+        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
     }
 }
