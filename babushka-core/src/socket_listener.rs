@@ -1,18 +1,18 @@
 use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
+use crate::client::ClientCMD;
 use crate::connection_request::ConnectionRequest;
 use crate::redis_request::redis_request;
 use crate::redis_request::{RedisRequest, RequestType};
 use crate::response;
 use crate::response::Response;
-use crate::retry_strategies::{get_fixed_interval_backoff, RetryStrategy};
+use crate::retry_strategies::get_fixed_interval_backoff;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
 use protobuf::Message;
-use redis::aio::MultiplexedConnection;
 use redis::{cmd, RedisResult, Value};
-use redis::{Client, ErrorKind, RedisError};
+use redis::{ErrorKind, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
@@ -305,76 +305,26 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
-fn to_babushka_result<T, E: std::fmt::Display>(
-    result: Result<T, E>,
-    err_msg: Option<&str>,
-) -> Result<T, ClientCreationError> {
-    result.map_err(|err: E| {
-        ClientCreationError::UnhandledError(match err_msg {
-            Some(msg) => format!("{msg}: {err}"),
-            None => format!("{err}"),
-        })
-    })
-}
-
-fn get_address(request: &ConnectionRequest) -> String {
-    let address = request.addresses.first().unwrap(); // TODO - use all received addresses.
-    let protocol = if request.use_tls { "rediss" } else { "redis" };
-    let port = if address.port > 0 { address.port } else { 6379 };
-    let insecure = if address.insecure { "#insecure" } else { "" };
-    format!("{protocol}://{}:{port}{insecure}", address.host)
-}
-
-async fn try_connecting_to_server(
-    address: &str,
-    retry_strategy: RetryStrategy,
-) -> Result<MultiplexedConnection, ClientCreationError> {
-    let action = || async move {
-        let client = to_babushka_result(
-            Client::open(address),
-            Some("Failed to open redis-rs client"),
-        )?;
-        to_babushka_result(
-            client.get_multiplexed_async_connection().await,
-            Some("Failed to create a multiplexed connection"),
-        )
-    };
-
-    Retry::spawn(retry_strategy.get_iterator(), action).await
-}
-
 async fn create_connection(
     writer: &Rc<Writer>,
-    request: &ConnectionRequest,
-) -> Result<MultiplexedConnection, ClientCreationError> {
-    let address = get_address(request);
-    log_trace(
-        "client creation",
-        format!("Connection to {address} created"),
-    );
-
-    let retry_strategy = RetryStrategy::new(&request.connection_retry_strategy.0);
-
-    let connection = try_connecting_to_server(&address, retry_strategy).await?;
+    request: ConnectionRequest,
+) -> Result<ClientCMD, ClientCreationError> {
+    let connection = ClientCMD::create_client(request).await?;
 
     // Send response
     write_result(Ok(Value::Nil), 0, writer).await?;
-    log_trace(
-        "client creation",
-        format!("Connection to {address} created"),
-    );
     Ok(connection)
 }
 
 async fn wait_for_server_address_create_conn(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
-) -> Result<MultiplexedConnection, ClientCreationError> {
+) -> Result<ClientCMD, ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values::<ConnectionRequest>().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
-        ReceivedValues(received_requests) => {
-            if let Some(request) = received_requests.first() {
+        ReceivedValues(mut received_requests) => {
+            if let Some(request) = received_requests.pop() {
                 create_connection(writer, request).await
             } else {
                 Err(ClientCreationError::UnhandledError(
