@@ -611,4 +611,46 @@ mod socket_listener {
         let _size = test_basics.socket.read(&mut buffer).unwrap();
         assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
     }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_reconnect_after_temporary_disconnect() {
+        let test_basics = setup_test_basics(false);
+        let mut socket = test_basics.socket.try_clone().unwrap();
+        let address = test_basics.server.get_client_addr().clone();
+        drop(test_basics);
+
+        let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(100);
+        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        socket.write_all(&buffer).unwrap();
+
+        let _size = socket.read(&mut buffer).unwrap();
+        assert_null_response(&buffer, CALLBACK_INDEX);
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_complete_request_after_reconnect() {
+        block_on_all(async move {
+            let test_basics = setup_test_basics(false);
+            let mut socket = test_basics.socket.try_clone().unwrap();
+            let address = test_basics.server.get_client_addr().clone();
+            drop(test_basics);
+
+            const CALLBACK_INDEX: u32 = 0;
+            let key = "hello";
+            let mut buffer = Vec::with_capacity(100);
+            write_get(&mut buffer, CALLBACK_INDEX, key, false);
+            socket.write_all(&buffer).unwrap();
+
+            let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
+
+            let _size = socket.read(&mut buffer).unwrap();
+            assert_null_response(&buffer, CALLBACK_INDEX);
+        });
+    }
 }
