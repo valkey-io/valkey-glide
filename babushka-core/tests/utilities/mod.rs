@@ -4,7 +4,10 @@ use std::{
     time::Duration,
 };
 
-use redis::Value;
+use babushka::connection_request::AddressInfo;
+use futures::Future;
+use rand::{distributions::Alphanumeric, Rng};
+use redis::{ConnectionAddr, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
 use tempfile::TempDir;
 
@@ -355,4 +358,33 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         redis_key,
         ca_crt,
     }
+}
+
+pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
+    let mut address_info = AddressInfo::new();
+    match address {
+        ConnectionAddr::Tcp(host, port) => {
+            address_info.host = host.clone();
+            address_info.port = *port as u32;
+        }
+        ConnectionAddr::TcpTls {
+            host,
+            port,
+            insecure,
+        } => {
+            address_info.host = host.clone();
+            address_info.port = *port as u32;
+            address_info.insecure = *insecure;
+        }
+        ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
+    }
+    address_info
+}
+
+pub fn generate_random_string(length: usize) -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(length)
+        .map(char::from)
+        .collect()
 }
