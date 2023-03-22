@@ -369,6 +369,49 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
     }
 }
 
+pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
+    let millisecond = Duration::from_millis(1);
+    let mut retries = 0;
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: server_address.clone(),
+        redis: redis::RedisConnectionInfo::default(),
+    })
+    .unwrap();
+    loop {
+        match client.get_multiplexed_async_connection().await {
+            Err(err) => {
+                if err.is_connection_refusal() {
+                    tokio::time::sleep(millisecond).await;
+                    retries += 1;
+                    if retries > 100000 {
+                        panic!("Tried to connect too many times, last error: {err}");
+                    }
+                } else {
+                    panic!("Could not connect: {err}");
+                }
+            }
+            Ok(mut con) => {
+                let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(&mut con).await;
+                break;
+            }
+        }
+    }
+}
+
+pub fn current_thread_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+}
+
+pub fn block_on_all<F>(f: F) -> F::Output
+where
+    F: Future,
+{
+    current_thread_runtime().block_on(f)
+}
+
 pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
     let mut address_info = AddressInfo::new();
     match address {
