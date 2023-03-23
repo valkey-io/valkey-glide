@@ -222,6 +222,27 @@ describe("socket client", () => {
         });
     });
 
+    it("custom command works", async () => {
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
+        await OpenServerAndExecute(port, async () => {
+            const client = await SocketConnection.CreateConnection(
+                getOptions(port)
+            );
+
+            const key = uuidv4();
+            // Adding random repetition, to prevent the inputs from always having the same alignment.
+            const value = uuidv4() + "0".repeat(Math.random() * 7);
+            const setResult = await client.customCommand("SET", [key, value]);
+            expect(setResult).toEqual("OK");
+            const result = await client.customCommand("GET", [key]);
+            expect(result).toEqual(value);
+
+            client.dispose();
+        });
+    });
+
     it("set and with return of old value works", async () => {
         const port = await FreePort(3000).then(
             ([free_port]: number[]) => free_port
