@@ -4,10 +4,12 @@ package redis_request;
 enum RequestType {
     /// Invalid request type
     InvalidRequest = 0;
+    /// An unknown command, where all arguments are defined by the user.
+    CustomCommand = 1;
     /// Type of a get string request.
-    GetString = 1;
+    GetString = 2;
     /// Type of a set string request.
-    SetString = 2;
+    SetString = 3;
 }
 
 message RedisRequest {

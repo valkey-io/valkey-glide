@@ -361,6 +361,52 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(Duration::from_millis(10000))]
+    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
+        let mut test_basics = setup_test_basics(false);
+
+        const CALLBACK1_INDEX: u32 = 100;
+        const CALLBACK2_INDEX: u32 = 101;
+        const VALUE_LENGTH: usize = 10;
+        let key = "hello";
+        let value = generate_random_string(VALUE_LENGTH);
+        // Send a set request
+        let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
+        let mut buffer = Vec::with_capacity(approx_message_length);
+        write_request(
+            &mut buffer,
+            CALLBACK1_INDEX,
+            vec!["SET".to_string(), key.to_string(), value.clone()],
+            RequestType::CustomCommand.into(),
+            args_pointer,
+        );
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        assert_ok_response(&buffer, CALLBACK1_INDEX);
+
+        buffer.clear();
+        write_request(
+            &mut buffer,
+            CALLBACK2_INDEX,
+            vec!["GET".to_string(), key.to_string()],
+            RequestType::CustomCommand.into(),
+            args_pointer,
+        );
+        test_basics.socket.write_all(&buffer).unwrap();
+        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
+        buffer.resize(approx_message_length, 0);
+        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        assert_response(
+            &buffer,
+            0,
+            CALLBACK2_INDEX,
+            Some(Value::Data(value.into_bytes())),
+            ResponseType::Value,
+        );
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
     fn test_socket_get_returns_null(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
