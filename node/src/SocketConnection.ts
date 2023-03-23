@@ -294,6 +294,17 @@ export class SocketConnection {
         return this.createWritePromise(RequestType.SetString, args);
     }
 
+    /// Executes a single command, without checking inputs.
+    public customCommand(
+        commandName: string,
+        args: string[]
+    ): Promise<"OK" | string | string[]> {
+        return this.createWritePromise(RequestType.CustomCommand, [
+            commandName,
+            ...args,
+        ]);
+    }
+
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
         ReadFromReplicaStrategy,
         connection_request.ReadFromReplicaStrategy
