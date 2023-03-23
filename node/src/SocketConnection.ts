@@ -176,6 +176,17 @@ export class SocketConnection {
         return false;
     }
 
+    private createWritePromise<T>(
+        requestType: number,
+        args: string[]
+    ): Promise<T> {
+        return new Promise((resolve, reject) => {
+            const callbackIndex = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.writeOrBufferRedisRequest(callbackIndex, requestType, args);
+        });
+    }
+
     private writeOrBufferRedisRequest(
         callbackIdx: number,
         requestType: number,
@@ -218,15 +229,7 @@ export class SocketConnection {
     /// Get the value associated with the given key, or null if no such value exists.
     /// See https://redis.io/commands/get/ for details.
     public get(key: string): Promise<string | null> {
-        return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(
-                callbackIndex,
-                RequestType.GetString,
-                [key]
-            );
-        });
+        return this.createWritePromise(RequestType.GetString, [key]);
     }
 
     /// Set the given key with the given value. Return value is dependent on the passed options.
@@ -255,48 +258,40 @@ export class SocketConnection {
                   };
         }
     ): Promise<"OK" | string | null> {
-        return new Promise((resolve, reject) => {
-            const args = [key, value];
-            if (options) {
-                if (options.conditionalSet === "onlyIfExists") {
-                    args.push("XX");
-                } else if (options.conditionalSet === "onlyIfDoesNotExist") {
-                    args.push("NX");
-                }
-                if (options.returnOldValue) {
-                    args.push("GET");
-                }
-                if (
-                    options.expiry &&
-                    options.expiry !== "keepExisting" &&
-                    !Number.isInteger(options.expiry.count)
-                ) {
-                    reject(
-                        `Received expiry '${JSON.stringify(
-                            options.expiry
-                        )}'. Count must be an integer`
-                    );
-                }
-                if (options.expiry === "keepExisting") {
-                    args.push("KEEPTTL");
-                } else if (options.expiry?.type === "seconds") {
-                    args.push("EX " + options.expiry.count);
-                } else if (options.expiry?.type === "milliseconds") {
-                    args.push("PX " + options.expiry.count);
-                } else if (options.expiry?.type === "unixSeconds") {
-                    args.push("EXAT " + options.expiry.count);
-                } else if (options.expiry?.type === "unixMilliseconds") {
-                    args.push("PXAT " + options.expiry.count);
-                }
+        const args = [key, value];
+        if (options) {
+            if (options.conditionalSet === "onlyIfExists") {
+                args.push("XX");
+            } else if (options.conditionalSet === "onlyIfDoesNotExist") {
+                args.push("NX");
             }
-            const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(
-                callbackIndex,
-                RequestType.SetString,
-                args
-            );
-        });
+            if (options.returnOldValue) {
+                args.push("GET");
+            }
+            if (
+                options.expiry &&
+                options.expiry !== "keepExisting" &&
+                !Number.isInteger(options.expiry.count)
+            ) {
+                throw new Error(
+                    `Received expiry '${JSON.stringify(
+                        options.expiry
+                    )}'. Count must be an integer`
+                );
+            }
+            if (options.expiry === "keepExisting") {
+                args.push("KEEPTTL");
+            } else if (options.expiry?.type === "seconds") {
+                args.push("EX " + options.expiry.count);
+            } else if (options.expiry?.type === "milliseconds") {
+                args.push("PX " + options.expiry.count);
+            } else if (options.expiry?.type === "unixSeconds") {
+                args.push("EXAT " + options.expiry.count);
+            } else if (options.expiry?.type === "unixMilliseconds") {
+                args.push("PXAT " + options.expiry.count);
+            }
+        }
+        return this.createWritePromise(RequestType.SetString, args);
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
