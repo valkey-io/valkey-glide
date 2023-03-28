@@ -9,6 +9,8 @@
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Command="cargo build --release" />
+    <Exec Command="mkdir -p protobuf" />
+    <Exec Command="protoc -IPATH=../../babushka-core/src/protobuf/  --csharp_opt=file_extension=.pb.cs,internal_access --csharp_out=./protobuf/ ../../babushka-core/src/protobuf/*.proto" />
   </Target>
 
   <ItemGroup Condition=" '$(OS)' == 'UNIX'">
@@ -16,6 +18,7 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>%(FileName)%(Extension)</Link>
     </Content>
+    <PackageReference Include="Google.Protobuf" Version="4.0.0-rc2" />
   </ItemGroup>
 
 </Project>

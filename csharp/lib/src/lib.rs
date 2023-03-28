@@ -1,6 +1,7 @@
-use babushka::start_legacy_socket_listener;
-use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, RedisResult};
+use babushka::start_socket_listener;
+use logger_core::{ log_error, log_info };
+use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use redis::RedisResult;
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
@@ -8,6 +9,7 @@ use std::{
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
 
+#[derive(Debug)]
 pub enum Level {
     Error = 0,
     Warn = 1,
@@ -16,6 +18,8 @@ pub enum Level {
     Trace = 4,
 }
 
+// Required to support FFI async client
+#[allow(dead_code)]
 pub struct Connection {
     connection: MultiplexedConnection,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
@@ -125,15 +129,18 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
 pub extern "C" fn start_socket_listener_wrapper(
     init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
 ) {
-    start_legacy_socket_listener(move |result| {
+    log_info("start_socket_listener_wrapper", "starting");
+    start_socket_listener(move |result| {
         match result {
             Ok(socket_name) => {
                 let c_str = CString::new(socket_name).unwrap();
+                log_info("start_socket_listener_wrapper", format!("socket: {:?}", c_str));
                 unsafe {
                     init_callback(c_str.as_ptr(), std::ptr::null());
                 }
             }
             Err(error_message) => {
+                log_error("start_socket_listener_wrapper", format!("error: {:?}", error_message));
                 let c_str = CString::new(error_message).unwrap();
                 unsafe {
                     init_callback(std::ptr::null(), c_str.as_ptr());
@@ -141,6 +148,7 @@ pub extern "C" fn start_socket_listener_wrapper(
             }
         };
     });
+
 }
 
 impl From<logger_core::Level> for Level {
@@ -209,4 +217,16 @@ pub unsafe extern "C" fn init(level: Option<Level>, file_name: *const c_char) ->
         let logger_level = logger_core::init(level.map(|level| level.into()), file_name_as_str);
         logger_level.into()
     }
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+pub unsafe extern "C" fn free_memory(pointer: *const Value) {
+    let _value = unsafe { Box::from_raw(pointer as *mut Value) };
+}
+
+#[no_mangle]
+#[allow(improper_ctypes_definitions)]
+pub fn string_from_pointer(pointer: *const char) -> String {
+    *unsafe { Box::from_raw(pointer as *mut String) }
 }

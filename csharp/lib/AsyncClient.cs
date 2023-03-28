@@ -18,14 +18,14 @@ namespace babushka
             }
         }
 
-        public Task SetAsync(string key, string value)
+        public ValueTask<RedisValueBase?> SetAsync(string key, string value)
         {
             var (message, task) = messageContainer.GetMessageForCall(key, value);
             SetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr, message.ValuePtr);
             return task;
         }
 
-        public Task<string?> GetAsync(string key)
+        public ValueTask<RedisValueBase?> GetAsync(string key)
         {
             var (message, task) = messageContainer.GetMessageForCall(key, null);
             GetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr);
@@ -49,7 +49,7 @@ namespace babushka
 
         private void SuccessCallback(ulong index, IntPtr str)
         {
-            var result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
+            RedisValueBase result = str == IntPtr.Zero ? new RedisNilValue() : new RedisBinaryValue() { Data = Marshal.PtrToStringAnsi(str) };
             // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
             Task.Run(() =>
             {

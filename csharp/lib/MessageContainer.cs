@@ -5,15 +5,16 @@ namespace babushka
 
     internal class MessageContainer
     {
-        internal Message<string?> GetMessage(int index)
+        internal Message<RedisValueBase?> GetMessage(int index)
         {
             return messages[index];
         }
 
-        internal (Message<string?>, Task<string?>) GetMessageForCall(string? key, string? value)
+        internal (Message<RedisValueBase?>, ValueTask<RedisValueBase?>) GetMessageForCall(string? key, string? value)
         {
             var message = GetFreeMessage();
-            var task = message.CreateTask(key, value, this).ContinueWith(result =>
+            var task = message.CreateTask(key, value, this);
+            task.AsTask().ContinueWith(result =>
             {
                 ReturnFreeMessage(message);
                 return result.Result;
@@ -21,21 +22,21 @@ namespace babushka
             return (message, task);
         }
 
-        private Message<string?> GetFreeMessage()
+        private Message<RedisValueBase?> GetFreeMessage()
         {
             if (!availableMessages.TryDequeue(out var message))
             {
                 lock (messages)
                 {
                     var index = messages.Count;
-                    message = new Message<string?>(index);
+                    message = new Message<RedisValueBase?>((uint)index);
                     messages.Add(message);
                 }
             }
             return message;
         }
 
-        private void ReturnFreeMessage(Message<string?> message)
+        private void ReturnFreeMessage(Message<RedisValueBase?> message)
         {
             availableMessages.Enqueue(message);
         }
@@ -60,11 +61,11 @@ namespace babushka
         /// This list allows us random-access to the message in each index,
         /// which means that once we receive a callback with an index, we can
         /// find the message to resolve in constant time.
-        private List<Message<string?>> messages = new();
+        private List<Message<RedisValueBase?>> messages = new();
 
         /// This queue contains the messages that were created and are currently unused by any task,
         /// so they can be reused y new tasks instead of allocating new messages.
-        private ConcurrentQueue<Message<string?>> availableMessages = new();
+        private ConcurrentQueue<Message<RedisValueBase?>> availableMessages = new();
     }
 
 }

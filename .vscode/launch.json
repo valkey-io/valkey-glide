@@ -34,6 +34,32 @@
             "stopAtEntry": true
         },
         {
+            "name": "C# app Launch (dotnet)",
+            "type": "coreclr",
+            // "miDebuggerPath": "dbg",
+            "request": "launch",
+            // "preLaunchTask": "build",
+            "program": "${workspaceFolder}/csharp/sandbox/bin/Debug/net6.0/sandbox",
+            "args": [],
+            "cwd": "${workspaceFolder}/csharp/sandbox",
+            // "console": "integratedTerminal",
+            "stopAtEntry": true,
+            "justMyCode": false,
+            "requireExactSource": false,
+            "symbolOptions": {
+                "searchMicrosoftSymbolServer": true, // get pdb files from ms symbol server
+                "searchNuGetOrgSymbolServer": true,
+                "moduleFilter": {
+                    "mode": "loadAllButExcluded",
+                    "excludedModules": []
+                }
+            },
+            "env": {
+                "RUSTFLAGS": "Development"
+            },
+            "logging": { "exceptions": true, "trace": true}
+        },
+        {
             "name": ".NET Core Attach",
             "type": "coreclr",
             "request": "attach"

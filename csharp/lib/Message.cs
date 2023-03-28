@@ -8,7 +8,7 @@ internal class Message<T> : IValueTaskSource<T>
 {
     /// This is the index of the message in an external array, that allows the user to
     /// know how to find the message and set its result.
-    public int Index { get; }
+    public uint Index { get; }
 
     /// The pointer to the unmanaged memory that contains the operation's key.
     public IntPtr KeyPtr { get; private set; }
@@ -16,7 +16,7 @@ internal class Message<T> : IValueTaskSource<T>
     /// The pointer to the unmanaged memory that contains the operation's key.
     public IntPtr ValuePtr { get; private set; }
 
-    public Message(int index)
+    public Message(uint index)
     {
         Index = index;
     }
@@ -32,7 +32,7 @@ internal class Message<T> : IValueTaskSource<T>
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public async Task<T> CreateTask(string? key, string? value, object client)
+    public async ValueTask<T> CreateTask(string? key, string? value, object client)
     {
         this.client = client;
         this.KeyPtr = key is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(key);

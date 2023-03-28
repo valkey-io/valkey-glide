@@ -229,7 +229,9 @@ fn get_command_name(request: &RedisRequest) -> Option<&str> {
         .enum_value_or(RequestType::InvalidRequest);
     match request_enum {
         RequestType::GetString => Some("GET"),
-        RequestType::SetString => Some("SET"),
+        RequestType::SetString => Some("SET"),        
+        RequestType::Incr      => Some("Incr"),
+        RequestType::MGetStrings      => Some("MGET"),
         _ => None,
     }
 }

@@ -8,6 +8,8 @@ enum RequestType {
     GetString = 1;
     /// Type of a set string request.
     SetString = 2;
+    Incr = 3;
+    MGetStrings = 4;
 }
 
 message RedisRequest {

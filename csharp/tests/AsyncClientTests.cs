@@ -16,8 +16,8 @@ public class AsyncClientTests
         var key = Guid.NewGuid().ToString();
         var value = Guid.NewGuid().ToString();
         await client.SetAsync(key, value);
-        var result = await client.GetAsync(key);
-        Assert.That(result, Is.EqualTo(value));
+        var result = await client.GetAsync(key) as RedisBinaryValue;
+        Assert.That(result?.Data, Is.EqualTo(value));
     }
 
     [Test]
@@ -37,8 +37,8 @@ public class AsyncClientTests
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
             await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            var result = await client.GetAsync(key) as RedisBinaryValue;
+            Assert.That(result?.Data, Is.EqualTo(value));
         }
     }
 
@@ -47,8 +47,8 @@ public class AsyncClientTests
     {
         using (var client = new AsyncClient("redis://localhost:6379"))
         {
-            var result = await client.GetAsync(Guid.NewGuid().ToString());
-            Assert.That(result, Is.EqualTo(null));
+            var result = await client.GetAsync(Guid.NewGuid().ToString()) as RedisBinaryValue;
+            Assert.That(result?.Data, Is.EqualTo(null));
         }
     }
 
@@ -60,8 +60,8 @@ public class AsyncClientTests
             var key = Guid.NewGuid().ToString();
             var value = "";
             await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            var result = await client.GetAsync(key) as RedisBinaryValue;
+            Assert.That(result?.Data, Is.EqualTo(value));
         }
     }
 
@@ -78,8 +78,8 @@ public class AsyncClientTests
                 value += value;
             }
             await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            var result = await client.GetAsync(key) as RedisBinaryValue;
+            Assert.That(result?.Data, Is.EqualTo(value));
         }
     }
 

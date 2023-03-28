@@ -3,14 +3,14 @@ namespace tests;
 using babushka;
 
 // TODO - need to start a new redis server for each test?
-public class AsyncSocketClientTests
+public class AsyncSocketClientTestsDirect
 {
     [OneTimeSetUp]
     public void Setup()
     {
         babushka.Logger.SetConfig(babushka.Level.Trace, "test.log");
     }
-    
+
     static Random randomizer = new();
 
     private async Task GetAndSetRandomValues(IAsyncSocketClient client)
@@ -27,7 +27,7 @@ public class AsyncSocketClientTests
     {
         // while (true) { Thread.Sleep(1000);
         //  }
-        using (var client = await AsyncSocketClient.CreateSocketClient("localhost", 6379, false))
+        using (var client = await AsyncSocketClientDirect.CreateSocketClient("localhost", 6379, false))
         {
             await GetAndSetRandomValues(client);
         }
@@ -90,7 +90,7 @@ public class AsyncSocketClientTests
     // This test is slow and hardly a unit test, but it caught timing and releasing issues in the past,
     // so it's being kept.
     [Test, Timeout(5000)]
-    public async Task ConcurrentOperationsWorkWithSocket()
+    public async Task ConcurrentOperationsWorkWithSocketDirect()
     {
         using (var client = await AsyncSocketClient.CreateSocketClient("localhost", 6379, false))
         {
