@@ -49,7 +49,7 @@ namespace babushka
 
         private void SuccessCallback(ulong index, IntPtr str)
         {
-            RedisValueBase result = str == IntPtr.Zero ? new RedisNilValue() : new RedisBinaryValue() { Data = Marshal.PtrToStringAnsi(str) };
+            RedisValueBase? result = str == IntPtr.Zero ? null : new RedisBinaryValue() { Data = Marshal.PtrToStringAnsi(str) };
             // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
             Task.Run(() =>
             {
