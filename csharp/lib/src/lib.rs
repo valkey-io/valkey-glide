@@ -1,7 +1,6 @@
 use babushka::start_socket_listener;
-use logger_core::{ log_error, log_info };
-use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
-use redis::RedisResult;
+use logger_core::{log_error, log_info};
+use redis::{aio::MultiplexedConnection, AsyncCommands, RedisResult, Value};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
@@ -134,13 +133,19 @@ pub extern "C" fn start_socket_listener_wrapper(
         match result {
             Ok(socket_name) => {
                 let c_str = CString::new(socket_name).unwrap();
-                log_info("start_socket_listener_wrapper", format!("socket: {:?}", c_str));
+                log_info(
+                    "start_socket_listener_wrapper",
+                    format!("socket: {:?}", c_str),
+                );
                 unsafe {
                     init_callback(c_str.as_ptr(), std::ptr::null());
                 }
             }
             Err(error_message) => {
-                log_error("start_socket_listener_wrapper", format!("error: {:?}", error_message));
+                log_error(
+                    "start_socket_listener_wrapper",
+                    format!("error: {:?}", error_message),
+                );
                 let c_str = CString::new(error_message).unwrap();
                 unsafe {
                     init_callback(std::ptr::null(), c_str.as_ptr());
@@ -148,7 +153,6 @@ pub extern "C" fn start_socket_listener_wrapper(
             }
         };
     });
-
 }
 
 impl From<logger_core::Level> for Level {
