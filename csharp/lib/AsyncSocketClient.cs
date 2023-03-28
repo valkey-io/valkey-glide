@@ -75,9 +75,9 @@ namespace babushka
         {
             Task.Run(() =>
             {
-                using (var stream = new NetworkStream(socket, FileAccess.Read, false))
+                using (var stream = new NetworkStream(socket!, FileAccess.Read, false))
                 {
-                    while (socket.Connected && !IsDisposed)
+                    while (socket!.Connected && !IsDisposed)
                     {
                         try
                         {
@@ -119,7 +119,7 @@ namespace babushka
 
         protected override void WriteToSocket(IMessage writeRequest)
         {
-            WriteToSocket(socket, writeStream, new[] { writeRequest });
+            WriteToSocket(socket!, writeStream, new[] { writeRequest });
         }
 
         private static void WriteToSocket(Socket socket, NetworkStream stream, IEnumerable<IMessage> WriteRequests)

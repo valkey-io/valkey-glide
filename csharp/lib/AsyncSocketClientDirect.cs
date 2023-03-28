@@ -30,41 +30,7 @@ namespace babushka
 
         #region Private Methods
 
-        /// Triggers the creation of a Rust-side socket server if one isn't running, and returns the name of the socket the server is listening on.
-        private static Task<string> GetSocketNameAsync()
-        {
-            var completionSource = new TaskCompletionSource<string>();
-            InitCallback initCallback = (IntPtr successPointer, IntPtr errorPointer) =>
-            {
-                if (successPointer != IntPtr.Zero)
-                {
-                    var address = Marshal.PtrToStringAnsi(successPointer);
-                    if (address is not null)
-                    {
-                        Logger.Log(Level.Info, "connection", $"socket address {address}");
-                        completionSource.SetResult(address);
-                    }
-                    else
-                    {
-                        completionSource.SetException(new Exception("Received address that couldn't be converted to string"));
-                    }
-                }
-                else if (errorPointer != IntPtr.Zero)
-                {
-                    var errorMessage = Marshal.PtrToStringAnsi(errorPointer);
-                    completionSource.SetException(new Exception(errorMessage));
-                }
-                else
-                {
-                    completionSource.SetException(new Exception("Did not receive results from init callback"));
-                }
-            };
-            var callbackPointer = Marshal.GetFunctionPointerForDelegate(initCallback);
-            StartSocketListener(callbackPointer);
-            return completionSource.Task;
-        }
-
-        /// Returns a new ready to use socket.
+         /// Returns a new ready to use socket.
         private static async ValueTask<Socket?> GetSocketAsync(string socketName, string host, uint port, bool useTLS)
         {
             var socket = ConnectToSocket(socketName);
@@ -145,10 +111,10 @@ namespace babushka
         }
         private void StartListeningOnReadSocket()
         {
-            Task.Run(async () =>
+            Task.Run(() =>
             {
                 var previousSegment = new ArraySegment<byte>();
-                while (socket.Connected && !IsDisposed)
+                while (socket!.Connected && !IsDisposed)
                 {
                     try
                     {
@@ -197,7 +163,7 @@ namespace babushka
 
         protected override void WriteToSocket(IMessage writeRequest)
         {
-            WriteToSocket(socket, new [] { writeRequest });
+            WriteToSocket(socket!, new [] { writeRequest });
         }
 
         private static void WriteToSocket(Socket socket, IEnumerable<IMessage> WriteRequests)

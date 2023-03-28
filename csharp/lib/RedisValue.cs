@@ -41,7 +41,7 @@ namespace babushka
                         result = new RedisIntValue() { IntValue = fromValue.IntValue};
                         break;
                     case ValueType.Data: 
-                        result = new RedisBinaryValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize) };
+                        result = new RedisBinaryValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize)! };
                         break;
                     case ValueType.Bulk: 
                         result = new RedisBulkValue();
@@ -49,7 +49,7 @@ namespace babushka
                         // result.Values = Array.ConvertAll(bulkValue.Values, new Converter<RustRedisValue, RedisValueBase>(FromCoreValue));
                         break;
                     case ValueType.Status: 
-                        result = new RedisStatusValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize) };
+                        result = new RedisStatusValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize)! };
                         break;
                     case ValueType.Okay: 
                         result = new RedisOkValue();
@@ -64,13 +64,13 @@ namespace babushka
             switch (fromValue.Discriminator) {
                 case ValueType.Nil: return new RedisNilValue();
                 case ValueType.Int: return new RedisIntValue() { IntValue = fromValue.IntValue};
-                case ValueType.Data: return new RedisBinaryValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize) };
+                case ValueType.Data: return new RedisBinaryValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize)! };
                 case ValueType.Bulk: 
                     var result = new RedisBulkValue();
                     // RustRedisBulkValue bulkValue = Marshal.PtrToStructure<RustRedisBulkValue>(respPointer);
                     // result.Values = Array.ConvertAll(bulkValue.Values, new Converter<RustRedisValue, RedisValueBase>(FromCoreValue));
                     return result;
-                case ValueType.Status: return new RedisStatusValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize) };
+                case ValueType.Status: return new RedisStatusValue() { Data = Marshal.PtrToStringAuto(fromValue.DataPointer, (int)fromValue.DataSize)! };
                 case ValueType.Okay: return new RedisOkValue();
             }
 

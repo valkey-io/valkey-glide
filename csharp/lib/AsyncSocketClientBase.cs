@@ -15,8 +15,6 @@ namespace babushka
         ValueTask<RedisValueBase?> IncrAsync(string key);
         ValueTask<RedisValueBase?> MGetAsync(string[] keys);
         Task SetAsync(string key, string value);
-
-        void Dispose();
     }
 
     public abstract class AsyncSocketClientBase : IDisposable, IAsyncSocketClient
@@ -110,7 +108,7 @@ namespace babushka
             {
                 return;
             }
-            this.socket.Close();
+            this.socket!.Close();
             messageContainer.DisposeWithError(error);
         }
 
@@ -151,7 +149,7 @@ namespace babushka
         internal void ResolveMessage(Message<RedisValueBase?> message, Response.Response response)
         {
             // Work needs to be offloaded from the calling thread, because otherwise we might starve the reader task.
-            Task.Run(async () =>
+            Task.Run(() =>
             {
                 switch (response.ValueCase)
                 {
@@ -183,7 +181,7 @@ namespace babushka
 
         #region Protected Memebers
 
-        protected Socket socket;
+        protected Socket? socket;
         
         internal readonly MessageContainer messageContainer = new();
         /// 1 when disposed, 0 beforeException thrown: 'System.TypeLoadException' in babushka.dll: 'Could not load type 'babushka.RedisValue' from assembly 'babushka, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null' because it contains an object field at offset 8 that is incorrectly aligned or overlapped by a non-object field.'
