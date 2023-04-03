@@ -335,7 +335,9 @@ export class SocketConnection {
                 : undefined;
             const configuration: connection_request.IConnectionRequest = {
                 addresses: options.addresses,
-                useTls: options.useTLS,
+                tlsMode: options.useTLS
+                    ? connection_request.TlsMode.SecureTls
+                    : connection_request.TlsMode.NoTls,
                 responseTimeout: options.responseTimeout,
                 connectionTimeout: options.connectionTimeout,
                 readFromReplicaStrategy,
