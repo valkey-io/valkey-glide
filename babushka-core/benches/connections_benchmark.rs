@@ -5,7 +5,7 @@ use babushka::{
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
 use redis::{
-    AsyncCommands, Client, ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult, Value,
+    AsyncCommands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult, Value,
 };
 use std::env;
 use tokio::runtime::{Builder, Runtime};
@@ -74,7 +74,7 @@ fn get_connection_info(address: ConnectionAddr) -> redis::ConnectionInfo {
 
 fn multiplexer_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
     benchmark(c, address, "multiplexer", group, |address, runtime| {
-        let client = Client::open(get_connection_info(address)).unwrap();
+        let client = redis::Client::open(get_connection_info(address)).unwrap();
         runtime.block_on(async { client.get_multiplexed_tokio_connection().await.unwrap() })
     });
 }
@@ -86,7 +86,7 @@ fn connection_manager_benchmark(c: &mut Criterion, address: ConnectionAddr, grou
         "connection-manager",
         group,
         |address, runtime| {
-            let client = Client::open(get_connection_info(address)).unwrap();
+            let client = redis::Client::open(get_connection_info(address)).unwrap();
             runtime.block_on(async { client.get_tokio_connection_manager().await.unwrap() })
         },
     );
@@ -122,12 +122,14 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
     request
 }
 
-fn client_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
-    benchmark(c, address, "client", group, |address, runtime| {
+fn client_cmd_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
+    benchmark(c, address, "ClientCMD", group, |address, runtime| {
         runtime.block_on(async {
-            ClientCMD::create_client(create_connection_request(address))
-                .await
-                .unwrap()
+            Client::CMD(
+                ClientCMD::create_client(create_connection_request(address))
+                    .await
+                    .unwrap(),
+            )
         })
     });
 }
@@ -166,16 +168,16 @@ fn connection_manager_benchmarks(c: &mut Criterion) {
     local_benchmark(c, connection_manager_benchmark)
 }
 
-fn client_benchmarks(c: &mut Criterion) {
-    remote_benchmark(c, client_benchmark);
-    local_benchmark(c, client_benchmark)
+fn client_cmd_benchmarks(c: &mut Criterion) {
+    remote_benchmark(c, client_cmd_benchmark);
+    local_benchmark(c, client_cmd_benchmark)
 }
 
 criterion_group!(
     benches,
     connection_manager_benchmarks,
     multiplexer_benchmarks,
-    client_benchmarks
+    client_cmd_benchmarks
 );
 
 criterion_main!(benches);
