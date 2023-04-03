@@ -1,17 +1,14 @@
 mod utilities;
 
 #[cfg(test)]
-mod client {
+mod client_cmd_tests {
     use super::*;
     use babushka::client::ClientCMD;
     use babushka::connection_request::{self, ConnectionRequest, ConnectionRetryStrategy};
     use protobuf::MessageField;
-    use redis::aio::ConnectionLike;
-    use redis::{RedisResult, Value};
+    use redis::Value;
     use rstest::rstest;
-
     use std::time::Duration;
-
     use utilities::*;
 
     struct TestBasics {
@@ -24,7 +21,7 @@ mod client {
         connection_retry_strategy: Option<ConnectionRetryStrategy>,
     ) -> TestBasics {
         let server = TestContext::new(ServerType::Tcp { tls: use_tls }).server;
-        let address_info = get_address_info(server.get_client_addr());
+        let address_info = get_address_info(&server.get_client_addr());
         let mut connection_request = ConnectionRequest::new();
         connection_request.addresses = vec![address_info];
         connection_request.tls_mode = if use_tls {
@@ -35,31 +32,13 @@ mod client {
         .into();
         connection_request.connection_retry_strategy =
             MessageField::from_option(connection_retry_strategy);
+        connection_request.cluster_mode_enabled = false;
         let client = ClientCMD::create_client(connection_request).await.unwrap();
         TestBasics { server, client }
     }
 
     async fn setup_test_basics(use_tls: bool) -> TestBasics {
         setup_test_basics_and_connection_retry_strategy(use_tls, None).await
-    }
-
-    async fn send_get(client: &mut ClientCMD, key: &str) -> RedisResult<Value> {
-        let mut get_command = redis::Cmd::new();
-        get_command.arg("GET").arg(key);
-        client.req_packed_command(&get_command).await
-    }
-
-    async fn send_set_and_get(mut client: ClientCMD, key: String) {
-        const VALUE_LENGTH: usize = 10;
-        let value = generate_random_string(VALUE_LENGTH);
-
-        let mut set_command = redis::Cmd::new();
-        set_command.arg("SET").arg(key.as_str()).arg(value.clone());
-        let set_result = client.req_packed_command(&set_command).await.unwrap();
-        let get_result = send_get(&mut client, key.as_str()).await.unwrap();
-
-        assert_eq!(set_result, Value::Okay);
-        assert_eq!(get_result, Value::Data(value.into_bytes()));
     }
 
     #[rstest]
@@ -120,7 +99,7 @@ mod client {
                 setup_test_basics_and_connection_retry_strategy(use_tls, Some(retry_strategy))
                     .await;
             let server = test_basics.server;
-            let address = server.get_client_addr().clone();
+            let address = server.get_client_addr();
             drop(server);
 
             let thread = std::thread::spawn(move || {
