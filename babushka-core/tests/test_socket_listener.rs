@@ -250,7 +250,7 @@ mod socket_listener {
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
         let address = redis_server.get_client_addr();
-        send_address(address, &socket, use_tls);
+        send_address(&address, &socket, use_tls);
         socket
     }
 
@@ -681,7 +681,7 @@ mod socket_listener {
     fn test_reconnect_after_temporary_disconnect() {
         let test_basics = setup_test_basics(false);
         let mut socket = test_basics.socket.try_clone().unwrap();
-        let address = test_basics.server.get_client_addr().clone();
+        let address = test_basics.server.get_client_addr();
         drop(test_basics);
 
         let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
@@ -702,7 +702,7 @@ mod socket_listener {
         block_on_all(async move {
             let test_basics = setup_test_basics(false);
             let mut socket = test_basics.socket.try_clone().unwrap();
-            let address = test_basics.server.get_client_addr().clone();
+            let address = test_basics.server.get_client_addr();
             drop(test_basics);
 
             const CALLBACK_INDEX: u32 = 0;
