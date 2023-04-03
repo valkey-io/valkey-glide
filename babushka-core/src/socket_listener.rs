@@ -1,6 +1,6 @@
 use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
-use crate::client::ClientCMD;
+use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
 use crate::redis_request::redis_request;
 use crate::redis_request::{RedisRequest, RequestType};
@@ -308,18 +308,16 @@ pub fn close_socket(socket_path: &String) {
 async fn create_connection(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
-) -> Result<ClientCMD, ClientCreationError> {
-    let connection = ClientCMD::create_client(request).await?;
-
-    // Send response
+) -> Result<Client, ClientCreationError> {
+    let client = Client::new(request).await?;
     write_result(Ok(Value::Nil), 0, writer).await?;
-    Ok(connection)
+    Ok(client)
 }
 
-async fn wait_for_server_address_create_conn(
+async fn wait_for_connection_configuration_and_create_connection(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
-) -> Result<ClientCMD, ClientCreationError> {
+) -> Result<Client, ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values::<ConnectionRequest>().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
@@ -365,7 +363,11 @@ async fn listen_on_client_stream(socket: UnixStream) {
         accumulated_outputs,
         closing_sender: sender,
     });
-    let connection = match wait_for_server_address_create_conn(&mut client_listener, &writer).await
+    let connection = match wait_for_connection_configuration_and_create_connection(
+        &mut client_listener,
+        &writer,
+    )
+    .await
     {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {

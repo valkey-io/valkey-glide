@@ -23,12 +23,12 @@ enum TlsMode {
 message ConnectionRequest {
     repeated AddressInfo addresses = 1;
     TlsMode tls_mode = 2;
-    bool use_tls = 2;
-    uint32 response_timeout = 3;
-    uint32 connection_timeout = 4;
+    bool cluster_mode_enabled = 3;
+    uint32 response_timeout = 4;
+    uint32 connection_timeout = 5;
     // credentials - TODO - implement
-    ReadFromReplicaStrategy read_from_replica_strategy = 5;
-    ConnectionRetryStrategy connection_retry_strategy = 6;
+    ReadFromReplicaStrategy read_from_replica_strategy = 6;
+    ConnectionRetryStrategy connection_retry_strategy = 7;
 }
 
 message ConnectionRetryStrategy {
