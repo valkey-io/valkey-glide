@@ -422,11 +422,10 @@ pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
         ConnectionAddr::TcpTls {
             host,
             port,
-            insecure,
+            insecure: _,
         } => {
             address_info.host = host.clone();
             address_info.port = *port as u32;
-            address_info.insecure = *insecure;
         }
         ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
     }

@@ -1,6 +1,6 @@
 use babushka::{
-    client::{BabushkaClient, ClientCMD},
-    connection_request::{AddressInfo, ConnectionRequest},
+    client::{BabushkaClient, Client, ClientCMD},
+    connection_request::{AddressInfo, ConnectionRequest, TlsMode},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
@@ -96,11 +96,10 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
     let mut request = ConnectionRequest::new();
     match address {
         ConnectionAddr::Tcp(host, port) => {
-            request.use_tls = false;
+            request.tls_mode = TlsMode::NoTls.into();
             let mut address_info = AddressInfo::new();
             address_info.host = host;
             address_info.port = port as u32;
-            address_info.insecure = false;
             request.addresses.push(address_info);
         }
         ConnectionAddr::TcpTls {
@@ -108,11 +107,14 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
             port,
             insecure,
         } => {
-            request.use_tls = true;
+            request.tls_mode = if insecure {
+                TlsMode::InsecureTls.into()
+            } else {
+                TlsMode::SecureTls.into()
+            };
             let mut address_info = AddressInfo::new();
             address_info.host = host;
             address_info.port = port as u32;
-            address_info.insecure = insecure;
             request.addresses.push(address_info);
         }
         _ => unreachable!(),

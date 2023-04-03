@@ -213,7 +213,12 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut connection_request = ConnectionRequest::new();
         connection_request.addresses = vec![address_info];
-        connection_request.use_tls = use_tls;
+        connection_request.tls_mode = if use_tls {
+            connection_request::TlsMode::InsecureTls
+        } else {
+            connection_request::TlsMode::NoTls
+        }
+        .into();
         write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();

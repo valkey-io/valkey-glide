@@ -4,7 +4,6 @@ package connection_request;
 message AddressInfo {
     string host = 1;
     uint32 port = 2;
-    bool insecure = 3;
 }
 
 enum ReadFromReplicaStrategy {
@@ -14,8 +13,16 @@ enum ReadFromReplicaStrategy {
     AZAffinity = 3;
 }
 
+enum TlsMode {
+    NoTls = 0;
+    SecureTls = 1;
+    InsecureTls = 2;
+}
+
+
 message ConnectionRequest {
     repeated AddressInfo addresses = 1;
+    TlsMode tls_mode = 2;
     bool use_tls = 2;
     uint32 response_timeout = 3;
     uint32 connection_timeout = 4;

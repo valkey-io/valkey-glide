@@ -4,7 +4,7 @@ mod utilities;
 mod client {
     use super::*;
     use babushka::client::ClientCMD;
-    use babushka::connection_request::{ConnectionRequest, ConnectionRetryStrategy};
+    use babushka::connection_request::{self, ConnectionRequest, ConnectionRetryStrategy};
     use protobuf::MessageField;
     use redis::aio::ConnectionLike;
     use redis::{RedisResult, Value};
@@ -27,7 +27,12 @@ mod client {
         let address_info = get_address_info(server.get_client_addr());
         let mut connection_request = ConnectionRequest::new();
         connection_request.addresses = vec![address_info];
-        connection_request.use_tls = use_tls;
+        connection_request.tls_mode = if use_tls {
+            connection_request::TlsMode::InsecureTls
+        } else {
+            connection_request::TlsMode::NoTls
+        }
+        .into();
         connection_request.connection_retry_strategy =
             MessageField::from_option(connection_retry_strategy);
         let client = ClientCMD::create_client(connection_request).await.unwrap();
