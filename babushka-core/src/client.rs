@@ -3,6 +3,7 @@ use crate::retry_strategies::RetryStrategy;
 use futures::FutureExt;
 use futures_intrusive::sync::ManualResetEvent;
 use logger_core::log_trace;
+use redis::cluster_async::ClusterConnection;
 use redis::RedisError;
 use redis::{
     aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
@@ -18,6 +19,8 @@ pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 impl BabushkaClient for MultiplexedConnection {}
 impl BabushkaClient for ConnectionManager {}
 impl BabushkaClient for ClientCMD {}
+impl BabushkaClient for ClusterConnection {}
+impl BabushkaClient for Client {}
 
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
@@ -235,6 +238,69 @@ impl ConnectionLike for ClientCMD {
         match &*guard {
             ConnectionState::Connected(connection, _) => connection.get_db(),
             _ => -1,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Client {
+    CMD(ClientCMD),
+    CME(ClusterConnection),
+}
+
+impl ConnectionLike for Client {
+    fn req_packed_command<'a>(
+        &'a mut self,
+        cmd: &'a redis::Cmd,
+    ) -> redis::RedisFuture<'a, redis::Value> {
+        match self {
+            Client::CMD(client) => client.req_packed_command(cmd),
+            Client::CME(client) => client.req_packed_command(cmd),
+        }
+    }
+
+    fn req_packed_commands<'a>(
+        &'a mut self,
+        cmd: &'a redis::Pipeline,
+        offset: usize,
+        count: usize,
+    ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
+        match self {
+            Client::CMD(client) => client.req_packed_commands(cmd, offset, count),
+            Client::CME(client) => client.req_packed_commands(cmd, offset, count),
+        }
+    }
+
+    fn get_db(&self) -> i64 {
+        match self {
+            Client::CMD(client) => client.get_db(),
+            Client::CME(client) => client.get_db(),
+        }
+    }
+}
+
+impl Client {
+    pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
+        if request.cluster_mode_enabled {
+            let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
+            let initial_nodes = request
+                .addresses
+                .into_iter()
+                .map(|address| get_connection_info(&address, tls_mode))
+                .collect();
+            let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes);
+            if tls_mode != TlsMode::NoTls {
+                let tls = if tls_mode == TlsMode::SecureTls {
+                    redis::cluster::TlsMode::Secure
+                } else {
+                    redis::cluster::TlsMode::Insecure
+                };
+                builder = builder.tls(tls);
+            }
+            let client = builder.build()?;
+            Ok(Self::CME(client.get_async_connection().await?))
+        } else {
+            Ok(Self::CMD(ClientCMD::create_client(request).await?))
         }
     }
 }
