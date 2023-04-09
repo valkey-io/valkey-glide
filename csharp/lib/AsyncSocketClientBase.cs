@@ -17,6 +17,10 @@ namespace babushka
         Task SetAsync(string key, string value);
     }
 
+    /// <summary>
+    /// Basic Async client that implements all the common functionality
+    /// It is abstract class that enables different implementations for better performance
+    /// </summary>
     public abstract class AsyncSocketClientBase : IDisposable, IAsyncSocketClient
     {
         #region Public Methods

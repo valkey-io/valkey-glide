@@ -44,6 +44,9 @@ x64/
 *.svclog
 *.scc
 
+# protobuf generated files
+*.pb.cs
+
 # Visual C++ cache files
 ipch/
 *.aps

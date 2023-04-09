@@ -17,5 +17,6 @@
     "python.testing.pytestEnabled": true,
     "[yaml]": {
         "editor.tabSize": 4
-    }
+    },
+    "dotnet-test-explorer.testProjectPath": "csharp/tests"
 }

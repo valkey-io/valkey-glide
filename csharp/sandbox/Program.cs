@@ -34,9 +34,19 @@ public static class MainClass
 
     public static async Task Main(string[] args)
     {
-        using (var client = await AsyncSocketClient.CreateSocketClient("localhost", 6379, false))
+        Logger.SetConfig(Level.Trace, "sanbox.log");
+        using (var client = await AsyncSocketClient.CreateSocketClient("localhost", 6379, false)!)
         {
-            await GetAndSetRandomValues(client);
-        }
+            var array = new double[] { 1, 2, 4, 8, 16 };
+            var tasks = array.Select(async (n) => await Task.Run(async ()=> 
+            {
+                for(int i = 0; i < 20000; i++) 
+                {
+                    await GetAndSetRandomValues(client); 
+                }
+            }));
+
+            await Task.WhenAll(tasks);
+        }                  
     }
 }

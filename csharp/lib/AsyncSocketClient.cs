@@ -10,6 +10,9 @@ using Google.Protobuf;
 
 namespace babushka
 {
+    /// <summary>
+    /// Simple async client based on protobuf protocol using NetworkStream
+    /// </summary>
     public class AsyncSocketClient : AsyncSocketClientBase
     {
         #region public methods
