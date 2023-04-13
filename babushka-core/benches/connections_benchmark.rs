@@ -1,4 +1,7 @@
-use babushka::client::BabushkaClient;
+use babushka::{
+    client::{BabushkaClient, ClientCMD},
+    connection_request::{AddressInfo, ConnectionRequest},
+};
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
 use redis::{
@@ -89,6 +92,44 @@ fn connection_manager_benchmark(c: &mut Criterion, address: ConnectionAddr, grou
     );
 }
 
+fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
+    let mut request = ConnectionRequest::new();
+    match address {
+        ConnectionAddr::Tcp(host, port) => {
+            request.use_tls = false;
+            let mut address_info = AddressInfo::new();
+            address_info.host = host;
+            address_info.port = port as u32;
+            address_info.insecure = false;
+            request.addresses.push(address_info);
+        }
+        ConnectionAddr::TcpTls {
+            host,
+            port,
+            insecure,
+        } => {
+            request.use_tls = true;
+            let mut address_info = AddressInfo::new();
+            address_info.host = host;
+            address_info.port = port as u32;
+            address_info.insecure = insecure;
+            request.addresses.push(address_info);
+        }
+        _ => unreachable!(),
+    };
+    request
+}
+
+fn client_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
+    benchmark(c, address, "client", group, |address, runtime| {
+        runtime.block_on(async {
+            ClientCMD::create_client(create_connection_request(address))
+                .await
+                .unwrap()
+        })
+    });
+}
+
 fn local_benchmark<F: FnOnce(&mut Criterion, ConnectionAddr, &str)>(c: &mut Criterion, f: F) {
     f(
         c,
@@ -123,10 +164,16 @@ fn connection_manager_benchmarks(c: &mut Criterion) {
     local_benchmark(c, connection_manager_benchmark)
 }
 
+fn client_benchmarks(c: &mut Criterion) {
+    remote_benchmark(c, client_benchmark);
+    local_benchmark(c, client_benchmark)
+}
+
 criterion_group!(
     benches,
     connection_manager_benchmarks,
     multiplexer_benchmarks,
+    client_benchmarks
 );
 
 criterion_main!(benches);

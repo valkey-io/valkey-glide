@@ -1,5 +1,4 @@
 use babushka::*;
-use rand::Rng;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -14,11 +13,10 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use babushka::connection_request::{AddressInfo, ConnectionRequest};
+    use babushka::connection_request::ConnectionRequest;
     use babushka::redis_request::redis_request::{Args, ArgsArray};
     use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
-    use rand::distributions::Alphanumeric;
     use redis::{ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
@@ -189,27 +187,6 @@ mod socket_listener {
         u32::decode_var(buffer).unwrap()
     }
 
-    fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
-        let mut address_info = AddressInfo::new();
-        match address {
-            ConnectionAddr::Tcp(host, port) => {
-                address_info.host = host.clone();
-                address_info.port = *port as u32;
-            }
-            ConnectionAddr::TcpTls {
-                host,
-                port,
-                insecure,
-            } => {
-                address_info.host = host.clone();
-                address_info.port = *port as u32;
-                address_info.insecure = *insecure;
-            }
-            ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
-        }
-        address_info
-    }
-
     fn send_address(address: &ConnectionAddr, socket: &UnixStream, use_tls: bool) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
@@ -274,13 +251,6 @@ mod socket_listener {
 
     fn setup_test_basics(use_tls: bool) -> TestBasics {
         setup_test_basics_with_socket_path(use_tls, None)
-    }
-    fn generate_random_string(length: usize) -> String {
-        rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(length)
-            .map(char::from)
-            .collect()
     }
 
     #[rstest]
@@ -640,5 +610,47 @@ mod socket_listener {
         buffer.resize(100, 0);
         let _size = test_basics.socket.read(&mut buffer).unwrap();
         assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_reconnect_after_temporary_disconnect() {
+        let test_basics = setup_test_basics(false);
+        let mut socket = test_basics.socket.try_clone().unwrap();
+        let address = test_basics.server.get_client_addr().clone();
+        drop(test_basics);
+
+        let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = "hello";
+        let mut buffer = Vec::with_capacity(100);
+        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        socket.write_all(&buffer).unwrap();
+
+        let _size = socket.read(&mut buffer).unwrap();
+        assert_null_response(&buffer, CALLBACK_INDEX);
+    }
+
+    #[rstest]
+    #[timeout(Duration::from_millis(10000))]
+    fn test_complete_request_after_reconnect() {
+        block_on_all(async move {
+            let test_basics = setup_test_basics(false);
+            let mut socket = test_basics.socket.try_clone().unwrap();
+            let address = test_basics.server.get_client_addr().clone();
+            drop(test_basics);
+
+            const CALLBACK_INDEX: u32 = 0;
+            let key = "hello";
+            let mut buffer = Vec::with_capacity(100);
+            write_get(&mut buffer, CALLBACK_INDEX, key, false);
+            socket.write_all(&buffer).unwrap();
+
+            let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
+
+            let _size = socket.read(&mut buffer).unwrap();
+            assert_null_response(&buffer, CALLBACK_INDEX);
+        });
     }
 }
