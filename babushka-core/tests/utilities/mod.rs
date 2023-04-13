@@ -4,7 +4,10 @@ use std::{
     time::Duration,
 };
 
-use redis::Value;
+use babushka::connection_request::AddressInfo;
+use futures::Future;
+use rand::{distributions::Alphanumeric, Rng};
+use redis::{ConnectionAddr, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
 use tempfile::TempDir;
 
@@ -59,13 +62,22 @@ impl RedisServer {
                 redis::ConnectionAddr::Unix(PathBuf::from(&path))
             }
         };
-        RedisServer::new_with_addr(addr, None, modules, |cmd| {
+        RedisServer::new_with_addr_and_modules(addr, modules)
+    }
+
+    pub fn new_with_addr_and_modules(
+        addr: redis::ConnectionAddr,
+        modules: &[Module],
+    ) -> RedisServer {
+        RedisServer::new_with_addr_tls_modules_and_spawner(addr, None, modules, |cmd| {
             cmd.spawn()
                 .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
         })
     }
 
-    pub fn new_with_addr<F: FnOnce(&mut process::Command) -> process::Child>(
+    pub fn new_with_addr_tls_modules_and_spawner<
+        F: FnOnce(&mut process::Command) -> process::Child,
+    >(
         addr: redis::ConnectionAddr,
         tls_paths: Option<TlsFilePaths>,
         modules: &[Module],
@@ -355,4 +367,76 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         redis_key,
         ca_crt,
     }
+}
+
+pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
+    let millisecond = Duration::from_millis(1);
+    let mut retries = 0;
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: server_address.clone(),
+        redis: redis::RedisConnectionInfo::default(),
+    })
+    .unwrap();
+    loop {
+        match client.get_multiplexed_async_connection().await {
+            Err(err) => {
+                if err.is_connection_refusal() {
+                    tokio::time::sleep(millisecond).await;
+                    retries += 1;
+                    if retries > 100000 {
+                        panic!("Tried to connect too many times, last error: {err}");
+                    }
+                } else {
+                    panic!("Could not connect: {err}");
+                }
+            }
+            Ok(mut con) => {
+                let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(&mut con).await;
+                break;
+            }
+        }
+    }
+}
+
+pub fn current_thread_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+}
+
+pub fn block_on_all<F>(f: F) -> F::Output
+where
+    F: Future,
+{
+    current_thread_runtime().block_on(f)
+}
+
+pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
+    let mut address_info = AddressInfo::new();
+    match address {
+        ConnectionAddr::Tcp(host, port) => {
+            address_info.host = host.clone();
+            address_info.port = *port as u32;
+        }
+        ConnectionAddr::TcpTls {
+            host,
+            port,
+            insecure,
+        } => {
+            address_info.host = host.clone();
+            address_info.port = *port as u32;
+            address_info.insecure = *insecure;
+        }
+        ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
+    }
+    address_info
+}
+
+pub fn generate_random_string(length: usize) -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(length)
+        .map(char::from)
+        .collect()
 }
