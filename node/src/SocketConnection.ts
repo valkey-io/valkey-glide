@@ -294,11 +294,19 @@ export class SocketConnection {
         return this.createWritePromise(RequestType.SetString, args);
     }
 
-    /// Executes a single command, without checking inputs.
+    /** Executes a single command, without checking inputs. commandName should be the full command, including multi-word commands,
+     * and arguments should be passed as argument name, space, then value.
+     *
+     * @example
+     * Returns a list of all pub/sub clients:
+     * ```ts
+     * connection.customCommand("CLIENT", ["LIST","TYPE", "PUBSUB"])
+     * ```
+     */
     public customCommand(
         commandName: string,
         args: string[]
-    ): Promise<"OK" | string | string[]> {
+    ): Promise<"OK" | string | string[] | number | null> {
         return this.createWritePromise(RequestType.CustomCommand, [
             commandName,
             ...args,
