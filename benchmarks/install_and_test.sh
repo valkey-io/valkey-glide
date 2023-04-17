@@ -51,7 +51,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm install
   rm -rf build-ts
-  npm run build
+  npm run build:release
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
