@@ -422,4 +422,34 @@ describe("socket client", () => {
             client.dispose();
         });
     });
+
+    it("can handle custom commands", async () => {
+        const port = await FreePort(3000).then(
+            ([free_port]: number[]) => free_port
+        );
+        await OpenServerAndExecute(port, async () => {
+            const client = await SocketConnection.CreateConnection(
+                getOptions(port)
+            );
+
+            const raw_id = await client.customCommand("CLIENT", ["ID"]);
+            if (typeof raw_id !== "number") {
+                throw new Error("Unexpected value: " + typeof raw_id);
+            }
+            const id = raw_id.toString();
+            const clients = await client.customCommand("CLIENT", [
+                "LIST",
+                "ID",
+                id,
+            ]);
+
+            if (typeof clients === "string") {
+                expect(clients.split(" ")[0].split("=")[1]).toEqual(id);
+            } else {
+                throw new Error("Unexpected value: " + typeof clients);
+            }
+
+            client.dispose();
+        });
+    });
 });
