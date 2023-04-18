@@ -294,8 +294,8 @@ export class SocketConnection {
         return this.createWritePromise(RequestType.SetString, args);
     }
 
-    /** Executes a single command, without checking inputs. commandName should be the full command, including multi-word commands,
-     * and arguments should be passed as argument name, space, then value.
+    /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
+     *  should be added as a separate value in args.
      *
      * @example
      * Returns a list of all pub/sub clients:
