@@ -17,5 +17,8 @@
     "python.testing.pytestEnabled": true,
     "[yaml]": {
         "editor.tabSize": 4
+    },
+    "rust-analyzer.runnableEnv": {
+        "REDISRS_SERVER_TYPE": "tcp"
     }
 }
