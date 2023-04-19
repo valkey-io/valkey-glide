@@ -61,8 +61,8 @@ function runNodeBenchmark(){
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
-  dotnet build
-  dotnet run --property:Configuration=Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
+  dotnet build --configuration Release
+  dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
 }
 
 function flushDB() {
