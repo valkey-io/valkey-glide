@@ -11,7 +11,7 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_error, log_info, log_trace};
 use protobuf::Message;
-use redis::{cmd, RedisResult, Value};
+use redis::{cmd, Cmd, RedisResult, Value};
 use redis::{ErrorKind, RedisError};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
@@ -223,19 +223,20 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-fn get_command_name(request: &RedisRequest) -> Option<&str> {
+fn get_command(request: &RedisRequest) -> Option<Cmd> {
     let request_enum = request
         .request_type
         .enum_value_or(RequestType::InvalidRequest);
     match request_enum {
-        RequestType::GetString => Some("GET"),
-        RequestType::SetString => Some("SET"),
+        RequestType::CustomCommand => Some(Cmd::new()),
+        RequestType::GetString => Some(cmd("GET")),
+        RequestType::SetString => Some(cmd("SET")),
         _ => None,
     }
 }
 
 async fn send_redis_command(
-    command_name: &str,
+    mut cmd: Cmd,
     request: &RedisRequest,
     mut connection: impl BabushkaClient + 'static,
     writer: Rc<Writer>,
@@ -253,7 +254,6 @@ async fn send_redis_command(
         ))),
     };
     let args = args?;
-    let mut cmd = cmd(command_name);
     for arg in args.iter() {
         cmd.arg(arg);
     }
@@ -268,7 +268,7 @@ fn handle_request(
     writer: Rc<Writer>,
 ) {
     task::spawn_local(async move {
-        let Some(command_name) = get_command_name(&request) else {
+        let Some(command) = get_command(&request) else {
                 let err_message =
                     format!("Received invalid request type: {:?}", request.request_type);
                 let _res = write_closing_error(
@@ -280,7 +280,7 @@ fn handle_request(
                 return;
         };
 
-        let result = send_redis_command(command_name, &request, connection, writer.clone()).await;
+        let result = send_redis_command(command, &request, connection, writer.clone()).await;
         if let Err(err) = result {
             let _res = write_result(Err(err), request.callback_idx, &writer).await;
         }
