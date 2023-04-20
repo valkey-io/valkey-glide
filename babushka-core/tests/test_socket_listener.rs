@@ -21,7 +21,7 @@ mod socket_listener {
     use redis::{ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
-    use std::{mem::size_of, time::Duration};
+    use std::mem::size_of;
     use tokio::{net::UnixListener, runtime::Builder};
 
     /// An enum representing the values of the request type field for testing purposes
@@ -297,7 +297,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
         let socket_path =
             get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
@@ -325,7 +325,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
         let socket_path = get_socket_path_from_name(
             "test_multiple_listeners_competing_for_the_socket".to_string(),
@@ -356,18 +356,7 @@ mod socket_listener {
         close_socket(&socket_path);
     }
 
-    #[rstest]
-    #[timeout(Duration::from_millis(10000))]
-    fn test_socket_set_and_get(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-    ) {
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls);
-
+    fn test_set_and_get(socket: &mut UnixStream, args_pointer: bool) {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -383,15 +372,15 @@ mod socket_listener {
             value.clone(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        socket.write_all(&buffer).unwrap();
+        read_from_socket(&mut buffer, socket);
         assert_response(
             &buffer,
             0,
@@ -403,9 +392,19 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
-    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
-        let mut test_basics = setup_test_basics(false);
+    fn test_socket_set_and_get(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
+        let mut test_basics = setup_test_basics(use_tls);
+        test_set_and_get(&mut test_basics.socket, args_pointer);
+    }
 
+    fn handle_custom_command(socket: &mut UnixStream, args_pointer: bool) {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -421,9 +420,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
@@ -434,9 +433,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        let _size = socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_response(
             &buffer,
             0,
@@ -444,6 +443,13 @@ mod socket_listener {
             Some(Value::Data(value.into_bytes())),
             ResponseType::Value,
         );
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
+        let mut test_basics = setup_test_basics(false);
+        handle_custom_command(&mut test_basics.socket, args_pointer);
     }
 
     #[rstest]
@@ -457,40 +463,7 @@ mod socket_listener {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_cluster_test_basics(use_tls);
-
-        const CALLBACK1_INDEX: u32 = 100;
-        const CALLBACK2_INDEX: u32 = 101;
-        const VALUE_LENGTH: usize = 10;
-        let key = "hello";
-        let value = generate_random_string(VALUE_LENGTH);
-        // Send a set request
-        let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
-        let mut buffer = Vec::with_capacity(approx_message_length);
-        write_set(
-            &mut buffer,
-            CALLBACK1_INDEX,
-            key,
-            value.clone(),
-            args_pointer,
-        );
-        test_basics.socket.write_all(&buffer).unwrap();
-
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_ok_response(&buffer, CALLBACK1_INDEX);
-
-        buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
-        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        buffer.resize(approx_message_length, 0);
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_response(
-            &buffer,
-            0,
-            CALLBACK2_INDEX,
-            Some(Value::Data(value.into_bytes())),
-            ResponseType::Value,
-        );
+        test_set_and_get(&mut test_basics.socket, args_pointer);
     }
 
     #[rstest]
@@ -505,45 +478,7 @@ mod socket_listener {
         let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_cluster_test_basics(use_tls);
 
-        const CALLBACK1_INDEX: u32 = 100;
-        const CALLBACK2_INDEX: u32 = 101;
-        const VALUE_LENGTH: usize = 10;
-        let key = "hello";
-        let value = generate_random_string(VALUE_LENGTH);
-        // Send a set request
-        let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
-        let mut buffer = Vec::with_capacity(approx_message_length);
-        write_request(
-            &mut buffer,
-            CALLBACK1_INDEX,
-            vec!["SET".to_string(), key.to_string(), value.clone()],
-            RequestType::CustomCommand.into(),
-            args_pointer,
-        );
-        test_basics.socket.write_all(&buffer).unwrap();
-
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_ok_response(&buffer, CALLBACK1_INDEX);
-
-        buffer.clear();
-        write_request(
-            &mut buffer,
-            CALLBACK2_INDEX,
-            vec!["GET".to_string(), key.to_string()],
-            RequestType::CustomCommand.into(),
-            args_pointer,
-        );
-        test_basics.socket.write_all(&buffer).unwrap();
-        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        buffer.resize(approx_message_length, 0);
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
-        assert_response(
-            &buffer,
-            0,
-            CALLBACK2_INDEX,
-            Some(Value::Data(value.into_bytes())),
-            ResponseType::Value,
-        );
+        handle_custom_command(&mut test_basics.socket, args_pointer);
     }
 
     #[rstest]
