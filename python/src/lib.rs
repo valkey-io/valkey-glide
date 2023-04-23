@@ -1,8 +1,9 @@
 use babushka::headers_legacy::{RequestType, ResponseType, HEADER_END};
-use babushka::start_legacy_socket_listener;
+use babushka::start_socket_listener;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{PyList, PyString};
 use redis::aio::MultiplexedConnection;
+use redis::Value;
 use redis::{AsyncCommands, RedisResult};
 
 #[pyclass]
@@ -160,7 +161,7 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
 
     #[pyfn(m)]
     fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
-        start_legacy_socket_listener(move |socket_path| {
+        start_socket_listener(move |socket_path| {
             Python::with_gil(|py| {
                 match socket_path {
                     Ok(path) => {
@@ -175,6 +176,40 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
         Ok(Python::with_gil(|py| "OK".into_py(py)))
     }
 
+    fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
+        match val {
+            Value::Nil => Ok(py.None()),
+            Value::Status(str) => Ok(str.into_py(py)),
+            Value::Okay => Ok("OK".into_py(py)),
+            Value::Int(num) => Ok(num.into_py(py)),
+            Value::Data(data) => {
+                let str = std::str::from_utf8(data.as_ref())?;
+                Ok(str.into_py(py))
+            }
+            Value::Bulk(bulk) => {
+                let elements: &PyList = PyList::new(
+                    py,
+                    bulk.into_iter()
+                        .map(|item| redis_value_to_py(py, item).unwrap()),
+                );
+                Ok(elements.into_py(py))
+            }
+        }
+    }
+
+    #[pyfn(m)]
+    pub fn value_from_pointer(py: Python, pointer: u64) -> PyResult<PyObject> {
+        let value = unsafe { Box::from_raw(pointer as *mut Value) };
+        redis_value_to_py(py, *value)
+    }
+
+    #[pyfn(m)]
+    /// This function is for tests that require a value allocated on the heap.
+    /// Should NOT be used in production.
+    pub fn create_leaked_value(message: String) -> usize {
+        let value = Value::Status(message);
+        Box::leak(Box::new(value)) as *mut Value as usize
+    }
     Ok(())
 }
 
