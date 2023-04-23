@@ -1,6 +1,10 @@
 {
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": true
+    },
+    "editor.formatOnSave": true,
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
     "python.formatting.provider": "black",
@@ -12,13 +16,29 @@
         "csharp/lib/Cargo.toml",
         "submodules/redis-rs/Cargo.toml"
     ],
-    "python.testing.pytestArgs": ["python"],
+    "rust-analyzer.runnableEnv": {
+        "REDISRS_SERVER_TYPE": "tcp"
+    },
+    "python.testing.pytestArgs": [
+        "python"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[yaml]": {
         "editor.tabSize": 4
     },
-    "rust-analyzer.runnableEnv": {
-        "REDISRS_SERVER_TYPE": "tcp"
-    }
+    "python.linting.flake8Enabled": false,
+    "python.linting.enabled": true,
+    "python.linting.flake8Args": [
+        "--extend-ignore=E203",
+        "--max-line-length=127"
+    ],
+    "python.formatting.blackArgs": [
+        "--target-version",
+        "py36"
+    ],
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
 }

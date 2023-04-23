@@ -2,6 +2,16 @@
 requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
 
+[tool.isort]
+profile = "black"
+
+[tool.flake8]
+max-complexity = 12
+max-line-length = 127
+extend-ignore = ['E203']
+
+[tool.black]
+target-version = ['py36']
 
 [project.option-dependencies]
 test = [
