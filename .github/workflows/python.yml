@@ -73,7 +73,12 @@ jobs:
             - name: Start redis server
               working-directory: ./python
               run: redis-server &
-
+            
+            - name: Generate protobuf files
+              working-directory: .
+              run: |
+                protoc -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
+                
             - name: Test with pytest
               working-directory: ./python
               run: |

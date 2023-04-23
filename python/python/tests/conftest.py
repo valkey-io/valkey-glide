@@ -1,7 +1,7 @@
 import pytest
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.async_socket_client import RedisAsyncSocketClient
-from pybushka.config import ClientConfiguration
+from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
 
@@ -32,7 +32,7 @@ async def async_ffi_client(request):
     "Get async FFI client for tests"
     host = request.config.getoption("--host")
     port = request.config.getoption("--port")
-    config = ClientConfiguration(host=host, port=port)
+    config = ClientConfiguration([AddressInfo(host=host, port=port)])
     return await RedisAsyncFFIClient.create(config)
 
 
@@ -41,5 +41,5 @@ async def async_socket_client(request):
     "Get async socket client for tests"
     host = request.config.getoption("--host")
     port = request.config.getoption("--port")
-    config = ClientConfiguration(host=host, port=port)
+    config = ClientConfiguration([AddressInfo(host=host, port=port)])
     return await RedisAsyncSocketClient.create(config)

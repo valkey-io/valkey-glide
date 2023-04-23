@@ -1,40 +1,55 @@
 import asyncio
-from typing import Awaitable, Optional, Type
+import threading
+from typing import Awaitable, List, Optional, Type, Union
 
 import async_timeout
-from pybushka.commands.core import CoreCommands
+from google.protobuf.internal.decoder import _DecodeVarint32
+from google.protobuf.internal.encoder import _VarintBytes
 from pybushka.config import ClientConfiguration
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
-from pybushka.utils import to_url
+from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
+from pybushka.protobuf.redis_request_pb2 import RedisRequest, RequestType
+from pybushka.protobuf.response_pb2 import Response
+from typing_extensions import Self
 
-from .pybushka import (
-    HEADER_LENGTH_IN_BYTES,
-    PyRequestType,
-    PyResponseType,
-    start_socket_listener_external,
-)
+from .pybushka import start_socket_listener_external, value_from_pointer
+
+OK = "OK"
+TREQUEST = Union[Type["RedisRequest"], Type["ConnectionRequest"]]
+TRESULT = Union[OK, str, None]
+DEFAULT_READ_BYTES_SIZE = pow(2, 16)
 
 
-class RedisAsyncSocketClient(CoreCommands):
+def _protobuf_encode_delimited(b_arr, request: TREQUEST) -> None:
+    bytes_request = request.SerializeToString()
+    varint = _VarintBytes(len(bytes_request))
+    b_arr.extend(varint)
+    b_arr.extend(bytes_request)
+
+
+class RedisAsyncSocketClient:
     @classmethod
-    async def create(cls, config: ClientConfiguration = None):
-        config = config or ClientConfiguration.get_default_config()
+    async def create(cls, config: ClientConfiguration = None) -> Self:
+        config = config or ClientConfiguration()
         self = RedisAsyncSocketClient()
         self.config: Type[ClientConfiguration] = config
-        self.socket_connect_timeout = config.config_args.get("connection_timeout")
-        self.write_buffer: bytearray = bytearray(1024)
-        self._availableFutures: dict[int, Awaitable[Optional[str]]] = {}
-        self._availableCallbackIndexes: set[int] = set()
-        self._lock = asyncio.Lock()
+        self._write_buffer: bytearray = bytearray(1024)
+        self._available_futures: dict[int, Awaitable[TRESULT]] = {}
+        self._available_callbackIndexes: set[int] = set()
+        self._buffered_requests: List[Type["RedisRequest"]] = list()
+        self._writer_lock = threading.Lock()
         init_future = asyncio.Future()
         loop = asyncio.get_event_loop()
 
         def init_callback(socket_path: Optional[str], err: Optional[str]):
             if err is not None:
-                raise (f"Failed to initialize the socket connection: {str(err)}")
+                raise Exception(
+                    f"Failed to initialize the socket \
+                    connection: {str(err)}"
+                )
             elif socket_path is None:
-                raise ("Received None as the socket_path")
+                raise Exception("Received None as the socket_path")
             else:
                 # Received socket path
                 self.socket_path = socket_path
@@ -42,29 +57,27 @@ class RedisAsyncSocketClient(CoreCommands):
 
         start_socket_listener_external(init_callback=init_callback)
 
-        # will log if the logger was created (wrapper or costumer) on info level or higher
+        # will log if the logger was created (wrapper or costumer) on info
+        # level or higher
         Logger.log(LogLevel.INFO, "connection info", "new connection established")
-
         # Wait for the socket listener to complete its initialization
         await init_future
         # Create UDS connection
         await self._create_uds_connection()
         # Start the reader loop as a background task
         self._reader_task = asyncio.create_task(self._reader_loop())
-        server_url = to_url(**self.config.config_args)
-        # Set the server address
-        await self.execute_command(int(PyRequestType.ServerAddress), server_url)
-
+        # Set the client configurations
+        await self._set_connection_configurations()
         return self
 
-    async def _wait_for_init_complete(self):
+    async def _wait_for_init_complete(self) -> None:
         while not self._done_init:
             await asyncio.sleep(0.1)
 
-    async def _create_uds_connection(self):
+    async def _create_uds_connection(self) -> None:
         try:
             # Open an UDS connection
-            async with async_timeout.timeout(self.socket_connect_timeout):
+            async with async_timeout.timeout(self.config.connection_timeout):
                 reader, writer = await asyncio.open_unix_connection(
                     path=self.socket_path
                 )
@@ -74,138 +87,121 @@ class RedisAsyncSocketClient(CoreCommands):
             self.close(f"Failed to create UDS connection: {e}")
             raise
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             if self._reader_task:
                 self._reader_task.cancel()
-            pass
         except RuntimeError as e:
             if "no running event loop" in str(e):
                 # event loop already closed
                 pass
 
-    def close(self, err=""):
-        for response_future in self._availableFutures.values():
+    def close(self, err: str = "") -> None:
+        for response_future in self._available_futures.values():
             response_future.set_exception(err)
         self.__del__()
 
-    def _get_header_length(self, num_of_args: int) -> int:
-        return HEADER_LENGTH_IN_BYTES + 4 * (num_of_args - 1)
+    def _get_future(self, callback_idx: int) -> Type[asyncio.Future]:
+        response_future = asyncio.Future()
+        self._available_futures.update({callback_idx: response_future})
+        return response_future
 
-    async def execute_command(self, command, *args, **kwargs):
-        response_future = await self._write_to_socket(command, *args, **kwargs)
+    async def _set_connection_configurations(self) -> None:
+        conn_request = self.config.convert_to_protobuf_request()
+        response_future = self._get_future(0)
+        await self._write_or_buffer_request(conn_request)
+        await response_future
+        if response_future.result() is not None:
+            raise Exception(f"Failed to set configurations={response_future.result()}")
+
+    async def _write_or_buffer_request(self, request: TREQUEST):
+        self._buffered_requests.append(request)
+        if self._writer_lock.acquire(False):
+            try:
+                await self._write_buffered_requests_to_socket()
+            finally:
+                self._writer_lock.release()
+
+    async def _write_buffered_requests_to_socket(self) -> None:
+        requests = self._buffered_requests
+        self._buffered_requests = list()
+        b_arr = bytearray()
+        for request in requests:
+            _protobuf_encode_delimited(b_arr, request)
+        self._writer.write(b_arr)
+        await self._writer.drain()
+        if len(self._buffered_requests) > 0:
+            # might not be threadsafe, we should consider adding a lock
+            await self._write_buffered_requests_to_socket()
+
+    async def execute_command(
+        self, request_type: Type["RequestType"], args: List[str]
+    ) -> TRESULT:
+        request = RedisRequest()
+        request.request_type = request_type
+        request.callback_idx = self._get_callback_index()
+        request.args_array.args[:] = args
+        # Create a response future for this request and add it to the available
+        # futures map
+        response_future = self._get_future(request.callback_idx)
+        await self._write_or_buffer_request(request)
         await response_future
         return response_future.result()
 
-    async def set(self, key, value):
-        return await self.execute_command(int(PyRequestType.SetString), key, value)
+    async def set(self, key: str, value: str) -> TRESULT:
+        return await self.execute_command(RequestType.SetString, [key, value])
 
-    async def get(self, key):
-        return await self.execute_command(int(PyRequestType.GetString), key)
+    async def get(self, key: str) -> TRESULT:
+        return await self.execute_command(RequestType.GetString, [key])
 
-    def _write_int_to_buffer(self, int_arg, bytes_offset, length=4, byteorder="little"):
-        bytes_end = bytes_offset + length
-        self.write_buffer[bytes_offset:bytes_end] = (int_arg).to_bytes(
-            length=length, byteorder=byteorder
-        )
-
-    def _write_header(
-        self, callback_index, message_length, operation_type, args_len_array
-    ):
-        self._write_int_to_buffer(message_length, 0)
-        self._write_int_to_buffer(callback_index, 4)
-        self._write_int_to_buffer(operation_type, 8)
-        # Except for the last argument, which can be calculated from the message length
-        # minus all other arguments + header, write the length of all additional arguments
-        num_of_args = len(args_len_array)
-        if num_of_args > 1:
-            bytes_offset = HEADER_LENGTH_IN_BYTES
-            for i in range(num_of_args - 1):
-                self._write_int_to_buffer(args_len_array[i], bytes_offset)
-                bytes_offset += 4
-
-    def _get_callback_index(self):
-        if not self._availableCallbackIndexes:
+    def _get_callback_index(self) -> int:
+        if not self._available_callbackIndexes:
             # Set is empty
-            return len(self._availableFutures)
-        return self._availableCallbackIndexes.pop()
+            return len(self._available_futures)
+        return self._available_callbackIndexes.pop()
 
-    async def _write_to_socket(self, operation_type, *args, **kwargs):
-        async with self._lock:
-            callback_index = self._get_callback_index()
-            header_len = self._get_header_length(len(args))
-            args_len_array = []
-            bytes_offset = header_len
-            for arg in args:
-                arg_in_bytes = arg.encode("UTF-8")
-                arg_len = len(arg_in_bytes)
-                # Adds the argument length to the array so we can add it to the header later
-                args_len_array.append(arg_len)
-                end_pos = bytes_offset + arg_len
-                # Write the argument to the buffer
-                self.write_buffer[bytes_offset:end_pos] = arg_in_bytes
-                bytes_offset = end_pos
-
-            message_length = header_len + sum(len for len in args_len_array)
-            # Write the header to the buffer
-            self._write_header(
-                callback_index,
-                message_length,
-                operation_type,
-                args_len_array,
-            )
-            # Create a response future for this request and add it to the available futures map
-            response_future = asyncio.Future()
-            self._writer.write(self.write_buffer[0:message_length])
-            await self._writer.drain()
-            self._availableFutures.update({callback_index: response_future})
-            return response_future
-
-    async def _reader_loop(self):
+    async def _reader_loop(self) -> None:
         # Socket reader loop
+        remaining_read_bytes = bytearray()
         while True:
-            try:
-                data = await self._reader.readexactly(HEADER_LENGTH_IN_BYTES)
-                # Parse the received header and wait for the rest of the message
-                await self._handle_read_data(data)
-            except asyncio.IncompleteReadError:
+            read_bytes = await self._reader.read(DEFAULT_READ_BYTES_SIZE)
+            if len(read_bytes) == 0:
                 self.close("The server closed the connection")
-
-    def _parse_header(self, data):
-        msg_length = int.from_bytes(data[0:4], "little")
-        callback_idx = int.from_bytes(data[4:8], "little")
-        request_type = int.from_bytes(data[8:12], "little")
-        return msg_length, callback_idx, request_type
-
-    async def _handle_read_data(self, data):
-        length, callback_idx, type = self._parse_header(data)
-        if type == int(PyResponseType.ClosingError):
-            msg_length = length - HEADER_LENGTH_IN_BYTES
-            # Wait for the rest of the message
-            message = await self._reader.readexactly(msg_length)
-            response = message[:msg_length].decode("UTF-8")
-            self.close(f"The server closed the connection with error: {response}")
-            return
-
-        res_future = self._availableFutures.get(callback_idx)
-        if not res_future:
-            raise Exception(f"found invalid callback index: {callback_idx}")
-        if type == int(PyResponseType.Null):
-            res_future.set_result(None)
-        else:
-            msg_length = length - HEADER_LENGTH_IN_BYTES
-            if msg_length > 0:
-                # Wait for the rest of the message
-                message = await self._reader.readexactly(msg_length)
-                response = message[:msg_length].decode("UTF-8")
-            else:
-                response = ""
-            if type == int(PyResponseType.String):
-                res_future.set_result(response)
-            elif type == int(PyResponseType.RequestError):
-                res_future.set_exception(response)
-            elif type == int(PyResponseType.ClosingError):
-                self.close(f"The server closed the connection with error: {response}")
-            else:
-                self.close(f"Received invalid response type: {type}")
-        self._availableCallbackIndexes.add(callback_idx)
+                raise Exception("read 0 bytes")
+            read_bytes = remaining_read_bytes + bytearray(read_bytes)
+            read_bytes_view = memoryview(read_bytes)
+            offset = 0
+            while offset <= len(read_bytes):
+                try:
+                    msg_len, new_pos = _DecodeVarint32(read_bytes_view, offset)
+                except IndexError:
+                    # Didn't read enough bytes to decode the varint,
+                    # break the inner loop
+                    remaining_read_bytes = read_bytes[offset:]
+                    break
+                required_read_size = new_pos + msg_len
+                if required_read_size > len(read_bytes):
+                    # Recieved only partial response,
+                    # break the inner loop
+                    remaining_read_bytes = read_bytes[offset:]
+                    break
+                offset = new_pos
+                msg_buf = read_bytes_view[offset : offset + msg_len]
+                offset += msg_len
+                response = Response()
+                response.ParseFromString(msg_buf)
+                res_future = self._available_futures.get(response.callback_idx)
+                if not res_future:
+                    self.close("Got wrong callback index: {}", response.callback_idx)
+                else:
+                    if response.HasField("request_error"):
+                        res_future.set_exception(response.request_error)
+                    elif response.HasField("closing_error"):
+                        res_future.set_exception(response.closing_error)
+                        self.close(response.closing_error)
+                    elif response.HasField("resp_pointer"):
+                        res_future.set_result(value_from_pointer(response.resp_pointer))
+                    elif response.HasField("constant_response"):
+                        res_future.set_result(OK)
+                    else:
+                        res_future.set_result(None)
