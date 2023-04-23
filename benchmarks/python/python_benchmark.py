@@ -15,6 +15,7 @@ from pybushka import (
     RedisAsyncSocketClient,
     LogLevel,
     set_logger_config,
+    AddressInfo
 )
 
 
@@ -255,7 +256,7 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka FFI
-        config = ClientConfiguration(host=host, port=PORT, tls_enabled=use_tls)
+        config = ClientConfiguration([AddressInfo(host=host, port=PORT)], use_tls=use_tls)
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncFFIClient.create(config),
@@ -275,7 +276,7 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
-        config = ClientConfiguration(host=host, port=PORT, tls_enabled=use_tls)
+        config = ClientConfiguration([AddressInfo(host=host, port=PORT)], use_tls=use_tls)
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncSocketClient.create(config),

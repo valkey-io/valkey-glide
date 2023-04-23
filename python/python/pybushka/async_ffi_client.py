@@ -8,7 +8,7 @@ from .pybushka import AsyncClient
 class RedisAsyncFFIClient(CoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None):
-        config = config or ClientConfiguration.get_default_config()
+        config = config or ClientConfiguration()
         self = RedisAsyncFFIClient()
         self.config = config
         self.connection = await self._create_multiplexed_conn()
@@ -29,7 +29,9 @@ class RedisAsyncFFIClient(CoreCommands):
         return funcs
 
     async def _create_multiplexed_conn(self):
-        return await AsyncClient.create_client(to_url(**self.config.config_args))
+        return await AsyncClient.create_client(
+            to_url(self.config.addresses[0].host, self.config.addresses[0].port)
+        )
 
     async def execute_command(self, command, *args, **kwargs):
         conn_rust_func = self.rust_functions.get(command)
