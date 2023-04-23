@@ -4,6 +4,7 @@ import string
 from datetime import datetime
 
 import pytest
+from pybushka.async_socket_client import OK
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
 
@@ -18,10 +19,10 @@ def get_random_string(length):
 
 @pytest.mark.asyncio
 class TestSocketClient:
-    async def test_set_get(self, async_socket_client):
+    async def test_socket_set_get(self, async_socket_client):
         key = get_random_string(5)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        assert await async_socket_client.set(key, value) is None
+        assert await async_socket_client.set(key, value) == OK
         assert await async_socket_client.get(key) == value
 
     async def test_large_values(self, async_socket_client):
@@ -42,13 +43,15 @@ class TestSocketClient:
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     async def test_concurrent_tasks(self, async_socket_client, value_size):
-        num_of_concurrent_tasks = 20
+        num_of_concurrent_tasks = 100
         running_tasks = set()
 
         async def exec_command(i):
-            value = get_random_string(value_size)
-            await async_socket_client.set(str(i), value)
-            assert await async_socket_client.get(str(i)) == value
+            range_end = 1 if value_size > 100 else 100
+            for _ in range(range_end):
+                value = get_random_string(value_size)
+                assert await async_socket_client.set(str(i), value) == OK
+                assert await async_socket_client.get(str(i)) == value
 
         for i in range(num_of_concurrent_tasks):
             task = asyncio.create_task(exec_command(i))
@@ -59,7 +62,7 @@ class TestSocketClient:
 
 @pytest.mark.asyncio
 class TestCoreCommands:
-    async def test_set_get(self, async_ffi_client):
+    async def test_ffi_set_get(self, async_ffi_client):
         time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         await async_ffi_client.set("key", time_str)
         result = await async_ffi_client.get("key")

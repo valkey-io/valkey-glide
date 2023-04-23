@@ -1,9 +1,15 @@
 # babushka
 
-## pre-requirements:
+## developer pre-requirements:
 
-Install protobuf compiler, for ubuntu:
-`sudo apt install protobuf-compiler`
+ - GCC
+ - pkg-config
+ - protobuf-compiler (protoc)
+ - openssl
+ - libssl-dev
+
+Installation for ubuntu:
+`sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev`
 
 ### git submodule -
 

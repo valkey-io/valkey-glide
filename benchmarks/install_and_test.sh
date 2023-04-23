@@ -32,6 +32,8 @@ host="localhost"
 tlsFlag="--tls"
 
 function runPythonBenchmark(){
+  # generate protobuf files
+  protoc -Iprotobuf=${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
@@ -82,6 +84,7 @@ script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
 export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
+export BABUSHKA_HOME_FOLDER="${BENCH_FOLDER}/.."
 export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder 
