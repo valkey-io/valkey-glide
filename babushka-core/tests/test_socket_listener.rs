@@ -83,6 +83,11 @@ mod socket_listener {
         assert_response(buffer, 0, expected_callback, None, error_type)
     }
 
+    fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
+        buffer.resize(100, 0_u8);
+        socket.read(buffer).unwrap()
+    }
+
     fn assert_response(
         buffer: &[u8],
         cursor: usize,
@@ -200,7 +205,7 @@ mod socket_listener {
         write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
-        let _size = socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
 
@@ -276,7 +281,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key, false);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
         close_socket(&socket_path);
     }
@@ -303,7 +308,7 @@ mod socket_listener {
                         write_get(&mut buffer, CALLBACK_INDEX, key, false);
                         socket.write_all(&buffer).unwrap();
 
-                        let _size = socket.read(&mut buffer).unwrap();
+                        let _size = read_from_socket(&mut buffer, &mut socket);
                         assert_null_response(&buffer, CALLBACK_INDEX);
                     })
                     .unwrap();
@@ -341,15 +346,13 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
-        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        buffer.resize(approx_message_length, 0);
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
             &buffer,
             0,
@@ -381,7 +384,7 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
@@ -393,9 +396,8 @@ mod socket_listener {
             args_pointer,
         );
         test_basics.socket.write_all(&buffer).unwrap();
-        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
-        buffer.resize(approx_message_length, 0);
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
             &buffer,
             0,
@@ -422,7 +424,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key, args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
 
@@ -445,8 +447,8 @@ mod socket_listener {
             false,
         );
         test_basics.socket.write_all(&buffer).unwrap();
-        let mut buffer = [0; 50];
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         let response = assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
         assert_eq!(
             response.closing_error(),
@@ -486,7 +488,7 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
@@ -653,8 +655,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key, false);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        buffer.resize(100, 0);
-        let _size = test_basics.socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
     }
 
@@ -674,7 +675,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key, false);
         socket.write_all(&buffer).unwrap();
 
-        let _size = socket.read(&mut buffer).unwrap();
+        let _size = read_from_socket(&mut buffer, &mut socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
 
@@ -695,7 +696,7 @@ mod socket_listener {
 
             let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
 
-            let _size = socket.read(&mut buffer).unwrap();
+            let _size = read_from_socket(&mut buffer, &mut socket);
             assert_null_response(&buffer, CALLBACK_INDEX);
         });
     }
