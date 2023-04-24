@@ -72,7 +72,6 @@ mod client {
     fn test_client_handle_concurrent_workload(#[values(false, true)] use_tls: bool) {
         block_on_all(async {
             let test_basics = setup_test_basics(use_tls).await;
-            const VALUE_LENGTH: usize = 1000000;
             const NUMBER_OF_CONCURRENT_OPERATIONS: usize = 1000;
 
             let mut actions = Vec::with_capacity(NUMBER_OF_CONCURRENT_OPERATIONS);
