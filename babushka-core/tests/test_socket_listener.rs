@@ -49,9 +49,18 @@ mod socket_listener {
     }
 
     fn decode_response(buffer: &[u8], cursor: usize, message_length: usize) -> Response {
-        let header_end = cursor;
-        match Response::parse_from_bytes(&buffer[header_end..header_end + message_length]) {
-            Ok(res) => res,
+        let header_end = std::cmp::min(cursor + message_length, buffer.len());
+        match Response::parse_from_bytes(&buffer[cursor..header_end]) {
+            Ok(res) => {
+                if message_length <= buffer.len() {
+                    res
+                } else {
+                    panic!(
+                    "Expected message of length {message_length}, got buffer of length {}, with message {:?}",
+                    buffer.len(), res
+                );
+                }
+            }
             Err(err) => {
                 panic!(
                     "Error decoding protocol message\r\n|── Protobuf error was: {:?}",
