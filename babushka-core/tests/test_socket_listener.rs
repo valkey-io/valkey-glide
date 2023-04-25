@@ -88,7 +88,7 @@ mod socket_listener {
         cursor: usize,
         expected_callback: u32,
         expected_value: Option<Value>,
-        response_type: ResponseType,
+        expected_response_type: ResponseType,
     ) -> Response {
         let (message_length, header_bytes) = parse_header(buffer);
         let response = decode_response(buffer, cursor + header_bytes, message_length as usize);
@@ -98,22 +98,34 @@ mod socket_listener {
                 assert_value(pointer, expected_value);
             }
             Some(response::Value::ClosingError(ref _err)) => {
-                assert_eq!(response_type, ResponseType::ClosingError);
+                assert_eq!(
+                    expected_response_type,
+                    ResponseType::ClosingError,
+                    "Received {response:?}",
+                );
             }
             Some(response::Value::RequestError(ref _err)) => {
-                assert_eq!(response_type, ResponseType::RequestError);
+                assert_eq!(
+                    expected_response_type,
+                    ResponseType::RequestError,
+                    "Received {response:?}",
+                );
             }
             Some(response::Value::ConstantResponse(enum_value)) => {
                 let enum_value = enum_value.unwrap();
                 if enum_value == ConstantResponse::OK {
-                    assert_eq!(expected_value.unwrap(), Value::Okay);
+                    assert_eq!(
+                        expected_value.unwrap(),
+                        Value::Okay,
+                        "Received {response:?}"
+                    );
                 } else {
                     unreachable!()
                 }
             }
             Some(_) => unreachable!(),
             None => {
-                assert!(expected_value.is_none());
+                assert!(expected_value.is_none(), "Expected {expected_value:?}",);
             }
         };
         response
