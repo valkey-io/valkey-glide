@@ -1,14 +1,30 @@
 import asyncio
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Dict
 
 import pytest
-from pybushka.async_socket_client import OK
+from packaging import version
+from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
+from pybushka.async_ffi_client import RedisAsyncFFIClient
+from pybushka.async_socket_client import RedisAsyncSocketClient
+from pybushka.constants import OK
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
 
 set_logger_config(logLevel.INFO)
+
+
+def parse_info_response(res: str) -> Dict[str, str]:
+    info_lines = [
+        line for line in res.splitlines() if line and not line.startswith("#")
+    ]
+    info_dict = {}
+    for line in info_lines:
+        key, value = line.split(":")
+        info_dict[key] = value
+    return info_dict
 
 
 def get_random_string(length):
@@ -17,15 +33,24 @@ def get_random_string(length):
     return result_str
 
 
+async def check_if_server_version_lt(
+    client: RedisAsyncSocketClient, min_version: str
+) -> bool:
+    # TODO: change it to pytest fixture after we'll implement a sync client
+    info_str = await client.custom_command(["INFO", "server"])
+    redis_version = parse_info_response(info_str).get("redis_version")
+    return version.parse(redis_version) < version.parse(min_version)
+
+
 @pytest.mark.asyncio
 class TestSocketClient:
-    async def test_socket_set_get(self, async_socket_client):
+    async def test_socket_set_get(self, async_socket_client: RedisAsyncSocketClient):
         key = get_random_string(5)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         assert await async_socket_client.set(key, value) == OK
         assert await async_socket_client.get(key) == value
 
-    async def test_large_values(self, async_socket_client):
+    async def test_large_values(self, async_socket_client: RedisAsyncSocketClient):
         length = 2**16
         key = get_random_string(length)
         value = get_random_string(length)
@@ -34,7 +59,7 @@ class TestSocketClient:
         await async_socket_client.set(key, value)
         assert await async_socket_client.get(key) == value
 
-    async def test_non_ascii_unicode(self, async_socket_client):
+    async def test_non_ascii_unicode(self, async_socket_client: RedisAsyncSocketClient):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
@@ -42,7 +67,9 @@ class TestSocketClient:
         assert await async_socket_client.get(key) == value
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
-    async def test_concurrent_tasks(self, async_socket_client, value_size):
+    async def test_concurrent_tasks(
+        self, async_socket_client: RedisAsyncSocketClient, value_size
+    ):
         num_of_concurrent_tasks = 100
         running_tasks = set()
 
@@ -59,10 +86,115 @@ class TestSocketClient:
             task.add_done_callback(running_tasks.discard)
         await asyncio.gather(*(list(running_tasks)))
 
+    async def test_conditional_set(self, async_socket_client: RedisAsyncSocketClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        res = await async_socket_client.set(
+            key, value, conditional_set=ConditionalSet.ONLY_IF_EXISTS
+        )
+        assert res is None
+        res = await async_socket_client.set(
+            key, value, conditional_set=ConditionalSet.ONLY_IF_DOES_NOT_EXIST
+        )
+        assert res == OK
+        assert await async_socket_client.get(key) == value
+        res = await async_socket_client.set(
+            key, "foobar", conditional_set=ConditionalSet.ONLY_IF_DOES_NOT_EXIST
+        )
+        assert res is None
+        assert await async_socket_client.get(key) == value
+
+    async def test_set_return_old_value(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(async_socket_client, min_version):
+            # TODO: change it to pytest fixture after we'll implement a sync client
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+        key = get_random_string(10)
+        value = get_random_string(10)
+        res = await async_socket_client.set(key, value)
+        assert res == OK
+        assert await async_socket_client.get(key) == value
+        new_value = get_random_string(10)
+        res = await async_socket_client.set(key, new_value, return_old_value=True)
+        assert res == value
+        assert await async_socket_client.get(key) == new_value
+
+    async def test_custom_command_single_arg(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        # Test single arg command
+        res: str = await async_socket_client.custom_command(["INFO"])
+        info_dict = parse_info_response(res)
+        assert info_dict.get("redis_version") is not None
+        assert (
+            info_dict.get("connected_clients").isdigit()
+            and int(info_dict.get("connected_clients")) >= 1
+        )
+
+    async def test_custom_command_multi_arg(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        # Test multi args command
+        res: str = await async_socket_client.custom_command(
+            ["CLIENT", "LIST", "TYPE", "NORMAL"]
+        )
+        assert res is not None
+        assert "id" in res
+        assert "cmd=client" in res
+
+    async def test_custom_command_lower_and_upper_case(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        # Test multi args command
+        res: str = await async_socket_client.custom_command(
+            ["client", "LIST", "type", "NORMAL"]
+        )
+        assert res is not None
+        assert "id" in res
+        assert "cmd=client" in res
+
+    def test_expiry_cmd_args(self):
+        exp_sec = ExpirySet(ExpiryType.SEC, 5)
+        assert exp_sec.get_cmd_args() == ["EX", "5"]
+
+        exp_sec_timedelta = ExpirySet(ExpiryType.SEC, timedelta(seconds=5))
+        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
+
+        exp_millsec = ExpirySet(ExpiryType.MILLSEC, 5)
+        assert exp_millsec.get_cmd_args() == ["PX", "5"]
+
+        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_unix_sec = ExpirySet(ExpiryType.UNIX_SEC, 1682575739)
+        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
+
+        exp_unix_sec_datetime = ExpirySet(
+            ExpiryType.UNIX_SEC, datetime(2023, 4, 27, 23, 55, 59, 342380)
+        )
+        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
+
+        exp_unix_millisec = ExpirySet(ExpiryType.UNIX_MILLSEC, 1682586559964)
+        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
+
+        exp_unix_millisec_datetime = ExpirySet(
+            ExpiryType.UNIX_MILLSEC, datetime(2023, 4, 27, 23, 55, 59, 342380)
+        )
+        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
+
+    def test_expiry_raises_on_value_error(self):
+        with pytest.raises(ValueError):
+            ExpirySet(ExpiryType.SEC, 5.5)
+
 
 @pytest.mark.asyncio
-class TestCoreCommands:
-    async def test_ffi_set_get(self, async_ffi_client):
+class TestFFICoreCommands:
+    async def test_ffi_set_get(self, async_ffi_client: RedisAsyncFFIClient):
         time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         await async_ffi_client.set("key", time_str)
         result = await async_ffi_client.get("key")
@@ -71,7 +203,7 @@ class TestCoreCommands:
 
 @pytest.mark.asyncio
 class TestPipeline:
-    async def test_set_get_pipeline(self, async_ffi_client):
+    async def test_set_get_pipeline(self, async_ffi_client: RedisAsyncFFIClient):
         pipeline = async_ffi_client.create_pipeline()
         time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         pipeline.set("pipeline_key", time_str)
@@ -79,7 +211,9 @@ class TestPipeline:
         result = await pipeline.execute()
         assert result == ["OK", time_str]
 
-    async def test_set_get_pipeline_chained_requests(self, async_ffi_client):
+    async def test_set_get_pipeline_chained_requests(
+        self, async_ffi_client: RedisAsyncFFIClient
+    ):
         pipeline = async_ffi_client.create_pipeline()
         time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         result = (
@@ -87,7 +221,7 @@ class TestPipeline:
         )
         assert result == ["OK", time_str]
 
-    async def test_set_with_ignored_result(self, async_ffi_client):
+    async def test_set_with_ignored_result(self, async_ffi_client: RedisAsyncFFIClient):
         pipeline = async_ffi_client.create_pipeline()
         time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         result = (
