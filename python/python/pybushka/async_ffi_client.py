@@ -1,18 +1,18 @@
-from pybushka.commands.core import CoreCommands
+from pybushka.async_commands.core import FFICoreCommands
 from pybushka.config import ClientConfiguration
 from pybushka.utils import to_url
 
 from .pybushka import AsyncClient
 
 
-class RedisAsyncFFIClient(CoreCommands):
+class RedisAsyncFFIClient(FFICoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None):
         config = config or ClientConfiguration()
         self = RedisAsyncFFIClient()
         self.config = config
         self.connection = await self._create_multiplexed_conn()
-        self.rust_functions = self._initialize_functions([CoreCommands])
+        self.rust_functions = self._initialize_functions([FFICoreCommands])
         return self
 
     def _initialize_functions(self, classes):

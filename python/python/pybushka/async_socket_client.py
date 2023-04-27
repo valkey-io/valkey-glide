@@ -1,43 +1,46 @@
 import asyncio
 import threading
-from typing import Awaitable, List, Optional, Type, Union
+from typing import Awaitable, List, Optional, Type
 
 import async_timeout
 from google.protobuf.internal.decoder import _DecodeVarint32
 from google.protobuf.internal.encoder import _VarintBytes
+from pybushka.async_commands import CoreCommands
 from pybushka.config import ClientConfiguration
+from pybushka.constants import (
+    DEFAULT_READ_BYTES_SIZE,
+    OK,
+    TRedisRequest,
+    TRequest,
+    TRequestType,
+    TResult,
+)
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
-from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
-from pybushka.protobuf.redis_request_pb2 import RedisRequest, RequestType
+from pybushka.protobuf.redis_request_pb2 import RedisRequest
 from pybushka.protobuf.response_pb2 import Response
 from typing_extensions import Self
 
 from .pybushka import start_socket_listener_external, value_from_pointer
 
-OK = "OK"
-TREQUEST = Union[Type["RedisRequest"], Type["ConnectionRequest"]]
-TRESULT = Union[OK, str, None]
-DEFAULT_READ_BYTES_SIZE = pow(2, 16)
 
-
-def _protobuf_encode_delimited(b_arr, request: TREQUEST) -> None:
+def _protobuf_encode_delimited(b_arr, request: TRequest) -> None:
     bytes_request = request.SerializeToString()
     varint = _VarintBytes(len(bytes_request))
     b_arr.extend(varint)
     b_arr.extend(bytes_request)
 
 
-class RedisAsyncSocketClient:
+class RedisAsyncSocketClient(CoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None) -> Self:
         config = config or ClientConfiguration()
         self = RedisAsyncSocketClient()
         self.config: Type[ClientConfiguration] = config
         self._write_buffer: bytearray = bytearray(1024)
-        self._available_futures: dict[int, Awaitable[TRESULT]] = {}
+        self._available_futures: dict[int, Awaitable[TResult]] = {}
         self._available_callbackIndexes: set[int] = set()
-        self._buffered_requests: List[Type["RedisRequest"]] = list()
+        self._buffered_requests: List[TRedisRequest] = list()
         self._writer_lock = threading.Lock()
         init_future = asyncio.Future()
         loop = asyncio.get_event_loop()
@@ -114,7 +117,7 @@ class RedisAsyncSocketClient:
         if response_future.result() is not None:
             raise Exception(f"Failed to set configurations={response_future.result()}")
 
-    async def _write_or_buffer_request(self, request: TREQUEST):
+    async def _write_or_buffer_request(self, request: TRequest):
         self._buffered_requests.append(request)
         if self._writer_lock.acquire(False):
             try:
@@ -135,8 +138,8 @@ class RedisAsyncSocketClient:
             await self._write_buffered_requests_to_socket()
 
     async def execute_command(
-        self, request_type: Type["RequestType"], args: List[str]
-    ) -> TRESULT:
+        self, request_type: TRequestType, args: List[str]
+    ) -> TResult:
         request = RedisRequest()
         request.request_type = request_type
         request.callback_idx = self._get_callback_index()
@@ -147,12 +150,6 @@ class RedisAsyncSocketClient:
         await self._write_or_buffer_request(request)
         await response_future
         return response_future.result()
-
-    async def set(self, key: str, value: str) -> TRESULT:
-        return await self.execute_command(RequestType.SetString, [key, value])
-
-    async def get(self, key: str) -> TRESULT:
-        return await self.execute_command(RequestType.GetString, [key])
 
     def _get_callback_index(self) -> int:
         if not self._available_callbackIndexes:
