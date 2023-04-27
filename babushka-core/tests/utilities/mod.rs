@@ -1,15 +1,19 @@
 #![allow(dead_code)]
+use babushka::connection_request::AddressInfo;
+use futures::Future;
+use rand::{distributions::Alphanumeric, Rng};
+use redis::{aio::ConnectionLike, ConnectionAddr, RedisResult, Value};
+use socket2::{Domain, Socket, Type};
 use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, thread::sleep,
     time::Duration,
 };
-
-use babushka::connection_request::AddressInfo;
-use futures::Future;
-use rand::{distributions::Alphanumeric, Rng};
-use redis::{ConnectionAddr, RedisResult, Value};
-use socket2::{Domain, Socket, Type};
 use tempfile::TempDir;
+
+pub mod cluster;
+
+pub(crate) const SHORT_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
+pub(crate) const LONG_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
 
 // Code copied from redis-rs
 
@@ -29,6 +33,18 @@ pub enum Module {
     Json,
 }
 
+pub fn get_available_port() -> u16 {
+    // this is technically a race but we can't do better with
+    // the tools that redis gives us :(
+    let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
+    socket.set_reuse_address(true).unwrap();
+    socket.bind(addr).unwrap();
+    socket.listen(1).unwrap();
+    let listener = TcpListener::from(socket);
+    listener.local_addr().unwrap().port()
+}
+
 impl RedisServer {
     pub fn new(server_type: ServerType) -> RedisServer {
         RedisServer::with_modules(server_type, &[])
@@ -37,15 +53,7 @@ impl RedisServer {
     pub fn with_modules(server_type: ServerType, modules: &[Module]) -> RedisServer {
         let addr = match server_type {
             ServerType::Tcp { tls } => {
-                // this is technically a race but we can't do better with
-                // the tools that redis gives us :(
-                let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
-                let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
-                socket.set_reuse_address(true).unwrap();
-                socket.bind(addr).unwrap();
-                socket.listen(1).unwrap();
-                let listener = TcpListener::from(socket);
-                let redis_port = listener.local_addr().unwrap().port();
+                let redis_port = get_available_port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
                         host: "127.0.0.1".to_string(),
@@ -165,14 +173,21 @@ impl RedisServer {
         }
     }
 
-    pub fn get_client_addr(&self) -> &redis::ConnectionAddr {
-        &self.addr
+    pub fn get_client_addr(&self) -> redis::ConnectionAddr {
+        self.addr.clone()
+    }
+
+    pub fn connection_info(&self) -> redis::ConnectionInfo {
+        redis::ConnectionInfo {
+            addr: self.get_client_addr(),
+            redis: Default::default(),
+        }
     }
 
     pub fn stop(&mut self) {
         let _ = self.process.kill();
         let _ = self.process.wait();
-        if let redis::ConnectionAddr::Unix(ref path) = *self.get_client_addr() {
+        if let redis::ConnectionAddr::Unix(ref path) = self.get_client_addr() {
             fs::remove_file(path).ok();
         }
     }
@@ -198,7 +213,7 @@ impl TestContext {
         let server = RedisServer::with_modules(server_type, modules);
 
         let client = redis::Client::open(redis::ConnectionInfo {
-            addr: server.get_client_addr().clone(),
+            addr: server.get_client_addr(),
             redis: Default::default(),
         })
         .unwrap();
@@ -391,6 +406,9 @@ pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
                 }
             }
             Ok(mut con) => {
+                while con.send_packed_command(&redis::cmd("PING")).await.is_err() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
                 let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(&mut con).await;
                 break;
             }
@@ -422,11 +440,10 @@ pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
         ConnectionAddr::TcpTls {
             host,
             port,
-            insecure,
+            insecure: _,
         } => {
             address_info.host = host.clone();
             address_info.port = *port as u32;
-            address_info.insecure = *insecure;
         }
         ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
     }
@@ -439,4 +456,23 @@ pub fn generate_random_string(length: usize) -> String {
         .take(length)
         .map(char::from)
         .collect()
+}
+
+pub async fn send_get(client: &mut impl ConnectionLike, key: &str) -> RedisResult<Value> {
+    let mut get_command = redis::Cmd::new();
+    get_command.arg("GET").arg(key);
+    client.req_packed_command(&get_command).await
+}
+
+pub async fn send_set_and_get(mut client: impl ConnectionLike, key: String) {
+    const VALUE_LENGTH: usize = 10;
+    let value = generate_random_string(VALUE_LENGTH);
+
+    let mut set_command = redis::Cmd::new();
+    set_command.arg("SET").arg(key.as_str()).arg(value.clone());
+    let set_result = client.req_packed_command(&set_command).await.unwrap();
+    let get_result = send_get(&mut client, key.as_str()).await.unwrap();
+
+    assert_eq!(set_result, Value::Okay);
+    assert_eq!(get_result, Value::Data(value.into_bytes()));
 }

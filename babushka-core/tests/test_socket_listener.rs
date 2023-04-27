@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::{os::unix::net::UnixStream, thread};
 mod utilities;
 use integer_encoding::VarInt;
+use utilities::cluster::*;
 use utilities::*;
 
 /// Response header length approximation, including the length of the message and the callback index
@@ -20,7 +21,7 @@ mod socket_listener {
     use redis::{ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
-    use std::{mem::size_of, time::Duration};
+    use std::mem::size_of;
     use tokio::{net::UnixListener, runtime::Builder};
 
     /// An enum representing the values of the request type field for testing purposes
@@ -38,6 +39,11 @@ mod socket_listener {
 
     struct TestBasics {
         server: RedisServer,
+        socket: UnixStream,
+    }
+
+    struct ClusterTestBasics {
+        _cluster: RedisCluster,
         socket: UnixStream,
     }
 
@@ -204,16 +210,27 @@ mod socket_listener {
         u32::decode_var(buffer).unwrap()
     }
 
-    fn send_address(address: &ConnectionAddr, socket: &UnixStream, use_tls: bool) {
+    fn send_addresses(addresses: &[ConnectionAddr], socket: &UnixStream, use_tls: bool) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
 
-        let address_info = get_address_info(address);
-        let approx_message_length = address_info.compute_size() as usize + APPROX_RESP_HEADER_LEN;
+        let mut approx_message_length = APPROX_RESP_HEADER_LEN;
+        let mut addresses_info = Vec::new();
+        for address in addresses {
+            let address_info = get_address_info(address);
+            approx_message_length += address_info.compute_size() as usize;
+            addresses_info.push(address_info);
+        }
+
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut connection_request = ConnectionRequest::new();
-        connection_request.addresses = vec![address_info];
-        connection_request.use_tls = use_tls;
+        connection_request.addresses = addresses_info;
+        connection_request.tls_mode = if use_tls {
+            connection_request::TlsMode::InsecureTls
+        } else {
+            connection_request::TlsMode::NoTls
+        }
+        .into();
         write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
@@ -224,7 +241,7 @@ mod socket_listener {
     fn setup_socket(
         use_tls: bool,
         socket_path: Option<String>,
-        redis_server: &RedisServer,
+        addresses: &[ConnectionAddr],
     ) -> UnixStream {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
@@ -244,8 +261,7 @@ mod socket_listener {
         let path = path_arc.lock().unwrap();
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
-        let address = redis_server.get_client_addr();
-        send_address(address, &socket, use_tls);
+        send_addresses(addresses, &socket, use_tls);
         socket
     }
 
@@ -254,7 +270,8 @@ mod socket_listener {
         socket_path: Option<String>,
         server: RedisServer,
     ) -> TestBasics {
-        let socket = setup_socket(use_tls, socket_path, &server);
+        let address = server.get_client_addr();
+        let socket = setup_socket(use_tls, socket_path, &[address]);
         TestBasics { server, socket }
     }
 
@@ -270,8 +287,17 @@ mod socket_listener {
         setup_test_basics_with_socket_path(use_tls, None)
     }
 
+    async fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
+        let cluster = RedisCluster::new(6, 1, use_tls).await;
+        let socket = setup_socket(use_tls, None, &cluster.get_server_addresses());
+        ClusterTestBasics {
+            _cluster: cluster,
+            socket,
+        }
+    }
+
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
         let socket_path =
             get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
@@ -299,7 +325,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
         let socket_path = get_socket_path_from_name(
             "test_multiple_listeners_competing_for_the_socket".to_string(),
@@ -313,7 +339,8 @@ mod socket_listener {
                     .name(format!("test-{i}"))
                     .spawn_scoped(scope, || {
                         const CALLBACK_INDEX: u32 = 99;
-                        let mut socket = setup_socket(false, Some(socket_path.clone()), &server);
+                        let address = server.get_client_addr();
+                        let mut socket = setup_socket(false, Some(socket_path.clone()), &[address]);
                         let key = "hello";
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -329,18 +356,7 @@ mod socket_listener {
         close_socket(&socket_path);
     }
 
-    #[rstest]
-    #[timeout(Duration::from_millis(10000))]
-    fn test_socket_set_and_get(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-    ) {
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls);
-
+    fn test_set_and_get(socket: &mut UnixStream, args_pointer: bool) {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -356,15 +372,16 @@ mod socket_listener {
             value.clone(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, socket);
         assert_response(
             &buffer,
             0,
@@ -375,10 +392,20 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
-    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
-        let mut test_basics = setup_test_basics(false);
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    fn test_socket_set_and_get(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
+        let mut test_basics = setup_test_basics(use_tls);
+        test_set_and_get(&mut test_basics.socket, args_pointer);
+    }
 
+    fn handle_custom_command(socket: &mut UnixStream, args_pointer: bool) {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -394,9 +421,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
@@ -407,9 +434,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let _size = read_from_socket(&mut buffer, socket);
         assert_response(
             &buffer,
             0,
@@ -420,7 +447,44 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
+        let mut test_basics = setup_test_basics(false);
+        handle_custom_command(&mut test_basics.socket, args_pointer);
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socket_set_and_get_from_cluster(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
+
+        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
+        test_set_and_get(&mut test_basics.socket, args_pointer);
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socke_handlet_custom_command_to_cluster(
+        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
+        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
+
+        handle_custom_command(&mut test_basics.socket, args_pointer);
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_socket_get_returns_null(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -441,7 +505,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_socket_report_error(#[values(false, true)] use_tls: bool) {
         let mut test_basics = setup_test_basics(use_tls);
 
@@ -469,7 +533,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_socket_handle_long_input(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -529,7 +593,7 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
-    #[timeout(Duration::from_millis(15000))]
+    #[timeout(LONG_CMD_TEST_TIMEOUT)]
     fn test_socket_handle_multiple_long_inputs(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -654,7 +718,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_close_when_server_closes() {
         let mut test_basics = setup_test_basics(false);
         let server = test_basics.server;
@@ -672,11 +736,11 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
         let test_basics = setup_test_basics(false);
         let mut socket = test_basics.socket.try_clone().unwrap();
-        let address = test_basics.server.get_client_addr().clone();
+        let address = test_basics.server.get_client_addr();
         drop(test_basics);
 
         let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
@@ -692,12 +756,12 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(Duration::from_millis(10000))]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_complete_request_after_reconnect() {
         block_on_all(async move {
             let test_basics = setup_test_basics(false);
             let mut socket = test_basics.socket.try_clone().unwrap();
-            let address = test_basics.server.get_client_addr().clone();
+            let address = test_basics.server.get_client_addr();
             drop(test_basics);
 
             const CALLBACK_INDEX: u32 = 0;
