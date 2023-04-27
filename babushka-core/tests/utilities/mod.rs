@@ -406,6 +406,9 @@ pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
                 }
             }
             Ok(mut con) => {
+                while con.send_packed_command(&redis::cmd("PING")).await.is_err() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
                 let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(&mut con).await;
                 break;
             }

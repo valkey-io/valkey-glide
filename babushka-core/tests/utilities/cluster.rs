@@ -62,17 +62,17 @@ impl RedisCluster {
         "world"
     }
 
-    pub fn new(nodes: u16, replicas: u16, use_tls: bool) -> Self {
+    pub async fn new(nodes: u16, replicas: u16, use_tls: bool) -> Self {
         let initial_port = get_available_port();
 
         let cluster_info = (0..nodes)
             .map(|port| ClusterType::build_addr(use_tls, port + initial_port))
             .collect();
 
-        Self::new_with_cluster_info(cluster_info, use_tls, replicas, &[])
+        Self::new_with_cluster_info(cluster_info, use_tls, replicas, &[]).await
     }
 
-    pub fn new_with_cluster_info(
+    pub async fn new_with_cluster_info(
         cluster_info: Vec<ConnectionAddr>,
         use_tls: bool,
         replicas: u16,
@@ -123,6 +123,8 @@ impl RedisCluster {
                         .arg("5000")
                         .arg("--appendonly")
                         .arg("yes")
+                        .arg("--logfile")
+                        .arg(format!("{port}.log"))
                         .arg("--aclfile")
                         .arg(&acl_path);
                     if is_tls {
@@ -140,7 +142,14 @@ impl RedisCluster {
             ));
         }
 
-        sleep(Duration::from_millis(100));
+        let cluster = RedisCluster {
+            servers,
+            folders,
+            cluster_info,
+            replica_count: replicas,
+        };
+
+        wait_for_cluster_to_become_ready(&cluster.get_server_addresses()).await;
 
         let mut cmd = process::Command::new("redis-cli");
         cmd.stdout(process::Stdio::null())
@@ -154,45 +163,96 @@ impl RedisCluster {
         if is_tls {
             cmd.arg("--tls").arg("--insecure");
         }
-        assert!(cmd.status().unwrap().success());
+        let status = cmd.status().unwrap();
+        assert!(status.success(), "{}", status);
 
-        let cluster = RedisCluster {
-            servers,
-            folders,
-            cluster_info,
-            replica_count: replicas,
-        };
-        if replicas > 0 {
-            cluster.wait_for_replicas(replicas);
-        }
+        cluster.wait_for_nodes_to_sync();
+        cluster.wait_for_slots_to_fill();
+        cluster.wait_for_cluster_ok();
         cluster
     }
 
-    fn wait_for_replicas(&self, replicas: u16) {
+    fn wait_for_nodes_to_sync(&self) {
         'server: for server in &self.servers {
             let conn_info = server.connection_info();
-            eprintln!(
-                "waiting until {:?} knows required number of replicas",
-                conn_info.addr
-            );
             let client = redis::Client::open(conn_info).unwrap();
             let mut con = client.get_connection().unwrap();
 
-            // retry 500 times
-            for _ in 1..500 {
-                let value = redis::cmd("CLUSTER").arg("SLOTS").query(&mut con).unwrap();
-                let slots: Vec<Vec<redis::Value>> = redis::from_redis_value(&value).unwrap();
+            for _ in 1..5000 {
+                let value = redis::cmd("CLUSTER").arg("NODES").query(&mut con).unwrap();
+                let string_response: String = redis::from_redis_value(&value).unwrap();
+                let nodes = string_response.as_str().lines().count();
 
-                // all slots should have following items:
-                // [start slot range, end slot range, master's IP, replica1's IP, replica2's IP,... ]
-                if slots.iter().all(|slot| slot.len() >= 3 + replicas as usize) {
+                if nodes == self.servers.len() {
                     continue 'server;
                 }
 
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(10));
             }
 
-            panic!("failed to create enough replicas");
+            panic!("failed to sync nodes");
+        }
+    }
+
+    fn wait_for_slots_to_fill(&self) {
+        'server: for server in &self.servers {
+            let conn_info = server.connection_info();
+            let client = redis::Client::open(conn_info).unwrap();
+            let mut con = client.get_connection().unwrap();
+
+            for _ in 1..5000 {
+                let value = redis::cmd("CLUSTER").arg("SHARDS").query(&mut con).unwrap();
+                //"slots", list of slot-couples, "nodes", more data.
+                let shard_response: Vec<redis::Value> = redis::from_redis_value(&value).unwrap();
+                let mut tuples: Vec<(u16, u16)> = shard_response
+                    .into_iter()
+                    .flat_map(|value| {
+                        let node: ((), Vec<(u16, u16)>, (), ()) =
+                            redis::from_redis_value(&value).unwrap();
+                        node.1
+                    })
+                    .collect();
+                tuples.sort_by(|a, b| a.0.cmp(&b.0));
+                tuples.dedup();
+                let consecutive = tuples.iter().fold((true, None), |acc, val| {
+                    (
+                        acc.0 && acc.1.map(|val| val + 1).unwrap_or(0) == val.0,
+                        Some(val.1),
+                    )
+                });
+                if consecutive.0 && consecutive.1.unwrap_or_default() == 16_383 {
+                    continue 'server;
+                }
+
+                sleep(Duration::from_millis(10));
+            }
+
+            panic!("failed to get slot coverage");
+        }
+    }
+
+    fn wait_for_cluster_ok(&self) {
+        'server: for server in &self.servers {
+            let conn_info = server.connection_info();
+            let client = redis::Client::open(conn_info).unwrap();
+            let mut con = client.get_connection().unwrap();
+
+            for _ in 1..5000 {
+                let value = redis::cmd("CLUSTER").arg("INFO").query(&mut con).unwrap();
+                //"slots", list of slot-couples, "nodes", more data.
+                let string_response: String = redis::from_redis_value(&value).unwrap();
+
+                if string_response.contains("cluster_state:ok")
+                    && string_response.contains("cluster_slots_assigned:16384")
+                    && string_response.contains("cluster_slots_ok:16384")
+                {
+                    continue 'server;
+                }
+
+                sleep(Duration::from_millis(10));
+            }
+
+            panic!("failed to get slot coverage");
         }
     }
 
@@ -223,6 +283,5 @@ impl Drop for RedisCluster {
 pub async fn wait_for_cluster_to_become_ready(server_addresses: &[ConnectionAddr]) {
     let iter = server_addresses.iter();
     let map = iter.map(wait_for_server_to_become_ready);
-    // let vec = map.collect();
     join_all(map).await;
 }

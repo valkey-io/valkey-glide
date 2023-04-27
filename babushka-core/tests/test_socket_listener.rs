@@ -287,8 +287,8 @@ mod socket_listener {
         setup_test_basics_with_socket_path(use_tls, None)
     }
 
-    fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
-        let cluster = RedisCluster::new(6, 1, use_tls);
+    async fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
+        let cluster = RedisCluster::new(6, 1, use_tls).await;
         let socket = setup_socket(use_tls, None, &cluster.get_server_addresses());
         ClusterTestBasics {
             _cluster: cluster,
@@ -380,7 +380,8 @@ mod socket_listener {
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
         socket.write_all(&buffer).unwrap();
-        read_from_socket(&mut buffer, socket);
+
+        let _size = read_from_socket(&mut buffer, socket);
         assert_response(
             &buffer,
             0,
@@ -433,7 +434,7 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        let _size = socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, socket);
         assert_response(
@@ -462,7 +463,8 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_cluster_test_basics(use_tls);
+
+        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
         test_set_and_get(&mut test_basics.socket, args_pointer);
     }
 
@@ -476,7 +478,7 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_cluster_test_basics(use_tls);
+        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
 
         handle_custom_command(&mut test_basics.socket, args_pointer);
     }

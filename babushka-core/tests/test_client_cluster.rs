@@ -17,7 +17,7 @@ mod cluster_client {
     }
 
     async fn setup_test_basics(use_tls: bool) -> TestBasics {
-        let cluster = RedisCluster::new(6, 1, use_tls);
+        let cluster = RedisCluster::new(3, 0, use_tls).await;
         let mut connection_request = ConnectionRequest::new();
         connection_request.addresses = cluster
             .iter_servers()
@@ -50,7 +50,6 @@ mod cluster_client {
     fn test_client_handle_concurrent_workload(#[values(false, true)] use_tls: bool) {
         block_on_all(async {
             let test_basics = setup_test_basics(use_tls).await;
-            const VALUE_LENGTH: usize = 1000000;
             const NUMBER_OF_CONCURRENT_OPERATIONS: usize = 1000;
 
             let mut actions = Vec::with_capacity(NUMBER_OF_CONCURRENT_OPERATIONS);
@@ -69,8 +68,8 @@ mod cluster_client {
     fn test_report_closing_when_server_closes() {
         block_on_all(async {
             let mut test_basics = setup_test_basics(false).await;
-            let server = test_basics.cluster;
-            drop(server);
+            let cluster = test_basics.cluster;
+            drop(cluster);
 
             let get_result = send_get(&mut test_basics.client, "foobar")
                 .await
