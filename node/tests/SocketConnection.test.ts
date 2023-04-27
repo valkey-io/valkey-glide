@@ -1,12 +1,12 @@
-import { ConnectionOptions, SocketConnection } from "..";
+import { describe, expect, it } from "@jest/globals";
+import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
+import { v4 as uuidv4 } from "uuid";
+import { ConnectionOptions, SocketConnection } from "..";
+import { redis_request } from "../src/ProtobufMessage";
+import { runCommonTests } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
-import { describe, expect, it } from "@jest/globals";
-import { runCommonTests } from "./TestUtilities";
-import { redis_request } from "../src/ProtobufMessage";
-import { BufferWriter, BufferReader } from "protobufjs";
-import { v4 as uuidv4 } from "uuid";
 
 type Context = {
     server: RedisServer;
@@ -81,7 +81,7 @@ describe("SocketConnection", () => {
         expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);
     });
 
-    it("set and with return of old value works", async () => {
+    it("set with return of old value works", async () => {
         await OpenServerAndExecute(async (port) => {
             const client = await SocketConnection.CreateConnection(
                 getOptions(port)
