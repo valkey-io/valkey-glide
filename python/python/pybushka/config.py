@@ -4,6 +4,7 @@ from typing import Callable, List, Optional, Tuple, Type
 from pybushka.protobuf.connection_request_pb2 import (
     ConnectionRequest,
     ReadFromReplicaStrategy,
+    TlsMode,
 )
 
 
@@ -100,7 +101,7 @@ class ClientConfiguration:
             address_info = request.addresses.add()
             address_info.host = address.host
             address_info.port = address.port
-        request.use_tls = self.use_tls
+        request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from_replica_strategy = self.read_from_replica.value
         request.response_timeout = self.response_timeout
         request.connection_timeout = self.connection_timeout
