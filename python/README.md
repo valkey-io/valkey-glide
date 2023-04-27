@@ -51,6 +51,6 @@ Or, run in a terminal:
 cd babushka/python
 isort . --profile black --skip-glob python/pybushka/protobuf
 black --target-version py36 . --exclude python/pybushka/protobuf
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf --extend-ignore=E230
-flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/pybushka/protobuf --extend-ignore=E230
+flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
+flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
 ```
