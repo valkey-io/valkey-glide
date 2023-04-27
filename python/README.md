@@ -9,7 +9,7 @@ Using [Pyo3](https://github.com/PyO3/pyo3) and [Maturin](https://github.com/PyO3
 
 `source .env/bin/activate` in order to enter virtual env.
 
-### Install requirements 
+### Install requirements
 
 `pip install -r requirements.txt` install the library requriements (run in babushka/python folder)
 
@@ -28,8 +28,7 @@ Autogenerate python's protobuf files with:
 `BABUSHKA_PATH=.` // e.g. /home/ubuntu/babushka
 `protoc -Iprotobuf=${BABUSHKA_PATH}/babushka-core/src/protobuf/ --python_out=${BABUSHKA_PATH}/python/python/pybushka ${BABUSHKA_PATH}/babushka-core/src/protobuf/*.proto`
 
-
-### [Optional] Install development requirements 
+### [Optional] Install development requirements
 
 `pip install -r dev_requirements.txt` install the library's development requriements (run in babushka/python folder)
 
@@ -38,13 +37,16 @@ Autogenerate python's protobuf files with:
 Run `pytest --asyncio-mode=auto` from this folder, or from the `tests` folder. Make sure your shell uses your virtual environment.
 
 #### Running linters:
+
 Using VS code, install the following extensions:
-- Python
-- isort
-- Black Formatter
-- Flake8
+
+-   Python
+-   isort
+-   Black Formatter
+-   Flake8
 
 Or, run in a terminal:
+
 ```
 cd babushka/python
 isort . --profile black --skip-glob python/pybushka/protobuf

@@ -35,11 +35,11 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
-            
+
             - name: Install protoc
               run: |
-                sudo apt update
-                sudo apt install protobuf-compiler
+                  sudo apt update
+                  sudo apt install protobuf-compiler
 
             - name: Set up Python 3.10
               uses: actions/setup-python@v3
@@ -73,12 +73,12 @@ jobs:
             - name: Start redis server
               working-directory: ./python
               run: redis-server &
-            
+
             - name: Generate protobuf files
               working-directory: .
               run: |
-                protoc -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
-                
+                  protoc -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
+
             - name: Test with pytest
               working-directory: ./python
               run: |
