@@ -1,5 +1,8 @@
 #![allow(dead_code)]
-use babushka::connection_request::AddressInfo;
+use babushka::{
+    client::ClientCMD,
+    connection_request::{self, AddressInfo},
+};
 use futures::Future;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{aio::ConnectionLike, ConnectionAddr, RedisResult, Value};
@@ -475,4 +478,34 @@ pub async fn send_set_and_get(mut client: impl ConnectionLike, key: String) {
 
     assert_eq!(set_result, Value::Okay);
     assert_eq!(get_result, Value::Data(value.into_bytes()));
+}
+
+pub struct TestBasics {
+    pub server: RedisServer,
+    pub client: ClientCMD,
+}
+
+pub async fn setup_test_basics_and_connection_retry_strategy(
+    use_tls: bool,
+    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
+) -> TestBasics {
+    let server = TestContext::new(ServerType::Tcp { tls: use_tls }).server;
+    let address_info = get_address_info(&server.get_client_addr());
+    let mut connection_request = connection_request::ConnectionRequest::new();
+    connection_request.addresses = vec![address_info];
+    connection_request.tls_mode = if use_tls {
+        connection_request::TlsMode::InsecureTls
+    } else {
+        connection_request::TlsMode::NoTls
+    }
+    .into();
+    connection_request.connection_retry_strategy =
+        protobuf::MessageField::from_option(connection_retry_strategy);
+    connection_request.cluster_mode_enabled = false;
+    let client = ClientCMD::create_client(connection_request).await.unwrap();
+    TestBasics { server, client }
+}
+
+pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
+    setup_test_basics_and_connection_retry_strategy(use_tls, None).await
 }
