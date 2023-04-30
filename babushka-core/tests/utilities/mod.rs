@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use babushka::{
     client::ClientCMD,
-    connection_request::{self, AddressInfo},
+    connection_request::{self, AddressInfo, AuthenticationInfo},
 };
 use futures::Future;
 use rand::{distributions::Alphanumeric, Rng};
@@ -485,20 +485,49 @@ pub struct TestBasics {
     pub client: ClientCMD,
 }
 
-pub async fn setup_test_basics_and_connection_retry_strategy(
+fn set_connection_info_to_connection_request(
+    connection_info: redis::RedisConnectionInfo,
+    connection_request: &mut connection_request::ConnectionRequest,
+) {
+    if connection_info.password.is_some() {
+        connection_request.authentication_info =
+            protobuf::MessageField(Some(Box::new(AuthenticationInfo {
+                password: connection_info.password.unwrap(),
+                username: connection_info.username.unwrap_or("".to_string()),
+                ..Default::default()
+            })));
+    }
+}
+
+pub fn create_connection_request(
+    addresses: &[ConnectionAddr],
     use_tls: bool,
-    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
-) -> TestBasics {
-    let server = TestContext::new(ServerType::Tcp { tls: use_tls }).server;
-    let address_info = get_address_info(&server.get_client_addr());
+    connection_info: Option<redis::RedisConnectionInfo>,
+) -> connection_request::ConnectionRequest {
+    let addresses_info = addresses.iter().map(get_address_info).collect();
     let mut connection_request = connection_request::ConnectionRequest::new();
-    connection_request.addresses = vec![address_info];
+    connection_request.addresses = addresses_info;
     connection_request.tls_mode = if use_tls {
         connection_request::TlsMode::InsecureTls
     } else {
         connection_request::TlsMode::NoTls
     }
     .into();
+    set_connection_info_to_connection_request(
+        connection_info.unwrap_or_default(),
+        &mut connection_request,
+    );
+    connection_request
+}
+
+async fn setup_test_basics_internal(
+    use_tls: bool,
+    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
+    connection_info: Option<redis::RedisConnectionInfo>,
+) -> TestBasics {
+    let server = RedisServer::new(ServerType::Tcp { tls: use_tls });
+    let mut connection_request =
+        create_connection_request(&[server.get_client_addr()], use_tls, connection_info);
     connection_request.connection_retry_strategy =
         protobuf::MessageField::from_option(connection_retry_strategy);
     connection_request.cluster_mode_enabled = false;
@@ -506,6 +535,20 @@ pub async fn setup_test_basics_and_connection_retry_strategy(
     TestBasics { server, client }
 }
 
+pub async fn setup_test_basics_and_connection_retry_strategy(
+    use_tls: bool,
+    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
+) -> TestBasics {
+    setup_test_basics_internal(use_tls, connection_retry_strategy, None).await
+}
+
+pub async fn setup_test_basics_with_connection_info(
+    use_tls: bool,
+    connection_info: redis::RedisConnectionInfo,
+) -> TestBasics {
+    setup_test_basics_internal(use_tls, None, Some(connection_info)).await
+}
+
 pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
-    setup_test_basics_and_connection_retry_strategy(use_tls, None).await
+    setup_test_basics_internal(use_tls, None, None).await
 }

@@ -14,7 +14,6 @@ const APPROX_RESP_HEADER_LEN: usize = 3;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use babushka::connection_request::ConnectionRequest;
     use babushka::redis_request::redis_request::{Args, ArgsArray};
     use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
@@ -213,24 +212,10 @@ mod socket_listener {
     fn send_addresses(addresses: &[ConnectionAddr], socket: &UnixStream, use_tls: bool) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
-
-        let mut approx_message_length = APPROX_RESP_HEADER_LEN;
-        let mut addresses_info = Vec::new();
-        for address in addresses {
-            let address_info = get_address_info(address);
-            approx_message_length += address_info.compute_size() as usize;
-            addresses_info.push(address_info);
-        }
-
+        let connection_request = create_connection_request(addresses, use_tls, None);
+        let approx_message_length =
+            APPROX_RESP_HEADER_LEN + connection_request.compute_size() as usize;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        let mut connection_request = ConnectionRequest::new();
-        connection_request.addresses = addresses_info;
-        connection_request.tls_mode = if use_tls {
-            connection_request::TlsMode::InsecureTls
-        } else {
-            connection_request::TlsMode::NoTls
-        }
-        .into();
         write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();

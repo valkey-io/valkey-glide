@@ -1,9 +1,8 @@
 use super::{
-    build_keys_and_certs_for_tls, get_available_port, wait_for_server_to_become_ready, Module,
-    RedisServer,
+    build_keys_and_certs_for_tls, create_connection_request, get_available_port,
+    wait_for_server_to_become_ready, Module, RedisServer,
 };
 use babushka::client::Client;
-use babushka::connection_request::{self, ConnectionRequest};
 use futures::future::join_all;
 use redis::ConnectionAddr;
 use std::process;
@@ -293,21 +292,26 @@ pub struct ClusterTestBasics {
     pub client: Client,
 }
 
-pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
+pub async fn setup_test_basics_internal(
+    use_tls: bool,
+    connection_info: Option<redis::RedisConnectionInfo>,
+) -> ClusterTestBasics {
     let cluster = RedisCluster::new(3, 0, use_tls).await;
-    let mut connection_request = ConnectionRequest::new();
-    connection_request.addresses = cluster
-        .iter_servers()
-        .map(|server| super::get_address_info(&server.get_client_addr()))
-        .collect();
-    connection_request.tls_mode = if use_tls {
-        connection_request::TlsMode::InsecureTls
-    } else {
-        connection_request::TlsMode::NoTls
-    }
-    .into();
-    connection_request.connection_retry_strategy = protobuf::MessageField::from_option(None);
+    let mut connection_request =
+        create_connection_request(&cluster.get_server_addresses(), use_tls, connection_info);
+
     connection_request.cluster_mode_enabled = true;
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }
+}
+
+pub async fn setup_test_basics_with_connection_info(
+    use_tls: bool,
+    connection_info: redis::RedisConnectionInfo,
+) -> ClusterTestBasics {
+    setup_test_basics_internal(use_tls, Some(connection_info)).await
+}
+
+pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
+    setup_test_basics_internal(use_tls, None).await
 }
