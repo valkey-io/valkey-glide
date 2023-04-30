@@ -18,20 +18,30 @@ mod shared_client_tests {
         client: Client,
     }
 
-    async fn setup_test_basics(use_tls: bool, use_cme: bool) -> TestBasics {
+    async fn setup_test_basics_with_connection_info(
+        use_tls: bool,
+        use_cme: bool,
+        connection_info: Option<redis::RedisConnectionInfo>,
+    ) -> TestBasics {
         if use_cme {
-            let cluster_basics = cluster::setup_test_basics(use_tls).await;
+            let cluster_basics =
+                cluster::setup_test_basics_with_connection_info(use_tls, connection_info).await;
             TestBasics {
                 server: BackingServer::Cme(cluster_basics.cluster),
                 client: cluster_basics.client,
             }
         } else {
-            let cmd_basics = utilities::setup_test_basics(use_tls).await;
+            let cmd_basics =
+                utilities::setup_test_basics_with_connection_info(use_tls, connection_info).await;
             TestBasics {
                 server: BackingServer::Cmd(cmd_basics.server),
                 client: Client::CMD(cmd_basics.client),
             }
         }
+    }
+
+    async fn setup_test_basics(use_tls: bool, use_cme: bool) -> TestBasics {
+        setup_test_basics_with_connection_info(use_tls, use_cme, None).await
     }
 
     #[rstest]
@@ -80,6 +90,43 @@ mod shared_client_tests {
                 .await
                 .unwrap_err();
             assert!(get_result.is_connection_dropped());
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_authenticate_with_password(#[values(false, true)] use_cme: bool) {
+        block_on_all(async {
+            let test_basics = setup_test_basics_with_connection_info(
+                true,
+                use_cme,
+                Some(redis::RedisConnectionInfo {
+                    password: Some("ReallySecurePassword".to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
+            let key = "hello";
+            send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_authenticate_with_password_and_username(#[values(false, true)] use_cme: bool) {
+        block_on_all(async {
+            let test_basics = setup_test_basics_with_connection_info(
+                true,
+                use_cme,
+                Some(redis::RedisConnectionInfo {
+                    password: Some("ReallySecurePassword".to_string()),
+                    username: Some("AuthorizedUsername".to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
+            let key = "hello";
+            send_set_and_get(test_basics.client.clone(), key.to_string()).await;
         });
     }
 }
