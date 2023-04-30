@@ -1,4 +1,4 @@
-use crate::connection_request::{AddressInfo, ConnectionRequest, TlsMode};
+use crate::connection_request::{AddressInfo, AuthenticationInfo, ConnectionRequest, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::FutureExt;
 use futures_intrusive::sync::ManualResetEvent;
@@ -60,7 +60,32 @@ fn get_port(address: &AddressInfo) -> u16 {
     }
 }
 
-fn get_connection_info(address: &AddressInfo, tls_mode: TlsMode) -> redis::ConnectionInfo {
+fn string_to_option(str: String) -> Option<String> {
+    if str.is_empty() {
+        None
+    } else {
+        Some(str)
+    }
+}
+
+fn get_redis_connection_info(
+    authentication_info: Option<Box<AuthenticationInfo>>,
+) -> redis::RedisConnectionInfo {
+    match authentication_info {
+        Some(info) => redis::RedisConnectionInfo {
+            db: 0,
+            username: string_to_option(info.username),
+            password: string_to_option(info.password),
+        },
+        None => redis::RedisConnectionInfo::default(),
+    }
+}
+
+fn get_connection_info(
+    address: &AddressInfo,
+    tls_mode: TlsMode,
+    redis_connection_info: redis::RedisConnectionInfo,
+) -> redis::ConnectionInfo {
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
             host: address.host.clone(),
@@ -72,16 +97,20 @@ fn get_connection_info(address: &AddressInfo, tls_mode: TlsMode) -> redis::Conne
     };
     redis::ConnectionInfo {
         addr,
-        redis: redis::RedisConnectionInfo {
-            db: 0,
-            username: None,
-            password: None,
-        },
+        redis: redis_connection_info,
     }
 }
 
-fn get_client(address: &AddressInfo, tls_mode: TlsMode) -> RedisResult<redis::Client> {
-    redis::Client::open(get_connection_info(address, tls_mode))
+fn get_client(
+    address: &AddressInfo,
+    tls_mode: TlsMode,
+    redis_connection_info: redis::RedisConnectionInfo,
+) -> RedisResult<redis::Client> {
+    redis::Client::open(get_connection_info(
+        address,
+        tls_mode,
+        redis_connection_info,
+    ))
 }
 
 async fn try_create_multiplexed_connection(
@@ -115,10 +144,13 @@ impl ClientCMD {
         );
 
         let retry_strategy = RetryStrategy::new(&connection_request.connection_retry_strategy.0);
+        let redis_connection_info =
+            get_redis_connection_info(connection_request.authentication_info.0);
         let client = Arc::new(ConnectionBackend {
             connection_info: get_client(
                 address,
                 connection_request.tls_mode.enum_value_or(TlsMode::NoTls),
+                redis_connection_info,
             )?,
             connection_available_signal: ManualResetEvent::new(true),
         });
@@ -283,10 +315,13 @@ impl Client {
     pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
         if request.cluster_mode_enabled {
             let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
+            let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
             let initial_nodes = request
                 .addresses
                 .into_iter()
-                .map(|address| get_connection_info(&address, tls_mode))
+                .map(|address| {
+                    get_connection_info(&address, tls_mode, redis_connection_info.clone())
+                })
                 .collect();
             let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes);
             if tls_mode != TlsMode::NoTls {

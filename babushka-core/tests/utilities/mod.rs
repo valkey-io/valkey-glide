@@ -5,7 +5,7 @@ use babushka::{
 };
 use futures::Future;
 use rand::{distributions::Alphanumeric, Rng};
-use redis::{aio::ConnectionLike, ConnectionAddr, RedisResult, Value};
+use redis::{aio::ConnectionLike, ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
 use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, thread::sleep,
@@ -392,7 +392,7 @@ pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
     let mut retries = 0;
     let client = redis::Client::open(redis::ConnectionInfo {
         addr: server_address.clone(),
-        redis: redis::RedisConnectionInfo::default(),
+        redis: RedisConnectionInfo::default(),
     })
     .unwrap();
     loop {
@@ -486,7 +486,7 @@ pub struct TestBasics {
 }
 
 fn set_connection_info_to_connection_request(
-    connection_info: redis::RedisConnectionInfo,
+    connection_info: RedisConnectionInfo,
     connection_request: &mut connection_request::ConnectionRequest,
 ) {
     if connection_info.password.is_some() {
@@ -499,10 +499,32 @@ fn set_connection_info_to_connection_request(
     }
 }
 
+pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: addr.clone(),
+        redis: RedisConnectionInfo::default(),
+    })
+    .unwrap();
+    let mut connection = client.get_multiplexed_async_connection().await.unwrap();
+    let password = connection_info.password.clone().unwrap();
+    let username = connection_info
+        .username
+        .clone()
+        .unwrap_or("default".to_string());
+    let mut cmd = redis::cmd("ACL");
+    cmd.arg("SETUSER")
+        .arg(username)
+        .arg("on")
+        .arg("allkeys")
+        .arg("+@all")
+        .arg(format!(">{password}"));
+    connection.req_packed_command(&cmd).await.unwrap();
+}
+
 pub fn create_connection_request(
     addresses: &[ConnectionAddr],
     use_tls: bool,
-    connection_info: Option<redis::RedisConnectionInfo>,
+    connection_info: Option<RedisConnectionInfo>,
 ) -> connection_request::ConnectionRequest {
     let addresses_info = addresses.iter().map(get_address_info).collect();
     let mut connection_request = connection_request::ConnectionRequest::new();
@@ -523,9 +545,12 @@ pub fn create_connection_request(
 async fn setup_test_basics_internal(
     use_tls: bool,
     connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
-    connection_info: Option<redis::RedisConnectionInfo>,
+    connection_info: Option<RedisConnectionInfo>,
 ) -> TestBasics {
     let server = RedisServer::new(ServerType::Tcp { tls: use_tls });
+    if let Some(redis_connection_info) = &connection_info {
+        setup_acl(&server.get_client_addr(), redis_connection_info).await;
+    }
     let mut connection_request =
         create_connection_request(&[server.get_client_addr()], use_tls, connection_info);
     connection_request.connection_retry_strategy =
@@ -544,9 +569,9 @@ pub async fn setup_test_basics_and_connection_retry_strategy(
 
 pub async fn setup_test_basics_with_connection_info(
     use_tls: bool,
-    connection_info: redis::RedisConnectionInfo,
+    connection_info: Option<RedisConnectionInfo>,
 ) -> TestBasics {
-    setup_test_basics_internal(use_tls, None, Some(connection_info)).await
+    setup_test_basics_internal(use_tls, None, connection_info).await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
