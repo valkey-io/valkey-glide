@@ -4,7 +4,12 @@ import net from "net";
 import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
-import { BabushkaInternal, SocketConnection, setLoggerConfig } from "..";
+import {
+    BabushkaInternal,
+    ConnectionOptions,
+    SocketConnection,
+    setLoggerConfig,
+} from "..";
 import {
     connection_request,
     redis_request,
@@ -60,12 +65,15 @@ function sendResponse(
     socket.write(response_bytes);
 }
 
-function getConnectionAndSocket(): Promise<{
+function getConnectionAndSocket(
+    checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
+    connectionOptions?: ConnectionOptions
+): Promise<{
     socket: net.Socket;
     connection: SocketConnection;
     server: net.Server;
 }> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const temporaryFolder = fs.mkdtempSync(
             path.join(os.tmpdir(), `socket_listener`)
         );
@@ -80,7 +88,11 @@ function getConnectionAndSocket(): Promise<{
                         connection_request.ConnectionRequest.decodeDelimited(
                             reader
                         );
-
+                    if (checkRequest && !checkRequest(request)) {
+                        reject(
+                            `${JSON.stringify(request)}  did not pass condition`
+                        );
+                    }
                     sendResponse(socket, ResponseType.Null, 0);
                 });
 
@@ -96,7 +108,7 @@ function getConnectionAndSocket(): Promise<{
             const socket = new net.Socket();
             socket.connect(socketName).once("connect", async () => {
                 const connection = await SocketConnection.__CreateConnection(
-                    {
+                    connectionOptions ?? {
                         addresses: [{ host: "foo" }],
                     },
                     socket
@@ -329,5 +341,20 @@ describe("SocketConnectionInternals", () => {
 
             expect(result).toBeNull();
         });
+    });
+
+    it("should pass credentials on connection", async () => {
+        const username = "this is a username";
+        const password = "more like losername, amiright?";
+        const { connection, server, socket } = await getConnectionAndSocket(
+            (request: connection_request.ConnectionRequest) =>
+                request.authenticationInfo?.password === password &&
+                request.authenticationInfo?.username === username,
+            {
+                addresses: [{ host: "foo" }],
+                credentials: { username, password },
+            }
+        );
+        closeTestResources(connection, server, socket);
     });
 });
