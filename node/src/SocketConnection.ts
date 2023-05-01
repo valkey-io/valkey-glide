@@ -131,7 +131,7 @@ export class SocketConnection {
         this.remainingReadData = undefined;
     }
 
-    private constructor(socket: net.Socket) {
+    protected constructor(socket: net.Socket) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.instance.log("info", "connection", `construct socket`);
 
@@ -324,28 +324,34 @@ export class SocketConnection {
         lowestLatency: connection_request.ReadFromReplicaStrategy.LowestLatency,
     };
 
-    private connectToServer(options: ConnectionOptions): Promise<void> {
+    protected createConnectionRequest(
+        options: ConnectionOptions
+    ): connection_request.IConnectionRequest {
+        const readFromReplicaStrategy = options.readFromReplicaStrategy
+            ? this.MAP_READ_FROM_REPLICA_STRATEGY[
+                  options.readFromReplicaStrategy
+              ]
+            : undefined;
+        return {
+            addresses: options.addresses,
+            tlsMode: options.useTLS
+                ? connection_request.TlsMode.SecureTls
+                : connection_request.TlsMode.NoTls,
+            responseTimeout: options.responseTimeout,
+            clusterModeEnabled: false,
+            connectionTimeout: options.connectionTimeout,
+            readFromReplicaStrategy,
+            connectionRetryStrategy: options.connectionBackoff,
+        };
+    }
+
+    protected connectToServer(options: ConnectionOptions): Promise<void> {
         return new Promise((resolve, reject) => {
             this.promiseCallbackFunctions[0] = [resolve, reject];
 
-            const readFromReplicaStrategy = options.readFromReplicaStrategy
-                ? this.MAP_READ_FROM_REPLICA_STRATEGY[
-                      options.readFromReplicaStrategy
-                  ]
-                : undefined;
-            const configuration: connection_request.IConnectionRequest = {
-                addresses: options.addresses,
-                tlsMode: options.useTLS
-                    ? connection_request.TlsMode.SecureTls
-                    : connection_request.TlsMode.NoTls,
-                responseTimeout: options.responseTimeout,
-                connectionTimeout: options.connectionTimeout,
-                readFromReplicaStrategy,
-                connectionRetryStrategy: options.connectionBackoff,
-            };
-
-            const message =
-                connection_request.ConnectionRequest.create(configuration);
+            const message = connection_request.ConnectionRequest.create(
+                this.createConnectionRequest(options)
+            );
 
             this.writeOrBufferRequest(
                 message,
@@ -369,13 +375,25 @@ export class SocketConnection {
         this.socket.end();
     }
 
+    private static async __CreateConnectionInternal(
+        options: ConnectionOptions,
+        connectedSocket: net.Socket,
+        constructor: (socket: net.Socket) => any
+    ): Promise<any> {
+        const connection = constructor(connectedSocket);
+        await connection.connectToServer(options);
+        return connection;
+    }
+
     static async __CreateConnection(
         options: ConnectionOptions,
         connectedSocket: net.Socket
     ): Promise<SocketConnection> {
-        const connection = new SocketConnection(connectedSocket);
-        await connection.connectToServer(options);
-        return connection;
+        return this.__CreateConnectionInternal(
+            options,
+            connectedSocket,
+            (options) => new SocketConnection(options)
+        );
     }
 
     private static GetSocket(path: string): Promise<net.Socket> {
@@ -388,11 +406,25 @@ export class SocketConnection {
         });
     }
 
-    public static async CreateConnection(
-        options: ConnectionOptions
-    ): Promise<SocketConnection> {
+    protected static async CreateConnectionInternal<TConnection>(
+        options: ConnectionOptions,
+        constructor: (socket: net.Socket) => TConnection
+    ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__CreateConnection(options, socket);
+        return await this.__CreateConnectionInternal(
+            options,
+            socket,
+            constructor
+        );
+    }
+
+    public static CreateConnection(
+        options: ConnectionOptions
+    ): Promise<SocketConnection> {
+        return this.CreateConnectionInternal<SocketConnection>(
+            options,
+            (socket: net.Socket) => new SocketConnection(socket)
+        );
     }
 }
