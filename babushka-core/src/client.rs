@@ -11,16 +11,19 @@ use redis::{
 };
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::task;
 use tokio_retry::Retry;
 
 pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 
 impl BabushkaClient for MultiplexedConnection {}
 impl BabushkaClient for ConnectionManager {}
-impl BabushkaClient for ClientCMD {}
 impl BabushkaClient for ClusterConnection {}
 impl BabushkaClient for Client {}
+
+pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
@@ -49,6 +52,7 @@ pub struct ClientCMD {
     /// Connection to the primary node in the client.
     primary: ConnectionWrapper,
     connection_retry_strategy: RetryStrategy,
+    response_timeout: Duration,
 }
 
 fn get_port(address: &AddressInfo) -> u16 {
@@ -137,6 +141,10 @@ async fn try_create_connection(
 
 impl ClientCMD {
     pub async fn create_client(connection_request: ConnectionRequest) -> RedisResult<Self> {
+        let response_timeout = to_duration(
+            connection_request.response_timeout,
+            DEFAULT_RESPONSE_TIMEOUT,
+        );
         let address = connection_request.addresses.first().unwrap();
         log_trace(
             "client creation",
@@ -161,8 +169,8 @@ impl ClientCMD {
         );
         Ok(Self {
             primary,
-            // _replicas: Vec::new(),
             connection_retry_strategy: retry_strategy,
+            response_timeout,
         })
     }
 
@@ -206,78 +214,104 @@ impl ClientCMD {
             *guard = ConnectionState::Reconnecting(backend.clone());
             backend
         };
+        let clone = self.clone();
+        // The reconnect task is spawned instead of awaited here, so that if this task will be dropped for some reason, the reconnection attempt will continue.
+        task::spawn(async move {
+            let connection_result = try_create_multiplexed_connection(
+                backend.clone(),
+                clone.connection_retry_strategy.clone(),
+            )
+            .await;
+            let mut guard = clone.primary.lock().await;
+            backend.connection_available_signal.set();
+            if let Ok(connection) = connection_result {
+                *guard = ConnectionState::Connected(connection.clone(), backend.clone());
+                Ok(connection)
+            } else {
+                *guard = ConnectionState::Disconnected;
+                Self::get_disconnected_error()
+            }
+        });
+        self.get_connection().await
+    }
 
-        let connection_result = try_create_multiplexed_connection(
-            backend.clone(),
-            self.connection_retry_strategy.clone(),
-        )
-        .await;
-        let mut guard = self.primary.lock().await;
-        backend.connection_available_signal.set();
-        if let Ok(connection) = connection_result {
-            *guard = ConnectionState::Connected(connection.clone(), backend.clone());
-            Ok(connection)
-        } else {
-            *guard = ConnectionState::Disconnected;
-            Self::get_disconnected_error()
+    async fn send_command(
+        &mut self,
+        cmd: &redis::Cmd,
+        mut connection: MultiplexedConnection,
+    ) -> redis::RedisResult<redis::Value> {
+        run_with_timeout(self.response_timeout, connection.send_packed_command(cmd)).await
+    }
+
+    pub async fn send_packed_command(
+        &mut self,
+        cmd: &redis::Cmd,
+    ) -> redis::RedisResult<redis::Value> {
+        let connection = self.get_connection().await?;
+        let result = self.send_command(cmd, connection).await;
+        match result {
+            Ok(val) => Ok(val),
+            Err(err) if err.is_connection_dropped() => {
+                let connection = self.reconnect().await?;
+                self.send_command(cmd, connection).await
+            }
+            Err(err) => Err(err),
         }
     }
-}
 
-impl ConnectionLike for ClientCMD {
-    fn req_packed_command<'a>(
-        &'a mut self,
-        cmd: &'a redis::Cmd,
-    ) -> redis::RedisFuture<'a, redis::Value> {
-        (async move {
-            let mut connection = self.get_connection().await?;
-            let result = connection.send_packed_command(cmd).await;
-            match result {
-                Ok(val) => Ok(val),
-                Err(err) if err.is_connection_dropped() => {
-                    let mut connection = self.reconnect().await?;
-                    connection.send_packed_command(cmd).await
-                }
-                Err(err) => Err(err),
-            }
-        })
-        .boxed()
-    }
-
-    fn req_packed_commands<'a>(
-        &'a mut self,
-        cmd: &'a redis::Pipeline,
+    async fn send_commands(
+        &mut self,
+        cmd: &redis::Pipeline,
         offset: usize,
         count: usize,
-    ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
-        (async move {
-            let mut connection = self.get_connection().await?;
-            let result = connection.send_packed_commands(cmd, offset, count).await;
-            match result {
-                Ok(val) => Ok(val),
-                Err(err) if err.is_connection_dropped() => {
-                    let mut connection = self.reconnect().await?;
-                    connection.send_packed_commands(cmd, offset, count).await
-                }
-                Err(err) => Err(err),
-            }
-        })
-        .boxed()
+        mut connection: MultiplexedConnection,
+    ) -> redis::RedisResult<Vec<redis::Value>> {
+        run_with_timeout(
+            self.response_timeout,
+            connection.send_packed_commands(cmd, offset, count),
+        )
+        .await
     }
 
-    fn get_db(&self) -> i64 {
-        let guard = self.primary.blocking_lock();
-        match &*guard {
-            ConnectionState::Connected(connection, _) => connection.get_db(),
-            _ => -1,
+    async fn send_packed_commands(
+        &mut self,
+        cmd: &redis::Pipeline,
+        offset: usize,
+        count: usize,
+    ) -> redis::RedisResult<Vec<redis::Value>> {
+        let connection = self.get_connection().await?;
+        let result = self.send_commands(cmd, offset, count, connection).await;
+        match result {
+            Ok(val) => Ok(val),
+            Err(err) if err.is_connection_dropped() => {
+                let connection = self.reconnect().await?;
+                self.send_commands(cmd, offset, count, connection).await
+            }
+            Err(err) => Err(err),
         }
     }
 }
 
 #[derive(Clone)]
-pub enum Client {
+pub enum ClientWrapper {
     CMD(ClientCMD),
     CME(ClusterConnection),
+}
+
+#[derive(Clone)]
+pub struct Client {
+    internal_client: ClientWrapper,
+    response_timeout: Duration,
+}
+
+async fn run_with_timeout<T>(
+    timeout: Duration,
+    future: impl futures::Future<Output = RedisResult<T>> + Send,
+) -> redis::RedisResult<T> {
+    tokio::time::timeout(timeout, future)
+        .await
+        .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
+        .and_then(|res| res)
 }
 
 impl ConnectionLike for Client {
@@ -285,10 +319,16 @@ impl ConnectionLike for Client {
         &'a mut self,
         cmd: &'a redis::Cmd,
     ) -> redis::RedisFuture<'a, redis::Value> {
-        match self {
-            Client::CMD(client) => client.req_packed_command(cmd),
-            Client::CME(client) => client.req_packed_command(cmd),
-        }
+        (async move {
+            match self.internal_client {
+                ClientWrapper::CMD(ref mut client) => client.send_packed_command(cmd).await,
+
+                ClientWrapper::CME(ref mut client) => {
+                    run_with_timeout(self.response_timeout, client.req_packed_command(cmd)).await
+                }
+            }
+        })
+        .boxed()
     }
 
     fn req_packed_commands<'a>(
@@ -297,23 +337,50 @@ impl ConnectionLike for Client {
         offset: usize,
         count: usize,
     ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
-        match self {
-            Client::CMD(client) => client.req_packed_commands(cmd, offset, count),
-            Client::CME(client) => client.req_packed_commands(cmd, offset, count),
-        }
+        (async move {
+            match self.internal_client {
+                ClientWrapper::CMD(ref mut client) => {
+                    client.send_packed_commands(cmd, offset, count).await
+                }
+
+                ClientWrapper::CME(ref mut client) => {
+                    run_with_timeout(
+                        self.response_timeout,
+                        client.req_packed_commands(cmd, offset, count),
+                    )
+                    .await
+                }
+            }
+        })
+        .boxed()
     }
 
     fn get_db(&self) -> i64 {
-        match self {
-            Client::CMD(client) => client.get_db(),
-            Client::CME(client) => client.get_db(),
+        match self.internal_client {
+            ClientWrapper::CMD(ref client) => {
+                let guard = client.primary.blocking_lock();
+                match &*guard {
+                    ConnectionState::Connected(connection, _) => connection.get_db(),
+                    _ => -1,
+                }
+            }
+            ClientWrapper::CME(ref client) => client.get_db(),
         }
+    }
+}
+
+fn to_duration(time_in_millis: u32, default: Duration) -> Duration {
+    if time_in_millis > 0 {
+        Duration::from_millis(time_in_millis as u64)
+    } else {
+        default
     }
 }
 
 impl Client {
     pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
-        if request.cluster_mode_enabled {
+        let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let internal_client = if request.cluster_mode_enabled {
             let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
             let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
             let initial_nodes = request
@@ -333,9 +400,14 @@ impl Client {
                 builder = builder.tls(tls);
             }
             let client = builder.build()?;
-            Ok(Self::CME(client.get_async_connection().await?))
+            ClientWrapper::CME(client.get_async_connection().await?)
         } else {
-            Ok(Self::CMD(ClientCMD::create_client(request).await?))
-        }
+            ClientWrapper::CMD(ClientCMD::create_client(request).await?)
+        };
+
+        Ok(Self {
+            internal_client,
+            response_timeout,
+        })
     }
 }

@@ -4,6 +4,7 @@ mod utilities;
 mod shared_client_tests {
     use super::*;
     use babushka::client::Client;
+    use redis::aio::ConnectionLike;
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::*;
@@ -27,9 +28,15 @@ mod shared_client_tests {
             }
         } else {
             let cmd_basics = utilities::setup_test_basics_internal(&configuration).await;
+            let client = Client::new(create_connection_request(
+                &[cmd_basics.server.get_client_addr()],
+                &configuration,
+            ))
+            .await
+            .unwrap();
             TestBasics {
                 server: BackingServer::Cmd(cmd_basics.server),
-                client: Client::CMD(cmd_basics.client),
+                client,
             }
         }
     }
@@ -86,7 +93,14 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_report_closing_when_server_closes(#[values(false, true)] use_cme: bool) {
         block_on_all(async {
-            let mut test_basics = setup_test_basics(use_cme, TestConfiguration::default()).await;
+            let mut test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    response_timeout: Some(10000000),
+                    ..Default::default()
+                },
+            )
+            .await;
             let server = test_basics.server;
             drop(server);
 
@@ -137,6 +151,27 @@ mod shared_client_tests {
             .await;
             let key = "hello";
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_timeout(#[values(false, true)] use_cme: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    response_timeout: Some(1),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
+            let result = test_basics.client.req_packed_command(&cmd).await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().is_timeout());
         });
     }
 }
