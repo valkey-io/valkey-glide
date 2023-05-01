@@ -292,7 +292,6 @@ async fn handle_requests(
     connection: &(impl BabushkaClient + 'static),
     writer: &Rc<Writer>,
 ) {
-    // TODO - can use pipeline here, if we're fine with the added latency.
     for request in received_requests {
         handle_request(request, connection.clone(), writer.clone())
     }
