@@ -1,6 +1,6 @@
 use super::{
     build_keys_and_certs_for_tls, create_connection_request, get_available_port,
-    wait_for_server_to_become_ready, ClusterMode, Module, RedisServer,
+    wait_for_server_to_become_ready, ClusterMode, Module, RedisServer, TestConfiguration,
 };
 use babushka::client::Client;
 use futures::future::{join_all, BoxFuture};
@@ -287,20 +287,14 @@ async fn setup_acl_for_cluster(
     join_all(ops).await;
 }
 
-pub async fn setup_test_basics_internal(
-    use_tls: bool,
-    connection_info: Option<RedisConnectionInfo>,
-) -> ClusterTestBasics {
-    let cluster = RedisCluster::new(3, 0, use_tls).await;
-    if let Some(redis_connection_info) = &connection_info {
+pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) -> ClusterTestBasics {
+    let cluster = RedisCluster::new(3, 0, configuration.use_tls).await;
+    if let Some(redis_connection_info) = &configuration.connection_info {
         setup_acl_for_cluster(&cluster.get_server_addresses(), redis_connection_info).await;
     }
-    let connection_request = create_connection_request(
-        &cluster.get_server_addresses(),
-        use_tls,
-        connection_info,
-        ClusterMode::Enabled,
-    );
+    configuration.cluster_mode = ClusterMode::Enabled;
+    let connection_request =
+        create_connection_request(&cluster.get_server_addresses(), &configuration);
 
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }
@@ -310,9 +304,18 @@ pub async fn setup_test_basics_with_connection_info(
     use_tls: bool,
     connection_info: Option<RedisConnectionInfo>,
 ) -> ClusterTestBasics {
-    setup_test_basics_internal(use_tls, connection_info).await
+    setup_test_basics_internal(TestConfiguration {
+        use_tls,
+        connection_info,
+        ..Default::default()
+    })
+    .await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
-    setup_test_basics_internal(use_tls, None).await
+    setup_test_basics_internal(TestConfiguration {
+        use_tls,
+        ..Default::default()
+    })
+    .await
 }

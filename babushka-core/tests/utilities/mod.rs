@@ -521,52 +521,54 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
     connection.req_packed_command(&cmd).await.unwrap();
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Default)]
 pub enum ClusterMode {
+    #[default]
     Disabled,
     Enabled,
 }
 
 pub fn create_connection_request(
     addresses: &[ConnectionAddr],
-    use_tls: bool,
-    connection_info: Option<RedisConnectionInfo>,
-    cluster_mode: ClusterMode,
+    configuration: &TestConfiguration,
 ) -> connection_request::ConnectionRequest {
     let addresses_info = addresses.iter().map(get_address_info).collect();
     let mut connection_request = connection_request::ConnectionRequest::new();
     connection_request.addresses = addresses_info;
-    connection_request.tls_mode = if use_tls {
+    connection_request.tls_mode = if configuration.use_tls {
         connection_request::TlsMode::InsecureTls
     } else {
         connection_request::TlsMode::NoTls
     }
     .into();
-    connection_request.cluster_mode_enabled = ClusterMode::Enabled == cluster_mode;
+    connection_request.cluster_mode_enabled = ClusterMode::Enabled == configuration.cluster_mode;
     set_connection_info_to_connection_request(
-        connection_info.unwrap_or_default(),
+        configuration.connection_info.clone().unwrap_or_default(),
         &mut connection_request,
     );
     connection_request
 }
 
-async fn setup_test_basics_internal(
-    use_tls: bool,
-    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
-    connection_info: Option<RedisConnectionInfo>,
-) -> TestBasics {
-    let server = RedisServer::new(ServerType::Tcp { tls: use_tls });
-    if let Some(redis_connection_info) = &connection_info {
+#[derive(Default)]
+pub struct TestConfiguration {
+    pub use_tls: bool,
+    pub connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
+    pub connection_info: Option<RedisConnectionInfo>,
+    pub cluster_mode: ClusterMode,
+}
+
+pub async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
+    let server = RedisServer::new(ServerType::Tcp {
+        tls: configuration.use_tls,
+    });
+    if let Some(redis_connection_info) = &configuration.connection_info {
         setup_acl(&server.get_client_addr(), redis_connection_info).await;
     }
-    let mut connection_request = create_connection_request(
-        &[server.get_client_addr()],
-        use_tls,
-        connection_info,
-        ClusterMode::Disabled,
-    );
+    let mut connection_request =
+        create_connection_request(&[server.get_client_addr()], configuration);
     connection_request.connection_retry_strategy =
-        protobuf::MessageField::from_option(connection_retry_strategy);
+        protobuf::MessageField::from_option(configuration.connection_retry_strategy.clone());
+    connection_request.cluster_mode_enabled = false;
     let client = ClientCMD::create_client(connection_request).await.unwrap();
     TestBasics { server, client }
 }
@@ -575,16 +577,30 @@ pub async fn setup_test_basics_and_connection_retry_strategy(
     use_tls: bool,
     connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
 ) -> TestBasics {
-    setup_test_basics_internal(use_tls, connection_retry_strategy, None).await
+    setup_test_basics_internal(&TestConfiguration {
+        use_tls,
+        connection_retry_strategy,
+        ..Default::default()
+    })
+    .await
 }
 
 pub async fn setup_test_basics_with_connection_info(
     use_tls: bool,
     connection_info: Option<RedisConnectionInfo>,
 ) -> TestBasics {
-    setup_test_basics_internal(use_tls, None, connection_info).await
+    setup_test_basics_internal(&TestConfiguration {
+        use_tls,
+        connection_info,
+        ..Default::default()
+    })
+    .await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
-    setup_test_basics_internal(use_tls, None, None).await
+    setup_test_basics_internal(&TestConfiguration {
+        use_tls,
+        ..Default::default()
+    })
+    .await
 }
