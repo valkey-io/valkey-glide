@@ -11,6 +11,19 @@ type Client = {
     get: (key: string) => Promise<string | null>;
 };
 
+type BaseClient = {
+    set: (
+        key: string,
+        value: string,
+        options?: any
+    ) => Promise<string | "OK" | null>;
+    get: (key: string) => Promise<string | null>;
+    customCommand: (
+        commandName: string,
+        args: string[]
+    ) => Promise<string | string[] | number | null>;
+};
+
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
     // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -19,6 +32,100 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(setResult).toEqual("OK");
     const result = await client.get(key);
     expect(result).toEqual(value);
+}
+
+export function runBaseTests<Context>(config: {
+    init: () => Promise<{ context: Context; client: BaseClient }>;
+    close: (context: Context) => void;
+    timeout?: number;
+}) {
+    runCommonTests(config);
+
+    const runTest = async (test: (client: BaseClient) => Promise<void>) => {
+        const { context, client } = await config.init();
+
+        try {
+            await test(client);
+        } finally {
+            config.close(context);
+        }
+    };
+
+    it(
+        "set with return of old value works",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                // Adding random repetition, to prevent the inputs from always having the same alignment.
+                const value = uuidv4() + "0".repeat(Math.random() * 7);
+
+                let result = await client.set(key, value);
+                expect(result).toEqual("OK");
+
+                result = await client.set(key, "", {
+                    returnOldValue: true,
+                });
+                expect(result).toEqual(value);
+
+                result = await client.get(key);
+                expect(result).toEqual("");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "conditional set works",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                // Adding random repetition, to prevent the inputs from always having the same alignment.
+                const value = uuidv4() + "0".repeat(Math.random() * 7);
+                let result = await client.set(key, value, {
+                    conditionalSet: "onlyIfExists",
+                });
+                expect(result).toEqual(null);
+
+                result = await client.set(key, value, {
+                    conditionalSet: "onlyIfDoesNotExist",
+                });
+                expect(result).toEqual("OK");
+                expect(await client.get(key)).toEqual(value);
+
+                result = await client.set(key, "foobar", {
+                    conditionalSet: "onlyIfDoesNotExist",
+                });
+                expect(result).toEqual(null);
+
+                result = await client.set(key, "foobar", {
+                    conditionalSet: "onlyIfExists",
+                });
+                expect(result).toEqual("OK");
+
+                expect(await client.get(key)).toEqual("foobar");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "custom command works",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                // Adding random repetition, to prevent the inputs from always having the same alignment.
+                const value = uuidv4() + "0".repeat(Math.random() * 7);
+                const setResult = await client.customCommand("SET", [
+                    key,
+                    value,
+                ]);
+                expect(setResult).toEqual("OK");
+                const result = await client.customCommand("GET", [key]);
+                expect(result).toEqual(value);
+            });
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
