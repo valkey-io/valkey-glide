@@ -1,15 +1,15 @@
-import { SocketConnection, BabushkaInternal, setLoggerConfig } from "..";
-import net from "net";
+import { beforeAll, describe, expect, it } from "@jest/globals";
 import fs from "fs";
+import net from "net";
 import os from "os";
 import path from "path";
+import { Reader } from "protobufjs";
+import { BabushkaInternal, SocketConnection, setLoggerConfig } from "..";
 import {
-    redis_request,
     connection_request,
+    redis_request,
     response,
 } from "../src/ProtobufMessage";
-import { Reader } from "protobufjs";
-import { describe, expect, beforeAll, it } from "@jest/globals";
 
 const { createLeakedValue, MAX_REQUEST_ARGS_LEN } = BabushkaInternal;
 
@@ -19,18 +19,17 @@ beforeAll(() => {
     setLoggerConfig("info");
 });
 
-// TODO: use TS enums when tests are in TS.
 enum ResponseType {
     /** Type of a response that returns a null. */
-    Null = 0,
+    Null,
     /** Type of a response that returns a value which isn't an error. */
-    Value = 1,
+    Value,
     /** Type of response containing an error that impacts a single request. */
-    RequestError = 2,
+    RequestError,
     /** Type of response containing an error causes the connection to close. */
-    ClosingError = 3,
+    ClosingError,
     /** Type of response containing the string "OK". */
-    OK = 4,
+    OK,
 }
 
 function sendResponse(
