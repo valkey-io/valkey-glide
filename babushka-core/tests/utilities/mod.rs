@@ -474,7 +474,9 @@ pub async fn send_set_and_get(mut client: impl ConnectionLike, key: String) {
     let mut set_command = redis::Cmd::new();
     set_command.arg("SET").arg(key.as_str()).arg(value.clone());
     let set_result = client.req_packed_command(&set_command).await.unwrap();
-    let get_result = send_get(&mut client, key.as_str()).await.unwrap();
+    let mut get_command = redis::Cmd::new();
+    get_command.arg("GET").arg(key);
+    let get_result = client.req_packed_command(&get_command).await.unwrap();
 
     assert_eq!(set_result, Value::Okay);
     assert_eq!(get_result, Value::Data(value.into_bytes()));
@@ -542,6 +544,9 @@ pub fn create_connection_request(
     }
     .into();
     connection_request.cluster_mode_enabled = ClusterMode::Enabled == configuration.cluster_mode;
+    if let Some(response_timeout) = configuration.response_timeout {
+        connection_request.response_timeout = response_timeout;
+    }
     set_connection_info_to_connection_request(
         configuration.connection_info.clone().unwrap_or_default(),
         &mut connection_request,
@@ -555,6 +560,7 @@ pub struct TestConfiguration {
     pub connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
     pub connection_info: Option<RedisConnectionInfo>,
     pub cluster_mode: ClusterMode,
+    pub response_timeout: Option<u32>,
 }
 
 pub async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
