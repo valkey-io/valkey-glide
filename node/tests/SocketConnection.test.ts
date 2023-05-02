@@ -1,10 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
-import { v4 as uuidv4 } from "uuid";
 import { ConnectionOptions, SocketConnection } from "..";
 import { redis_request } from "../src/ProtobufMessage";
-import { runCommonTests } from "./TestUtilities";
+import { runBaseTests } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
@@ -14,26 +13,6 @@ type Context = {
 };
 
 const PORT_NUMBER = 3000;
-
-async function OpenServerAndExecute(action: (port: number) => Promise<void>) {
-    const port = await FreePort(PORT_NUMBER).then(
-        ([free_port]: number[]) => free_port
-    );
-    return new Promise<void>((resolve, reject) => {
-        const server = new RedisServer(port);
-        server.open(async (err: Error | null) => {
-            if (err) {
-                reject(err);
-            }
-            try {
-                await action(port);
-            } finally {
-                server.close();
-            }
-            resolve();
-        });
-    });
-}
 
 describe("SocketConnection", () => {
     const getAddress = (port: number) => {
@@ -81,86 +60,7 @@ describe("SocketConnection", () => {
         expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);
     });
 
-    it("set with return of old value works", async () => {
-        await OpenServerAndExecute(async (port) => {
-            const client = await SocketConnection.CreateConnection(
-                getOptions(port)
-            );
-
-            const key = uuidv4();
-            // Adding random repetition, to prevent the inputs from always having the same alignment.
-            const value = uuidv4() + "0".repeat(Math.random() * 7);
-
-            let result = await client.set(key, value);
-            expect(result).toEqual("OK");
-
-            result = await client.set(key, "", {
-                returnOldValue: true,
-            });
-            expect(result).toEqual(value);
-
-            result = await client.get(key);
-            expect(result).toEqual("");
-
-            client.dispose();
-        });
-    });
-
-    it("conditional set works", async () => {
-        await OpenServerAndExecute(async (port) => {
-            const client = await SocketConnection.CreateConnection(
-                getOptions(port)
-            );
-
-            const key = uuidv4();
-            // Adding random repetition, to prevent the inputs from always having the same alignment.
-            const value = uuidv4() + "0".repeat(Math.random() * 7);
-            let result = await client.set(key, value, {
-                conditionalSet: "onlyIfExists",
-            });
-            expect(result).toEqual(null);
-
-            result = await client.set(key, value, {
-                conditionalSet: "onlyIfDoesNotExist",
-            });
-            expect(result).toEqual("OK");
-            expect(await client.get(key)).toEqual(value);
-
-            result = await client.set(key, "foobar", {
-                conditionalSet: "onlyIfDoesNotExist",
-            });
-            expect(result).toEqual(null);
-
-            result = await client.set(key, "foobar", {
-                conditionalSet: "onlyIfExists",
-            });
-            expect(result).toEqual("OK");
-
-            expect(await client.get(key)).toEqual("foobar");
-
-            client.dispose();
-        });
-    });
-
-    it("custom command works", async () => {
-        await OpenServerAndExecute(async (port) => {
-            const client = await SocketConnection.CreateConnection(
-                getOptions(port)
-            );
-
-            const key = uuidv4();
-            // Adding random repetition, to prevent the inputs from always having the same alignment.
-            const value = uuidv4() + "0".repeat(Math.random() * 7);
-            const setResult = await client.customCommand("SET", [key, value]);
-            expect(setResult).toEqual("OK");
-            const result = await client.customCommand("GET", [key]);
-            expect(result).toEqual(value);
-
-            client.dispose();
-        });
-    });
-
-    runCommonTests<Context>({
+    runBaseTests<Context>({
         init: async () => {
             const port = await FreePort(PORT_NUMBER).then(
                 ([free_port]: number[]) => free_port
