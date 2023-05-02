@@ -1,10 +1,10 @@
-import { BabushkaInternal } from "../";
-import * as net from "net";
-import { Logger } from "./Logger";
 import { valueFromSplitPointer } from "babushka-rs-internal";
-import { redis_request, response, connection_request } from "./ProtobufMessage";
-import { BufferWriter, Buffer, Reader, Writer } from "protobufjs";
 import Long from "long";
+import * as net from "net";
+import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
+import { BabushkaInternal } from "../";
+import { Logger } from "./Logger";
+import { connection_request, redis_request, response } from "./ProtobufMessage";
 
 const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } =
     BabushkaInternal;
@@ -332,6 +332,14 @@ export class SocketConnection {
                   options.readFromReplicaStrategy
               ]
             : undefined;
+        const authenticationInfo =
+            options.credentials !== undefined &&
+            "password" in options.credentials
+                ? {
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
+                : undefined;
         return {
             addresses: options.addresses,
             tlsMode: options.useTLS
@@ -342,6 +350,7 @@ export class SocketConnection {
             connectionTimeout: options.connectionTimeout,
             readFromReplicaStrategy,
             connectionRetryStrategy: options.connectionBackoff,
+            authenticationInfo,
         };
     }
 

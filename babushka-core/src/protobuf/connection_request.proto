@@ -19,6 +19,10 @@ enum TlsMode {
     InsecureTls = 2;
 }
 
+message AuthenticationInfo {
+    string password = 1;
+    string username = 2;
+}
 
 message ConnectionRequest {
     repeated AddressInfo addresses = 1;
@@ -26,9 +30,9 @@ message ConnectionRequest {
     bool cluster_mode_enabled = 3;
     uint32 response_timeout = 4;
     uint32 connection_timeout = 5;
-    // credentials - TODO - implement
     ReadFromReplicaStrategy read_from_replica_strategy = 6;
     ConnectionRetryStrategy connection_retry_strategy = 7;
+    AuthenticationInfo authentication_info = 8;
 }
 
 message ConnectionRetryStrategy {

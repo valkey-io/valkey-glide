@@ -1,11 +1,11 @@
 use super::{
-    build_keys_and_certs_for_tls, get_available_port, wait_for_server_to_become_ready, Module,
-    RedisServer,
+    build_keys_and_certs_for_tls, create_connection_request, get_available_port,
+    wait_for_server_to_become_ready, Module, RedisServer,
 };
 use babushka::client::Client;
-use babushka::connection_request::{self, ConnectionRequest};
-use futures::future::join_all;
-use redis::ConnectionAddr;
+use futures::future::{join_all, BoxFuture};
+use futures::FutureExt;
+use redis::{ConnectionAddr, RedisConnectionInfo};
 use std::process;
 use std::thread::sleep;
 use std::time::Duration;
@@ -56,14 +56,6 @@ fn get_port(address: &ConnectionAddr) -> u16 {
 }
 
 impl RedisCluster {
-    pub fn username() -> &'static str {
-        "hello"
-    }
-
-    pub fn password() -> &'static str {
-        "world"
-    }
-
     pub async fn new(nodes: u16, replicas: u16, use_tls: bool) -> Self {
         let initial_port = get_available_port();
 
@@ -110,13 +102,6 @@ impl RedisCluster {
                         .prefix("redis")
                         .tempdir()
                         .expect("failed to create tempdir");
-                    let acl_path = tempdir.path().join("users.acl");
-                    let acl_content = format!(
-                        "user {} on allcommands allkeys >{}",
-                        Self::username(),
-                        Self::password()
-                    );
-                    std::fs::write(&acl_path, acl_content).expect("failed to write acl file");
                     cmd.arg("--cluster-enabled")
                         .arg("yes")
                         .arg("--cluster-config-file")
@@ -126,9 +111,7 @@ impl RedisCluster {
                         .arg("--appendonly")
                         .arg("yes")
                         .arg("--logfile")
-                        .arg(format!("{port}.log"))
-                        .arg("--aclfile")
-                        .arg(&acl_path);
+                        .arg(format!("{port}.log"));
                     if is_tls {
                         cmd.arg("--tls-cluster").arg("yes");
                         if replicas > 0 {
@@ -293,21 +276,40 @@ pub struct ClusterTestBasics {
     pub client: Client,
 }
 
-pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
-    let cluster = RedisCluster::new(3, 0, use_tls).await;
-    let mut connection_request = ConnectionRequest::new();
-    connection_request.addresses = cluster
-        .iter_servers()
-        .map(|server| super::get_address_info(&server.get_client_addr()))
+async fn setup_acl_for_cluster(
+    addresses: &[ConnectionAddr],
+    connection_info: &RedisConnectionInfo,
+) {
+    let ops: Vec<BoxFuture<()>> = addresses
+        .iter()
+        .map(|addr| (async move { super::setup_acl(addr, connection_info).await }).boxed())
         .collect();
-    connection_request.tls_mode = if use_tls {
-        connection_request::TlsMode::InsecureTls
-    } else {
-        connection_request::TlsMode::NoTls
+    join_all(ops).await;
+}
+
+pub async fn setup_test_basics_internal(
+    use_tls: bool,
+    connection_info: Option<RedisConnectionInfo>,
+) -> ClusterTestBasics {
+    let cluster = RedisCluster::new(3, 0, use_tls).await;
+    if let Some(redis_connection_info) = &connection_info {
+        setup_acl_for_cluster(&cluster.get_server_addresses(), redis_connection_info).await;
     }
-    .into();
-    connection_request.connection_retry_strategy = protobuf::MessageField::from_option(None);
+    let mut connection_request =
+        create_connection_request(&cluster.get_server_addresses(), use_tls, connection_info);
+
     connection_request.cluster_mode_enabled = true;
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }
+}
+
+pub async fn setup_test_basics_with_connection_info(
+    use_tls: bool,
+    connection_info: Option<RedisConnectionInfo>,
+) -> ClusterTestBasics {
+    setup_test_basics_internal(use_tls, connection_info).await
+}
+
+pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
+    setup_test_basics_internal(use_tls, None).await
 }
