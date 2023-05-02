@@ -1,8 +1,7 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe } from "@jest/globals";
 import { exec } from "child_process";
-import { v4 as uuidv4 } from "uuid";
 import { ClusterSocketConnection, ConnectionOptions } from "..";
-import { runCommonTests } from "./TestUtilities";
+import { runBaseTests } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
@@ -13,22 +12,6 @@ type Context = {
 
 const PORT_NUMBER = 5000;
 const TIMEOUT = 10000;
-
-async function OpenClusterAndExecute(
-    action: (ports: number[]) => Promise<void>
-) {
-    const port = await FreePort(PORT_NUMBER).then(
-        ([free_port]: number[]) => free_port
-    );
-    let cluster: RedisCluster | undefined = undefined;
-    try {
-        cluster = await RedisCluster.createCluster(port, 6);
-        const ports = cluster.ports();
-        await action(ports);
-    } finally {
-        await cluster?.dispose();
-    }
-}
 
 class RedisCluster {
     private firstPort: number;
@@ -91,76 +74,7 @@ describe("ClusterSocketConnection", () => {
         };
     };
 
-    it(
-        "set with return of old value works",
-        async () => {
-            await OpenClusterAndExecute(async (ports) => {
-                const client = await ClusterSocketConnection.CreateConnection(
-                    getOptions(ports)
-                );
-
-                const key = uuidv4();
-                // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value = uuidv4() + "0".repeat(Math.random() * 7);
-
-                let result = await client.set(key, value);
-                expect(result).toEqual("OK");
-
-                result = await client.set(key, "", {
-                    returnOldValue: true,
-                });
-                expect(result).toEqual(value);
-
-                result = await client.get(key);
-                expect(result).toEqual("");
-
-                client.dispose();
-            });
-        },
-        TIMEOUT
-    );
-
-    it(
-        "conditional set works",
-        async () => {
-            await OpenClusterAndExecute(async (ports) => {
-                const client = await ClusterSocketConnection.CreateConnection(
-                    getOptions(ports)
-                );
-
-                const key = uuidv4();
-                // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value = uuidv4() + "0".repeat(Math.random() * 7);
-                let result = await client.set(key, value, {
-                    conditionalSet: "onlyIfExists",
-                });
-                expect(result).toEqual(null);
-
-                result = await client.set(key, value, {
-                    conditionalSet: "onlyIfDoesNotExist",
-                });
-                expect(result).toEqual("OK");
-                expect(await client.get(key)).toEqual(value);
-
-                result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfDoesNotExist",
-                });
-                expect(result).toEqual(null);
-
-                result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfExists",
-                });
-                expect(result).toEqual("OK");
-
-                expect(await client.get(key)).toEqual("foobar");
-
-                client.dispose();
-            });
-        },
-        TIMEOUT
-    );
-
-    runCommonTests<Context>({
+    runBaseTests<Context>({
         init: async () => {
             const port = await FreePort(PORT_NUMBER).then(
                 ([free_port]: number[]) => free_port
