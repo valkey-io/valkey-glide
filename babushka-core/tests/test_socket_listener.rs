@@ -10,6 +10,7 @@ use utilities::*;
 
 /// Response header length approximation, including the length of the message and the callback index
 const APPROX_RESP_HEADER_LEN: usize = 3;
+const KEY_LENGTH: usize = 6;
 
 #[cfg(test)]
 mod socket_listener {
@@ -209,10 +210,15 @@ mod socket_listener {
         u32::decode_var(buffer).unwrap()
     }
 
-    fn send_addresses(addresses: &[ConnectionAddr], socket: &UnixStream, use_tls: bool) {
+    fn connect_to_redis(
+        addresses: &[ConnectionAddr],
+        socket: &UnixStream,
+        use_tls: bool,
+        cluster_mode: ClusterMode,
+    ) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
-        let connection_request = create_connection_request(addresses, use_tls, None);
+        let connection_request = create_connection_request(addresses, use_tls, None, cluster_mode);
         let approx_message_length =
             APPROX_RESP_HEADER_LEN + connection_request.compute_size() as usize;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -227,6 +233,7 @@ mod socket_listener {
         use_tls: bool,
         socket_path: Option<String>,
         addresses: &[ConnectionAddr],
+        cluster_mode: ClusterMode,
     ) -> UnixStream {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
@@ -246,7 +253,7 @@ mod socket_listener {
         let path = path_arc.lock().unwrap();
         let path = path.as_ref().expect("Didn't get any socket path");
         let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
-        send_addresses(addresses, &socket, use_tls);
+        connect_to_redis(addresses, &socket, use_tls, cluster_mode);
         socket
     }
 
@@ -256,7 +263,7 @@ mod socket_listener {
         server: RedisServer,
     ) -> TestBasics {
         let address = server.get_client_addr();
-        let socket = setup_socket(use_tls, socket_path, &[address]);
+        let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
         TestBasics { server, socket }
     }
 
@@ -274,7 +281,12 @@ mod socket_listener {
 
     async fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
         let cluster = RedisCluster::new(6, 1, use_tls).await;
-        let socket = setup_socket(use_tls, None, &cluster.get_server_addresses());
+        let socket = setup_socket(
+            use_tls,
+            None,
+            &cluster.get_server_addresses(),
+            ClusterMode::Enabled,
+        );
         ClusterTestBasics {
             _cluster: cluster,
             socket,
@@ -325,6 +337,12 @@ mod socket_listener {
                     .spawn_scoped(scope, || {
                         const CALLBACK_INDEX: u32 = 99;
                         let address = server.get_client_addr();
+                        let mut socket = setup_socket(
+                            false,
+                            Some(socket_path.clone()),
+                            &[address],
+                            ClusterMode::Disabled,
+                        );
                         let key = generate_random_string(KEY_LENGTH);
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -414,7 +432,7 @@ mod socket_listener {
         write_request(
             &mut buffer,
             CALLBACK2_INDEX,
-            vec!["GET".to_string(), key.to_string()],
+            vec!["GET".to_string(), key],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
