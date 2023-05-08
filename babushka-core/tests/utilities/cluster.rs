@@ -1,6 +1,6 @@
 use super::{
     build_keys_and_certs_for_tls, create_connection_request, get_available_port,
-    wait_for_server_to_become_ready, Module, RedisServer,
+    wait_for_server_to_become_ready, ClusterMode, Module, RedisServer,
 };
 use babushka::client::Client;
 use futures::future::{join_all, BoxFuture};
@@ -295,10 +295,13 @@ pub async fn setup_test_basics_internal(
     if let Some(redis_connection_info) = &connection_info {
         setup_acl_for_cluster(&cluster.get_server_addresses(), redis_connection_info).await;
     }
-    let mut connection_request =
-        create_connection_request(&cluster.get_server_addresses(), use_tls, connection_info);
+    let connection_request = create_connection_request(
+        &cluster.get_server_addresses(),
+        use_tls,
+        connection_info,
+        ClusterMode::Enabled,
+    );
 
-    connection_request.cluster_mode_enabled = true;
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }
 }
