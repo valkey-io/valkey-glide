@@ -1,12 +1,12 @@
-import { describe } from "@jest/globals";
+import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { exec } from "child_process";
 import { ClusterSocketConnection, ConnectionOptions } from "..";
-import { runBaseTests } from "./TestUtilities";
+import { flushallOnPort } from "./TestUtilities";
+import { runBaseTests } from "./SharedTests";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
 type Context = {
-    cluster: RedisCluster;
     client: ClusterSocketConnection;
 };
 
@@ -16,25 +16,34 @@ const TIMEOUT = 10000;
 class RedisCluster {
     private firstPort: number;
     private nodeCount: number;
+    private replicaCount: number;
 
-    private constructor(firstPort: number, nodeCount: number) {
+    private constructor(
+        firstPort: number,
+        nodeCount: number,
+        replicaCount: number
+    ) {
         this.firstPort = firstPort;
         this.nodeCount = nodeCount;
+        this.replicaCount = replicaCount;
     }
 
     public static createCluster(
         firstPort: number,
-        nodeCount: number
+        nodeCount: number,
+        replicaCount: number
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
             exec(
-                `sudo START_PORT=${firstPort} NODE_COUNT=${nodeCount} ../create-cluster.sh start`,
+                `sudo REPLICA_COUNT=${replicaCount} START_PORT=${firstPort} NODE_COUNT=${nodeCount} ../create-cluster.sh start`,
                 (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
                     } else {
-                        resolve(new RedisCluster(firstPort, nodeCount));
+                        resolve(
+                            new RedisCluster(firstPort, nodeCount, replicaCount)
+                        );
                     }
                 }
             );
@@ -65,6 +74,22 @@ class RedisCluster {
 }
 
 describe("ClusterSocketConnection", () => {
+    let cluster: RedisCluster;
+    beforeAll(async () => {
+        const port = await FreePort(PORT_NUMBER).then(
+            ([free_port]: number[]) => free_port
+        );
+        cluster = await RedisCluster.createCluster(port, 3, 0);
+    });
+
+    afterEach(async () => {
+        await Promise.all(cluster.ports().map((port) => flushallOnPort(port)));
+    });
+
+    afterAll(async () => {
+        await cluster.dispose();
+    });
+
     const getOptions = (ports: number[]): ConnectionOptions => {
         return {
             addresses: ports.map((port) => ({
@@ -76,24 +101,18 @@ describe("ClusterSocketConnection", () => {
 
     runBaseTests<Context>({
         init: async () => {
-            const port = await FreePort(PORT_NUMBER).then(
-                ([free_port]: number[]) => free_port
-            );
-            const cluster = await RedisCluster.createCluster(port, 6);
             const client = await ClusterSocketConnection.CreateConnection(
                 getOptions(cluster.ports())
             );
             return {
                 context: {
-                    cluster,
                     client,
                 },
                 client,
             };
         },
-        close: async (context: Context) => {
+        close: (context: Context) => {
             context.client.dispose();
-            await context.cluster.dispose();
         },
         timeout: TIMEOUT,
     });
