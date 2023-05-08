@@ -298,10 +298,10 @@ mod socket_listener {
 
         const CALLBACK_INDEX: u32 = 99;
         let mut test_basics = setup_test_basics_with_socket_path(false, Some(socket_path.clone()));
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
@@ -325,11 +325,10 @@ mod socket_listener {
                     .spawn_scoped(scope, || {
                         const CALLBACK_INDEX: u32 = 99;
                         let address = server.get_client_addr();
-                        let mut socket = setup_socket(false, Some(socket_path.clone()), &[address]);
-                        let key = "hello";
+                        let key = generate_random_string(KEY_LENGTH);
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
-                        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+                        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
                         socket.write_all(&buffer).unwrap();
 
                         let _size = read_from_socket(&mut buffer, &mut socket);
@@ -345,7 +344,7 @@ mod socket_listener {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let value = generate_random_string(VALUE_LENGTH);
         // Send a set request
         let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
@@ -353,7 +352,7 @@ mod socket_listener {
         write_set(
             &mut buffer,
             CALLBACK1_INDEX,
-            key,
+            key.as_str(),
             value.clone(),
             args_pointer,
         );
@@ -363,7 +362,7 @@ mod socket_listener {
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
+        write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
         socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, socket);
@@ -394,7 +393,7 @@ mod socket_listener {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let value = generate_random_string(VALUE_LENGTH);
         // Send a set request
         let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
@@ -480,9 +479,9 @@ mod socket_listener {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
         let mut test_basics = setup_test_basics(use_tls);
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let mut buffer = Vec::with_capacity(key.len() * 2);
-        write_get(&mut buffer, CALLBACK_INDEX, key, args_pointer);
+        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
@@ -532,7 +531,7 @@ mod socket_listener {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 1000000;
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let value = generate_random_string(VALUE_LENGTH);
         // Send a set request
         let approx_message_length = VALUE_LENGTH
@@ -543,7 +542,7 @@ mod socket_listener {
         write_set(
             &mut buffer,
             CALLBACK1_INDEX,
-            key,
+            key.as_str(),
             value.clone(),
             args_pointer,
         );
@@ -553,7 +552,7 @@ mod socket_listener {
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key, args_pointer);
+        write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let response_header_length = u32::required_space(size_of::<usize>() as u32);
@@ -711,9 +710,9 @@ mod socket_listener {
         drop(server);
 
         const CALLBACK_INDEX: u32 = 0;
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
@@ -731,9 +730,9 @@ mod socket_listener {
         let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
 
         const CALLBACK_INDEX: u32 = 0;
-        let key = "hello";
+        let key = generate_random_string(KEY_LENGTH);
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key, false);
+        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, &mut socket);
@@ -750,9 +749,9 @@ mod socket_listener {
             drop(test_basics);
 
             const CALLBACK_INDEX: u32 = 0;
-            let key = "hello";
+            let key = generate_random_string(KEY_LENGTH);
             let mut buffer = Vec::with_capacity(100);
-            write_get(&mut buffer, CALLBACK_INDEX, key, false);
+            write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
             socket.write_all(&buffer).unwrap();
 
             let _new_server = RedisServer::new_with_addr_and_modules(address, &[]);
