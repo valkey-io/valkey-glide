@@ -362,12 +362,9 @@ async fn listen_on_client_stream(socket: UnixStream) {
         accumulated_outputs,
         closing_sender: sender,
     });
-    let connection = match wait_for_connection_configuration_and_create_connection(
-        &mut client_listener,
-        &writer,
-    )
-    .await
-    {
+    let connection_creation =
+        wait_for_connection_configuration_and_create_connection(&mut client_listener, &writer);
+    let connection = match connection_creation.await {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
             // This isn't an error - it can happen when a new wrapper-client creates a connection in order to check whether something already listens on the socket.
