@@ -9,7 +9,7 @@ use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
-use logger_core::{log_error, log_info, log_trace};
+use logger_core::{log_debug, log_error, log_info, log_trace};
 use protobuf::Message;
 use redis::{cmd, Cmd, RedisResult, Value};
 use redis::{ErrorKind, RedisError};
@@ -80,7 +80,7 @@ impl<T: Message> From<ClosingReason> for PipeListeningResult<T> {
 impl UnixStreamListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         // if the logger has been initialized by the user (external or internal) on info level this log will be shown
-        log_info("connection", "new socket listener initiated");
+        log_debug("connection", "new socket listener initiated");
         let rotating_buffer = RotatingBuffer::new(2, 65_536);
         Self {
             read_socket,
@@ -368,7 +368,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
             // This isn't an error - it can happen when a new wrapper-client creates a connection in order to check whether something already listens on the socket.
-            log_trace(
+            log_debug(
                 "client creation",
                 "read socket closed before client was created.",
             );
@@ -394,6 +394,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
     };
+    log_info("connection", "new connection started");
     tokio::select! {
             reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
