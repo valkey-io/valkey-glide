@@ -1,20 +1,53 @@
-import { describe, expect, it } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+} from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
 import { ConnectionOptions, SocketConnection } from "..";
 import { redis_request } from "../src/ProtobufMessage";
-import { runBaseTests } from "./TestUtilities";
+import { flushallOnPort } from "./TestUtilities";
+import { runBaseTests } from "./SharedTests";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
 type Context = {
-    server: RedisServer;
     client: SocketConnection;
 };
 
 const PORT_NUMBER = 3000;
 
 describe("SocketConnection", () => {
+    let server: RedisServer;
+    let port: number;
+    beforeAll(async () => {
+        port = await FreePort(PORT_NUMBER).then(
+            ([free_port]: number[]) => free_port
+        );
+        server = await new Promise((resolve, reject) => {
+            const server = new RedisServer(port);
+            server.open(async (err: Error | null) => {
+                if (err) {
+                    reject(err);
+                }
+
+                resolve(server);
+            });
+        });
+    });
+
+    afterEach(async () => {
+        await flushallOnPort(port);
+    });
+
+    afterAll(() => {
+        server.close();
+    });
+
     const getAddress = (port: number) => {
         return [{ host: "localhost", port }];
     };
@@ -62,26 +95,13 @@ describe("SocketConnection", () => {
 
     runBaseTests<Context>({
         init: async () => {
-            const port = await FreePort(PORT_NUMBER).then(
-                ([free_port]: number[]) => free_port
+            const client = await SocketConnection.CreateConnection(
+                getOptions(port)
             );
-            return new Promise((resolve, reject) => {
-                const server = new RedisServer(port);
-                server.open(async (err: Error | null) => {
-                    if (err) {
-                        reject(err);
-                    }
 
-                    const client = await SocketConnection.CreateConnection(
-                        getOptions(port)
-                    );
-
-                    resolve({ client, context: { server, client } });
-                });
-            });
+            return { client, context: { client } };
         },
         close: async (context: Context) => {
-            context.server.close();
             context.client.dispose();
         },
     });
