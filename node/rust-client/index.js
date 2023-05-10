@@ -231,6 +231,7 @@ if (!nativeBinding) {
 const {
   Level,
   MAX_REQUEST_ARGS_LEN,
+  DEFAULT_TIMEOUT_IN_MILLISECONDS,
   AsyncClient,
   StartSocketConnection,
   log,
@@ -243,6 +244,7 @@ const {
 
 module.exports.Level = Level
 module.exports.MAX_REQUEST_ARGS_LEN = MAX_REQUEST_ARGS_LEN
+module.exports.DEFAULT_TIMEOUT_IN_MILLISECONDS = DEFAULT_TIMEOUT_IN_MILLISECONDS
 module.exports.AsyncClient = AsyncClient
 module.exports.StartSocketConnection = StartSocketConnection
 module.exports.log = log

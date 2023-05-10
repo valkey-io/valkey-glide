@@ -1,4 +1,7 @@
-import { valueFromSplitPointer } from "babushka-rs-internal";
+import {
+    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    valueFromSplitPointer,
+} from "babushka-rs-internal";
 import Long from "long";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
@@ -79,6 +82,7 @@ export class SocketConnection {
     private requestWriter = new BufferWriter();
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
+    private readonly responseTimeout: number; // Timeout in milliseconds
 
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
@@ -131,10 +135,11 @@ export class SocketConnection {
         this.remainingReadData = undefined;
     }
 
-    protected constructor(socket: net.Socket) {
+    protected constructor(socket: net.Socket, options?: ConnectionOptions) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.instance.log("info", "connection", `construct socket`);
-
+        this.responseTimeout =
+            options?.responseTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -181,6 +186,9 @@ export class SocketConnection {
         args: string[]
     ): Promise<T> {
         return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                reject("Operation timed out");
+            }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
             this.writeOrBufferRedisRequest(callbackIndex, requestType, args);
@@ -387,9 +395,9 @@ export class SocketConnection {
     private static async __CreateConnectionInternal(
         options: ConnectionOptions,
         connectedSocket: net.Socket,
-        constructor: (socket: net.Socket) => any
+        constructor: (socket: net.Socket, options?: ConnectionOptions) => any
     ): Promise<any> {
-        const connection = constructor(connectedSocket);
+        const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
         return connection;
     }
@@ -401,7 +409,7 @@ export class SocketConnection {
         return this.__CreateConnectionInternal(
             options,
             connectedSocket,
-            (options) => new SocketConnection(options)
+            (socket, options) => new SocketConnection(socket, options)
         );
     }
 
@@ -417,7 +425,10 @@ export class SocketConnection {
 
     protected static async CreateConnectionInternal<TConnection>(
         options: ConnectionOptions,
-        constructor: (socket: net.Socket) => TConnection
+        constructor: (
+            socket: net.Socket,
+            options?: ConnectionOptions
+        ) => TConnection
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
