@@ -11,6 +11,7 @@ export const enum Level {
   Warn = 1,
 }
 export const MAX_REQUEST_ARGS_LEN: number
+export const DEFAULT_TIMEOUT_IN_MILLISECONDS: number
 export function StartSocketConnection(): Promise<string>
 export function log(logLevel: Level, logIdentifier: string, message: string): void
 export function InitInternalLogger(level?: Level | undefined | null, fileName?: string | undefined | null): Level
