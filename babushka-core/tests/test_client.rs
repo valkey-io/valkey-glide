@@ -4,6 +4,7 @@ mod utilities;
 mod shared_client_tests {
     use super::*;
     use babushka::client::Client;
+    use redis::aio::ConnectionLike;
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::*;
@@ -18,30 +19,26 @@ mod shared_client_tests {
         client: Client,
     }
 
-    async fn setup_test_basics_with_connection_info(
-        use_tls: bool,
-        use_cme: bool,
-        connection_info: Option<redis::RedisConnectionInfo>,
-    ) -> TestBasics {
+    async fn setup_test_basics(use_cme: bool, configuration: TestConfiguration) -> TestBasics {
         if use_cme {
-            let cluster_basics =
-                cluster::setup_test_basics_with_connection_info(use_tls, connection_info).await;
+            let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
             TestBasics {
                 server: BackingServer::Cme(cluster_basics.cluster),
                 client: cluster_basics.client,
             }
         } else {
-            let cmd_basics =
-                utilities::setup_test_basics_with_connection_info(use_tls, connection_info).await;
+            let cmd_basics = utilities::setup_test_basics_internal(&configuration).await;
+            let client = Client::new(create_connection_request(
+                &[cmd_basics.server.get_client_addr()],
+                &configuration,
+            ))
+            .await
+            .unwrap();
             TestBasics {
                 server: BackingServer::Cmd(cmd_basics.server),
-                client: Client::CMD(cmd_basics.client),
+                client,
             }
         }
-    }
-
-    async fn setup_test_basics(use_tls: bool, use_cme: bool) -> TestBasics {
-        setup_test_basics_with_connection_info(use_tls, use_cme, None).await
     }
 
     #[rstest]
@@ -51,7 +48,14 @@ mod shared_client_tests {
         #[values(false, true)] use_cme: bool,
     ) {
         block_on_all(async {
-            let test_basics = setup_test_basics(use_tls, use_cme).await;
+            let test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    use_tls,
+                    ..Default::default()
+                },
+            )
+            .await;
             let key = "hello";
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
         });
@@ -64,7 +68,14 @@ mod shared_client_tests {
         #[values(false, true)] use_cme: bool,
     ) {
         block_on_all(async {
-            let test_basics = setup_test_basics(use_tls, use_cme).await;
+            let test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    use_tls,
+                    ..Default::default()
+                },
+            )
+            .await;
             const NUMBER_OF_CONCURRENT_OPERATIONS: usize = 1000;
 
             let mut actions = Vec::with_capacity(NUMBER_OF_CONCURRENT_OPERATIONS);
@@ -82,7 +93,14 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_report_closing_when_server_closes(#[values(false, true)] use_cme: bool) {
         block_on_all(async {
-            let mut test_basics = setup_test_basics(false, use_cme).await;
+            let mut test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    response_timeout: Some(10000000),
+                    ..Default::default()
+                },
+            )
+            .await;
             let server = test_basics.server;
             drop(server);
 
@@ -97,13 +115,16 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password(#[values(false, true)] use_cme: bool) {
         block_on_all(async {
-            let test_basics = setup_test_basics_with_connection_info(
-                true,
+            let test_basics = setup_test_basics(
                 use_cme,
-                Some(redis::RedisConnectionInfo {
-                    password: Some("ReallySecurePassword".to_string()),
+                TestConfiguration {
+                    use_tls: true,
+                    connection_info: Some(redis::RedisConnectionInfo {
+                        password: Some("ReallySecurePassword".to_string()),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
+                },
             )
             .await;
             let key = "hello";
@@ -115,18 +136,42 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password_and_username(#[values(false, true)] use_cme: bool) {
         block_on_all(async {
-            let test_basics = setup_test_basics_with_connection_info(
-                true,
+            let test_basics = setup_test_basics(
                 use_cme,
-                Some(redis::RedisConnectionInfo {
-                    password: Some("ReallySecurePassword".to_string()),
-                    username: Some("AuthorizedUsername".to_string()),
+                TestConfiguration {
+                    use_tls: true,
+                    connection_info: Some(redis::RedisConnectionInfo {
+                        password: Some("ReallySecurePassword".to_string()),
+                        username: Some("AuthorizedUsername".to_string()),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
+                },
             )
             .await;
             let key = "hello";
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_timeout(#[values(false, true)] use_cme: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cme,
+                TestConfiguration {
+                    response_timeout: Some(1),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
+            let result = test_basics.client.req_packed_command(&cmd).await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().is_timeout());
         });
     }
 }

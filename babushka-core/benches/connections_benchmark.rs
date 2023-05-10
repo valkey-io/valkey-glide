@@ -1,5 +1,5 @@
 use babushka::{
-    client::{BabushkaClient, Client, ClientCMD},
+    client::{BabushkaClient, Client},
     connection_request::{AddressInfo, ConnectionRequest, TlsMode},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -124,13 +124,9 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
 
 fn client_cmd_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
     benchmark(c, address, "ClientCMD", group, |address, runtime| {
-        runtime.block_on(async {
-            Client::CMD(
-                ClientCMD::create_client(create_connection_request(address))
-                    .await
-                    .unwrap(),
-            )
-        })
+        runtime
+            .block_on(Client::new(create_connection_request(address)))
+            .unwrap()
     });
 }
 

@@ -218,7 +218,14 @@ mod socket_listener {
     ) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
-        let connection_request = create_connection_request(addresses, use_tls, None, cluster_mode);
+        let connection_request = create_connection_request(
+            addresses,
+            &TestConfiguration {
+                use_tls,
+                cluster_mode,
+                ..Default::default()
+            },
+        );
         let approx_message_length =
             APPROX_RESP_HEADER_LEN + connection_request.compute_size() as usize;
         let mut buffer = Vec::with_capacity(approx_message_length);
