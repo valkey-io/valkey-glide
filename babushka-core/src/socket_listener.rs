@@ -194,11 +194,7 @@ async fn write_result(
                 log_error("response error", err.to_string());
                 Some(response::response::Value::ClosingError(err.to_string()))
             } else {
-                Some(response::response::Value::RequestError(format!(
-                    "{} - {}",
-                    err.category(),
-                    err
-                ))) // TODO - this log isn't structured well. It gives results like `key moved - An error was signalled by the server: 10263 127.0.0.1:41404`, which should be something like `An error was signalled by the server: key moved - 10263 127.0.0.1:41404`. This should be fixed at the library level.
+                Some(response::response::Value::RequestError(err.to_string()))
             };
         }
     }
