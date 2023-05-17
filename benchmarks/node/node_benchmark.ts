@@ -1,9 +1,14 @@
-import percentile from "percentile";
-import { stdev } from "stats-lite";
-import { createClient } from "redis";
-import { AsyncClient, SocketConnection, setLoggerConfig } from "babushka-rs";
+import {
+    AsyncClient,
+    ClusterSocketConnection,
+    SocketConnection,
+    setLoggerConfig,
+} from "babushka-rs";
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
+import percentile from "percentile";
+import { createClient, createCluster } from "redis";
+import { stdev } from "stats-lite";
 
 enum ChosenAction {
     GET_NON_EXISTING,
@@ -13,8 +18,8 @@ enum ChosenAction {
 // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
 setLoggerConfig("info", "first.log");
 
+const PORT = 6379;
 function getAddress(host: string, port?: number): string {
-    const PORT = 6379;
     return `${host}:${port === undefined ? PORT : port}`;
 }
 
@@ -23,7 +28,6 @@ function getAddressWithProtocol(
     useTLS: boolean,
     port?: number
 ): string {
-    const PORT = 6379;
     const protocol = useTLS ? "rediss" : "redis";
     return `${protocol}://${getAddress(host, port ?? PORT)}`;
 }
@@ -213,13 +217,15 @@ async function main(
     clients_to_run: "all" | "ffi" | "socket" | "babushka",
     host: string,
     clientCount: number,
-    useTLS: boolean
+    useTLS: boolean,
+    clusterModeEnabled: boolean
 ) {
     const data = generate_value(data_size);
     if (
-        clients_to_run == "ffi" ||
-        clients_to_run == "all" ||
-        clients_to_run == "babushka"
+        !clusterModeEnabled && // no FFI support for CME yet
+        (clients_to_run == "ffi" ||
+            clients_to_run == "all" ||
+            clients_to_run == "babushka")
     ) {
         const clients = await createClients(
             clientCount,
@@ -247,8 +253,11 @@ async function main(
         clients_to_run == "all" ||
         clients_to_run == "babushka"
     ) {
+        const clientClass = clusterModeEnabled
+            ? ClusterSocketConnection
+            : SocketConnection;
         const clients = await createClients(clientCount, () =>
-            SocketConnection.CreateConnection({
+            clientClass.CreateConnection({
                 addresses: [{ host }],
                 useTLS,
             })
@@ -266,14 +275,28 @@ async function main(
     }
 
     if (clients_to_run == "all") {
+        const clients = await createClients(clientCount, async () => {
+            const node = {
+                url: getAddressWithProtocol(host, useTLS),
+            };
+            const node_redis_client = clusterModeEnabled
+                ? createCluster({
+                      rootNodes: [
+                          { socket: { host, port: PORT, tls: useTLS } },
+                      ],
+                      defaults: {
+                          socket: {
+                              tls: useTLS,
+                          },
+                      },
+                      useReplicas: true,
+                  })
+                : createClient(node);
+            await node_redis_client.connect();
+            return node_redis_client;
+        });
         await run_clients(
-            await createClients(clientCount, async () => {
-                const node_redis_client = createClient({
-                    url: getAddressWithProtocol(host, useTLS),
-                });
-                await node_redis_client.connect();
-                return node_redis_client;
-            }),
+            clients,
             "node_redis",
             total_commands,
             num_of_concurrent_tasks,
@@ -291,6 +314,7 @@ const optionDefinitions = [
     { name: "host", type: String },
     { name: "clientCount", type: String, multiple: true },
     { name: "tls", type: Boolean },
+    { name: "clusterModeEnabled", type: Boolean },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -329,7 +353,8 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                 clients_to_run,
                 receivedOptions.host,
                 clientCount,
-                receivedOptions.tls
+                receivedOptions.tls,
+                receivedOptions.clusterModeEnabled
             );
         }
 

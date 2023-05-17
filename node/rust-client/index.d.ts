@@ -8,7 +8,7 @@ export const enum Level {
   Error = 0,
   Info = 2,
   Trace = 4,
-  Warn = 1
+  Warn = 1,
 }
 export const MAX_REQUEST_ARGS_LEN: number
 export function StartSocketConnection(): Promise<string>
@@ -25,5 +25,5 @@ export function createLeakedStringVec(message: Array<string>): [number, number]
 export class AsyncClient {
   static CreateConnection(connectionAddress: string): AsyncClient
   get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<string | "OK" | null>
+  set(key: string, value: string): Promise<string | 'OK' | null>
 }

@@ -57,7 +57,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
 }
 
 function runCSharpBenchmark(){
@@ -70,13 +70,13 @@ function runCSharpBenchmark(){
 function flushDB() {
   cd $utilitiesDir
   npm install
-  npm run flush -- --host $host $tlsFlag
+  npm run flush -- --host $host $tlsFlag $clusterFlag
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  npm run fill -- --dataSize $1 --host $host $tlsFlag
+  npm run fill -- --dataSize $1 --host $host $tlsFlag $clusterFlag
 }
 
 utilitiesDir=`pwd`/utilities
@@ -117,6 +117,7 @@ function Help() {
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
     echo Pass -only-babushka to only run Babushk clients.
+    echo Pass -is-cluster if the host is a CME server.
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
 }
@@ -185,6 +186,9 @@ do
         -no-tls) 
             tlsFlag=
             ;;
+        -is-cluster) 
+            clusterFlag="--clusterModeEnabled"
+            ;;            
     esac
     shift
 done
