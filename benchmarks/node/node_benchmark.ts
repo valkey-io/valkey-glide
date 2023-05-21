@@ -7,7 +7,7 @@ import {
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
 import percentile from "percentile";
-import { createClient, createCluster } from "redis";
+import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
 
 enum ChosenAction {
@@ -148,7 +148,8 @@ async function run_clients(
     total_commands: number,
     num_of_concurrent_tasks: number,
     data_size: number,
-    data: string
+    data: string,
+    clientDisposal: (client: IAsyncClient) => void
 ) {
     const now = new Date();
     console.log(
@@ -198,6 +199,8 @@ async function run_clients(
         ...get_non_existing_latency_results,
     };
     bench_json_results.push(json_res);
+
+    Promise.all(clients.map((client) => clientDisposal(client)));
 }
 
 function createClients(
@@ -227,16 +230,12 @@ async function main(
             clients_to_run == "all" ||
             clients_to_run == "babushka")
     ) {
-        const clients = await createClients(
-            clientCount,
-            () =>
-                new Promise((resolve) =>
-                    resolve(
-                        AsyncClient.CreateConnection(
-                            getAddressWithProtocol(host, useTLS)
-                        )
-                    )
+        const clients = await createClients(clientCount, () =>
+            Promise.resolve(
+                AsyncClient.CreateConnection(
+                    getAddressWithProtocol(host, useTLS)
                 )
+            )
         );
         await run_clients(
             clients,
@@ -244,7 +243,8 @@ async function main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
-            data
+            data,
+            (_) => {}
         );
     }
 
@@ -268,9 +268,11 @@ async function main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
-            data
+            data,
+            (client) => {
+                (client as SocketConnection).dispose();
+            }
         );
-        clients.forEach((client) => (client as SocketConnection).dispose());
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
@@ -301,8 +303,12 @@ async function main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
-            data
+            data,
+            (client) => {
+                (client as RedisClientType).disconnect();
+            }
         );
+        await new Promise((resolve) => setTimeout(resolve, 100));
     }
 }
 
