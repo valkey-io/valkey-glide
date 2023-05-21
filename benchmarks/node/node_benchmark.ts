@@ -149,13 +149,14 @@ async function run_clients(
     num_of_concurrent_tasks: number,
     data_size: number,
     data: string,
-    clientDisposal: (client: IAsyncClient) => void
+    clientDisposal: (client: IAsyncClient) => void,
+    is_cluster: boolean
 ) {
     const now = new Date();
     console.log(
         `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${
             clients.length
-        } ${now.toLocaleTimeString()}`
+        } is_cluster: ${is_cluster} ${now.toLocaleTimeString()}`
     );
     const action_latencies = {
         [ChosenAction.SET]: [],
@@ -194,6 +195,7 @@ async function run_clients(
         data_size,
         tps,
         clientCount: clients.length,
+        is_cluster,
         ...set_latency_results,
         ...get_existing_latency_results,
         ...get_non_existing_latency_results,
@@ -244,7 +246,8 @@ async function main(
             num_of_concurrent_tasks,
             data_size,
             data,
-            (_) => {}
+            (_) => {},
+            clusterModeEnabled
         );
     }
 
@@ -271,7 +274,8 @@ async function main(
             data,
             (client) => {
                 (client as SocketConnection).dispose();
-            }
+            },
+            clusterModeEnabled
         );
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -306,7 +310,8 @@ async function main(
             data,
             (client) => {
                 (client as RedisClientType).disconnect();
-            }
+            },
+            clusterModeEnabled
         );
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -319,8 +324,8 @@ const optionDefinitions = [
     { name: "clients", type: String },
     { name: "host", type: String },
     { name: "clientCount", type: String, multiple: true },
-    { name: "tls", type: Boolean },
-    { name: "clusterModeEnabled", type: Boolean },
+    { name: "tls", type: Boolean, defaultValue: false },
+    { name: "clusterModeEnabled", type: Boolean, defaultValue: false },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 

@@ -9,6 +9,7 @@ with open(output_file_name, "w+") as output_file:
     base_fields = [
         "language",
         "client",
+        "is_cluster",
         "num_of_tasks",
         "data_size",
         "clientCount",
