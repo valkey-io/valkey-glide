@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import RedisServer from "redis-server";
 import { AsyncClient } from "..";
-import { flushallOnPort } from "./TestUtilities";
 import { runCommonTests } from "./SharedTests";
+import { flushallOnPort } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
@@ -45,7 +45,8 @@ describe("AsyncClient", () => {
 
             return { client, context: {} };
         },
-        /* eslint-disable @typescript-eslint/no-empty-function */
-        close: (context: EmptyObject) => {},
+        close: () => {
+            // GC takes care of dropping the object
+        },
     });
 });
