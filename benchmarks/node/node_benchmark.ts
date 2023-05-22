@@ -246,7 +246,9 @@ async function main(
             num_of_concurrent_tasks,
             data_size,
             data,
-            (_) => {},
+            () => {
+                /* disposed by GC */
+            },
             clusterModeEnabled
         );
     }
@@ -352,7 +354,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                 )
             )
             .filter(
-                ([concurrent_tasks, _, clientCount]) =>
+                ([concurrent_tasks, , clientCount]) =>
                     clientCount <= concurrent_tasks
             );
 
