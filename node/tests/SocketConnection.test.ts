@@ -85,12 +85,12 @@ describe("SocketConnection", () => {
         const dec_msg1 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.requestType).toEqual(2);
-        expect(dec_msg1.argsArray!.args).toEqual(["bar1", "bar2"]);
+        expect(dec_msg1.argsArray?.args).toEqual(["bar1", "bar2"]);
 
         const dec_msg2 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.requestType).toEqual(4);
-        expect(dec_msg2.argsArray!.args).toEqual(["bar3", "bar4"]);
+        expect(dec_msg2.argsArray?.args).toEqual(["bar3", "bar4"]);
     });
 
     runBaseTests<Context>({
