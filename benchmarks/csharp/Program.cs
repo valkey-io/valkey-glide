@@ -350,7 +350,7 @@ public static class MainClass
 
     private static int number_of_iterations(int num_of_concurrent_tasks)
     {
-        return Math.Max(1, num_of_concurrent_tasks * 1);
+        return Math.min(Math.Max(100000, num_of_concurrent_tasks * 10000), 10000000);
     }
 
     public static async Task Main(string[] args)
