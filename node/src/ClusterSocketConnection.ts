@@ -1,5 +1,4 @@
 import { ConnectionOptions, SocketConnection } from "..";
-import { Logger } from "./Logger";
 import { connection_request } from "./ProtobufMessage";
 import * as net from "net";
 
