@@ -7,15 +7,16 @@ import time
 from datetime import datetime
 from enum import Enum
 from statistics import mean
+
 import numpy as np
 import redis.asyncio as redispy
 from pybushka import (
+    AddressInfo,
     ClientConfiguration,
+    LogLevel,
     RedisAsyncFFIClient,
     RedisAsyncSocketClient,
-    LogLevel,
     set_logger_config,
-    AddressInfo
 )
 
 
@@ -257,7 +258,9 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka FFI
-        config = ClientConfiguration([AddressInfo(host=host, port=PORT)], use_tls=use_tls)
+        config = ClientConfiguration(
+            [AddressInfo(host=host, port=PORT)], use_tls=use_tls
+        )
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncFFIClient.create(config),
@@ -277,7 +280,9 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
-        config = ClientConfiguration([AddressInfo(host=host, port=PORT)], use_tls=use_tls)
+        config = ClientConfiguration(
+            [AddressInfo(host=host, port=PORT)], use_tls=use_tls
+        )
         clients = await create_clients(
             client_count,
             lambda: RedisAsyncSocketClient.create(config),
@@ -293,7 +298,7 @@ async def main(
 
 
 def number_of_iterations(num_of_concurrent_tasks):
-    return max(100000, num_of_concurrent_tasks * 10000)
+    return min(max(100000, num_of_concurrent_tasks * 10000), 10000000)
 
 
 if __name__ == "__main__":
