@@ -23,6 +23,10 @@ pub enum Level {
 pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[napi]
+pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
+    babushka::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+
+#[napi]
 struct AsyncClient {
     #[allow(dead_code)]
     connection: MultiplexedConnection,

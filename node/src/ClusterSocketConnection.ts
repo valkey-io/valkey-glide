@@ -1,6 +1,6 @@
+import * as net from "net";
 import { ConnectionOptions, SocketConnection } from "..";
 import { connection_request } from "./ProtobufMessage";
-import * as net from "net";
 
 export class ClusterSocketConnection extends SocketConnection {
     protected createConnectionRequest(
@@ -16,7 +16,8 @@ export class ClusterSocketConnection extends SocketConnection {
     ): Promise<ClusterSocketConnection> {
         return await super.CreateConnectionInternal(
             options,
-            (socket: net.Socket) => new ClusterSocketConnection(socket)
+            (socket: net.Socket, options?: ConnectionOptions) =>
+                new ClusterSocketConnection(socket, options)
         );
     }
 }

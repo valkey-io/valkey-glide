@@ -133,9 +133,13 @@ async function testWithResources(
     testFunction: (
         connection: SocketConnection,
         socket: net.Socket
-    ) => Promise<void>
+    ) => Promise<void>,
+    connectionOptions?: ConnectionOptions
 ) {
-    const { connection, server, socket } = await getConnectionAndSocket();
+    const { connection, server, socket } = await getConnectionAndSocket(
+        undefined,
+        connectionOptions
+    );
 
     await testFunction(connection, socket);
 
@@ -359,5 +363,36 @@ describe("SocketConnectionInternals", () => {
             }
         );
         closeTestResources(connection, server, socket);
+    });
+
+    it("should timeout before receiving response from core", async () => {
+        await testWithResources(
+            async (connection, socket) => {
+                socket.once("data", (data) =>
+                    setTimeout(() => {
+                        const reader = Reader.create(data);
+                        const request = RedisRequest.decodeDelimited(reader);
+                        expect(request.requestType).toEqual(
+                            RequestType.GetString
+                        );
+                        expect(request.argsArray!.args!.length).toEqual(1);
+
+                        sendResponse(
+                            socket,
+                            ResponseType.Value,
+                            request.callbackIdx,
+                            "bar"
+                        );
+                    }, 20)
+                );
+                await expect(connection.get("foo")).rejects.toEqual(
+                    "Operation timed out"
+                );
+            },
+            {
+                addresses: [{ host: "foo" }],
+                responseTimeout: 1,
+            }
+        );
     });
 });
