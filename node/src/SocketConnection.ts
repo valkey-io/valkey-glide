@@ -378,7 +378,7 @@ export class SocketConnection {
     }
 
     public dispose(errorMessage?: string): void {
-        this.promiseCallbackFunctions.forEach(([_resolve, reject], _index) => {
+        this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(errorMessage);
         });
         this.socket.end();
