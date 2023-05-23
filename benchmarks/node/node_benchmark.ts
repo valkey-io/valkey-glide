@@ -317,7 +317,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                 )
             )
             .filter(
-                ([concurrent_tasks, _, clientCount]) =>
+                ([concurrent_tasks, , clientCount]) =>
                     clientCount <= concurrent_tasks
             );
 
