@@ -9,6 +9,7 @@ use redis::{
 use std::io;
 use std::time::Duration;
 mod client_cmd;
+mod reconnecting_connection;
 
 pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 
