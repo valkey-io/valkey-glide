@@ -495,7 +495,7 @@ fn set_connection_info_to_connection_request(
         connection_request.authentication_info =
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
                 password: connection_info.password.unwrap(),
-                username: connection_info.username.unwrap_or("".to_string()),
+                username: connection_info.username.unwrap_or_default(),
                 ..Default::default()
             })));
     }
@@ -512,7 +512,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
     let username = connection_info
         .username
         .clone()
-        .unwrap_or("default".to_string());
+        .unwrap_or_else(|| "default".to_string());
     let mut cmd = redis::cmd("ACL");
     cmd.arg("SETUSER")
         .arg(username)
@@ -523,7 +523,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
     connection.req_packed_command(&cmd).await.unwrap();
 }
 
-#[derive(PartialEq, Default)]
+#[derive(Eq, PartialEq, Default)]
 pub enum ClusterMode {
     #[default]
     Disabled,
