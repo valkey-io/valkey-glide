@@ -28,4 +28,5 @@ install_and_test_cp.sh
 
 babushka-logs/
 logger-rs.linux-x64-gnu.node
-redis-cluster-nodes/
+utils/clusters/
+utils/tls_crts/
