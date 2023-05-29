@@ -223,6 +223,7 @@ mod socket_listener {
             &TestConfiguration {
                 use_tls,
                 cluster_mode,
+                response_timeout: Some(10000),
                 ..Default::default()
             },
         );
@@ -286,8 +287,8 @@ mod socket_listener {
         setup_test_basics_with_socket_path(use_tls, None)
     }
 
-    async fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
-        let cluster = RedisCluster::new(6, 1, use_tls).await;
+    fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
+        let cluster = RedisCluster::new(use_tls, &None, None, None);
         let socket = setup_socket(
             use_tls,
             None,
@@ -473,7 +474,7 @@ mod socket_listener {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
 
-        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
+        let mut test_basics = setup_cluster_test_basics(use_tls);
         test_set_and_get(&mut test_basics.socket, args_pointer);
     }
 
@@ -487,7 +488,7 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = block_on_all(setup_cluster_test_basics(use_tls));
+        let mut test_basics = setup_cluster_test_basics(use_tls);
 
         handle_custom_command(&mut test_basics.socket, args_pointer);
     }
