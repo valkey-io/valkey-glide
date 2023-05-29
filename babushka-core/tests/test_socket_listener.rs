@@ -279,8 +279,8 @@ mod socket_listener {
         use_tls: bool,
         socket_path: Option<String>,
     ) -> TestBasics {
-        let context = TestContext::new(ServerType::Tcp { tls: use_tls });
-        setup_test_basics_with_server_and_socket_path(use_tls, socket_path, context.server)
+        let server = RedisServer::new(ServerType::Tcp { tls: use_tls });
+        setup_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
 
     fn setup_test_basics(use_tls: bool) -> TestBasics {
@@ -336,7 +336,7 @@ mod socket_listener {
             "test_multiple_listeners_competing_for_the_socket".to_string(),
         );
         close_socket(&socket_path);
-        let server = Arc::new(TestContext::new(ServerType::Tcp { tls: false }).server);
+        let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
 
         thread::scope(|scope| {
             for i in 0..20 {
