@@ -34,6 +34,7 @@ socket2 = "0.4.7"
 tempfile = "3.3.0"
 rstest = "0.16.0"
 criterion = { version = "0.4", features = ["html_reports", "async_tokio"] }
+which = "4.4.0"
 
 [build-dependencies]
 protobuf-codegen = "3"
