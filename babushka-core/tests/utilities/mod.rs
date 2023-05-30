@@ -7,10 +7,7 @@ use futures::Future;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{aio::ConnectionLike, ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
-use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, thread::sleep,
-    time::Duration,
-};
+use std::{env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, time::Duration};
 use tempfile::TempDir;
 
 pub mod cluster;
@@ -199,61 +196,6 @@ impl RedisServer {
 impl Drop for RedisServer {
     fn drop(&mut self) {
         self.stop()
-    }
-}
-
-pub struct TestContext {
-    pub server: RedisServer,
-    pub client: redis::Client,
-}
-
-impl TestContext {
-    pub fn new(server_type: ServerType) -> TestContext {
-        TestContext::with_modules(server_type, &[])
-    }
-
-    pub fn with_modules(server_type: ServerType, modules: &[Module]) -> TestContext {
-        let server = RedisServer::with_modules(server_type, modules);
-
-        let client = redis::Client::open(redis::ConnectionInfo {
-            addr: server.get_client_addr(),
-            redis: Default::default(),
-        })
-        .unwrap();
-        let mut con;
-
-        let millisecond = Duration::from_millis(1);
-        let mut retries = 0;
-        loop {
-            match client.get_connection() {
-                Err(err) => {
-                    if err.is_connection_refusal() {
-                        sleep(millisecond);
-                        retries += 1;
-                        if retries > 100000 {
-                            panic!("Tried to connect too many times, last error: {err}");
-                        }
-                    } else {
-                        panic!("Could not connect: {err}");
-                    }
-                }
-                Ok(x) => {
-                    con = x;
-                    break;
-                }
-            }
-        }
-        redis::cmd("FLUSHDB").execute(&mut con);
-
-        TestContext { server, client }
-    }
-
-    pub fn connection(&self) -> redis::Connection {
-        self.client.get_connection().unwrap()
-    }
-
-    pub fn stop_server(&mut self) {
-        self.server.stop();
     }
 }
 
@@ -577,30 +519,6 @@ pub async fn setup_test_basics_internal(configuration: &TestConfiguration) -> Te
     connection_request.cluster_mode_enabled = false;
     let client = ClientCMD::create_client(connection_request).await.unwrap();
     TestBasics { server, client }
-}
-
-pub async fn setup_test_basics_and_connection_retry_strategy(
-    use_tls: bool,
-    connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
-) -> TestBasics {
-    setup_test_basics_internal(&TestConfiguration {
-        use_tls,
-        connection_retry_strategy,
-        ..Default::default()
-    })
-    .await
-}
-
-pub async fn setup_test_basics_with_connection_info(
-    use_tls: bool,
-    connection_info: Option<RedisConnectionInfo>,
-) -> TestBasics {
-    setup_test_basics_internal(&TestConfiguration {
-        use_tls,
-        connection_info,
-        ..Default::default()
-    })
-    .await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
