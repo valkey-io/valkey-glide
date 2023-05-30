@@ -21,9 +21,12 @@ mod client_cmd_tests {
             retry_strategy.number_of_retries = 100;
             retry_strategy.factor = 1;
             retry_strategy.exponent_base = 2;
-            let mut test_basics =
-                setup_test_basics_and_connection_retry_strategy(use_tls, Some(retry_strategy))
-                    .await;
+            let mut test_basics = setup_test_basics_internal(&TestConfiguration {
+                use_tls,
+                connection_retry_strategy: Some(retry_strategy),
+                ..Default::default()
+            })
+            .await;
             let server = test_basics.server;
             let address = server.get_client_addr();
             drop(server);
