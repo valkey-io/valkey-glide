@@ -4,8 +4,8 @@ use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_warn};
 use redis::aio::{ConnectionLike, MultiplexedConnection};
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
-use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio_retry::Retry;
@@ -27,8 +27,6 @@ enum ConnectionState {
     Connected(MultiplexedConnection, Arc<ConnectionBackend>),
     /// There's a reconnection effort on the way, no need to try reconnecting again.
     Reconnecting(Arc<ConnectionBackend>),
-    /// The connection has been disconnected, and reconnection efforts have exhausted all available retries.
-    Disconnected,
 }
 
 /// This allows us to safely share and replace the connection state between clones of the client.
@@ -37,13 +35,12 @@ type StateWrapper = Arc<Mutex<ConnectionState>>;
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
     state: StateWrapper,
-    connection_retry_strategy: RetryStrategy,
 }
 
-async fn try_create_multiplexed_connection(
+async fn try_create_connection(
     connection_backend: Arc<ConnectionBackend>,
     retry_strategy: RetryStrategy,
-) -> RedisResult<MultiplexedConnection> {
+) -> RedisResult<StateWrapper> {
     let client = &connection_backend.connection_info;
     let action = || {
         log_warn(
@@ -54,15 +51,7 @@ async fn try_create_multiplexed_connection(
         client.get_multiplexed_async_connection()
     };
 
-    Retry::spawn(retry_strategy.get_iterator(), action).await
-}
-
-async fn try_create_connection(
-    connection_backend: Arc<ConnectionBackend>,
-    retry_strategy: RetryStrategy,
-) -> RedisResult<StateWrapper> {
-    let connection =
-        try_create_multiplexed_connection(connection_backend.clone(), retry_strategy).await?;
+    let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
     Ok(Arc::new(Mutex::new(ConnectionState::Connected(
         connection,
         connection_backend,
@@ -81,10 +70,22 @@ fn get_client(
     ))
 }
 
+/// This iterator isn't exposed to users, and can't be configured.
+fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
+    const MAX_DURATION: Duration = Duration::from_secs(5);
+    crate::retry_strategies::get_exponential_backoff(
+        crate::retry_strategies::EXPONENT_BASE,
+        crate::retry_strategies::FACTOR,
+        crate::retry_strategies::NUMBER_OF_RETRIES,
+    )
+    .get_iterator()
+    .chain(std::iter::repeat(MAX_DURATION))
+}
+
 impl ReconnectingConnection {
     pub(super) async fn new(
         address: &AddressInfo,
-        retry_strategy: RetryStrategy,
+        connection_retry_strategy: RetryStrategy,
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
     ) -> RedisResult<Self> {
@@ -97,20 +98,12 @@ impl ReconnectingConnection {
             connection_info: get_client(address, tls_mode, redis_connection_info)?,
             connection_available_signal: ManualResetEvent::new(true),
         });
-        let primary = try_create_connection(client, retry_strategy.clone()).await?;
+        let state = try_create_connection(client, connection_retry_strategy).await?;
         log_debug(
             "connection creation",
             format!("Connection to {address} created"),
         );
-        Ok(Self {
-            state: primary,
-            connection_retry_strategy: retry_strategy,
-        })
-    }
-
-    fn get_disconnected_error<T>() -> Result<T, RedisError> {
-        let io_error: io::Error = io::ErrorKind::BrokenPipe.into();
-        Err(io_error.into())
+        Ok(Self { state })
     }
 
     async fn get_connection(&self) -> Result<MultiplexedConnection, RedisError> {
@@ -122,9 +115,6 @@ impl ReconnectingConnection {
                     ConnectionState::Reconnecting(backend) => backend.clone(),
                     ConnectionState::Connected(connection, _) => {
                         return Ok(connection.clone());
-                    }
-                    ConnectionState::Disconnected => {
-                        return Self::get_disconnected_error();
                     }
                 }
             };
@@ -161,25 +151,27 @@ impl ReconnectingConnection {
         let clone = self.clone();
         // The reconnect task is spawned instead of awaited here, so that if this task will be dropped for some reason, the reconnection attempt will continue.
         task::spawn(async move {
-            let connection_result = try_create_multiplexed_connection(
-                backend.clone(),
-                clone.connection_retry_strategy.clone(),
-            )
-            .await;
-
-            let mut guard = clone.state.lock().await;
-            backend.connection_available_signal.set();
-            if let Ok(connection) = connection_result {
+            let client = &backend.connection_info;
+            for sleep_duration in internal_retry_iterator() {
                 log_warn(
                     // TODO -log_debug
-                    "reconnect",
-                    format!("completed succesfully"),
+                    "connection creation",
+                    format!("Creating multiplexed connection"),
                 );
-                *guard = ConnectionState::Connected(connection.clone(), backend.clone());
-                Ok(connection)
-            } else {
-                *guard = ConnectionState::Disconnected;
-                Self::get_disconnected_error()
+                match client.get_multiplexed_async_connection().await {
+                    Ok(connection) => {
+                        let mut guard = clone.state.lock().await;
+                        log_warn(
+                            // TODO -log_debug
+                            "reconnect",
+                            format!("completed succesfully"),
+                        );
+                        backend.connection_available_signal.set();
+                        *guard = ConnectionState::Connected(connection, backend);
+                        break;
+                    }
+                    Err(_) => tokio::time::sleep(sleep_duration).await,
+                }
             }
         });
     }
@@ -220,6 +212,7 @@ impl ReconnectingConnection {
             _ => result,
         }
     }
+
     pub(super) fn get_db(&self) -> i64 {
         let guard = self.state.blocking_lock();
         match &*guard {

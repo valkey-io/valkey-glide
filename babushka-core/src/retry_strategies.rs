@@ -29,11 +29,11 @@ impl RetryStrategy {
     }
 }
 
-const EXPONENT_BASE: u32 = 2;
-const FACTOR: u32 = 100;
-const NUMBER_OF_RETRIES: u32 = 5;
+pub(crate) const EXPONENT_BASE: u32 = 2;
+pub(crate) const FACTOR: u32 = 100;
+pub(crate) const NUMBER_OF_RETRIES: u32 = 5;
 
-fn get_exponential_backoff(
+pub(crate) fn get_exponential_backoff(
     exponent_base: u32,
     factor: u32,
     number_of_retries: u32,
