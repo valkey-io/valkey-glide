@@ -2,31 +2,22 @@ mod utilities;
 
 #[cfg(test)]
 mod client_cmd_tests {
-    use std::time::Duration;
-
     use super::*;
-    use babushka::connection_request::ConnectionRetryStrategy;
     use redis::Value;
     use rstest::rstest;
+    use std::time::Duration;
     use utilities::*;
 
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
-    fn test_reconnect_and_complete_request_after_temporary_disconnect(
+    fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
         #[values(false, true)] use_tls: bool,
     ) {
+        let server_available_event =
+            std::sync::Arc::new(futures_intrusive::sync::ManualResetEvent::new(false));
+        let server_available_event_clone = server_available_event.clone();
         block_on_all(async move {
-            // We want a retry strategy that retries often, so that the test won't hang an wait too long for a retry.
-            let mut retry_strategy = ConnectionRetryStrategy::new();
-            retry_strategy.number_of_retries = 100;
-            retry_strategy.factor = 1;
-            retry_strategy.exponent_base = 2;
-            let mut test_basics = setup_test_basics_internal(&TestConfiguration {
-                use_tls,
-                connection_retry_strategy: Some(retry_strategy),
-                ..Default::default()
-            })
-            .await;
+            let mut test_basics = setup_test_basics(use_tls).await;
             let server = test_basics.server;
             let address = server.get_client_addr();
             drop(server);
@@ -36,7 +27,11 @@ mod client_cmd_tests {
                     let mut get_command = redis::Cmd::new();
                     get_command
                         .arg("GET")
-                        .arg("test_reconnect_and_complete_request_after_temporary_disconnect");
+                        .arg("test_report_disconnect_and_reconnect_after_temporary_disconnect");
+                    let error = test_basics.client.send_packed_command(&get_command).await;
+                    assert!(error.is_err(), "{error:?}",);
+
+                    server_available_event.wait().await;
                     let get_result = test_basics
                         .client
                         .send_packed_command(&get_command)
@@ -52,6 +47,7 @@ mod client_cmd_tests {
 
             let _new_server = RedisServer::new_with_addr_and_modules(address.clone(), &[]);
             wait_for_server_to_become_ready(&address).await;
+            server_available_event_clone.set();
 
             thread.join().unwrap();
         });

@@ -1,7 +1,7 @@
 use crate::connection_request::{AddressInfo, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;
-use logger_core::log_trace;
+use logger_core::{log_debug, log_warn};
 use redis::aio::{ConnectionLike, MultiplexedConnection};
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
 use std::io;
@@ -45,7 +45,14 @@ async fn try_create_multiplexed_connection(
     retry_strategy: RetryStrategy,
 ) -> RedisResult<MultiplexedConnection> {
     let client = &connection_backend.connection_info;
-    let action = || client.get_multiplexed_async_connection();
+    let action = || {
+        log_warn(
+            // TODO -log_debug
+            "connection creation",
+            format!("Creating multiplexed connection"),
+        );
+        client.get_multiplexed_async_connection()
+    };
 
     Retry::spawn(retry_strategy.get_iterator(), action).await
 }
@@ -81,7 +88,7 @@ impl ReconnectingConnection {
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
     ) -> RedisResult<Self> {
-        log_trace(
+        log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
         );
@@ -91,7 +98,7 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
         });
         let primary = try_create_connection(client, retry_strategy.clone()).await?;
-        log_trace(
+        log_debug(
             "connection creation",
             format!("Connection to {address} created"),
         );
@@ -125,7 +132,7 @@ impl ReconnectingConnection {
         }
     }
 
-    async fn reconnect(&self) -> Result<MultiplexedConnection, RedisError> {
+    async fn reconnect(&self) {
         let backend = {
             let mut guard = self.state.lock().await;
             let backend = match &*guard {
@@ -134,13 +141,23 @@ impl ReconnectingConnection {
                     backend.clone()
                 }
                 _ => {
+                    log_warn(
+                        // TODO -log_trace
+                        "reconnect",
+                        format!("already started"),
+                    );
                     // exit early - if reconnection already started or failed, there's nothing else to do.
-                    return self.get_connection().await;
+                    return;
                 }
             };
             *guard = ConnectionState::Reconnecting(backend.clone());
             backend
         };
+        log_warn(
+            // TODO -log_debug
+            "reconnect",
+            format!("starting"),
+        );
         let clone = self.clone();
         // The reconnect task is spawned instead of awaited here, so that if this task will be dropped for some reason, the reconnection attempt will continue.
         task::spawn(async move {
@@ -149,9 +166,15 @@ impl ReconnectingConnection {
                 clone.connection_retry_strategy.clone(),
             )
             .await;
+
             let mut guard = clone.state.lock().await;
             backend.connection_available_signal.set();
             if let Ok(connection) = connection_result {
+                log_warn(
+                    // TODO -log_debug
+                    "reconnect",
+                    format!("completed succesfully"),
+                );
                 *guard = ConnectionState::Connected(connection.clone(), backend.clone());
                 Ok(connection)
             } else {
@@ -159,22 +182,25 @@ impl ReconnectingConnection {
                 Self::get_disconnected_error()
             }
         });
-        self.get_connection().await
     }
 
     pub(super) async fn send_packed_command(
         &mut self,
         cmd: &redis::Cmd,
     ) -> redis::RedisResult<redis::Value> {
+        log_warn(
+            // TODO -log_trace
+            "ReconnectingConnection",
+            format!("sending command"),
+        );
         let mut connection = self.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
-            Ok(val) => Ok(val),
             Err(err) if err.is_connection_dropped() => {
-                let mut connection = self.reconnect().await?;
-                connection.send_packed_command(cmd).await
+                self.reconnect().await;
+                Err(err)
             }
-            Err(err) => Err(err),
+            _ => result,
         }
     }
 
@@ -187,12 +213,11 @@ impl ReconnectingConnection {
         let mut connection = self.get_connection().await?;
         let result = connection.send_packed_commands(cmd, offset, count).await;
         match result {
-            Ok(val) => Ok(val),
             Err(err) if err.is_connection_dropped() => {
-                let mut connection = self.reconnect().await?;
-                connection.send_packed_commands(cmd, offset, count).await
+                self.reconnect().await;
+                Err(err)
             }
-            Err(err) => Err(err),
+            _ => result,
         }
     }
     pub(super) fn get_db(&self) -> i64 {
