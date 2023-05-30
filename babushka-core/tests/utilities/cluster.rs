@@ -115,7 +115,7 @@ impl RedisCluster {
             script_path.display(),
             if use_tls { "--tls" } else { "" },
             if let Some(pass) = password {
-                format!("--auth {}", pass)
+                format!("--auth {pass}")
             } else {
                 "".to_string()
             },
@@ -183,18 +183,6 @@ pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) ->
 
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }
-}
-
-pub async fn setup_test_basics_with_connection_info(
-    use_tls: bool,
-    connection_info: Option<RedisConnectionInfo>,
-) -> ClusterTestBasics {
-    setup_test_basics_internal(TestConfiguration {
-        use_tls,
-        connection_info,
-        ..Default::default()
-    })
-    .await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
