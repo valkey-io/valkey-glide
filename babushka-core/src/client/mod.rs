@@ -97,13 +97,11 @@ impl ConnectionLike for Client {
         &'a mut self,
         cmd: &'a redis::Cmd,
     ) -> redis::RedisFuture<'a, redis::Value> {
-        (async move {
+        run_with_timeout(self.response_timeout, async {
             match self.internal_client {
                 ClientWrapper::CMD(ref mut client) => client.send_packed_command(cmd).await,
 
-                ClientWrapper::CME(ref mut client) => {
-                    run_with_timeout(self.response_timeout, client.req_packed_command(cmd)).await
-                }
+                ClientWrapper::CME(ref mut client) => client.req_packed_command(cmd).await,
             }
         })
         .boxed()
