@@ -1,9 +1,10 @@
 use crate::connection_request::{AddressInfo, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;
-use logger_core::{log_debug, log_warn};
+use logger_core::{log_debug, log_trace};
 use redis::aio::{ConnectionLike, MultiplexedConnection};
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -19,43 +20,59 @@ struct ConnectionBackend {
     connection_available_signal: ManualResetEvent,
     /// Information needed in order to create a new connection.
     connection_info: redis::Client,
+    /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because the client was dropped.
+    client_dropped_flagged: AtomicBool,
 }
 
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
 enum ConnectionState {
     /// A connection has been made, and hasn't disconnected yet.
-    Connected(MultiplexedConnection, Arc<ConnectionBackend>),
+    Connected(MultiplexedConnection),
     /// There's a reconnection effort on the way, no need to try reconnecting again.
-    Reconnecting(Arc<ConnectionBackend>),
+    Reconnecting,
 }
 
-/// This allows us to safely share and replace the connection state between clones of the client.
-type StateWrapper = Arc<Mutex<ConnectionState>>;
+struct InnerReconnectingConnection {
+    state: Mutex<ConnectionState>,
+    backend: ConnectionBackend,
+}
+
+/// The separation between an inner and outer client is because the outer client is clonable, and the inner client needs to be dropped when no outer client exists.
+struct DropWrapper(Arc<InnerReconnectingConnection>);
+
+impl Drop for DropWrapper {
+    fn drop(&mut self) {
+        self.0
+            .backend
+            .client_dropped_flagged
+            .store(true, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
-    state: StateWrapper,
+    /// All of the connection's clones point to the same internal wrapper, which will be dropped only once,
+    /// when all of the clones have been dropped.
+    inner: Arc<DropWrapper>,
 }
 
 async fn try_create_connection(
-    connection_backend: Arc<ConnectionBackend>,
+    connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
-) -> RedisResult<StateWrapper> {
+) -> RedisResult<ReconnectingConnection> {
     let client = &connection_backend.connection_info;
     let action = || {
-        log_warn(
-            // TODO -log_debug
-            "connection creation",
-            format!("Creating multiplexed connection"),
-        );
+        log_debug("connection creation", "Creating multiplexed connection");
         client.get_multiplexed_async_connection()
     };
 
     let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
-    Ok(Arc::new(Mutex::new(ConnectionState::Connected(
-        connection,
-        connection_backend,
-    ))))
+    Ok(ReconnectingConnection {
+        inner: Arc::new(DropWrapper(Arc::new(InnerReconnectingConnection {
+            state: Mutex::new(ConnectionState::Connected(connection)),
+            backend: connection_backend,
+        }))),
+    })
 }
 
 fn get_client(
@@ -94,80 +111,72 @@ impl ReconnectingConnection {
             format!("Attempting connection to {address}"),
         );
 
-        let client = Arc::new(ConnectionBackend {
+        let client = ConnectionBackend {
             connection_info: get_client(address, tls_mode, redis_connection_info)?,
             connection_available_signal: ManualResetEvent::new(true),
-        });
-        let state = try_create_connection(client, connection_retry_strategy).await?;
+            client_dropped_flagged: AtomicBool::new(false),
+        };
+        let connection = try_create_connection(client, connection_retry_strategy).await?;
         log_debug(
             "connection creation",
             format!("Connection to {address} created"),
         );
-        Ok(Self { state })
+        Ok(connection)
     }
 
     async fn get_connection(&self) -> Result<MultiplexedConnection, RedisError> {
         loop {
-            // Using a limited scope in order to release the mutex lock before waiting for notifications.
-            let backend = {
-                let mut guard = self.state.lock().await;
-                match &mut *guard {
-                    ConnectionState::Reconnecting(backend) => backend.clone(),
-                    ConnectionState::Connected(connection, _) => {
-                        return Ok(connection.clone());
-                    }
+            self.inner
+                .0
+                .backend
+                .connection_available_signal
+                .wait()
+                .await;
+            {
+                let guard = self.inner.0.state.lock().await;
+                if let ConnectionState::Connected(connection) = &*guard {
+                    return Ok(connection.clone());
                 }
             };
-            backend.connection_available_signal.wait().await;
         }
     }
 
     async fn reconnect(&self) {
-        let backend = {
-            let mut guard = self.state.lock().await;
-            let backend = match &*guard {
-                ConnectionState::Connected(_, backend) => {
-                    backend.connection_available_signal.reset();
-                    backend.clone()
+        {
+            let mut guard = self.inner.0.state.lock().await;
+            match &*guard {
+                ConnectionState::Connected(_) => {
+                    self.inner.0.backend.connection_available_signal.reset();
                 }
                 _ => {
-                    log_warn(
-                        // TODO -log_trace
-                        "reconnect",
-                        format!("already started"),
-                    );
+                    log_trace("reconnect", "already started");
                     // exit early - if reconnection already started or failed, there's nothing else to do.
                     return;
                 }
             };
-            *guard = ConnectionState::Reconnecting(backend.clone());
-            backend
+            *guard = ConnectionState::Reconnecting;
         };
-        log_warn(
-            // TODO -log_debug
-            "reconnect",
-            format!("starting"),
-        );
-        let clone = self.clone();
+        log_debug("reconnect", "starting");
+        let clone = self.inner.0.clone();
         // The reconnect task is spawned instead of awaited here, so that if this task will be dropped for some reason, the reconnection attempt will continue.
         task::spawn(async move {
-            let client = &backend.connection_info;
+            let client = &clone.backend.connection_info;
             for sleep_duration in internal_retry_iterator() {
-                log_warn(
-                    // TODO -log_debug
-                    "connection creation",
-                    format!("Creating multiplexed connection"),
-                );
+                if clone.backend.client_dropped_flagged.load(Ordering::Relaxed) {
+                    log_trace(
+                        "ReconnectingConnection",
+                        "reconnect stopped after client was dropped",
+                    );
+                    // Client was dropped, reconnection attempts can stop
+                    return;
+                }
+                log_debug("connection creation", "Creating multiplexed connection");
                 match client.get_multiplexed_async_connection().await {
                     Ok(connection) => {
                         let mut guard = clone.state.lock().await;
-                        log_warn(
-                            // TODO -log_debug
-                            "reconnect",
-                            format!("completed succesfully"),
-                        );
-                        backend.connection_available_signal.set();
-                        *guard = ConnectionState::Connected(connection, backend);
+                        log_debug("reconnect", "completed succesfully");
+                        clone.backend.connection_available_signal.set();
+                        *guard = ConnectionState::Connected(connection);
                         break;
                     }
                     Err(_) => tokio::time::sleep(sleep_duration).await,
@@ -180,11 +189,7 @@ impl ReconnectingConnection {
         &mut self,
         cmd: &redis::Cmd,
     ) -> redis::RedisResult<redis::Value> {
-        log_warn(
-            // TODO -log_trace
-            "ReconnectingConnection",
-            format!("sending command"),
-        );
+        log_trace("ReconnectingConnection", "sending command");
         let mut connection = self.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
@@ -214,9 +219,9 @@ impl ReconnectingConnection {
     }
 
     pub(super) fn get_db(&self) -> i64 {
-        let guard = self.state.blocking_lock();
+        let guard = self.inner.0.state.blocking_lock();
         match &*guard {
-            ConnectionState::Connected(connection, _) => connection.get_db(),
+            ConnectionState::Connected(connection) => connection.get_db(),
             _ => -1,
         }
     }
