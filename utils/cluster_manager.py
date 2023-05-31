@@ -19,7 +19,7 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
 }
 
-BABUSHKA_HOME_DIR = os.getenv("BABUSHKA_HOME_DIR") or f"{os.getcwd()}/.."
+BABUSHKA_HOME_DIR = os.getenv("BABUSHKA_HOME_DIR") or f"{__file__}/../.."
 CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
     f"{BABUSHKA_HOME_DIR}/utils/clusters"
 )
