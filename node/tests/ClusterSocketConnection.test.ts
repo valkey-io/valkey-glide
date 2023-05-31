@@ -1,49 +1,63 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { exec } from "child_process";
 import { ClusterSocketConnection, ConnectionOptions } from "..";
-import { flushallOnPort } from "./TestUtilities";
 import { runBaseTests } from "./SharedTests";
-/* eslint-disable @typescript-eslint/no-var-requires */
-const FreePort = require("find-free-port");
+import { flushallOnPort } from "./TestUtilities";
 
 type Context = {
     client: ClusterSocketConnection;
 };
 
-const PORT_NUMBER = 5000;
 const TIMEOUT = 10000;
 
 class RedisCluster {
-    private firstPort: number;
-    private nodeCount: number;
-    private replicaCount: number;
+    private usedPorts: number[];
+    private clusterFolder: string;
 
-    private constructor(
-        firstPort: number,
-        nodeCount: number,
-        replicaCount: number
-    ) {
-        this.firstPort = firstPort;
-        this.nodeCount = nodeCount;
-        this.replicaCount = replicaCount;
+    private constructor(ports: number[], clusterFolder: string) {
+        this.usedPorts = ports;
+        this.clusterFolder = clusterFolder;
+    }
+
+    private static parseOutput(input: string): {
+        clusterFolder: string;
+        ports: number[];
+    } {
+        const lines = input.split(/\r\n|\r|\n/);
+        const clusterFolder = lines
+            .find((line) => line.startsWith("CLUSTER_FOLDER"))
+            ?.split("=")[1];
+        const ports = lines
+            .find((line) => line.startsWith("CLUSTER_NODES"))
+            ?.split("=")[1]
+            .split(",")
+            .map((address) => address.split(":")[1])
+            .map((port) => Number(port));
+        if (clusterFolder === undefined || ports === undefined) {
+            throw new Error(`Insufficient data in input: ${input}`);
+        }
+
+        return {
+            clusterFolder,
+            ports,
+        };
     }
 
     public static createCluster(
-        firstPort: number,
-        nodeCount: number,
+        shardCount: number,
         replicaCount: number
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
             exec(
-                `sudo REPLICA_COUNT=${replicaCount} START_PORT=${firstPort} NODE_COUNT=${nodeCount} ../create-cluster.sh start`,
-                (error, _, stderr) => {
+                `python3 ../utils/cluster_manager.py start -r  ${replicaCount} -n ${shardCount}`,
+                (error, stdout, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
                     } else {
-                        resolve(
-                            new RedisCluster(firstPort, nodeCount, replicaCount)
-                        );
+                        const { clusterFolder, ports } =
+                            this.parseOutput(stdout);
+                        resolve(new RedisCluster(ports, clusterFolder));
                     }
                 }
             );
@@ -51,15 +65,13 @@ class RedisCluster {
     }
 
     public ports(): number[] {
-        return Array(this.nodeCount)
-            .fill(0)
-            .map((_, i) => this.firstPort + i);
+        return [...this.usedPorts];
     }
 
     public async dispose() {
         await new Promise<void>((resolve, reject) =>
             exec(
-                `sudo START_PORT=${this.firstPort} NODE_COUNT=${this.nodeCount} ../create-cluster.sh stop`,
+                `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
                 (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
@@ -76,10 +88,7 @@ class RedisCluster {
 describe("ClusterSocketConnection", () => {
     let cluster: RedisCluster;
     beforeAll(async () => {
-        const port = await FreePort(PORT_NUMBER).then(
-            ([free_port]: number[]) => free_port
-        );
-        cluster = await RedisCluster.createCluster(port, 3, 0);
+        cluster = await RedisCluster.createCluster(3, 0);
     });
 
     afterEach(async () => {
