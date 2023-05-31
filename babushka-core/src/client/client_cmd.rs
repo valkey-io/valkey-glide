@@ -1,24 +1,18 @@
 use crate::connection_request::{ConnectionRequest, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use redis::RedisResult;
-use std::time::Duration;
 
+use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
-use super::{get_redis_connection_info, run_with_timeout, to_duration, DEFAULT_RESPONSE_TIMEOUT};
 
 #[derive(Clone)]
 pub struct ClientCMD {
     /// Connection to the primary node in the client.
     primary: ReconnectingConnection,
-    response_timeout: Duration,
 }
 
 impl ClientCMD {
     pub async fn create_client(connection_request: ConnectionRequest) -> RedisResult<Self> {
-        let response_timeout = to_duration(
-            connection_request.response_timeout,
-            DEFAULT_RESPONSE_TIMEOUT,
-        );
         let primary_address = connection_request.addresses.first().unwrap();
 
         let retry_strategy = RetryStrategy::new(&connection_request.connection_retry_strategy.0);
@@ -34,17 +28,14 @@ impl ClientCMD {
         )
         .await?;
 
-        Ok(Self {
-            primary,
-            response_timeout,
-        })
+        Ok(Self { primary })
     }
 
     pub async fn send_packed_command(
         &mut self,
         cmd: &redis::Cmd,
     ) -> redis::RedisResult<redis::Value> {
-        run_with_timeout(self.response_timeout, self.primary.send_packed_command(cmd)).await
+        self.primary.send_packed_command(cmd).await
     }
 
     pub(super) async fn send_packed_commands(
@@ -53,11 +44,7 @@ impl ClientCMD {
         offset: usize,
         count: usize,
     ) -> redis::RedisResult<Vec<redis::Value>> {
-        run_with_timeout(
-            self.response_timeout,
-            self.primary.send_packed_commands(cmd, offset, count),
-        )
-        .await
+        self.primary.send_packed_commands(cmd, offset, count).await
     }
 
     pub(super) fn get_db(&self) -> i64 {
