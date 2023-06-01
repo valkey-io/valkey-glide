@@ -10,6 +10,7 @@ from pybushka.config import ClientConfiguration
 from pybushka.constants import (
     DEFAULT_READ_BYTES_SIZE,
     OK,
+    TConnectionRequest,
     TRedisRequest,
     TRequest,
     TRequestType,
@@ -35,7 +36,7 @@ class RedisAsyncSocketClient(CoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None) -> Self:
         config = config or ClientConfiguration()
-        self = RedisAsyncSocketClient()
+        self = cls()
         self.config: Type[ClientConfiguration] = config
         self._write_buffer: bytearray = bytearray(1024)
         self._available_futures: dict[int, Awaitable[TResult]] = {}
@@ -109,8 +110,11 @@ class RedisAsyncSocketClient(CoreCommands):
         self._available_futures.update({callback_idx: response_future})
         return response_future
 
+    def _get_protobuf_conn_request(self) -> TConnectionRequest:
+        return self.config.convert_to_protobuf_request()
+
     async def _set_connection_configurations(self) -> None:
-        conn_request = self.config.convert_to_protobuf_request()
+        conn_request = self._get_protobuf_conn_request()
         response_future = self._get_future(0)
         await self._write_or_buffer_request(conn_request)
         await response_future

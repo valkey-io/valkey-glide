@@ -1,6 +1,7 @@
 from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.async_socket_client import RedisAsyncSocketClient
+from pybushka.async_socket_cluster_client import RedisClusterAsyncSocket
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.constants import OK
 from pybushka.Logger import Level as LogLevel
@@ -17,5 +18,6 @@ __all__ = [
     "OK",
     "RedisAsyncFFIClient",
     "RedisAsyncSocketClient",
+    "RedisClusterAsyncSocket",
     "set_logger_config",
 ]
