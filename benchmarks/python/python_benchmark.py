@@ -16,6 +16,7 @@ from pybushka import (
     LogLevel,
     RedisAsyncFFIClient,
     RedisAsyncSocketClient,
+    RedisClusterAsyncSocket,
     set_logger_config,
 )
 
@@ -61,6 +62,11 @@ arguments_parser.add_argument(
 )
 arguments_parser.add_argument(
     "--tls", help="Should benchmark a TLS server", action="store_true"
+)
+arguments_parser.add_argument(
+    "--is-cluster",
+    help="Should benchmark a cluster mode enabled cluster",
+    action="store_false",
 )
 args = arguments_parser.parse_args()
 
@@ -177,10 +183,12 @@ async def run_clients(
     total_commands,
     num_of_concurrent_tasks,
     data_size,
+    is_cluster,
 ):
     now = datetime.now().strftime("%H:%M:%S")
     print(
-        f"Starting {client_name} data size: {data_size} concurrency: {num_of_concurrent_tasks} client count: {len(clients)} {now}"
+        f"Starting {client_name} data size: {data_size} concurrency:"
+        f"{num_of_concurrent_tasks} client count: {len(clients)} {now}"
     )
     action_latencies = {
         ChosenAction.GET_NON_EXISTING: list(),
@@ -212,7 +220,7 @@ async def run_clients(
             "data_size": data_size,
             "tps": tps,
             "clientCount": len(clients),
-            "is_cluster": "false",
+            "is_cluster": is_cluster,
         },
         **get_existing_latency_results,
         **get_non_existing_latency_results,
@@ -231,14 +239,17 @@ async def main(
     host,
     client_count,
     use_tls,
+    is_cluster,
 ):
-    # Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
+    # Demo - Setting the internal logger to log every log that has a level of info and above,
+    # and save the logs to the first log file.
     set_logger_config(LogLevel.INFO, "first.log")
 
     if clients_to_run == "all":
+        client_class = redispy.RedisCluster if is_cluster else redispy.Redis
         clients = await create_clients(
             client_count,
-            lambda: redispy.Redis(
+            lambda: client_class(
                 host=host, port=PORT, decode_responses=True, ssl=use_tls
             ),
         )
@@ -250,10 +261,12 @@ async def main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
+            is_cluster,
         )
 
     if (
-        clients_to_run == "all"
+        is_cluster is False  # We dont have CME support in FFI
+        and clients_to_run == "all"
         or clients_to_run == "ffi"
         or clients_to_run == "babushka"
     ):
@@ -272,6 +285,7 @@ async def main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
+            is_cluster,
         )
 
     if (
@@ -280,12 +294,13 @@ async def main(
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
+        client_class = RedisClusterAsyncSocket if is_cluster else RedisAsyncSocketClient
         config = ClientConfiguration(
             [AddressInfo(host=host, port=PORT)], use_tls=use_tls
         )
         clients = await create_clients(
             client_count,
-            lambda: RedisAsyncSocketClient.create(config),
+            lambda: client_class.create(config),
         )
         await run_clients(
             clients,
@@ -294,6 +309,7 @@ async def main(
             total_commands,
             num_of_concurrent_tasks,
             data_size,
+            is_cluster,
         )
 
 
@@ -308,6 +324,7 @@ if __name__ == "__main__":
     client_count = args.clientCount
     host = args.host
     use_tls = args.tls
+    is_cluster = args.is_cluster
 
     product_of_arguments = [
         (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
@@ -327,6 +344,7 @@ if __name__ == "__main__":
                 host,
                 number_of_clients,
                 use_tls,
+                is_cluster,
             )
         )
 
