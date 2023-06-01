@@ -9,11 +9,30 @@ from packaging import version
 from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.async_socket_client import RedisAsyncSocketClient
+from pybushka.async_socket_cluster_client import RedisClusterAsyncSocket
+from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.constants import OK
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
 
 set_logger_config(logLevel.INFO)
+
+
+@pytest.fixture()
+async def async_socket_client(request, cluster_mode) -> RedisAsyncSocketClient:
+    "Get async socket client for tests"
+    host = request.config.getoption("--host")
+    port = request.config.getoption("--port")
+    use_tls = request.config.getoption("--tls")
+    if cluster_mode:
+        seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
+        config = ClientConfiguration(seed_nodes, use_tls=use_tls)
+        return await RedisClusterAsyncSocket.create(config)
+    else:
+        config = ClientConfiguration(
+            [AddressInfo(host=host, port=port)], use_tls=use_tls
+        )
+        return await RedisAsyncSocketClient.create(config)
 
 
 def parse_info_response(res: str) -> Dict[str, str]:
@@ -44,12 +63,14 @@ async def check_if_server_version_lt(
 
 @pytest.mark.asyncio
 class TestSocketClient:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_socket_set_get(self, async_socket_client: RedisAsyncSocketClient):
-        key = get_random_string(5)
+        key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         assert await async_socket_client.set(key, value) == OK
         assert await async_socket_client.get(key) == value
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_large_values(self, async_socket_client: RedisAsyncSocketClient):
         length = 2**16
         key = get_random_string(length)
@@ -59,6 +80,7 @@ class TestSocketClient:
         await async_socket_client.set(key, value)
         assert await async_socket_client.get(key) == value
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_non_ascii_unicode(self, async_socket_client: RedisAsyncSocketClient):
         key = "foo"
         value = "שלום hello 汉字"
@@ -67,6 +89,7 @@ class TestSocketClient:
         assert await async_socket_client.get(key) == value
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_concurrent_tasks(
         self, async_socket_client: RedisAsyncSocketClient, value_size
     ):
@@ -86,6 +109,7 @@ class TestSocketClient:
             task.add_done_callback(running_tasks.discard)
         await asyncio.gather(*(list(running_tasks)))
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_conditional_set(self, async_socket_client: RedisAsyncSocketClient):
         key = get_random_string(10)
         value = get_random_string(10)
@@ -104,6 +128,7 @@ class TestSocketClient:
         assert res is None
         assert await async_socket_client.get(key) == value
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_set_return_old_value(
         self, async_socket_client: RedisAsyncSocketClient
     ):
@@ -121,6 +146,7 @@ class TestSocketClient:
         assert res == value
         assert await async_socket_client.get(key) == new_value
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_single_arg(
         self, async_socket_client: RedisAsyncSocketClient
     ):
@@ -133,6 +159,7 @@ class TestSocketClient:
             and int(info_dict.get("connected_clients")) >= 1
         )
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_multi_arg(
         self, async_socket_client: RedisAsyncSocketClient
     ):
@@ -144,6 +171,7 @@ class TestSocketClient:
         assert "id" in res
         assert "cmd=client" in res
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_lower_and_upper_case(
         self, async_socket_client: RedisAsyncSocketClient
     ):

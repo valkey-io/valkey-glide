@@ -1,9 +1,9 @@
 import pytest
 from pybushka.async_ffi_client import RedisAsyncFFIClient
-from pybushka.async_socket_client import RedisAsyncSocketClient
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
+from tests.utils.cluster import RedisCluster
 
 default_host = "localhost"
 default_port = 6379
@@ -50,11 +50,19 @@ async def async_ffi_client(request) -> RedisAsyncFFIClient:
     return await RedisAsyncFFIClient.create(config)
 
 
-@pytest.fixture()
-async def async_socket_client(request) -> RedisAsyncSocketClient:
-    "Get async socket client for tests"
-    host = request.config.getoption("--host")
-    port = request.config.getoption("--port")
-    use_tls = request.config.getoption("--tls")
-    config = ClientConfiguration([AddressInfo(host=host, port=port)], use_tls=use_tls)
-    return await RedisAsyncSocketClient.create(config)
+@pytest.fixture(autouse=True, scope="session")
+def pytest_sessionstart(request):
+    """
+    Called after the Session object has been created and
+    before performing collection and entering the run test loop.
+    """
+    tls = request.config.getoption("--tls")
+    pytest.redis_cluster = RedisCluster(tls)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Called after whole test run finished, right before
+    returning the exit status to the system.
+    """
+    del pytest.redis_cluster
