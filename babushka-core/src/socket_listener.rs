@@ -2,8 +2,8 @@ use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
-use crate::redis_request::redis_request;
-use crate::redis_request::{RedisRequest, RequestType};
+use crate::redis_request::{command, redis_request};
+use crate::redis_request::{Command, RedisRequest, RequestType, Transaction};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
@@ -11,8 +11,8 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_debug, log_error, log_info, log_trace};
 use protobuf::Message;
-use redis::{cmd, Cmd, RedisResult, Value};
-use redis::{ErrorKind, RedisError};
+use redis::RedisError;
+use redis::{cmd, Cmd, Value};
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
@@ -168,40 +168,45 @@ async fn write_closing_error(
 
 /// Create response and write it to the writer
 async fn write_result(
-    resp_result: RedisResult<Value>,
+    resp_result: ClientUsageResult<Value>,
     callback_index: u32,
     writer: &Rc<Writer>,
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
-    match resp_result {
-        Ok(Value::Okay) => {
-            response.value = Some(response::response::Value::ConstantResponse(
-                response::ConstantResponse::OK.into(),
-            ))
-        }
+    response.value = match resp_result {
+        Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
+            response::ConstantResponse::OK.into(),
+        )),
         Ok(value) => {
             if value != Value::Nil {
                 // Since null values don't require any additional data, they can be sent without any extra effort.
                 // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
                 let pointer = Box::leak(Box::new(value));
                 let raw_pointer = pointer as *mut redis::Value;
-                response.value = Some(response::response::Value::RespPointer(raw_pointer as u64))
+                Some(response::response::Value::RespPointer(raw_pointer as u64))
+            } else {
+                None
             }
         }
-        Err(err) => {
-            response.value = if err.is_connection_refusal() {
-                log_error("response error", err.to_string());
-                Some(response::response::Value::ClosingError(err.to_string()))
+        Err(ClienUsageError::InternalError(error_message)) => {
+            log_error("internal error", &error_message);
+            Some(response::response::Value::ClosingError(error_message))
+        }
+        Err(ClienUsageError::RedisError(err)) => {
+            let error_message = err.to_string();
+            if err.is_connection_refusal() {
+                log_error("response error", &error_message);
+                Some(response::response::Value::ClosingError(error_message))
             } else if err.is_connection_dropped() {
                 Some(response::response::Value::RequestError(format!(
-                    "Received connection error `{err}`. Will attempt to reconnect"
+                    "Received connection error `{error_message}`. Will attempt to reconnect"
                 )))
             } else {
-                Some(response::response::Value::RequestError(err.to_string()))
-            };
+                Some(response::response::Value::RequestError(error_message))
+            }
         }
-    }
+    };
     write_to_writer(response, writer).await
 }
 
@@ -227,7 +232,7 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-fn get_command(request: &RedisRequest) -> Option<Cmd> {
+fn get_command(request: &Command) -> Option<Cmd> {
     let request_enum = request
         .request_type
         .enum_value_or(RequestType::InvalidRequest);
@@ -239,31 +244,52 @@ fn get_command(request: &RedisRequest) -> Option<Cmd> {
     }
 }
 
-async fn send_redis_command(
-    mut cmd: Cmd,
-    request: &RedisRequest,
-    mut connection: impl BabushkaClient + 'static,
-    writer: Rc<Writer>,
-) -> RedisResult<()> {
+fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
+    let Some(mut cmd) = get_command(command) else {
+        return Err(ClienUsageError::InternalError(format!("Received invalid request type: {:?}", command.request_type)));
+    };
     let res;
-    let args = match &request.args {
-        Some(redis_request::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
-        Some(redis_request::Args::ArgsVecPointer(pointer)) => {
+    let args = match &command.args {
+        Some(command::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
+        Some(command::Args::ArgsVecPointer(pointer)) => {
             res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
             Ok(&res)
         }
-        None => Err(RedisError::from((
-            ErrorKind::ClientError,
-            "Failed to get request arguemnts, no arguments are set",
-        ))),
-    };
-    let args = args?;
+        None => Err(ClienUsageError::InternalError(
+            "Failed to get request arguemnts, no arguments are set".to_string(),
+        )),
+    }?;
     for arg in args.iter() {
         cmd.arg(arg);
     }
-    let result = cmd.query_async(&mut connection).await;
-    write_result(result, request.callback_idx, &writer).await?;
-    Ok(())
+    Ok(cmd)
+}
+
+async fn send_command(
+    request: Command,
+    mut connection: impl BabushkaClient + 'static,
+) -> ClientUsageResult<Value> {
+    let cmd = get_redis_command(&request)?;
+
+    cmd.query_async(&mut connection)
+        .await
+        .map_err(|err| err.into())
+}
+
+async fn send_transaction(
+    request: Transaction,
+    mut connection: impl BabushkaClient + 'static,
+) -> ClientUsageResult<Value> {
+    let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
+    pipeline.atomic();
+    for command in request.commands {
+        pipeline.add_command(get_redis_command(&command)?);
+    }
+
+    pipeline
+        .query_async(&mut connection)
+        .await
+        .map_err(|err| err.into())
 }
 
 fn handle_request(
@@ -272,22 +298,21 @@ fn handle_request(
     writer: Rc<Writer>,
 ) {
     task::spawn_local(async move {
-        let Some(command) = get_command(&request) else {
-                let err_message =
-                    format!("Received invalid request type: {:?}", request.request_type);
-                let _res = write_closing_error(
-                    ClosingError { err: err_message },
-                    request.callback_idx,
-                    &writer.clone(),
-                )
-                .await;
-                return;
+        let result = match request.command {
+            Some(action) => match action {
+                redis_request::Command::SingleCommand(command) => {
+                    send_command(command, connection).await
+                }
+                redis_request::Command::Transaction(transaction) => {
+                    send_transaction(transaction, connection).await
+                }
+            },
+            None => Err(ClienUsageError::InternalError(
+                "Received empty request".to_string(),
+            )),
         };
 
-        let result = send_redis_command(command, &request, connection, writer.clone()).await;
-        if let Err(err) = result {
-            let _res = write_result(Err(err), request.callback_idx, &writer).await;
-        }
+        let _res = write_result(result, request.callback_idx, &writer).await;
     });
 }
 
@@ -539,7 +564,7 @@ impl From<io::Error> for ClosingReason {
 
 /// Enum describing errors received during client creation.
 #[derive(Debug, Error)]
-pub enum ClientCreationError {
+enum ClientCreationError {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
     #[error("Redis error: {0}")]
@@ -551,6 +576,18 @@ pub enum ClientCreationError {
     #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),
 }
+
+/// Enum describing errors received during client usage.
+#[derive(Debug, Error)]
+enum ClienUsageError {
+    #[error("Redis error: {0}")]
+    RedisError(#[from] RedisError),
+    /// An error that stems from wrong behavior of the client.
+    #[error("Internal error: {0}")]
+    InternalError(String),
+}
+
+type ClientUsageResult<T> = Result<T, ClienUsageError>;
 
 /// Defines errors caused the connection to close.
 #[derive(Debug, Clone, Error)]
