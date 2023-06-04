@@ -12,15 +12,27 @@ enum RequestType {
     SetString = 3;
 }
 
-message RedisRequest {
+message Command {
     message ArgsArray {
         repeated string args = 1;
     }
-    
-    uint32 callback_idx = 1;
-    RequestType request_type = 2;
+
+    RequestType request_type = 1;
     oneof args {
-        ArgsArray args_array = 3;
-        uint64 args_vec_pointer = 4;
+        ArgsArray args_array = 2;
+        uint64 args_vec_pointer = 3;
+    }
+}
+
+message Transaction {
+    repeated Command commands = 1;
+}
+
+message RedisRequest {
+    uint32 callback_idx = 1;
+    
+    oneof command {
+        Command single_command = 2;
+        Transaction transaction = 3;
     }
 }
