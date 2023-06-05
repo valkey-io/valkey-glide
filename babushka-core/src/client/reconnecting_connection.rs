@@ -15,18 +15,17 @@ use super::get_connection_info;
 
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
-    /// This signal is reset when a connection disconnects, and set when a new `ConnectionState` has been set with either a `Connected` or a `Disconnected` state.
-    /// Clone of the connection who experience the disconnect can wait on the signal in order to be notified when the new connection state is established.
+    /// This signal is reset when a connection disconnects, and set when a new `ConnectionState` has been set with a `Connected` state.
     connection_available_signal: ManualResetEvent,
     /// Information needed in order to create a new connection.
     connection_info: redis::Client,
-    /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because the client was dropped.
+    /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because all the outer clients were dropped.
     client_dropped_flagged: AtomicBool,
 }
 
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
 enum ConnectionState {
-    /// A connection has been made, and hasn't disconnected yet.
+    /// A connection has been established.
     Connected(MultiplexedConnection),
     /// There's a reconnection effort on the way, no need to try reconnecting again.
     Reconnecting,
@@ -37,7 +36,7 @@ struct InnerReconnectingConnection {
     backend: ConnectionBackend,
 }
 
-/// The separation between an inner and outer client is because the outer client is clonable, and the inner client needs to be dropped when no outer client exists.
+/// The separation between an inner and outer connection is because the outer connection is clonable, and the inner connection needs to be dropped when no outer connection exists.
 struct DropWrapper(Arc<InnerReconnectingConnection>);
 
 impl Drop for DropWrapper {
@@ -157,12 +156,17 @@ impl ReconnectingConnection {
             *guard = ConnectionState::Reconnecting;
         };
         log_debug("reconnect", "starting");
-        let clone = self.inner.0.clone();
-        // The reconnect task is spawned instead of awaited here, so that if this task will be dropped for some reason, the reconnection attempt will continue.
+        let inner_connection_clone = self.inner.0.clone();
+        // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
+        // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            let client = &clone.backend.connection_info;
+            let client = &inner_connection_clone.backend.connection_info;
             for sleep_duration in internal_retry_iterator() {
-                if clone.backend.client_dropped_flagged.load(Ordering::Relaxed) {
+                if inner_connection_clone
+                    .backend
+                    .client_dropped_flagged
+                    .load(Ordering::Relaxed)
+                {
                     log_trace(
                         "ReconnectingConnection",
                         "reconnect stopped after client was dropped",
@@ -173,11 +177,14 @@ impl ReconnectingConnection {
                 log_debug("connection creation", "Creating multiplexed connection");
                 match client.get_multiplexed_async_connection().await {
                     Ok(connection) => {
-                        let mut guard = clone.state.lock().await;
+                        let mut guard = inner_connection_clone.state.lock().await;
                         log_debug("reconnect", "completed succesfully");
-                        clone.backend.connection_available_signal.set();
+                        inner_connection_clone
+                            .backend
+                            .connection_available_signal
+                            .set();
                         *guard = ConnectionState::Connected(connection);
-                        break;
+                        return;
                     }
                     Err(_) => tokio::time::sleep(sleep_duration).await,
                 }
