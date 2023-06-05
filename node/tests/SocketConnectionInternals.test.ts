@@ -376,13 +376,6 @@ describe("SocketConnectionInternals", () => {
                             RequestType.GetString
                         );
                         expect(request.argsArray!.args!.length).toEqual(1);
-
-                        sendResponse(
-                            socket,
-                            ResponseType.Value,
-                            request.callbackIdx,
-                            "bar"
-                        );
                     }, 20)
                 );
                 await expect(connection.get("foo")).rejects.toEqual(
