@@ -1,5 +1,4 @@
 use std::sync::RwLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{self, event};
 use tracing_appender::{
     non_blocking,
@@ -31,6 +30,14 @@ impl Level {
     }
 }
 
+fn tracing_format(
+) -> tracing_subscriber::fmt::format::Format<tracing_subscriber::fmt::format::Compact> {
+    tracing_subscriber::fmt::format()
+        .with_source_location(false)
+        .with_target(false)
+        .compact()
+}
+
 // Initialize a logger that writes the received logs to a file under the babushka-logs folder.
 // The file name will be prefixed with the current timestamp, and will be replaced every hour.
 // This logger doesn't block the calling thread, and will save only logs of the given level or above.
@@ -42,6 +49,7 @@ pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
     let level_filter = minimal_level.to_filter();
     let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
+            .event_format(tracing_format())
             .with_max_level(level_filter)
             .with_writer(non_blocking)
             .finish(),
@@ -59,6 +67,7 @@ pub fn init_console(minimal_level: Level) -> Level {
     *guard = Some(_guard);
     let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
+            .event_format(tracing_format())
             .with_writer(non_blocking)
             .with_max_level(level_filter)
             .finish(),
@@ -86,15 +95,11 @@ macro_rules! create_log {
                 init(None, None);
             };
 
-            let micro_time_stamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_micros();
             let message_ref = message.as_ref();
             let identifier_ref = log_identifier.as_ref();
             event!(
                 tracing::Level::$uppercase_level,
-                " - {identifier_ref} - {message_ref} - {micro_time_stamp}"
+                "{identifier_ref} - {message_ref}"
             )
         }
     };
