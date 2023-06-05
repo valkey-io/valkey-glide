@@ -27,15 +27,17 @@ mod shared_client_tests {
                 client: cluster_basics.client,
             }
         } else {
-            let cmd_basics = utilities::setup_test_basics_internal(&configuration).await;
+            let server = RedisServer::new(ServerType::Tcp {
+                tls: configuration.use_tls,
+            });
             let client = Client::new(create_connection_request(
-                &[cmd_basics.server.get_client_addr()],
+                &[server.get_client_addr()],
                 &configuration,
             ))
             .await
             .unwrap();
             TestBasics {
-                server: BackingServer::Cmd(cmd_basics.server),
+                server: BackingServer::Cmd(server),
                 client,
             }
         }
