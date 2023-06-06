@@ -1,4 +1,4 @@
-import { expect, it } from "@jest/globals";
+import { expect, fit, it, xit } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import { Client, GetAndSetRandomValue } from "./TestUtilities";
 
@@ -17,18 +17,19 @@ type BaseClient = {
 
 export function runBaseTests<Context>(config: {
     init: () => Promise<{ context: Context; client: BaseClient }>;
-    close: (context: Context) => void;
+    close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     runCommonTests(config);
 
     const runTest = async (test: (client: BaseClient) => Promise<void>) => {
         const { context, client } = await config.init();
-
+        let testSucceeded = false;
         try {
             await test(client);
+            testSucceeded = true;
         } finally {
-            config.close(context);
+            config.close(context, testSucceeded);
         }
     };
 
@@ -111,16 +112,18 @@ export function runBaseTests<Context>(config: {
 
 export function runCommonTests<Context>(config: {
     init: () => Promise<{ context: Context; client: Client }>;
-    close: (context: Context) => void;
+    close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     const runTest = async (test: (client: Client) => Promise<void>) => {
         const { context, client } = await config.init();
+        let testSucceeded = false;
 
         try {
             await test(client);
+            testSucceeded = true;
         } finally {
-            config.close(context);
+            config.close(context, testSucceeded);
         }
     };
 
