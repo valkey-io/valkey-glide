@@ -6,7 +6,7 @@ import socket
 import string
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -238,7 +238,9 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     Returns:
         str: The full path of the cluster folder
     """
-    cluster_folder = f"{path}/{prefix}-{get_random_string(6)}"
+    time = datetime.now(timezone.utc)
+    time = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cluster_folder = f"{path}/{prefix}-{time}-{get_random_string(6)}"
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
