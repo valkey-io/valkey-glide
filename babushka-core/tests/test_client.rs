@@ -30,6 +30,9 @@ mod shared_client_tests {
             let server = RedisServer::new(ServerType::Tcp {
                 tls: configuration.use_tls,
             });
+            if let Some(redis_connection_info) = &configuration.connection_info {
+                setup_acl(&server.get_client_addr(), redis_connection_info).await;
+            }
             let client = Client::new(create_connection_request(
                 &[server.get_client_addr()],
                 &configuration,
