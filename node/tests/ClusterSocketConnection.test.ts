@@ -89,7 +89,7 @@ describe("ClusterSocketConnection", () => {
     let cluster: RedisCluster;
     beforeAll(async () => {
         cluster = await RedisCluster.createCluster(3, 0);
-    });
+    }, 10000);
 
     afterEach(async () => {
         await Promise.all(cluster.ports().map((port) => flushallOnPort(port)));
