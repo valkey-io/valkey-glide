@@ -190,9 +190,13 @@ async fn write_result(
             }
         }
         Err(err) => {
-            response.value = if err.is_connection_dropped() || err.is_connection_refusal() {
+            response.value = if err.is_connection_refusal() {
                 log_error("response error", err.to_string());
                 Some(response::response::Value::ClosingError(err.to_string()))
+            } else if err.is_connection_dropped() {
+                Some(response::response::Value::RequestError(format!(
+                    "Received connection error `{err}`. Will attempt to reconnect"
+                )))
             } else {
                 Some(response::response::Value::RequestError(err.to_string()))
             };
