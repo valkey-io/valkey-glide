@@ -15,7 +15,8 @@ const KEY_LENGTH: usize = 6;
 #[cfg(test)]
 mod socket_listener {
     use super::*;
-    use babushka::redis_request::redis_request::{Args, ArgsArray};
+    use babushka::redis_request::command::{Args, ArgsArray};
+    use babushka::redis_request::{Command, Transaction};
     use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
     use redis::{ConnectionAddr, Value};
@@ -45,6 +46,12 @@ mod socket_listener {
     struct ClusterTestBasics {
         _cluster: RedisCluster,
         socket: UnixStream,
+    }
+
+    struct CommandComponents {
+        args: Vec<String>,
+        request_type: EnumOrUnknown<RequestType>,
+        args_pointer: bool,
     }
 
     fn assert_value(pointer: u64, expected_value: Option<Value>) {
@@ -157,7 +164,22 @@ mod socket_listener {
         message_length
     }
 
-    fn write_request(
+    fn get_command(components: CommandComponents) -> Command {
+        let mut command = Command::new();
+        command.request_type = components.request_type;
+        if components.args_pointer {
+            command.args = Some(Args::ArgsVecPointer(Box::leak(Box::new(components.args))
+                as *mut Vec<String>
+                as u64));
+        } else {
+            let mut args_array = ArgsArray::new();
+            args_array.args = components.args;
+            command.args = Some(Args::ArgsArray(args_array));
+        }
+        command
+    }
+
+    fn write_command_request(
         buffer: &mut Vec<u8>,
         callback_index: u32,
         args: Vec<String>,
@@ -166,22 +188,41 @@ mod socket_listener {
     ) -> u32 {
         let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
-        request.request_type = request_type;
-        if args_pointer {
-            request.args = Some(Args::ArgsVecPointer(
-                Box::leak(Box::new(args)) as *mut Vec<String> as u64,
-            ));
-        } else {
-            let mut args_array = ArgsArray::new();
-            args_array.args = args;
-            request.args = Some(Args::ArgsArray(args_array));
+
+        request.command = Some(redis_request::redis_request::Command::SingleCommand(
+            get_command(CommandComponents {
+                args,
+                request_type,
+                args_pointer,
+            }),
+        ));
+
+        write_message(buffer, request)
+    }
+
+    fn write_transaction_request(
+        buffer: &mut Vec<u8>,
+        callback_index: u32,
+        commands_components: Vec<CommandComponents>,
+    ) -> u32 {
+        let mut request = RedisRequest::new();
+        request.callback_idx = callback_index;
+        let mut transaction = Transaction::new();
+        transaction.commands.reserve(commands_components.len());
+
+        for components in commands_components {
+            transaction.commands.push(get_command(components));
         }
+
+        request.command = Some(redis_request::redis_request::Command::Transaction(
+            transaction,
+        ));
 
         write_message(buffer, request)
     }
 
     fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str, args_pointer: bool) -> u32 {
-        write_request(
+        write_command_request(
             buffer,
             callback_index,
             vec![key.to_string()],
@@ -197,7 +238,7 @@ mod socket_listener {
         value: String,
         args_pointer: bool,
     ) -> u32 {
-        write_request(
+        write_command_request(
             buffer,
             callback_index,
             vec![key.to_string(), value],
@@ -424,7 +465,7 @@ mod socket_listener {
         // Send a set request
         let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_request(
+        write_command_request(
             &mut buffer,
             CALLBACK1_INDEX,
             vec!["SET".to_string(), key.to_string(), value.clone()],
@@ -437,7 +478,7 @@ mod socket_listener {
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_request(
+        write_command_request(
             &mut buffer,
             CALLBACK2_INDEX,
             vec!["GET".to_string(), key],
@@ -525,7 +566,7 @@ mod socket_listener {
                                      // Send a set request
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_request(
+        write_command_request(
             &mut buffer,
             CALLBACK_INDEX,
             vec![key.to_string()],
@@ -804,5 +845,54 @@ mod socket_listener {
 
         let _size = read_from_socket(&mut buffer, &mut socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    fn test_send_transaction_and_get_array_of_results() {
+        let test_basics = setup_test_basics(false);
+        let mut socket = test_basics.socket;
+
+        const CALLBACK_INDEX: u32 = 0;
+        let key = generate_random_string(KEY_LENGTH);
+        let commands = vec![
+            CommandComponents {
+                args: vec![key.clone(), "bar".to_string()],
+                args_pointer: true,
+                request_type: RequestType::SetString.into(),
+            },
+            CommandComponents {
+                args: vec!["GET".to_string(), key.clone()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
+                args: vec!["FLUSHALL".to_string()],
+                args_pointer: false,
+                request_type: RequestType::CustomCommand.into(),
+            },
+            CommandComponents {
+                args: vec![key],
+                args_pointer: false,
+                request_type: RequestType::GetString.into(),
+            },
+        ];
+        let mut buffer = Vec::with_capacity(200);
+        write_transaction_request(&mut buffer, CALLBACK_INDEX, commands);
+        socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut socket);
+        assert_response(
+            buffer.as_slice(),
+            0,
+            CALLBACK_INDEX,
+            Some(Value::Bulk(vec![
+                Value::Okay,
+                Value::Data(vec![b'b', b'a', b'r']),
+                Value::Okay,
+                Value::Nil,
+            ])),
+            ResponseType::Value,
+        );
     }
 }
