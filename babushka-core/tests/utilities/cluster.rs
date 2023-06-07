@@ -85,7 +85,11 @@ impl RedisCluster {
 
     fn parse_start_script_output(output: &str) -> (String, Vec<AddressInfo>) {
         let cluster_folder = output.split("CLUSTER_FOLDER=").collect::<Vec<&str>>();
-        assert!(!cluster_folder.is_empty() && cluster_folder.len() >= 2);
+        assert!(
+            !cluster_folder.is_empty() && cluster_folder.len() >= 2,
+            "{:?}",
+            cluster_folder
+        );
         let cluster_folder = cluster_folder.get(1).unwrap().lines();
         let cluster_folder = cluster_folder.collect::<Vec<&str>>();
         let cluster_folder = cluster_folder.first().unwrap().to_string();
