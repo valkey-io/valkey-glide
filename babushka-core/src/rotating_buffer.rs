@@ -110,8 +110,8 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::redis_request::redis_request::{Args, ArgsArray};
-    use crate::redis_request::{RedisRequest, RequestType};
+    use crate::redis_request::{command, redis_request};
+    use crate::redis_request::{Command, RedisRequest, RequestType};
     use rand::{distributions::Alphanumeric, Rng};
     use rstest::rstest;
     use std::io::Write;
@@ -123,7 +123,7 @@ mod tests {
         u32::encode_var(length, &mut buffer[new_len - required_space..]);
     }
 
-    fn create_request(
+    fn create_command_request(
         callback_index: u32,
         args: Vec<String>,
         request_type: RequestType,
@@ -131,16 +131,18 @@ mod tests {
     ) -> RedisRequest {
         let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
-        request.request_type = request_type.into();
+        let mut command = Command::new();
+        command.request_type = request_type.into();
         if args_pointer {
-            request.args = Some(Args::ArgsVecPointer(
-                Box::leak(Box::new(args)) as *mut Vec<String> as u64,
-            ));
+            command.args = Some(command::Args::ArgsVecPointer(Box::leak(Box::new(args))
+                as *mut Vec<String>
+                as u64));
         } else {
-            let mut args_array = ArgsArray::new();
+            let mut args_array = command::ArgsArray::new();
             args_array.args = args;
-            request.args = Some(Args::ArgsArray(args_array));
+            command.args = Some(command::Args::ArgsArray(args_array));
         }
+        request.command = Some(redis_request::Command::SingleCommand(command));
         request
     }
 
@@ -151,7 +153,7 @@ mod tests {
         request_type: RequestType,
         args_pointer: bool,
     ) {
-        let request = create_request(callback_index, args, request_type, args_pointer);
+        let request = create_command_request(callback_index, args, request_type, args_pointer);
         let message_length = request.compute_size() as usize;
         write_length(buffer, message_length as u32);
         let _res = buffer.write_all(&request.write_to_bytes().unwrap());
@@ -190,12 +192,15 @@ mod tests {
         expected_args: Vec<String>,
         args_pointer: bool,
     ) {
-        assert_eq!(request.request_type, expected_type.into());
         assert_eq!(request.callback_idx, expected_index);
+        let Some(redis_request::Command::SingleCommand(ref command)) = request.command else {
+            panic!("expected single command");
+        };
+        assert_eq!(command.request_type, expected_type.into());
         let args: Vec<String> = if args_pointer {
-            *unsafe { Box::from_raw(request.args_vec_pointer() as *mut Vec<String>) }
+            *unsafe { Box::from_raw(command.args_vec_pointer() as *mut Vec<String>) }
         } else {
-            request.args_array().args.clone()
+            command.args_array().args.clone()
         };
         assert_eq!(args, expected_args);
     }
