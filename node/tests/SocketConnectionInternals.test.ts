@@ -172,8 +172,12 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsArray?.args?.length).toEqual(1);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    1
+                );
 
                 sendResponse(
                     socket,
@@ -192,8 +196,12 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsArray?.args?.length).toEqual(1);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    1
+                );
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
@@ -207,8 +215,12 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.SetString);
-                expect(request.argsArray?.args?.length).toEqual(2);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.SetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    2
+                );
 
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
@@ -223,8 +235,12 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsArray?.args?.length).toEqual(1);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    1
+                );
                 sendResponse(
                     socket,
                     ResponseType.RequestError,
@@ -244,8 +260,12 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsArray?.args?.length).toEqual(1);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    1
+                );
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
@@ -268,7 +288,9 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
@@ -289,8 +311,10 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.SetString);
-                const args = request.argsArray?.args;
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.SetString
+                );
+                const args = request.singleCommand?.argsArray?.args;
                 if (!args) {
                     throw new Error("no args");
                 }
@@ -318,9 +342,11 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsVecPointer).not.toBeNull();
-                expect(request.argsArray).toBeNull();
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsVecPointer).not.toBeNull();
+                expect(request.singleCommand?.argsArray).toBeNull();
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
@@ -337,9 +363,11 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
-                expect(request.requestType).toEqual(RequestType.GetString);
-                expect(request.argsArray).not.toBeNull();
-                expect(request.argsVecPointer).toBeNull();
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray).not.toBeNull();
+                expect(request.singleCommand?.argsVecPointer).toBeNull();
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
@@ -372,10 +400,12 @@ describe("SocketConnectionInternals", () => {
                     setTimeout(() => {
                         const reader = Reader.create(data);
                         const request = RedisRequest.decodeDelimited(reader);
-                        expect(request.requestType).toEqual(
+                        expect(request.singleCommand?.requestType).toEqual(
                             RequestType.GetString
                         );
-                        expect(request.argsArray!.args!.length).toEqual(1);
+                        expect(
+                            request.singleCommand?.argsArray?.args?.length
+                        ).toEqual(1);
                     }, 20)
                 );
                 await expect(connection.get("foo")).rejects.toEqual(

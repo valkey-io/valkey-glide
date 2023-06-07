@@ -10,8 +10,8 @@ import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
 import { ConnectionOptions, SocketConnection } from "..";
 import { redis_request } from "../src/ProtobufMessage";
-import { flushallOnPort } from "./TestUtilities";
 import { runBaseTests } from "./SharedTests";
+import { flushallOnPort } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
@@ -65,17 +65,21 @@ describe("SocketConnection", () => {
         const writer = new BufferWriter();
         const request = {
             callbackIdx: 1,
-            requestType: 2,
-            argsArray: redis_request.RedisRequest.ArgsArray.create({
-                args: ["bar1", "bar2"],
-            }),
+            singleCommand: {
+                requestType: 2,
+                argsArray: redis_request.Command.ArgsArray.create({
+                    args: ["bar1", "bar2"],
+                }),
+            },
         };
         const request2 = {
             callbackIdx: 3,
-            requestType: 4,
-            argsArray: redis_request.RedisRequest.ArgsArray.create({
-                args: ["bar3", "bar4"],
-            }),
+            singleCommand: {
+                requestType: 4,
+                argsArray: redis_request.Command.ArgsArray.create({
+                    args: ["bar3", "bar4"],
+                }),
+            },
         };
         redis_request.RedisRequest.encodeDelimited(request, writer);
         redis_request.RedisRequest.encodeDelimited(request2, writer);
@@ -84,13 +88,19 @@ describe("SocketConnection", () => {
 
         const dec_msg1 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
-        expect(dec_msg1.requestType).toEqual(2);
-        expect(dec_msg1.argsArray?.args).toEqual(["bar1", "bar2"]);
+        expect(dec_msg1.singleCommand?.requestType).toEqual(2);
+        expect(dec_msg1.singleCommand?.argsArray?.args).toEqual([
+            "bar1",
+            "bar2",
+        ]);
 
         const dec_msg2 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
-        expect(dec_msg2.requestType).toEqual(4);
-        expect(dec_msg2.argsArray?.args).toEqual(["bar3", "bar4"]);
+        expect(dec_msg2.singleCommand?.requestType).toEqual(4);
+        expect(dec_msg2.singleCommand?.argsArray?.args).toEqual([
+            "bar3",
+            "bar4",
+        ]);
     });
 
     runBaseTests<Context>({
