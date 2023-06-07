@@ -52,7 +52,7 @@ export type ConnectionOptions = {
     /// If not set, a default value will be used.
     /// Value must be an integer.
     responseTimeout?: number;
-    /// Number of milliseconds that the client should wait for connection before determining that the connection has been severed.
+    /// Number of milliseconds that the client should wait for the initial connection before failing to create a client.
     /// If not set, a default value will be used.
     /// Value must be an integer.
     connectionTimeout?: number;

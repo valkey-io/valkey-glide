@@ -19,6 +19,7 @@ impl BabushkaClient for ClusterConnection {}
 impl BabushkaClient for Client {}
 
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
+pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub(super) fn get_port(address: &AddressInfo) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
@@ -147,37 +148,50 @@ fn to_duration(time_in_millis: u32, default: Duration) -> Duration {
     }
 }
 
+async fn create_cluster_client(
+    request: ConnectionRequest,
+) -> RedisResult<redis::cluster_async::ClusterConnection> {
+    // TODO - implement timeout for each connection attempt
+    // let connection_attempt_timeout = to_duration(request.connection_attempt_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT);
+    let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
+    let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
+    let initial_nodes = request
+        .addresses
+        .into_iter()
+        .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
+        .collect();
+    let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes);
+    if tls_mode != TlsMode::NoTls {
+        let tls = if tls_mode == TlsMode::SecureTls {
+            redis::cluster::TlsMode::Secure
+        } else {
+            redis::cluster::TlsMode::Insecure
+        };
+        builder = builder.tls(tls);
+    }
+    let client = builder.build()?;
+    client.get_async_connection().await
+}
+
 impl Client {
     pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
-        let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
-        let internal_client = if request.cluster_mode_enabled {
-            let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
-            let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
-            let initial_nodes = request
-                .addresses
-                .into_iter()
-                .map(|address| {
-                    get_connection_info(&address, tls_mode, redis_connection_info.clone())
-                })
-                .collect();
-            let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes);
-            if tls_mode != TlsMode::NoTls {
-                let tls = if tls_mode == TlsMode::SecureTls {
-                    redis::cluster::TlsMode::Secure
-                } else {
-                    redis::cluster::TlsMode::Insecure
-                };
-                builder = builder.tls(tls);
-            }
-            let client = builder.build()?;
-            ClientWrapper::CME(client.get_async_connection().await?)
-        } else {
-            ClientWrapper::CMD(ClientCMD::create_client(request).await?)
-        };
+        const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2500);
 
-        Ok(Self {
-            internal_client,
-            response_timeout,
+        let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let total_connection_timeout =
+            to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
+        run_with_timeout(total_connection_timeout, async move {
+            let internal_client = if request.cluster_mode_enabled {
+                ClientWrapper::CME(create_cluster_client(request).await?)
+            } else {
+                ClientWrapper::CMD(ClientCMD::create_client(request).await?)
+            };
+
+            Ok(Self {
+                internal_client,
+                response_timeout,
+            })
         })
+        .await
     }
 }
