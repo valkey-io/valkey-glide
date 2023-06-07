@@ -6,7 +6,7 @@ import socket
 import string
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -238,7 +238,9 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     Returns:
         str: The full path of the cluster folder
     """
-    cluster_folder = f"{path}/{prefix}-{get_random_string(6)}"
+    time = datetime.now(timezone.utc)
+    time = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cluster_folder = f"{path}/{prefix}-{time}-{get_random_string(6)}"
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
@@ -373,6 +375,18 @@ def create_cluster(
     output, err = p.communicate(timeout=10)
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
+
+    for dir in Path(cluster_folder).rglob("*"):
+        if not dir.is_dir():
+            continue
+        log_file = f"{dir}/redis.log"
+
+        if not wait_for_status_ok(log_file):
+            raise Exception(
+                f"Waiting for server with log {log_file} to reach status OK.\n"
+                f"See {dir}/redis.log for more information"
+            )
+
     logging.debug("The cluster was successfully created!")
     toc = time.perf_counter()
     logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
@@ -411,6 +425,24 @@ def wait_for_server(
         except subprocess.TimeoutExpired:
             pass
         time.sleep(0.1)
+    return False
+
+
+def wait_for_status_ok(
+    log_file: str,
+    timeout: int = 5,
+):
+    logging.debug(f"checking state changed in {log_file}")
+    timeout_start = time.time()
+    while time.time() < timeout_start + timeout:
+        with open(log_file, "r") as f:
+            redis_log = f.read()
+            if "Cluster state changed: ok" in redis_log:
+                return True
+            else:
+                time.sleep(0.1)
+                continue
+    logging.warn(f"Timeout exceeded trying to check if {log_file} contains status ok!")
     return False
 
 
