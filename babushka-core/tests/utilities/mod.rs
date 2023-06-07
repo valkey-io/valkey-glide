@@ -107,7 +107,9 @@ impl RedisServer {
 
         redis_cmd
             .stdout(process::Stdio::null())
-            .stderr(process::Stdio::null());
+            .stderr(process::Stdio::null())
+            .arg("--enable-debug-command")
+            .arg("local");
         let tempdir = tempfile::Builder::new()
             .prefix("redis")
             .tempdir()
@@ -489,6 +491,9 @@ pub fn create_connection_request(
     if let Some(response_timeout) = configuration.response_timeout {
         connection_request.response_timeout = response_timeout;
     }
+    if let Some(connection_timeout) = configuration.connection_timeout {
+        connection_request.connection_timeout = connection_timeout;
+    }
     set_connection_info_to_connection_request(
         configuration.connection_info.clone().unwrap_or_default(),
         &mut connection_request,
@@ -503,6 +508,7 @@ pub struct TestConfiguration {
     pub connection_info: Option<RedisConnectionInfo>,
     pub cluster_mode: ClusterMode,
     pub response_timeout: Option<u32>,
+    pub connection_timeout: Option<u32>,
 }
 
 pub async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
