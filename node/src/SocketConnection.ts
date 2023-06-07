@@ -200,20 +200,24 @@ export class SocketConnection {
         requestType: number,
         args: string[]
     ) {
-        const message = redis_request.RedisRequest.create({
-            callbackIdx: callbackIdx,
-            requestType: requestType,
+        const singleCommand = redis_request.Command.create({
+            requestType,
         });
+
         if (this.is_a_large_request(args)) {
             // pass as a pointer
             const pointerArr = createLeakedStringVec(args);
             const pointer = new Long(pointerArr[0], pointerArr[1]);
-            message.argsVecPointer = pointer;
+            singleCommand.argsVecPointer = pointer;
         } else {
-            message.argsArray = redis_request.RedisRequest.ArgsArray.create({
+            singleCommand.argsArray = redis_request.Command.ArgsArray.create({
                 args: args,
             });
         }
+        const message = redis_request.RedisRequest.create({
+            callbackIdx,
+            singleCommand,
+        });
 
         this.writeOrBufferRequest(
             message,
