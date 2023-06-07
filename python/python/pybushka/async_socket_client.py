@@ -18,7 +18,7 @@ from pybushka.constants import (
 )
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
-from pybushka.protobuf.redis_request_pb2 import RedisRequest
+from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
 from pybushka.protobuf.response_pb2 import Response
 from typing_extensions import Self
 
@@ -145,9 +145,9 @@ class RedisAsyncSocketClient(CoreCommands):
         self, request_type: TRequestType, args: List[str]
     ) -> TResult:
         request = RedisRequest()
-        request.request_type = request_type
         request.callback_idx = self._get_callback_index()
-        request.args_array.args[:] = args
+        request.single_command.request_type = request_type
+        request.single_command.args_array.args[:] = args  # TODO - use arg pointer
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
