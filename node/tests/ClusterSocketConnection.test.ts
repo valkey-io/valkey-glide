@@ -86,6 +86,7 @@ class RedisCluster {
 }
 
 describe("ClusterSocketConnection", () => {
+    let testsFailed = 0;
     let cluster: RedisCluster;
     beforeAll(async () => {
         cluster = await RedisCluster.createCluster(3, 0);
@@ -96,7 +97,9 @@ describe("ClusterSocketConnection", () => {
     });
 
     afterAll(async () => {
-        await cluster.dispose();
+        if (testsFailed === 0) {
+            await cluster.dispose();
+        }
     });
 
     const getOptions = (ports: number[]): ConnectionOptions => {
@@ -110,6 +113,7 @@ describe("ClusterSocketConnection", () => {
 
     runBaseTests<Context>({
         init: async () => {
+            testsFailed += 1;
             const client = await ClusterSocketConnection.CreateConnection(
                 getOptions(cluster.ports())
             );
@@ -120,7 +124,10 @@ describe("ClusterSocketConnection", () => {
                 client,
             };
         },
-        close: (context: Context) => {
+        close: (context: Context, testSucceeded: boolean) => {
+            if (testSucceeded) {
+                testsFailed -= 1;
+            }
             context.client.dispose();
         },
         timeout: TIMEOUT,
