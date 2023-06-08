@@ -64,9 +64,9 @@ arguments_parser.add_argument(
     "--tls", help="Should benchmark a TLS server", action="store_true"
 )
 arguments_parser.add_argument(
-    "--is-cluster",
+    "--clusterModeEnabled",
     help="Should benchmark a cluster mode enabled cluster",
-    action="store_false",
+    action="store_true",
 )
 args = arguments_parser.parse_args()
 
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     client_count = args.clientCount
     host = args.host
     use_tls = args.tls
-    is_cluster = args.is_cluster
+    is_cluster = args.clusterModeEnabled
 
     product_of_arguments = [
         (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
