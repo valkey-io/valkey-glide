@@ -18,7 +18,7 @@ from pybushka.constants import (
 )
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
-from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
+from pybushka.protobuf.redis_request_pb2 import RedisRequest
 from pybushka.protobuf.response_pb2 import Response
 from typing_extensions import Self
 
@@ -102,7 +102,8 @@ class RedisAsyncSocketClient(CoreCommands):
 
     def close(self, err: str = "") -> None:
         for response_future in self._available_futures.values():
-            response_future.set_exception(err)
+            if not response_future.done():
+                response_future.set_exception(err)
         self.__del__()
 
     def _get_future(self, callback_idx: int) -> Type[asyncio.Future]:
