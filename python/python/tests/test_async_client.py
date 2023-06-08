@@ -27,12 +27,14 @@ async def async_socket_client(request, cluster_mode) -> RedisAsyncSocketClient:
     if cluster_mode:
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
         config = ClientConfiguration(seed_nodes, use_tls=use_tls)
-        return await RedisClusterAsyncSocket.create(config)
+        client = await RedisClusterAsyncSocket.create(config)
     else:
         config = ClientConfiguration(
             [AddressInfo(host=host, port=port)], use_tls=use_tls
         )
-        return await RedisAsyncSocketClient.create(config)
+        client = await RedisAsyncSocketClient.create(config)
+    yield client
+    client.close()
 
 
 def parse_info_response(res: str) -> Dict[str, str]:
@@ -183,6 +185,8 @@ class TestSocketClient:
         assert "id" in res
         assert "cmd=client" in res
 
+
+class CommandsUnitTests:
     def test_expiry_cmd_args(self):
         exp_sec = ExpirySet(ExpiryType.SEC, 5)
         assert exp_sec.get_cmd_args() == ["EX", "5"]

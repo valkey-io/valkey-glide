@@ -51,7 +51,7 @@ async def async_ffi_client(request) -> RedisAsyncFFIClient:
 
 
 @pytest.fixture(autouse=True, scope="session")
-def pytest_sessionstart(request):
+def call_before_all_tests(request):
     """
     Called after the Session object has been created and
     before performing collection and entering the run test loop.
