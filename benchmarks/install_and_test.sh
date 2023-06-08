@@ -43,7 +43,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
+  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
   # exit python virtualenv
   deactivate
   echo "done python benchmark"
