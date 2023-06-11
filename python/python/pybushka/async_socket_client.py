@@ -1,6 +1,6 @@
 import asyncio
 import threading
-from typing import Awaitable, List, Optional, Type
+from typing import Awaitable, List, Optional, Type, Union
 
 import async_timeout
 from google.protobuf.internal.decoder import _DecodeVarint32
@@ -18,7 +18,7 @@ from pybushka.constants import (
 )
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
-from pybushka.protobuf.redis_request_pb2 import RedisRequest
+from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
 from pybushka.protobuf.response_pb2 import Response
 from typing_extensions import Self
 
@@ -149,6 +149,25 @@ class RedisAsyncSocketClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = args  # TODO - use arg pointer
+        # Create a response future for this request and add it to the available
+        # futures map
+        response_future = self._get_future(request.callback_idx)
+        await self._write_or_buffer_request(request)
+        await response_future
+        return response_future.result()
+
+    async def execute_command_Transaction(
+        self, commands: List[Union[TRequestType, List[str]]]
+    ) -> TResult:
+        request = RedisRequest()
+        request.callback_idx = self._get_callback_index()
+        transaction_commands = []
+        for requst_type, args in commands:
+            command = Command()
+            command.request_type = requst_type
+            command.args_array.args[:] = args
+            transaction_commands.append(command)
+        request.transaction.commands.extend(transaction_commands)
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)

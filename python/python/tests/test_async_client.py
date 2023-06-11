@@ -49,8 +49,7 @@ def parse_info_response(res: str) -> Dict[str, str]:
 
 
 def get_random_string(length):
-    letters = string.ascii_letters + string.digits + string.punctuation
-    result_str = "".join(random.choice(letters) for i in range(length))
+    result_str = "".join(random.choice(string.ascii_letters) for i in range(length))
     return result_str
 
 
@@ -195,6 +194,99 @@ class TestSocketClient:
         with pytest.raises(Exception) as e:
             await async_socket_client.custom_command(["HSET", key, "1", "bar"])
         assert "WRONGTYPE" in str(e)
+
+
+@pytest.mark.asyncio
+class TestTransaction:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_set_get(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        transaction = await async_socket_client.multi()
+        transaction.set(key, value)
+        transaction.get(key)
+        result = await async_socket_client.exec(transaction)
+        assert result == [OK, value]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_multiple_commands(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        key2 = "{{{}}}:{}".format(key, get_random_string(3))  # to get the same slot
+        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        transaction = await async_socket_client.multi()
+        transaction.set(key, value)
+        transaction.get(key)
+        transaction.set(key2, value)
+        transaction.get(key2)
+        result = await async_socket_client.exec(transaction)
+        assert result == [OK, value, OK, value]
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_transaction_with_different_slots(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        transaction = await async_socket_client.multi()
+        transaction.set("key1", "value1")
+        transaction.set("key2", "value2")
+        with pytest.raises(Exception) as e:
+            await async_socket_client.exec(transaction)
+        assert "Moved" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_custom_command(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        transaction = await async_socket_client.multi()
+        transaction.custom_command(["HSET", key, "foo", "bar"])
+        transaction.custom_command(["HGET", key, "foo"])
+        result = await async_socket_client.exec(transaction)
+        assert result == [1, "bar"]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_custom_unsupported_command(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        transaction = await async_socket_client.multi()
+        transaction.custom_command(["WATCH", key])
+        with pytest.raises(Exception) as e:
+            await async_socket_client.exec(transaction)
+        assert "WATCH inside MULTI is not allowed" in str(
+            e
+        )  # TODO : add an assert on EXEC ABORT
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_discard_command(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        await async_socket_client.set(key, "1")
+        transaction = await async_socket_client.multi()
+        transaction.custom_command(["INCR", key])
+        transaction.custom_command(["DISCARD"])
+        with pytest.raises(Exception) as e:
+            await async_socket_client.exec(transaction)
+        assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
+        value = await async_socket_client.get(key)
+        assert value == "1"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_transaction_exec_abort(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        transaction = await async_socket_client.multi()
+        transaction.custom_command(["INCR", key, key, key])
+        with pytest.raises(Exception) as e:
+            await async_socket_client.exec(transaction)
+        assert "wrong number of arguments" in str(
+            e
+        )  # TODO : add an assert on EXEC ABORT
 
 
 class CommandsUnitTests:
