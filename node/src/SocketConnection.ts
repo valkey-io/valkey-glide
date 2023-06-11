@@ -52,10 +52,10 @@ export type ConnectionOptions = {
     /// If not set, a default value will be used.
     /// Value must be an integer.
     responseTimeout?: number;
-    /// Number of milliseconds that the client should wait for connection before determining that the connection has been severed.
+    /// Number of milliseconds that the client should wait for the initial connection attempts before failing to create a client.
     /// If not set, a default value will be used.
     /// Value must be an integer.
-    connectionTimeout?: number;
+    clientCreationTimeout?: number;
     /// Strategy used to determine how and when to retry connecting, in case of connection failures.
     /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
     /// If not set, a default backoff strategy will be used.
@@ -359,7 +359,7 @@ export class SocketConnection {
                 : connection_request.TlsMode.NoTls,
             responseTimeout: options.responseTimeout,
             clusterModeEnabled: false,
-            connectionTimeout: options.connectionTimeout,
+            clientCreationTimeout: options.clientCreationTimeout,
             readFromReplicaStrategy,
             connectionRetryStrategy: options.connectionBackoff,
             authenticationInfo,
