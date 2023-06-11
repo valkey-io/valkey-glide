@@ -29,7 +29,7 @@ message ConnectionRequest {
     TlsMode tls_mode = 2;
     bool cluster_mode_enabled = 3;
     uint32 response_timeout = 4;
-    uint32 connection_timeout = 5;
+    uint32 client_creation_timeout = 5;
     ReadFromReplicaStrategy read_from_replica_strategy = 6;
     ConnectionRetryStrategy connection_retry_strategy = 7;
     AuthenticationInfo authentication_info = 8;

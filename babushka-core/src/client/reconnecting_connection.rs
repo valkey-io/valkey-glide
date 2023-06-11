@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio_retry::Retry;
 
-use super::get_connection_info;
+use super::{get_connection_info, run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
 
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
@@ -55,6 +55,14 @@ pub(super) struct ReconnectingConnection {
     inner: Arc<DropWrapper>,
 }
 
+async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
+    run_with_timeout(
+        DEFAULT_CONNECTION_ATTEMPT_TIMEOUT,
+        client.get_multiplexed_async_connection(),
+    )
+    .await
+}
+
 async fn try_create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
@@ -62,7 +70,7 @@ async fn try_create_connection(
     let client = &connection_backend.connection_info;
     let action = || {
         log_debug("connection creation", "Creating multiplexed connection");
-        client.get_multiplexed_async_connection()
+        get_multiplexed_connection(client)
     };
 
     let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
@@ -175,7 +183,7 @@ impl ReconnectingConnection {
                     return;
                 }
                 log_debug("connection creation", "Creating multiplexed connection");
-                match client.get_multiplexed_async_connection().await {
+                match get_multiplexed_connection(client).await {
                     Ok(connection) => {
                         let mut guard = inner_connection_clone.state.lock().await;
                         log_debug("reconnect", "completed succesfully");
