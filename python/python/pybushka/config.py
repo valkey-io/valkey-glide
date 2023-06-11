@@ -68,8 +68,9 @@ class ClientConfiguration:
         credentials (AuthenticationOptions): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from_replica (ReadFromReplicaStrategy): If not set, `ALWAYS_FROM_MASTER` will be used.
-            connection_timeout (Optional[int]): Number of milliseconds that the client should wait for connection before
-            determining that the connection has been severed. If not set, a default value will be used.
+        client_creation_timeout (Optional[int]): Number of milliseconds that the client should wait for the
+            initial connection attempts before determining that the connection has been severed. If not set, a
+            default value will be used.
         response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
             determining that the connection has been severed. If not set, a default value will be used.
         connection_backoff (Optional[int]): Strategy used to determine how and when to retry connecting, in case of
@@ -84,7 +85,7 @@ class ClientConfiguration:
         use_tls: bool = False,
         credentials: Optional[AuthenticationOptions] = None,
         read_from_replica: ReadFromReplica = ReadFromReplica.ALWAYS_FROM_MASTER,
-        connection_timeout: int = 200,
+        client_creation_timeout: int = 200,
         response_timeout: int = 100,
         connection_backoff: Optional[BackoffStrategy] = None,
     ):
@@ -92,7 +93,7 @@ class ClientConfiguration:
         self.use_tls = use_tls
         self.credentials = credentials
         self.read_from_replica = read_from_replica
-        self.connection_timeout = connection_timeout
+        self.client_creation_timeout = client_creation_timeout
         self.response_timeout = response_timeout
         self.connection_backoff = connection_backoff
 
@@ -107,7 +108,7 @@ class ClientConfiguration:
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from_replica_strategy = self.read_from_replica.value
         request.response_timeout = self.response_timeout
-        request.connection_timeout = self.connection_timeout
+        request.client_creation_timeout = self.client_creation_timeout
         if self.connection_backoff:
             request.connection_retry_strategy.number_of_retries = (
                 self.connection_backoff.num_of_retries
