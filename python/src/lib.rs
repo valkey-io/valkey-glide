@@ -1,4 +1,3 @@
-use babushka::headers_legacy::{RequestType, ResponseType, HEADER_END};
 use babushka::start_socket_listener;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
@@ -27,28 +26,6 @@ impl Level {
     fn is_lower(&self, level: &Level) -> bool {
         self <= level
     }
-}
-
-#[pyclass]
-enum PyRequestType {
-    /// Type of a server address request
-    ServerAddress = RequestType::ServerAddress as isize,
-    /// Type of a get string request.
-    GetString = RequestType::GetString as isize,
-    /// Type of a set string request.
-    SetString = RequestType::SetString as isize,
-}
-
-#[pyclass]
-enum PyResponseType {
-    /// Type of a response that returns a null.
-    Null = ResponseType::Null as isize,
-    /// Type of a response that returns a string.
-    String = ResponseType::Value as isize,
-    /// Type of response containing an error that impacts a single request.
-    RequestError = ResponseType::RequestError as isize,
-    /// Type of response containing an error causes the connection to close.
-    ClosingError = ResponseType::ClosingError as isize,
 }
 
 fn to_py_err(err: impl std::error::Error) -> PyErr {
@@ -144,9 +121,6 @@ impl AsyncPipeline {
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AsyncClient>()?;
-    m.add_class::<PyRequestType>()?;
-    m.add_class::<PyResponseType>()?;
-    m.add("HEADER_LENGTH_IN_BYTES", HEADER_END).unwrap();
     m.add_class::<Level>()?;
 
     #[pyfn(m)]
