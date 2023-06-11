@@ -10,6 +10,7 @@ use std::io;
 use std::time::Duration;
 mod client_cmd;
 mod reconnecting_connection;
+pub use reconnecting_connection::HEARTBEAT_SLEEP_DURATION;
 
 pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 
