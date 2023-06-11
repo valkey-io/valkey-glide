@@ -492,7 +492,7 @@ pub fn create_connection_request(
         connection_request.response_timeout = response_timeout;
     }
     if let Some(connection_timeout) = configuration.connection_timeout {
-        connection_request.connection_timeout = connection_timeout;
+        connection_request.client_creation_timeout = connection_timeout;
     }
     set_connection_info_to_connection_request(
         configuration.connection_info.clone().unwrap_or_default(),

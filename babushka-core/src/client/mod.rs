@@ -152,7 +152,6 @@ async fn create_cluster_client(
     request: ConnectionRequest,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
-    // let connection_attempt_timeout = to_duration(request.connection_attempt_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT);
     let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
     let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
     let initial_nodes = request
@@ -175,11 +174,13 @@ async fn create_cluster_client(
 
 impl Client {
     pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
-        const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(2500);
+        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_millis(2500);
 
         let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
-        let total_connection_timeout =
-            to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
+        let total_connection_timeout = to_duration(
+            request.client_creation_timeout,
+            DEFAULT_CLIENT_CREATION_TIMEOUT,
+        );
         run_with_timeout(total_connection_timeout, async move {
             let internal_client = if request.cluster_mode_enabled {
                 ClientWrapper::CME(create_cluster_client(request).await?)
