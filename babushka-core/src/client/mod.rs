@@ -30,11 +30,11 @@ pub(super) fn get_port(address: &AddressInfo) -> u16 {
     }
 }
 
-pub(super) fn string_to_option(str: String) -> Option<String> {
-    if str.is_empty() {
+pub(super) fn chars_to_option(chars: &::protobuf::Chars) -> Option<String> {
+    if chars.is_empty() {
         None
     } else {
-        Some(str)
+        Some(chars.to_string())
     }
 }
 
@@ -44,8 +44,8 @@ pub(super) fn get_redis_connection_info(
     match authentication_info {
         Some(info) => redis::RedisConnectionInfo {
             db: 0,
-            username: string_to_option(info.username),
-            password: string_to_option(info.password),
+            username: chars_to_option(&info.username),
+            password: chars_to_option(&info.password),
         },
         None => redis::RedisConnectionInfo::default(),
     }
@@ -58,12 +58,12 @@ pub(super) fn get_connection_info(
 ) -> redis::ConnectionInfo {
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
-            host: address.host.clone(),
+            host: address.host.to_string(),
             port: get_port(address),
             insecure: tls_mode == TlsMode::InsecureTls,
         }
     } else {
-        redis::ConnectionAddr::Tcp(address.host.clone(), get_port(address))
+        redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
     };
     redis::ConnectionInfo {
         addr,

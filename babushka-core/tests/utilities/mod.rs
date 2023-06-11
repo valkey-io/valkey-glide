@@ -381,7 +381,7 @@ pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
     let mut address_info = AddressInfo::new();
     match address {
         ConnectionAddr::Tcp(host, port) => {
-            address_info.host = host.clone();
+            address_info.host = host.to_string().into();
             address_info.port = *port as u32;
         }
         ConnectionAddr::TcpTls {
@@ -389,7 +389,7 @@ pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
             port,
             insecure: _,
         } => {
-            address_info.host = host.clone();
+            address_info.host = host.to_string().into();
             address_info.port = *port as u32;
         }
         ConnectionAddr::Unix(_) => unreachable!("Unix connection not tested"),
@@ -438,8 +438,8 @@ fn set_connection_info_to_connection_request(
     if connection_info.password.is_some() {
         connection_request.authentication_info =
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
-                password: connection_info.password.unwrap(),
-                username: connection_info.username.unwrap_or_default(),
+                password: connection_info.password.unwrap().into(),
+                username: connection_info.username.unwrap_or_default().into(),
                 ..Default::default()
             })));
     }
