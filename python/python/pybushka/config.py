@@ -85,8 +85,8 @@ class ClientConfiguration:
         use_tls: bool = False,
         credentials: Optional[AuthenticationOptions] = None,
         read_from_replica: ReadFromReplica = ReadFromReplica.ALWAYS_FROM_MASTER,
-        client_creation_timeout: int = 200,
-        response_timeout: int = 100,
+        client_creation_timeout: Optional[int] = None,
+        response_timeout: Optional[int] = None,
         connection_backoff: Optional[BackoffStrategy] = None,
     ):
         self.addresses = addresses or [AddressInfo()]
@@ -107,8 +107,10 @@ class ClientConfiguration:
             address_info.port = address.port
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from_replica_strategy = self.read_from_replica.value
-        request.response_timeout = self.response_timeout
-        request.client_creation_timeout = self.client_creation_timeout
+        if self.response_timeout:
+            request.response_timeout = self.response_timeout
+        if self.client_creation_timeout:
+            request.client_creation_timeout = self.client_creation_timeout
         if self.connection_backoff:
             request.connection_retry_strategy.number_of_retries = (
                 self.connection_backoff.num_of_retries
