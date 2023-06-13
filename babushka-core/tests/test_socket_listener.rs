@@ -173,7 +173,7 @@ mod socket_listener {
                 as u64));
         } else {
             let mut args_array = ArgsArray::new();
-            args_array.args = components.args;
+            args_array.args = components.args.into_iter().map(|str| str.into()).collect();
             command.args = Some(Args::ArgsArray(args_array));
         }
         command
