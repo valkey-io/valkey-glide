@@ -101,7 +101,7 @@ impl RedisCluster {
         for node in nodes {
             let node_parts = node.split(':').collect::<Vec<&str>>();
             let mut address_info = AddressInfo::new();
-            address_info.host = node_parts.first().unwrap().to_string();
+            address_info.host = node_parts.first().unwrap().to_string().into();
             address_info.port = node_parts.get(1).unwrap().parse::<u32>().unwrap();
             address_vec.push(address_info);
         }
