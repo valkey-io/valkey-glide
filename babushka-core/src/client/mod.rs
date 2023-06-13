@@ -30,7 +30,7 @@ pub(super) fn get_port(address: &AddressInfo) -> u16 {
     }
 }
 
-pub(super) fn chars_to_option(chars: &::protobuf::Chars) -> Option<String> {
+fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
     if chars.is_empty() {
         None
     } else {
@@ -44,8 +44,8 @@ pub(super) fn get_redis_connection_info(
     match authentication_info {
         Some(info) => redis::RedisConnectionInfo {
             db: 0,
-            username: chars_to_option(&info.username),
-            password: chars_to_option(&info.password),
+            username: chars_to_string_option(&info.username),
+            password: chars_to_string_option(&info.password),
         },
         None => redis::RedisConnectionInfo::default(),
     }
