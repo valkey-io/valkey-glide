@@ -81,7 +81,7 @@ impl UnixStreamListener {
     fn new(read_socket: Rc<UnixStream>) -> Self {
         // if the logger has been initialized by the user (external or internal) on info level this log will be shown
         log_debug("connection", "new socket listener initiated");
-        let rotating_buffer = RotatingBuffer::new(2, 65_536);
+        let rotating_buffer = RotatingBuffer::new(65_536);
         Self {
             read_socket,
             rotating_buffer,
@@ -162,7 +162,9 @@ async fn write_closing_error(
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
-    response.value = Some(response::response::Value::ClosingError(err.to_string()));
+    response.value = Some(response::response::Value::ClosingError(
+        err.to_string().into(),
+    ));
     write_to_writer(response, writer).await
 }
 
@@ -191,19 +193,28 @@ async fn write_result(
         }
         Err(ClienUsageError::InternalError(error_message)) => {
             log_error("internal error", &error_message);
-            Some(response::response::Value::ClosingError(error_message))
+            Some(response::response::Value::ClosingError(
+                error_message.into(),
+            ))
         }
         Err(ClienUsageError::RedisError(err)) => {
             let error_message = err.to_string();
             if err.is_connection_refusal() {
                 log_error("response error", &error_message);
-                Some(response::response::Value::ClosingError(error_message))
+                Some(response::response::Value::ClosingError(
+                    error_message.into(),
+                ))
             } else if err.is_connection_dropped() {
-                Some(response::response::Value::RequestError(format!(
-                    "Received connection error `{error_message}`. Will attempt to reconnect"
-                )))
+                Some(response::response::Value::RequestError(
+                    format!(
+                        "Received connection error `{error_message}`. Will attempt to reconnect"
+                    )
+                    .into(),
+                ))
             } else {
-                Some(response::response::Value::RequestError(error_message))
+                Some(response::response::Value::RequestError(
+                    error_message.into(),
+                ))
             }
         }
     };
@@ -248,20 +259,26 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     let Some(mut cmd) = get_command(command) else {
         return Err(ClienUsageError::InternalError(format!("Received invalid request type: {:?}", command.request_type)));
     };
-    let res;
-    let args = match &command.args {
-        Some(command::Args::ArgsArray(args_vec)) => Ok(&args_vec.args),
-        Some(command::Args::ArgsVecPointer(pointer)) => {
-            res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
-            Ok(&res)
+
+    match &command.args {
+        Some(command::Args::ArgsArray(args_vec)) => {
+            for arg in args_vec.args.iter() {
+                cmd.arg(arg.as_bytes());
+            }
         }
-        None => Err(ClienUsageError::InternalError(
-            "Failed to get request arguemnts, no arguments are set".to_string(),
-        )),
-    }?;
-    for arg in args.iter() {
-        cmd.arg(arg);
-    }
+        Some(command::Args::ArgsVecPointer(pointer)) => {
+            let res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
+            for arg in res {
+                cmd.arg(arg.as_bytes());
+            }
+        }
+        None => {
+            return Err(ClienUsageError::InternalError(
+                "Failed to get request arguemnts, no arguments are set".to_string(),
+            ));
+        }
+    };
+
     Ok(cmd)
 }
 

@@ -1,84 +1,36 @@
+use bytes::BytesMut;
 use integer_encoding::VarInt;
-use lifeguard::{pool, Pool, RcRecycled, StartingSize, Supplier};
 use logger_core::log_error;
 use protobuf::Message;
-use std::{io, mem, rc::Rc};
-
-type Buffer = RcRecycled<Vec<u8>>;
-/// Buffer needs to be wrapped in Rc, because RcRecycled's clone implementation
-/// involves copying the array.
-type SharedBuffer = Rc<Buffer>;
+use std::io;
 
 /// An object handling a arranging read buffers, and parsing the data in the buffers into requests.
-pub(super) struct RotatingBuffer {
-    /// Object pool for the internal buffers.
-    pool: Rc<Pool<Vec<u8>>>,
-    /// Buffer for next read request.
-    current_read_buffer: Buffer,
+pub struct RotatingBuffer {
+    backing_buffer: BytesMut,
 }
 
 impl RotatingBuffer {
-    pub(super) fn with_pool(pool: Rc<Pool<Vec<u8>>>) -> Self {
-        let next_read = pool.new_rc();
-        RotatingBuffer {
-            pool,
-            current_read_buffer: next_read,
+    pub fn new(buffer_size: usize) -> Self {
+        Self {
+            backing_buffer: BytesMut::with_capacity(buffer_size),
         }
     }
 
-    pub(super) fn new(initial_buffers: usize, buffer_size: usize) -> Self {
-        let pool = Rc::new(
-            pool()
-                .with(StartingSize(initial_buffers))
-                .with(Supplier(move || Vec::with_capacity(buffer_size)))
-                .build(),
-        );
-        Self::with_pool(pool)
-    }
-
-    /// Adjusts the current buffer size so that it will fit required_length.
-    fn match_capacity(&mut self, required_length: usize) {
-        let extra_capacity = required_length - self.current_read_buffer.len();
-        self.current_read_buffer.reserve(extra_capacity);
-    }
-
-    /// Replace the buffer, and copy the ending of the current incomplete message to the beginning of the next buffer.
-    fn copy_from_old_buffer(
-        &mut self,
-        old_buffer: SharedBuffer,
-        required_length: Option<usize>,
-        cursor: usize,
-    ) {
-        self.match_capacity(required_length.unwrap_or_else(|| self.current_read_buffer.capacity()));
-        let old_buffer_len = old_buffer.len();
-        let slice = &old_buffer[cursor..old_buffer_len];
-        debug_assert!(self.current_read_buffer.len() == 0);
-        self.current_read_buffer.extend_from_slice(slice);
-    }
-
-    fn get_new_buffer(&mut self) -> Buffer {
-        let mut buffer = self.pool.new_rc();
-        buffer.clear();
-        buffer
-    }
-
     /// Parses the requests in the buffer.
-    pub(super) fn get_requests<T: Message>(&mut self) -> io::Result<Vec<T>> {
-        // We replace the buffer on every call, because we want to prevent the next read from affecting existing results.
-        let new_buffer = self.get_new_buffer();
-        let backing_buffer = Rc::new(mem::replace(&mut self.current_read_buffer, new_buffer));
-        let buffer = backing_buffer.as_slice();
+    pub fn get_requests<T: Message>(&mut self) -> io::Result<Vec<T>> {
+        let buffer = self.backing_buffer.split().freeze();
         let mut results: Vec<T> = vec![];
         let mut prev_position = 0;
-        let buffer_len = backing_buffer.len();
+        let buffer_len = buffer.len();
         while prev_position < buffer_len {
             if let Some((request_len, bytes_read)) = u32::decode_var(&buffer[prev_position..]) {
                 let start_pos = prev_position + bytes_read;
                 if (start_pos + request_len as usize) > buffer_len {
                     break;
                 } else {
-                    match T::parse_from_bytes(&buffer[start_pos..start_pos + request_len as usize])
-                    {
+                    match T::parse_from_tokio_bytes(
+                        &buffer.slice(start_pos..start_pos + request_len as usize),
+                    ) {
                         Ok(request) => {
                             prev_position += request_len as usize + bytes_read;
                             results.push(request);
@@ -94,16 +46,15 @@ impl RotatingBuffer {
             }
         }
 
-        if prev_position != backing_buffer.len() {
-            self.copy_from_old_buffer(backing_buffer.clone(), None, prev_position);
-        } else {
-            self.current_read_buffer.clear();
+        if prev_position != buffer.len() {
+            self.backing_buffer
+                .extend_from_slice(&buffer[prev_position..]);
         }
         Ok(results)
     }
 
-    pub(super) fn current_buffer(&mut self) -> &mut Vec<u8> {
-        &mut self.current_read_buffer
+    pub fn current_buffer(&mut self) -> &mut BytesMut {
+        &mut self.backing_buffer
     }
 }
 
@@ -112,11 +63,11 @@ mod tests {
     use super::*;
     use crate::redis_request::{command, redis_request};
     use crate::redis_request::{Command, RedisRequest, RequestType};
+    use bytes::BufMut;
     use rand::{distributions::Alphanumeric, Rng};
     use rstest::rstest;
-    use std::io::Write;
 
-    fn write_length(buffer: &mut Vec<u8>, length: u32) {
+    fn write_length(buffer: &mut BytesMut, length: u32) {
         let required_space = u32::required_space(length);
         let new_len = buffer.len() + required_space;
         buffer.resize(new_len, 0_u8);
@@ -139,7 +90,7 @@ mod tests {
                 as u64));
         } else {
             let mut args_array = command::ArgsArray::new();
-            args_array.args = args;
+            args_array.args = args.into_iter().map(|str| str.into()).collect();
             command.args = Some(command::Args::ArgsArray(args_array));
         }
         request.command = Some(redis_request::Command::SingleCommand(command));
@@ -147,7 +98,7 @@ mod tests {
     }
 
     fn write_message(
-        buffer: &mut Vec<u8>,
+        buffer: &mut BytesMut,
         callback_index: u32,
         args: Vec<String>,
         request_type: RequestType,
@@ -156,10 +107,10 @@ mod tests {
         let request = create_command_request(callback_index, args, request_type, args_pointer);
         let message_length = request.compute_size() as usize;
         write_length(buffer, message_length as u32);
-        let _res = buffer.write_all(&request.write_to_bytes().unwrap());
+        buffer.extend_from_slice(&request.write_to_bytes().unwrap());
     }
 
-    fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str, args_pointer: bool) {
+    fn write_get(buffer: &mut BytesMut, callback_index: u32, key: &str, args_pointer: bool) {
         write_message(
             buffer,
             callback_index,
@@ -170,7 +121,7 @@ mod tests {
     }
 
     fn write_set(
-        buffer: &mut Vec<u8>,
+        buffer: &mut BytesMut,
         callback_index: u32,
         key: &str,
         value: String,
@@ -200,7 +151,12 @@ mod tests {
         let args: Vec<String> = if args_pointer {
             *unsafe { Box::from_raw(command.args_vec_pointer() as *mut Vec<String>) }
         } else {
-            command.args_array().args.clone()
+            command
+                .args_array()
+                .args
+                .iter()
+                .map(|chars| chars.to_string())
+                .collect()
         };
         assert_eq!(args, expected_args);
     }
@@ -215,7 +171,7 @@ mod tests {
 
     #[rstest]
     fn get_right_sized_buffer() {
-        let mut rotating_buffer = RotatingBuffer::new(1, 128);
+        let mut rotating_buffer = RotatingBuffer::new(128);
         assert_eq!(rotating_buffer.current_buffer().capacity(), 128);
         assert_eq!(rotating_buffer.current_buffer().len(), 0);
     }
@@ -223,7 +179,7 @@ mod tests {
     #[rstest]
     fn get_requests(#[values(false, true)] args_pointer: bool) {
         const BUFFER_SIZE: usize = 50;
-        let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE);
+        let mut rotating_buffer = RotatingBuffer::new(BUFFER_SIZE);
         write_get(rotating_buffer.current_buffer(), 100, "key", args_pointer);
         write_set(
             rotating_buffer.current_buffer(),
@@ -253,7 +209,7 @@ mod tests {
     #[rstest]
     fn repeating_requests_from_same_buffer(#[values(false, true)] args_pointer: bool) {
         const BUFFER_SIZE: usize = 50;
-        let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE);
+        let mut rotating_buffer = RotatingBuffer::new(BUFFER_SIZE);
         write_get(rotating_buffer.current_buffer(), 100, "key", args_pointer);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_request(
@@ -284,7 +240,7 @@ mod tests {
     #[rstest]
     fn next_write_doesnt_affect_values() {
         const BUFFER_SIZE: u32 = 16;
-        let mut rotating_buffer = RotatingBuffer::new(1, BUFFER_SIZE as usize);
+        let mut rotating_buffer = RotatingBuffer::new(BUFFER_SIZE as usize);
         write_get(rotating_buffer.current_buffer(), 100, "key", false);
 
         let requests = rotating_buffer.get_requests().unwrap();
@@ -297,10 +253,8 @@ mod tests {
             false,
         );
 
-        while rotating_buffer.current_read_buffer.len()
-            < rotating_buffer.current_read_buffer.capacity()
-        {
-            rotating_buffer.current_read_buffer.push(0_u8);
+        while rotating_buffer.backing_buffer.len() < rotating_buffer.backing_buffer.capacity() {
+            rotating_buffer.backing_buffer.put_u8(0_u8);
         }
         assert_request(
             &requests[0],
@@ -316,13 +270,13 @@ mod tests {
         #[values(false, true)] args_pointer: bool,
     ) {
         const NUM_OF_MESSAGE_BYTES: usize = 2;
-        let mut rotating_buffer = RotatingBuffer::new(1, 24);
+        let mut rotating_buffer = RotatingBuffer::new(24);
         write_get(rotating_buffer.current_buffer(), 100, "key1", args_pointer);
 
-        let mut second_request_bytes = Vec::new();
+        let mut second_request_bytes = BytesMut::new();
         write_get(&mut second_request_bytes, 101, "key2", args_pointer);
         let buffer = rotating_buffer.current_buffer();
-        buffer.append(&mut second_request_bytes[..NUM_OF_MESSAGE_BYTES].into());
+        buffer.extend_from_slice(&second_request_bytes[..NUM_OF_MESSAGE_BYTES]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_request(
@@ -334,7 +288,7 @@ mod tests {
         );
         let buffer = rotating_buffer.current_buffer();
         assert_eq!(buffer.len(), NUM_OF_MESSAGE_BYTES);
-        buffer.append(&mut second_request_bytes[NUM_OF_MESSAGE_BYTES..].into());
+        buffer.extend_from_slice(&second_request_bytes[NUM_OF_MESSAGE_BYTES..]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_request(
@@ -350,19 +304,19 @@ mod tests {
     fn copy_partial_length_to_buffer(#[values(false, true)] args_pointer: bool) {
         const NUM_OF_LENGTH_BYTES: usize = 1;
         const KEY_LENGTH: usize = 10000;
-        let mut rotating_buffer = RotatingBuffer::new(1, 24);
+        let mut rotating_buffer = RotatingBuffer::new(24);
         let buffer = rotating_buffer.current_buffer();
         let key = generate_random_string(KEY_LENGTH);
-        let mut request_bytes = Vec::new();
+        let mut request_bytes = BytesMut::new();
         write_get(&mut request_bytes, 100, key.as_str(), args_pointer);
 
         let required_varint_length = u32::required_space(KEY_LENGTH as u32);
         assert!(required_varint_length > 1); // so we could split the write of the varint
-        buffer.append(&mut request_bytes[..NUM_OF_LENGTH_BYTES].into());
+        buffer.extend_from_slice(&request_bytes[..NUM_OF_LENGTH_BYTES]);
         let requests = rotating_buffer.get_requests::<RedisRequest>().unwrap();
         assert_eq!(requests.len(), 0);
         let buffer = rotating_buffer.current_buffer();
-        buffer.append(&mut request_bytes[NUM_OF_LENGTH_BYTES..].into());
+        buffer.extend_from_slice(&request_bytes[NUM_OF_LENGTH_BYTES..]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_request(
@@ -380,16 +334,16 @@ mod tests {
     ) {
         const NUM_OF_LENGTH_BYTES: usize = 1;
         const KEY_LENGTH: usize = 10000;
-        let mut rotating_buffer = RotatingBuffer::new(1, 24);
+        let mut rotating_buffer = RotatingBuffer::new(24);
         let key2 = generate_random_string(KEY_LENGTH);
         let required_varint_length = u32::required_space(KEY_LENGTH as u32);
         assert!(required_varint_length > 1); // so we could split the write of the varint
         write_get(rotating_buffer.current_buffer(), 100, "key1", args_pointer);
-        let mut request_bytes = Vec::new();
+        let mut request_bytes = BytesMut::new();
         write_get(&mut request_bytes, 101, key2.as_str(), args_pointer);
 
         let buffer = rotating_buffer.current_buffer();
-        buffer.append(&mut request_bytes[..NUM_OF_LENGTH_BYTES].into());
+        buffer.extend_from_slice(&request_bytes[..NUM_OF_LENGTH_BYTES]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_request(
@@ -401,7 +355,7 @@ mod tests {
         );
         let buffer = rotating_buffer.current_buffer();
         assert_eq!(buffer.len(), NUM_OF_LENGTH_BYTES);
-        buffer.append(&mut request_bytes[NUM_OF_LENGTH_BYTES..].into());
+        buffer.extend_from_slice(&request_bytes[NUM_OF_LENGTH_BYTES..]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
         assert_request(

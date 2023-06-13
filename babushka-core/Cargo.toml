@@ -22,7 +22,7 @@ dispose = "0.4.0"
 tokio-util = {version = "^0.7", features = ["rt"]}
 num_cpus = "^1.15"
 tokio-retry = "0.3.0"
-protobuf = "3"
+protobuf = {version= "3", features = ["bytes", "with-bytes"]}
 integer-encoding = "3.0.4"
 thiserror = "1"
 rand = "0.8.5"
@@ -39,7 +39,10 @@ ctor = "0.2.2"
 
 [build-dependencies]
 protobuf-codegen = "3"
-protoc-rust = "^2.0"
+
+[[bench]]
+name = "rotating_buffer_benchmark"
+harness = false
 
 [[bench]]
 name = "connections_benchmark"

@@ -98,7 +98,7 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
         ConnectionAddr::Tcp(host, port) => {
             request.tls_mode = TlsMode::NoTls.into();
             let mut address_info = AddressInfo::new();
-            address_info.host = host;
+            address_info.host = host.into();
             address_info.port = port as u32;
             request.addresses.push(address_info);
         }
@@ -113,7 +113,7 @@ fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
                 TlsMode::SecureTls.into()
             };
             let mut address_info = AddressInfo::new();
-            address_info.host = host;
+            address_info.host = host.into();
             address_info.port = port as u32;
             request.addresses.push(address_info);
         }
