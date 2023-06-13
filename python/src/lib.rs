@@ -1,6 +1,8 @@
 use babushka::start_socket_listener;
+use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
+use pyo3::{PyErr, Python};
 use redis::aio::MultiplexedConnection;
 use redis::Value;
 use redis::{AsyncCommands, RedisResult};
@@ -156,10 +158,10 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::Status(str) => Ok(str.into_py(py)),
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
-            Value::Data(data) => {
-                let str = std::str::from_utf8(data.as_ref())?;
-                Ok(str.into_py(py))
-            }
+            Value::Data(data) => match std::str::from_utf8(data.as_ref()) {
+                Ok(val) => Ok(val.into_py(py)),
+                Err(_err) => Err(PyUnicodeDecodeError::new_err(data)),
+            },
             Value::Bulk(bulk) => {
                 let elements: &PyList = PyList::new(
                     py,

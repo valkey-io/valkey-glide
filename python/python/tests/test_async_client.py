@@ -185,6 +185,17 @@ class TestSocketClient:
         assert "id" in res
         assert "cmd=client" in res
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_request_error_raises_exception(
+        self, async_socket_client: RedisAsyncSocketClient
+    ):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        await async_socket_client.set(key, value)
+        with pytest.raises(Exception) as e:
+            await async_socket_client.custom_command(["HSET", key, "1", "bar"])
+        assert "WRONGTYPE" in str(e)
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):

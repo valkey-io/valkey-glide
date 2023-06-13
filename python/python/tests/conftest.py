@@ -65,4 +65,8 @@ def pytest_sessionfinish(session, exitstatus):
     Called after whole test run finished, right before
     returning the exit status to the system.
     """
-    del pytest.redis_cluster
+    try:
+        del pytest.redis_cluster
+    except AttributeError:
+        # redis_cluster was not set, skip deletion
+        pass
