@@ -33,16 +33,23 @@ mod shared_client_tests {
             if let Some(redis_connection_info) = &configuration.connection_info {
                 setup_acl(&server.get_client_addr(), redis_connection_info).await;
             }
-            let client = Client::new(create_connection_request(
-                &[server.get_client_addr()],
-                &configuration,
-            ))
-            .await
-            .unwrap();
-            TestBasics {
-                server: BackingServer::Cmd(server),
-                client,
+            // TODO - this is a patch, handling the situation where the new server
+            // still isn't available to connection. This should be fixed in [RedisServer].
+            for _ in 0..500 {
+                let result = Client::new(create_connection_request(
+                    &[server.get_client_addr()],
+                    &configuration,
+                ))
+                .await;
+                if result.is_ok() {
+                    return TestBasics {
+                        server: BackingServer::Cmd(server),
+                        client: result.unwrap(),
+                    };
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             }
+            panic!("couldn't connect client to server");
         }
     }
 
