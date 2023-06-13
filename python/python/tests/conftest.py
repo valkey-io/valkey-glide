@@ -68,4 +68,5 @@ def pytest_sessionfinish(session, exitstatus):
     try:
         del pytest.redis_cluster
     except AttributeError:
+        # redis_cluster was not set, skip deletion
         pass
