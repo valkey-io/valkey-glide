@@ -197,9 +197,9 @@ class RedisAsyncSocketClient(CoreCommands):
                     self.close("Got wrong callback index: {}", response.callback_idx)
                 else:
                     if response.HasField("request_error"):
-                        res_future.set_exception(response.request_error)
+                        res_future.set_exception(Exception(response.request_error))
                     elif response.HasField("closing_error"):
-                        res_future.set_exception(response.closing_error)
+                        res_future.set_exception(Exception(response.closing_error))
                         self.close(response.closing_error)
                     elif response.HasField("resp_pointer"):
                         res_future.set_result(value_from_pointer(response.resp_pointer))
