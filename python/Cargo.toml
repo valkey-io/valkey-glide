@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.17", features = ["extension-module"] }
 pyo3-asyncio = { version =  "0.17", features = ["tokio-runtime"] }
-redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tls", "tokio-native-tls-comp"] }
+redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tls", "tokio-rustls-comp"] }
 babushka = { path = "../babushka-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../logger_core"}
