@@ -452,6 +452,19 @@ fn set_connection_info_to_connection_request(
     }
 }
 
+pub async fn repeat_try_create<T, Fut>(f: impl Fn() -> Fut) -> T
+where
+    Fut: Future<Output = Option<T>>,
+{
+    for _ in 0..500 {
+        if let Some(value) = f().await {
+            return value;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("Couldn't create object");
+}
+
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
     println!("setup acl!");
     let client = redis::Client::open(redis::ConnectionInfo {
@@ -459,7 +472,9 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         redis: RedisConnectionInfo::default(),
     })
     .unwrap();
-    let mut connection = client.get_multiplexed_async_connection().await.unwrap();
+    let mut connection =
+        repeat_try_create(|| async { client.get_multiplexed_async_connection().await.ok() }).await;
+
     let password = connection_info.password.clone().unwrap();
     let username = connection_info
         .username
