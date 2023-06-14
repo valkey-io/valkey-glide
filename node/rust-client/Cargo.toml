@@ -11,7 +11,7 @@ license = "BSD-3-Clause"
 crate-type = ["cdylib"]
 
 [dependencies]
-redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp"] }
+redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-rustls-comp"] }
 babushka = { path = "../../babushka-core" }
 tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
