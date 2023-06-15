@@ -67,6 +67,11 @@ def generate_tls_certs():
     tic = time.perf_counter()
     ca_key = f"{TLS_FOLDER}/ca.key"
     ca_serial = f"{TLS_FOLDER}/ca.txt"
+    ext_file = f"{TLS_FOLDER}/openssl.cnf"
+
+    f = open(ext_file, "w")
+    f.write("keyUsage = digitalSignature, keyEncipherment")
+    f.close()
 
     def make_key(name: str, size: int):
         p = subprocess.Popen(
@@ -152,7 +157,9 @@ def generate_tls_certs():
             ca_serial,
             "-CAcreateserial",
             "-days",
-            "365",
+            "3650",
+            "-extfile",
+            ext_file,
             "-out",
             REDIS_CRT,
         ],
