@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Type, Union, get_args
@@ -100,6 +101,60 @@ class FFICoreCommands:
         return self.connection.set(key, value)
 
 
+class Transaction:
+    def __init__(self) -> None:
+        self.commands = []
+        self.lock = threading.Lock()
+
+    def execute_command(self, request_type: RequestType, args: List[str]):
+        self.lock.acquire()
+        try:
+            self.commands.append([request_type, args])
+        finally:
+            self.lock.release()
+
+    def get(self, key: str):
+        self.execute_command(RequestType.GetString, [key])
+
+    def set(
+        self,
+        key: str,
+        value: str,
+        conditional_set: Union[ConditionalSet, None] = None,
+        expiry: Union[ExpirySet, None] = None,
+        return_old_value: bool = False,
+    ):
+        args = [key, value]
+        if conditional_set:
+            if conditional_set == ConditionalSet.ONLY_IF_EXISTS:
+                args.append("XX")
+            if conditional_set == ConditionalSet.ONLY_IF_DOES_NOT_EXIST:
+                args.append("NX")
+        if return_old_value:
+            args.append("GET")
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        self.execute_command(RequestType.SetString, args)
+
+    def custom_command(self, command_args: List[str]):
+        """Executes a single command, without checking inputs.
+            @example - Return a list of all pub/sub clients:
+
+                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+        Args:
+            command_args (List[str]): List of strings of the command's arguements.
+            Every part of the command, including the command name and subcommands, should be added as a separate value in args.
+
+        Returns:
+            TResult: The returning value depends on the executed command
+        """
+        self.execute_command(RequestType.CustomCommand, command_args)
+
+    def dispose(self):
+        with self.lock:
+            self.commands.clear()
+
+
 class CoreCommands:
     async def set(
         self,
@@ -154,6 +209,14 @@ class CoreCommands:
             Union[str, None]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
         return await self.execute_command(RequestType.GetString, [key])
+
+    async def multi(self) -> Transaction:
+        return Transaction()
+
+    async def exec(self, transaction: Transaction) -> List[Union[str, None, TResult]]:
+        commands = transaction.commands[:]
+        transaction.dispose()
+        return await self.execute_command_Transaction(commands)
 
     async def custom_command(self, command_args: List[str]) -> TResult:
         """Executes a single command, without checking inputs.
