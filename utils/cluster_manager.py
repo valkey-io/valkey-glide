@@ -379,7 +379,7 @@ def create_cluster(
         stderr=subprocess.PIPE,
         text=True,
     )
-    output, err = p.communicate(timeout=10)
+    output, err = p.communicate(timeout=20)
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
