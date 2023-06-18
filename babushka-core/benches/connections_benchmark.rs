@@ -5,7 +5,8 @@ use babushka::{
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
 use redis::{
-    AsyncCommands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult, Value,
+    cluster::ClusterClientBuilder, AsyncCommands, ConnectionAddr, ConnectionInfo,
+    RedisConnectionInfo, RedisResult, Value,
 };
 use std::env;
 use tokio::runtime::{Builder, Runtime};
@@ -130,6 +131,32 @@ fn client_cmd_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str)
     });
 }
 
+fn cluster_connection_benchmark(
+    c: &mut Criterion,
+    address: ConnectionAddr,
+    group: &str,
+    read_from_replica: bool,
+) {
+    let connection_id = if read_from_replica {
+        "read-from-replica"
+    } else {
+        "read-from-master"
+    };
+    benchmark(c, address, connection_id, group, |address, runtime| {
+        runtime
+            .block_on(async {
+                let mut builder = ClusterClientBuilder::new(vec![get_connection_info(address)])
+                    .tls(redis::cluster::TlsMode::Secure);
+                if read_from_replica {
+                    builder = builder.read_from_replicas();
+                }
+                let client = builder.build().unwrap();
+                client.get_async_connection().await
+            })
+            .unwrap()
+    });
+}
+
 fn local_benchmark<F: FnOnce(&mut Criterion, ConnectionAddr, &str)>(c: &mut Criterion, f: F) {
     f(
         c,
@@ -169,11 +196,24 @@ fn client_cmd_benchmarks(c: &mut Criterion) {
     local_benchmark(c, client_cmd_benchmark)
 }
 
+fn cluster_connection_benchmarks(c: &mut Criterion) {
+    let Ok(address) = env::var("CLUSTER_HOST").map(|host| ConnectionAddr::TcpTls {
+        host,
+        port: 6379,
+        insecure: false,
+    }) else {
+        return;
+    };
+    cluster_connection_benchmark(c, address.clone(), "ClusterConnection", false);
+    cluster_connection_benchmark(c, address, "ClusterConnection", true);
+}
+
 criterion_group!(
     benches,
     connection_manager_benchmarks,
     multiplexer_benchmarks,
-    client_cmd_benchmarks
+    client_cmd_benchmarks,
+    cluster_connection_benchmarks
 );
 
 criterion_main!(benches);
