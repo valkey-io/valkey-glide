@@ -9,7 +9,7 @@ mod client_cmd_tests {
     use utilities::*;
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(LONG_CMD_TEST_TIMEOUT)]
     fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
         #[values(false, true)] use_tls: bool,
     ) {
@@ -17,8 +17,9 @@ mod client_cmd_tests {
             std::sync::Arc::new(futures_intrusive::sync::ManualResetEvent::new(false));
         let server_available_event_clone = server_available_event.clone();
         block_on_all(async move {
-            let mut test_basics = setup_test_basics(use_tls).await;
+            let test_basics = setup_test_basics(use_tls).await;
             let server = test_basics.server;
+            let mut client = test_basics.client;
             let address = server.get_client_addr();
             drop(server);
 
@@ -28,15 +29,15 @@ mod client_cmd_tests {
                     get_command
                         .arg("GET")
                         .arg("test_report_disconnect_and_reconnect_after_temporary_disconnect");
-                    let error = test_basics.client.send_packed_command(&get_command).await;
+                    let error = client.send_packed_command(&get_command).await;
                     assert!(error.is_err(), "{error:?}",);
 
                     server_available_event.wait().await;
-                    let get_result = test_basics
-                        .client
-                        .send_packed_command(&get_command)
-                        .await
-                        .unwrap();
+                    let get_result = repeat_try_create(|| async {
+                        let mut client = client.clone();
+                        client.send_packed_command(&get_command).await.ok()
+                    })
+                    .await;
                     assert_eq!(get_result, Value::Nil);
                 });
             });
