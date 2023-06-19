@@ -37,6 +37,7 @@ criterion = { version = "0.4", features = ["html_reports", "async_tokio"] }
 which = "4.4.0"
 ctor = "0.2.2"
 redis = { path = "../submodules/redis-rs/redis", features = ["tls-rustls-insecure"] }
+iai-callgrind = "0.3.1"
 
 [build-dependencies]
 protobuf-codegen = "3"
@@ -47,4 +48,8 @@ harness = false
 
 [[bench]]
 name = "connections_benchmark"
+harness = false
+
+[[bench]]
+name = "memory_benchmark"
 harness = false
