@@ -1,15 +1,22 @@
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     StartSocketConnection,
-    valueFromSplitPointer
+    valueFromSplitPointer,
 } from "babushka-rs-internal";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { createCustomCommand, createGet, createSet } from "./Commands";
+import {
+    SetOptions,
+    createCustomCommand,
+    createGet,
+    createSet,
+} from "./Commands";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
+import { Transaction } from "./Transaction";
 
 type PromiseFunction = (value?: any) => void;
+export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
 type AuthenticationOptions =
     | {
@@ -167,7 +174,7 @@ export class SocketConnection {
     }
 
     private createWritePromise<T>(
-        singleCommand: redis_request.Command
+        command: redis_request.Command | redis_request.Command[]
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
@@ -175,19 +182,25 @@ export class SocketConnection {
             }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(callbackIndex, singleCommand);
+            this.writeOrBufferRedisRequest(callbackIndex, command);
         });
     }
 
     private writeOrBufferRedisRequest(
         callbackIdx: number,
-        singleCommand: redis_request.Command
+        command: redis_request.Command | redis_request.Command[]
     ) {
-
-        const message = redis_request.RedisRequest.create({
-            callbackIdx,
-            singleCommand,
-        });
+        const message = Array.isArray(command)
+            ? redis_request.RedisRequest.create({
+                  callbackIdx,
+                  transaction: redis_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
+            : redis_request.RedisRequest.create({
+                  callbackIdx,
+                  singleCommand: command,
+              });
 
         this.writeOrBufferRequest(
             message,
@@ -219,26 +232,7 @@ export class SocketConnection {
     public set(
         key: string,
         value: string,
-        options?: {
-            /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
-            /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
-            /// if `conditional` is not set the value will be set regardless of prior value existence.
-            /// If value isn't set because of the condition, return null.
-            conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-            /// Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string. Equivalent to `GET` in the Redis API.
-            returnOldValue?: boolean;
-            /// If not set, no expiry time will be set for the value.
-            expiry?:
-                | "keepExisting" /// Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
-                | {
-                      type:
-                          | "seconds" /// Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-                          | "milliseconds" ///  Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-                          | "unixSeconds" /// Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
-                          | "unixMilliseconds"; /// Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
-                      count: number;
-                  };
-        }
+        options?: SetOptions
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
     }
@@ -255,8 +249,12 @@ export class SocketConnection {
     public customCommand(
         commandName: string,
         args: string[]
-    ): Promise<"OK" | string | string[] | number | null> {
+    ): Promise<ReturnType> {
         return this.createWritePromise(createCustomCommand(commandName, args));
+    }
+
+    public exec(transaction: Transaction): Promise<ReturnType[]> {
+        return this.createWritePromise(transaction.commands);
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<

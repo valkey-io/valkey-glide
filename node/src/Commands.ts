@@ -1,8 +1,10 @@
-import { MAX_REQUEST_ARGS_LEN, createLeakedStringVec } from "babushka-rs-internal";
+import {
+    MAX_REQUEST_ARGS_LEN,
+    createLeakedStringVec,
+} from "babushka-rs-internal";
 import Long from "long";
 import { redis_request } from "./ProtobufMessage";
-
-const {RequestType} = redis_request;
+import RequestType = redis_request.RequestType;
 
 function isLargeCommand(args: string[]) {
     let lenSum = 0;
@@ -15,7 +17,10 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
-function createCommand(requestType: redis_request.RequestType, args: string[]): redis_request.Command {
+function createCommand(
+    requestType: redis_request.RequestType,
+    args: string[]
+): redis_request.Command {
     const singleCommand = redis_request.Command.create({
         requestType,
     });
@@ -37,29 +42,32 @@ export function createGet(key: string): redis_request.Command {
     return createCommand(RequestType.GetString, [key]);
 }
 
+export type SetOptions = {
+    /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
+    /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
+    /// if `conditional` is not set the value will be set regardless of prior value existence.
+    /// If value isn't set because of the condition, return null.
+    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+    /// Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string. Equivalent to `GET` in the Redis API.
+    returnOldValue?: boolean;
+    /// If not set, no expiry time will be set for the value.
+    expiry?:
+        | "keepExisting" /// Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+        | {
+              type:
+                  | "seconds" /// Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+                  | "milliseconds" ///  Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+                  | "unixSeconds" /// Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+                  | "unixMilliseconds"; /// Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+              count: number;
+          };
+};
+
 export function createSet(
     key: string,
     value: string,
-    options?: {
-        /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
-        /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
-        /// if `conditional` is not set the value will be set regardless of prior value existence.
-        /// If value isn't set because of the condition, return null.
-        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-        /// Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string. Equivalent to `GET` in the Redis API.
-        returnOldValue?: boolean;
-        /// If not set, no expiry time will be set for the value.
-        expiry?:
-            | "keepExisting" /// Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
-            | {
-                  type:
-                      | "seconds" /// Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-                      | "milliseconds" ///  Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-                      | "unixSeconds" /// Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
-                      | "unixMilliseconds"; /// Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
-                  count: number;
-              };
-    }): redis_request.Command {
+    options?: SetOptions
+): redis_request.Command {
     const args = [key, value];
     if (options) {
         if (options.conditionalSet === "onlyIfExists") {
