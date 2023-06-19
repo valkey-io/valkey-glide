@@ -1,17 +1,13 @@
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
-    valueFromSplitPointer,
+    StartSocketConnection,
+    valueFromSplitPointer
 } from "babushka-rs-internal";
-import Long from "long";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { BabushkaInternal } from "../";
+import { createCustomCommand, createGet, createSet } from "./Commands";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
-
-const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } =
-    BabushkaInternal;
-const { RequestType } = redis_request;
 
 type PromiseFunction = (value?: any) => void;
 
