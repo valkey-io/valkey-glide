@@ -97,7 +97,7 @@ impl AsyncPipeline {
         this
     }
 
-    #[args(ignore_result = false)]
+    #[pyo3(signature = (key, value, ignore_result = false))]
     fn set(this: &PyCell<Self>, key: String, value: String, ignore_result: bool) -> &PyCell<Self> {
         let mut pipeline = this.borrow_mut();
         pipeline.internal_pipeline.set(key, value);
