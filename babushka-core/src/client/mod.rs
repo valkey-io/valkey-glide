@@ -20,6 +20,7 @@ impl BabushkaClient for Client {}
 
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
+pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub(super) fn get_port(address: &AddressInfo) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
@@ -159,7 +160,8 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
-    let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes);
+    let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
+        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT);
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
