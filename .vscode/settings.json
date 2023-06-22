@@ -14,14 +14,13 @@
         "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",
         "csharp/lib/Cargo.toml",
-        "submodules/redis-rs/Cargo.toml"
+        "submodules/redis-rs/Cargo.toml",
+        "rust-benchmark/Cargo.toml"
     ],
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"
     },
-    "python.testing.pytestArgs": [
-        "python"
-    ],
+    "python.testing.pytestArgs": ["python"],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[yaml]": {
@@ -33,12 +32,6 @@
         "--extend-ignore=E203",
         "--max-line-length=127"
     ],
-    "python.formatting.blackArgs": [
-        "--target-version",
-        "py36"
-    ],
-    "isort.args": [
-        "--profile",
-        "black"
-    ],
+    "python.formatting.blackArgs": ["--target-version", "py36"],
+    "isort.args": ["--profile", "black"]
 }
