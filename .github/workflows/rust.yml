@@ -53,7 +53,7 @@ jobs:
 
             - name: Run tests
               working-directory: ./babushka-core
-              run: cargo test -- --nocapture
+              run: cargo test -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
 
             - name: Check features
               working-directory: ./babushka-core
