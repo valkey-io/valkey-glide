@@ -466,7 +466,6 @@ where
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
-    println!("setup acl!");
     let client = redis::Client::open(redis::ConnectionInfo {
         addr: addr.clone(),
         redis: RedisConnectionInfo::default(),

@@ -69,8 +69,8 @@ impl RedisCluster {
             script_args.push("-r");
             script_args.push(&replicas_num);
         }
-        let output: String = Self::execute_cluster_script(script_args, use_tls, None);
-        let (cluster_folder, addresses) = Self::parse_start_script_output(&output);
+        let (stdout, stderr) = Self::execute_cluster_script(script_args, use_tls, None);
+        let (cluster_folder, addresses) = Self::parse_start_script_output(&stdout, &stderr);
         let mut password: Option<String> = None;
         if let Some(info) = conn_info {
             password = info.password.clone();
@@ -83,19 +83,21 @@ impl RedisCluster {
         }
     }
 
-    fn parse_start_script_output(output: &str) -> (String, Vec<AddressInfo>) {
+    fn parse_start_script_output(output: &str, errors: &str) -> (String, Vec<AddressInfo>) {
         let cluster_folder = output.split("CLUSTER_FOLDER=").collect::<Vec<&str>>();
         assert!(
             !cluster_folder.is_empty() && cluster_folder.len() >= 2,
-            "{:?}",
-            cluster_folder
+            "Received output: {output}, stderr: {errors}"
         );
         let cluster_folder = cluster_folder.get(1).unwrap().lines();
         let cluster_folder = cluster_folder.collect::<Vec<&str>>();
         let cluster_folder = cluster_folder.first().unwrap().to_string();
 
         let output_parts = output.split("CLUSTER_NODES=").collect::<Vec<&str>>();
-        assert!(!output_parts.is_empty() && output_parts.len() >= 2);
+        assert!(
+            !output_parts.is_empty() && output_parts.len() >= 2,
+            "Received output: {output}, stderr: {errors}"
+        );
         let nodes = output_parts.get(1).unwrap().split(',');
         let mut address_vec: Vec<AddressInfo> = Vec::new();
         for node in nodes {
@@ -108,7 +110,11 @@ impl RedisCluster {
         (cluster_folder, address_vec)
     }
 
-    fn execute_cluster_script(args: Vec<&str>, use_tls: bool, password: Option<String>) -> String {
+    fn execute_cluster_script(
+        args: Vec<&str>,
+        use_tls: bool,
+        password: Option<String>,
+    ) -> (String, String) {
         let python_binary = which("python3").unwrap();
         let mut script_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         script_path.push("../utils/cluster_manager.py");
@@ -137,11 +143,15 @@ impl RedisCluster {
                 .output()
                 .expect("failed to execute process")
         };
-        let parsed_output = output.stdout;
-        std::str::from_utf8(&parsed_output)
+        let parsed_stdout = std::str::from_utf8(&output.stdout)
             .unwrap()
             .trim()
-            .to_string()
+            .to_string();
+        let parsed_stderr = std::str::from_utf8(&output.stderr)
+            .unwrap()
+            .trim()
+            .to_string();
+        (parsed_stdout, parsed_stderr)
     }
 
     pub fn get_server_addresses(&self) -> Vec<ConnectionAddr> {
