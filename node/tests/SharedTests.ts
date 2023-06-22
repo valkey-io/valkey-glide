@@ -1,4 +1,4 @@
-import { expect, fit, it, xit } from "@jest/globals";
+import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import { Client, GetAndSetRandomValue } from "./TestUtilities";
 
@@ -104,6 +104,37 @@ export function runBaseTests<Context>(config: {
                 expect(setResult).toEqual("OK");
                 const result = await client.customCommand("GET", [key]);
                 expect(result).toEqual(value);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "getting array return value works",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const key3 = "{key}" + uuidv4();
+                // Adding random repetition, to prevent the inputs from always having the same alignment.
+                const value1 = uuidv4() + "0".repeat(Math.random() * 7);
+                const value2 = uuidv4() + "0".repeat(Math.random() * 7);
+                const setResult1 = await client.customCommand("SET", [
+                    key1,
+                    value1,
+                ]);
+                expect(setResult1).toEqual("OK");
+                const setResult2 = await client.customCommand("SET", [
+                    key2,
+                    value2,
+                ]);
+                expect(setResult2).toEqual("OK");
+                const mget_result = await client.customCommand("MGET", [
+                    key1,
+                    key2,
+                    key3,
+                ]);
+                expect(mget_result).toEqual([value1, value2, null]);
             });
         },
         config.timeout
