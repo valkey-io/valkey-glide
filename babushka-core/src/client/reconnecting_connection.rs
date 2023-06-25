@@ -36,23 +36,9 @@ struct InnerReconnectingConnection {
     backend: ConnectionBackend,
 }
 
-/// The separation between an inner and outer connection is because the outer connection is clonable, and the inner connection needs to be dropped when no outer connection exists.
-struct DropWrapper(Arc<InnerReconnectingConnection>);
-
-impl Drop for DropWrapper {
-    fn drop(&mut self) {
-        self.0
-            .backend
-            .client_dropped_flagged
-            .store(true, Ordering::Relaxed);
-    }
-}
-
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
-    /// All of the connection's clones point to the same internal wrapper, which will be dropped only once,
-    /// when all of the clones have been dropped.
-    inner: Arc<DropWrapper>,
+    inner: Arc<InnerReconnectingConnection>,
 }
 
 async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
@@ -75,10 +61,10 @@ async fn try_create_connection(
 
     let connection = Retry::spawn(retry_strategy.get_iterator(), action).await?;
     Ok(ReconnectingConnection {
-        inner: Arc::new(DropWrapper(Arc::new(InnerReconnectingConnection {
+        inner: Arc::new(InnerReconnectingConnection {
             state: Mutex::new(ConnectionState::Connected(connection)),
             backend: connection_backend,
-        }))),
+        }),
     })
 }
 
@@ -112,7 +98,7 @@ impl ReconnectingConnection {
         connection_retry_strategy: RetryStrategy,
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
-    ) -> RedisResult<Self> {
+    ) -> RedisResult<ReconnectingConnection> {
         log_debug(
             "connection creation",
             format!("Attempting connection to {address}"),
@@ -131,29 +117,44 @@ impl ReconnectingConnection {
         Ok(connection)
     }
 
-    async fn get_connection(&self) -> Result<MultiplexedConnection, RedisError> {
-        loop {
-            self.inner
-                .0
-                .backend
-                .connection_available_signal
-                .wait()
-                .await;
-            {
-                let guard = self.inner.0.state.lock().await;
-                if let ConnectionState::Connected(connection) = &*guard {
-                    return Ok(connection.clone());
-                }
-            };
+    pub(super) fn is_dropped(&self) -> bool {
+        self.inner
+            .backend
+            .client_dropped_flagged
+            .load(Ordering::Relaxed)
+    }
+
+    pub(super) fn mark_as_dropped(&self) {
+        self.inner
+            .backend
+            .client_dropped_flagged
+            .store(true, Ordering::Relaxed)
+    }
+
+    pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
+        let guard = self.inner.state.lock().await;
+        if let ConnectionState::Connected(connection) = &*guard {
+            Some(connection.clone())
+        } else {
+            None
         }
     }
 
-    async fn reconnect(&self) {
+    pub(super) async fn get_connection(&self) -> Result<MultiplexedConnection, RedisError> {
+        loop {
+            self.inner.backend.connection_available_signal.wait().await;
+            if let Some(connection) = self.try_get_connection().await {
+                return Ok(connection);
+            }
+        }
+    }
+
+    pub(super) async fn reconnect(&self) {
         {
-            let mut guard = self.inner.0.state.lock().await;
+            let mut guard = self.inner.state.lock().await;
             match &*guard {
                 ConnectionState::Connected(_) => {
-                    self.inner.0.backend.connection_available_signal.reset();
+                    self.inner.backend.connection_available_signal.reset();
                 }
                 _ => {
                     log_trace("reconnect", "already started");
@@ -164,18 +165,14 @@ impl ReconnectingConnection {
             *guard = ConnectionState::Reconnecting;
         };
         log_debug("reconnect", "starting");
-        let inner_connection_clone = self.inner.0.clone();
+        let connection_clone = self.clone();
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            let client = &inner_connection_clone.backend.connection_info;
+            let client = &connection_clone.inner.backend.connection_info;
             for sleep_duration in internal_retry_iterator() {
-                if inner_connection_clone
-                    .backend
-                    .client_dropped_flagged
-                    .load(Ordering::Relaxed)
-                {
-                    log_trace(
+                if connection_clone.is_dropped() {
+                    log_debug(
                         "ReconnectingConnection",
                         "reconnect stopped after client was dropped",
                     );
@@ -185,13 +182,16 @@ impl ReconnectingConnection {
                 log_debug("connection creation", "Creating multiplexed connection");
                 match get_multiplexed_connection(client).await {
                     Ok(connection) => {
-                        let mut guard = inner_connection_clone.state.lock().await;
-                        log_debug("reconnect", "completed succesfully");
-                        inner_connection_clone
-                            .backend
-                            .connection_available_signal
-                            .set();
-                        *guard = ConnectionState::Connected(connection);
+                        {
+                            let mut guard = connection_clone.inner.state.lock().await;
+                            log_debug("reconnect", "completed succesfully");
+                            connection_clone
+                                .inner
+                                .backend
+                                .connection_available_signal
+                                .set();
+                            *guard = ConnectionState::Connected(connection);
+                        }
                         return;
                     }
                     Err(_) => tokio::time::sleep(sleep_duration).await,
@@ -200,41 +200,8 @@ impl ReconnectingConnection {
         });
     }
 
-    pub(super) async fn send_packed_command(
-        &mut self,
-        cmd: &redis::Cmd,
-    ) -> redis::RedisResult<redis::Value> {
-        log_trace("ReconnectingConnection", "sending command");
-        let mut connection = self.get_connection().await?;
-        let result = connection.send_packed_command(cmd).await;
-        match result {
-            Err(err) if err.is_connection_dropped() => {
-                self.reconnect().await;
-                Err(err)
-            }
-            _ => result,
-        }
-    }
-
-    pub(super) async fn send_packed_commands(
-        &mut self,
-        cmd: &redis::Pipeline,
-        offset: usize,
-        count: usize,
-    ) -> redis::RedisResult<Vec<redis::Value>> {
-        let mut connection = self.get_connection().await?;
-        let result = connection.send_packed_commands(cmd, offset, count).await;
-        match result {
-            Err(err) if err.is_connection_dropped() => {
-                self.reconnect().await;
-                Err(err)
-            }
-            _ => result,
-        }
-    }
-
     pub(super) fn get_db(&self) -> i64 {
-        let guard = self.inner.0.state.blocking_lock();
+        let guard = self.inner.state.blocking_lock();
         match &*guard {
             ConnectionState::Connected(connection) => connection.get_db(),
             _ => -1,
