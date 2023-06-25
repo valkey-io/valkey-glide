@@ -1,6 +1,6 @@
 import * as net from "net";
-import { ConnectionOptions, SocketConnection } from "..";
 import { connection_request } from "./ProtobufMessage";
+import { ConnectionOptions, SocketConnection } from "./SocketConnection";
 
 export class ClusterSocketConnection extends SocketConnection {
     protected createConnectionRequest(

@@ -1,19 +1,22 @@
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    StartSocketConnection,
     valueFromSplitPointer,
 } from "babushka-rs-internal";
-import Long from "long";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { BabushkaInternal } from "../";
+import {
+    SetOptions,
+    createCustomCommand,
+    createGet,
+    createSet,
+} from "./Commands";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
-
-const { StartSocketConnection, createLeakedStringVec, MAX_REQUEST_ARGS_LEN } =
-    BabushkaInternal;
-const { RequestType } = redis_request;
+import { Transaction } from "./Transaction";
 
 type PromiseFunction = (value?: any) => void;
+export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
 type AuthenticationOptions =
     | {
@@ -170,20 +173,8 @@ export class SocketConnection {
         });
     }
 
-    private is_a_large_request(args: string[]) {
-        let len_sum = 0;
-        for (const arg of args) {
-            len_sum += arg.length;
-            if (len_sum >= MAX_REQUEST_ARGS_LEN) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private createWritePromise<T>(
-        requestType: number,
-        args: string[]
+        command: redis_request.Command | redis_request.Command[]
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
@@ -191,33 +182,25 @@ export class SocketConnection {
             }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(callbackIndex, requestType, args);
+            this.writeOrBufferRedisRequest(callbackIndex, command);
         });
     }
 
     private writeOrBufferRedisRequest(
         callbackIdx: number,
-        requestType: number,
-        args: string[]
+        command: redis_request.Command | redis_request.Command[]
     ) {
-        const singleCommand = redis_request.Command.create({
-            requestType,
-        });
-
-        if (this.is_a_large_request(args)) {
-            // pass as a pointer
-            const pointerArr = createLeakedStringVec(args);
-            const pointer = new Long(pointerArr[0], pointerArr[1]);
-            singleCommand.argsVecPointer = pointer;
-        } else {
-            singleCommand.argsArray = redis_request.Command.ArgsArray.create({
-                args: args,
-            });
-        }
-        const message = redis_request.RedisRequest.create({
-            callbackIdx,
-            singleCommand,
-        });
+        const message = Array.isArray(command)
+            ? redis_request.RedisRequest.create({
+                  callbackIdx,
+                  transaction: redis_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
+            : redis_request.RedisRequest.create({
+                  callbackIdx,
+                  singleCommand: command,
+              });
 
         this.writeOrBufferRequest(
             message,
@@ -241,7 +224,7 @@ export class SocketConnection {
     /// Get the value associated with the given key, or null if no such value exists.
     /// See https://redis.io/commands/get/ for details.
     public get(key: string): Promise<string | null> {
-        return this.createWritePromise(RequestType.GetString, [key]);
+        return this.createWritePromise(createGet(key));
     }
 
     /// Set the given key with the given value. Return value is dependent on the passed options.
@@ -249,61 +232,9 @@ export class SocketConnection {
     public set(
         key: string,
         value: string,
-        options?: {
-            /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
-            /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
-            /// if `conditional` is not set the value will be set regardless of prior value existence.
-            /// If value isn't set because of the condition, return null.
-            conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-            /// Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string. Equivalent to `GET` in the Redis API.
-            returnOldValue?: boolean;
-            /// If not set, no expiry time will be set for the value.
-            expiry?:
-                | "keepExisting" /// Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
-                | {
-                      type:
-                          | "seconds" /// Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-                          | "milliseconds" ///  Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-                          | "unixSeconds" /// Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
-                          | "unixMilliseconds"; /// Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
-                      count: number;
-                  };
-        }
+        options?: SetOptions
     ): Promise<"OK" | string | null> {
-        const args = [key, value];
-        if (options) {
-            if (options.conditionalSet === "onlyIfExists") {
-                args.push("XX");
-            } else if (options.conditionalSet === "onlyIfDoesNotExist") {
-                args.push("NX");
-            }
-            if (options.returnOldValue) {
-                args.push("GET");
-            }
-            if (
-                options.expiry &&
-                options.expiry !== "keepExisting" &&
-                !Number.isInteger(options.expiry.count)
-            ) {
-                throw new Error(
-                    `Received expiry '${JSON.stringify(
-                        options.expiry
-                    )}'. Count must be an integer`
-                );
-            }
-            if (options.expiry === "keepExisting") {
-                args.push("KEEPTTL");
-            } else if (options.expiry?.type === "seconds") {
-                args.push("EX " + options.expiry.count);
-            } else if (options.expiry?.type === "milliseconds") {
-                args.push("PX " + options.expiry.count);
-            } else if (options.expiry?.type === "unixSeconds") {
-                args.push("EXAT " + options.expiry.count);
-            } else if (options.expiry?.type === "unixMilliseconds") {
-                args.push("PXAT " + options.expiry.count);
-            }
-        }
-        return this.createWritePromise(RequestType.SetString, args);
+        return this.createWritePromise(createSet(key, value, options));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -318,11 +249,12 @@ export class SocketConnection {
     public customCommand(
         commandName: string,
         args: string[]
-    ): Promise<"OK" | string | string[] | number | null> {
-        return this.createWritePromise(RequestType.CustomCommand, [
-            commandName,
-            ...args,
-        ]);
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createCustomCommand(commandName, args));
+    }
+
+    public exec(transaction: Transaction): Promise<ReturnType[]> {
+        return this.createWritePromise(transaction.commands);
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
