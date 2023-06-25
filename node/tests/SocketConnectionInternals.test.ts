@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "@jest/globals";
+import { MAX_REQUEST_ARGS_LEN, createLeakedValue } from "babushka-rs-internal";
 import fs from "fs";
 import net from "net";
 import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
 import {
-    BabushkaInternal,
     ConnectionOptions,
     SocketConnection,
     setLoggerConfig,
@@ -15,8 +15,6 @@ import {
     redis_request,
     response,
 } from "../src/ProtobufMessage";
-
-const { createLeakedValue, MAX_REQUEST_ARGS_LEN } = BabushkaInternal;
 
 const { RequestType, RedisRequest } = redis_request;
 

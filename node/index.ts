@@ -1,6 +1,10 @@
 export { AsyncClient } from "babushka-rs-internal";
-export * as BabushkaInternal from "babushka-rs-internal";
-export { SocketConnection, ConnectionOptions } from "./src/SocketConnection";
 export { ClusterSocketConnection } from "./src/ClusterSocketConnection";
+export { SetOptions } from "./src/Commands";
 export { setLoggerConfig } from "./src/Logger";
-export * as PbfMessage from "./src/ProtobufMessage";
+export {
+    ConnectionOptions,
+    ReturnType,
+    SocketConnection,
+} from "./src/SocketConnection";
+export { Transaction } from "./src/Transaction";
