@@ -6,7 +6,12 @@ from typing import Dict
 
 import pytest
 from packaging import version
-from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
+from pybushka.async_commands.core import (
+    ConditionalSet,
+    ExpirySet,
+    ExpiryType,
+    Transaction,
+)
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.async_socket_client import RedisAsyncSocketClient
 from pybushka.async_socket_cluster_client import RedisClusterAsyncSocket
@@ -204,7 +209,7 @@ class TestTransaction:
     ):
         key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.set(key, value)
         transaction.get(key)
         result = await async_socket_client.exec(transaction)
@@ -217,7 +222,7 @@ class TestTransaction:
         key = get_random_string(10)
         key2 = "{{{}}}:{}".format(key, get_random_string(3))  # to get the same slot
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.set(key, value)
         transaction.get(key)
         transaction.set(key2, value)
@@ -229,7 +234,7 @@ class TestTransaction:
     async def test_transaction_with_different_slots(
         self, async_socket_client: RedisAsyncSocketClient
     ):
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(Exception) as e:
@@ -241,7 +246,7 @@ class TestTransaction:
         self, async_socket_client: RedisAsyncSocketClient
     ):
         key = get_random_string(10)
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
         result = await async_socket_client.exec(transaction)
@@ -252,7 +257,7 @@ class TestTransaction:
         self, async_socket_client: RedisAsyncSocketClient
     ):
         key = get_random_string(10)
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.custom_command(["WATCH", key])
         with pytest.raises(Exception) as e:
             await async_socket_client.exec(transaction)
@@ -266,7 +271,7 @@ class TestTransaction:
     ):
         key = get_random_string(10)
         await async_socket_client.set(key, "1")
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
         with pytest.raises(Exception) as e:
@@ -280,7 +285,7 @@ class TestTransaction:
         self, async_socket_client: RedisAsyncSocketClient
     ):
         key = get_random_string(10)
-        transaction = await async_socket_client.multi()
+        transaction = Transaction()
         transaction.custom_command(["INCR", key, key, key])
         with pytest.raises(Exception) as e:
             await async_socket_client.exec(transaction)
