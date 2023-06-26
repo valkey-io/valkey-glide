@@ -15,7 +15,7 @@
         "logger_core/Cargo.toml",
         "csharp/lib/Cargo.toml",
         "submodules/redis-rs/Cargo.toml",
-        "rust-benchmark/Cargo.toml"
+        "benchmarks/rust/Cargo.toml"
     ],
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"
