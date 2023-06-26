@@ -1,0 +1,24 @@
+[package]
+name = "rust-benchmark"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "time", "rt-multi-thread"] }
+babushka = { path = "../../babushka-core" }
+redis = { path = "../../submodules/redis-rs/redis", features = ["aio"] }
+futures = "0.3.28"
+rand = "0.8.5"
+stopwatch = "0.0.7"
+itoa = "1.0.6"
+futures-time = "^3.0.0"
+clap = { version = "4.3.8", features = ["derive"] }
+chrono = "0.4.26"
+serde_json = "1.0.99"
+statistical = "1.0.0"
+
+[profile.release]
+debug = true
+lto = true
