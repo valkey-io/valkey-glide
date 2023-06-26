@@ -76,3 +76,7 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./logger_core
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ./benchmarks/rust

@@ -67,6 +67,16 @@ function runCSharpBenchmark(){
   dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
 }
 
+function runRustBenchmark(){
+  rustConcurrentTasks=
+  for value in $concurrentTasks
+  do
+    rustConcurrentTasks=$rustConcurrentTasks" --concurrentTasks "$value
+  done
+  cd ${BENCH_FOLDER}/rust
+  cargo run --release -- --resultsFile=../$1 --dataSize $2 $rustConcurrentTasks --host $host --clientCount $clientCount $tlsFlag $clusterFlag
+}
+
 function flushDB() {
   cd $utilitiesDir
   npm install
@@ -173,6 +183,10 @@ do
             runAllBenchmarks=0
             runCsharp=1
             ;;
+        -rust)
+            runAllBenchmarks=0
+            runRust=1
+            ;;            
         -only-socket)
             chosenClients="socket"
             ;;
@@ -217,6 +231,13 @@ do
         resultFiles+=$csharpResults" "
         runCSharpBenchmark $csharpResults $currentDataSize
     fi
+
+    if [ $runAllBenchmarks == 1 ] || [ $runRust == 1 ]; 
+    then
+        rustResults=$(resultFileName rust $currentDataSize)
+        resultFiles+=$rustResults" "
+        runRustBenchmark $rustResults $currentDataSize
+    fi    
 done
 
 
