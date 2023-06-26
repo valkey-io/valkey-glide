@@ -7,6 +7,7 @@ use crate::redis_request::{Command, RedisRequest, RequestType, Transaction};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
+use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_debug, log_error, log_info, log_trace};
@@ -619,8 +620,19 @@ impl fmt::Display for ClosingError {
     }
 }
 
+/// Get the socket full path.
+/// The socket file name will contain the process ID and will be saved into the user's runtime directory (e.g. /run/user/1000)
+/// in Unix systems, or in %AppData%\Local in Windows
 pub fn get_socket_path_from_name(socket_name: String) -> String {
-    std::env::temp_dir()
+    let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
+    let folder = if cfg!(windows) {
+        base_dirs.data_local_dir()
+    } else {
+        base_dirs
+            .runtime_dir()
+            .expect("Failed to find the user's runtime folder")
+    };
+    folder
         .join(socket_name)
         .into_os_string()
         .into_string()
