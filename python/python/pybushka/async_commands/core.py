@@ -106,7 +106,7 @@ class Transaction:
         self.commands = []
         self.lock = threading.Lock()
 
-    def execute_command(self, request_type: RequestType, args: List[str]):
+    def append_command(self, request_type: RequestType, args: List[str]):
         self.lock.acquire()
         try:
             self.commands.append([request_type, args])
@@ -114,7 +114,7 @@ class Transaction:
             self.lock.release()
 
     def get(self, key: str):
-        self.execute_command(RequestType.GetString, [key])
+        self.append_command(RequestType.GetString, [key])
 
     def set(
         self,
@@ -134,7 +134,7 @@ class Transaction:
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        self.execute_command(RequestType.SetString, args)
+        self.append_command(RequestType.SetString, args)
 
     def custom_command(self, command_args: List[str]):
         """Executes a single command, without checking inputs.
@@ -148,7 +148,7 @@ class Transaction:
         Returns:
             TResult: The returning value depends on the executed command
         """
-        self.execute_command(RequestType.CustomCommand, command_args)
+        self.append_command(RequestType.CustomCommand, command_args)
 
     def dispose(self):
         with self.lock:
@@ -210,13 +210,10 @@ class CoreCommands:
         """
         return await self.execute_command(RequestType.GetString, [key])
 
-    async def multi(self) -> Transaction:
-        return Transaction()
-
     async def exec(self, transaction: Transaction) -> List[Union[str, None, TResult]]:
         commands = transaction.commands[:]
         transaction.dispose()
-        return await self.execute_command_Transaction(commands)
+        return await self.execute_transaction(commands)
 
     async def custom_command(self, command_args: List[str]) -> TResult:
         """Executes a single command, without checking inputs.

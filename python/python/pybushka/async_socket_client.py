@@ -156,7 +156,7 @@ class RedisAsyncSocketClient(CoreCommands):
         await response_future
         return response_future.result()
 
-    async def execute_command_Transaction(
+    async def execute_transaction(
         self, commands: List[Union[TRequestType, List[str]]]
     ) -> TResult:
         request = RedisRequest()
