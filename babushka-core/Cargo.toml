@@ -24,6 +24,7 @@ integer-encoding = "3.0.4"
 thiserror = "1"
 rand = "0.8.5"
 futures-intrusive = "0.5.0"
+tracing-subscriber = "0.3.17"
 directories = "5.0"
 
 [dev-dependencies]

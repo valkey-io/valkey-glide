@@ -1,4 +1,7 @@
 {
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
     "editor.codeActionsOnSave": {
@@ -15,7 +18,6 @@
         "logger_core/Cargo.toml",
         "csharp/lib/Cargo.toml",
         "submodules/redis-rs/Cargo.toml",
-        "rust-benchmark/Cargo.toml"
     ],
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"

@@ -1,14 +1,60 @@
+use once_cell::sync::OnceCell;
+use std::sync::Once;
 use std::sync::RwLock;
 use tracing::{self, event};
-use tracing_appender::{
-    non_blocking,
-    non_blocking::WorkerGuard,
-    rolling::{RollingFileAppender, Rotation},
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{
+    filter::Filtered,
+    fmt::{
+        format::{DefaultFields, Format},
+        Layer,
+    },
+    layer::Layered,
+    Registry,
 };
-use tracing_subscriber::{self, filter::LevelFilter};
 
-// Guard is in charge of making sure that the logs been collected when program stop
-pub static GUARD: RwLock<Option<WorkerGuard>> = RwLock::new(None);
+use tracing_subscriber::{
+    self,
+    filter::{self, LevelFilter},
+    prelude::*,
+    reload::{self, Handle},
+};
+
+// INIT_ONCE is responsible for making sure that we initiating the logger just once, and every other call to the
+// init function will just reload the existing logger
+static INIT_ONCE: Once = Once::new();
+
+// reloadable handles for resetting the logger
+pub static STDOUT_RELOAD: OnceCell<
+    RwLock<reload::Handle<Filtered<Layer<Registry>, LevelFilter, Registry>, Registry>>,
+> = OnceCell::new();
+
+pub static FILE_RELOAD: OnceCell<
+    RwLock<
+        Handle<
+            Filtered<
+                Layer<
+                    Layered<
+                        reload::Layer<Filtered<Layer<Registry>, LevelFilter, Registry>, Registry>,
+                        Registry,
+                    >,
+                    DefaultFields,
+                    Format,
+                    RollingFileAppender,
+                >,
+                LevelFilter,
+                Layered<
+                    reload::Layer<Filtered<Layer<Registry>, LevelFilter, Registry>, Registry>,
+                    Registry,
+                >,
+            >,
+            Layered<
+                reload::Layer<Filtered<Layer<Registry>, LevelFilter, Registry>, Registry>,
+                Registry,
+            >,
+        >,
+    >,
+> = OnceCell::new();
 
 #[derive(Debug)]
 pub enum Level {
@@ -19,7 +65,7 @@ pub enum Level {
     Trace = 4,
 }
 impl Level {
-    fn to_filter(&self) -> LevelFilter {
+    fn to_filter(&self) -> filter::LevelFilter {
         match self {
             Level::Trace => LevelFilter::TRACE,
             Level::Debug => LevelFilter::DEBUG,
@@ -30,59 +76,61 @@ impl Level {
     }
 }
 
-fn tracing_format(
-) -> tracing_subscriber::fmt::format::Format<tracing_subscriber::fmt::format::Compact> {
-    tracing_subscriber::fmt::format()
-        .with_source_location(false)
-        .with_target(false)
-        .compact()
-}
-
-// Initialize a logger that writes the received logs to a file under the babushka-logs folder.
-// The file name will be prefixed with the current timestamp, and will be replaced every hour.
-// This logger doesn't block the calling thread, and will save only logs of the given level or above.
-pub fn init_file(minimal_level: Level, file_name: &str) -> Level {
-    let file_appender = RollingFileAppender::new(Rotation::HOURLY, "babushka-logs", file_name);
-    let (non_blocking, _guard) = non_blocking(file_appender);
-    let mut guard = GUARD.write().unwrap();
-    *guard = Some(_guard);
-    let level_filter = minimal_level.to_filter();
-    let _ = tracing::subscriber::set_global_default(
-        tracing_subscriber::fmt()
-            .event_format(tracing_format())
-            .with_max_level(level_filter)
-            .with_writer(non_blocking)
-            .finish(),
-    );
-    minimal_level
-}
-
-// Initialize the global logger so that it will write the received logs to a file under the babushka-logs folder.
-// The file name will be prefixed with the current timestamp, and will be replaced every hour.
-// The logger doesn't block the calling thread, and will save only logs of the given level or above.
-pub fn init_console(minimal_level: Level) -> Level {
-    let level_filter = minimal_level.to_filter();
-    let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
-    let mut guard = GUARD.write().unwrap();
-    *guard = Some(_guard);
-    let _ = tracing::subscriber::set_global_default(
-        tracing_subscriber::fmt()
-            .event_format(tracing_format())
-            .with_writer(non_blocking)
-            .with_max_level(level_filter)
-            .finish(),
-    );
-    minimal_level
-}
-
-// Initialize the global logger so that it will write the received logs to the console.
+// Initialize the global logger to error level on the first call only
+// In any of the calls to the function, including the first - resetting the existence loggers to the new setting
+// provided by using the global reloadable handle
 // The logger will save only logs of the given level or above.
 pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
     let level = minimal_level.unwrap_or(Level::Warn);
+    let level_filter = level.to_filter();
+    INIT_ONCE.call_once(|| {
+        let stdout_fmt = tracing_subscriber::fmt::layer()
+            .with_ansi(true)
+            .with_filter(LevelFilter::ERROR); // Console logging ERROR by default
+
+        let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
+
+        let file_appender = RollingFileAppender::new(
+            Rotation::HOURLY,
+            "babushka-logs",
+            file_name.unwrap_or("output.log"),
+        );
+        let file_fmt = tracing_subscriber::fmt::layer()
+            .with_ansi(true)
+            .with_writer(file_appender)
+            .with_filter(LevelFilter::ERROR); // File logging ERROR by default
+        let (file_layer, file_reload) = reload::Layer::new(file_fmt);
+        tracing_subscriber::registry()
+            .with(stdout_layer)
+            .with(file_layer)
+            .init();
+        let _ = STDOUT_RELOAD.set(RwLock::new(stdout_reload));
+        let _ = FILE_RELOAD.set(RwLock::new(file_reload));
+    });
+
     match file_name {
-        None => init_console(level),
-        Some(file) => init_file(level, file),
-    }
+        None => {
+            let _ = STDOUT_RELOAD
+                .get()
+                .expect("error reloading stdout")
+                .write()
+                .expect("error reloading stdout")
+                .modify(|layer| (*layer.filter_mut() = level_filter));
+        }
+        Some(file) => {
+            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "babushka-logs", file);
+            let _ = FILE_RELOAD
+                .get()
+                .expect("error reloading stdout")
+                .write()
+                .expect("error reloading stdout")
+                .modify(|layer| {
+                    *layer.filter_mut() = level_filter;
+                    *layer.inner_mut().writer_mut() = file_appender;
+                });
+        }
+    };
+    level
 }
 
 macro_rules! create_log {
@@ -91,10 +139,9 @@ macro_rules! create_log {
             log_identifier: Identifier,
             message: Message,
         ) {
-            if GUARD.read().unwrap().is_none() {
-                init(None, None);
+            if STDOUT_RELOAD.get().is_none() {
+                init(Some(Level::Warn), None);
             };
-
             let message_ref = message.as_ref();
             let identifier_ref = log_identifier.as_ref();
             event!(
