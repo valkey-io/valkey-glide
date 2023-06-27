@@ -17,10 +17,11 @@ class RedisCluster:
         p = subprocess.Popen(
             args_list,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
         )
         output, err = p.communicate(timeout=20)
-        if err:
+        if p.returncode != 0:
             raise Exception(f"Failed to create a CME cluster. Executed: {p}:\n{err}")
         self.parse_cluster_script_start_output(output)
 
@@ -51,10 +52,11 @@ class RedisCluster:
         p = subprocess.Popen(
             args_list,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
         )
         output, err = p.communicate(timeout=20)
-        if err:
+        if p.returncode != 0:
             raise Exception(
                 f"Failed to stop CME cluster {self.cluster_folder}. Executed: {p}:\n{err}"
             )

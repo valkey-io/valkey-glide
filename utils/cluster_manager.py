@@ -87,8 +87,10 @@ def generate_tls_certs():
             text=True,
         )
         output, err = p.communicate(timeout=10)
-        if err:
-            raise Exception(f"Failed to make key for {name}. Executed: {p}:\n{err}")
+        if p.returncode != 0:
+            raise Exception(
+                f"Failed to make key for {name}. Executed: {p.args}:\n{err}"
+            )
 
     # Build CA key
     make_key(ca_key, 4096)
@@ -119,8 +121,8 @@ def generate_tls_certs():
         text=True,
     )
     output, err = p.communicate(timeout=10)
-    if err:
-        raise Exception(f"Failed to make create CA cert. Executed: {p}:\n{err}")
+    if p.returncode != 0:
+        raise Exception(f"Failed to make create CA cert. Executed: {p.args}:\n{err}")
 
     # Read Redis key
     p1 = subprocess.Popen(
@@ -139,8 +141,8 @@ def generate_tls_certs():
         text=True,
     )
     redis_key_output, err = p.communicate(timeout=10)
-    if err:
-        raise Exception(f"Failed to read Redis key. Executed: {p}:\n{err}")
+    if p.returncode != 0:
+        raise Exception(f"Failed to read Redis key. Executed: {p.args}:\n{err}")
 
     # Build redis cert
     p = subprocess.Popen(
@@ -164,12 +166,13 @@ def generate_tls_certs():
             REDIS_CRT,
         ],
         stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         stdin=p1.stdout,
         text=True,
     )
     output, err = p.communicate(timeout=10)
-    if err:
-        raise Exception(f"Failed to create redis cert. Executed: {p}:\n{err}")
+    if p.returncode != 0:
+        raise Exception(f"Failed to create redis cert. Executed: {p.args}:\n{err}")
     toc = time.perf_counter()
     logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
     logging.debug(f"TLS files= {REDIS_CRT}, {REDIS_KEY}, {CA_CRT}")
@@ -282,8 +285,10 @@ def start_redis_server(
         text=True,
     )
     output, err = p.communicate(timeout=2)
-    if err:
-        raise Exception(f"Failed to execute command {p}:\n{err}")
+    if p.returncode != 0:
+        raise Exception(
+            f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+        )
     server = RedisServer(host, port)
     return server, node_folder
 
@@ -427,8 +432,11 @@ def wait_for_server(
             if output.strip() == "PONG":
                 logging.debug(f"Server {server} is ready!")
                 return True
-            if err:
-                logging.debug(f"Got error while waiting for server: {err}")
+            if p.returncode != 0:
+                logging.debug(
+                    f"Got error while waiting for server. Executed command: {p.args}\n "
+                    f"Return code: {p.returncode}\n Error: {err}"
+                )
         except subprocess.TimeoutExpired:
             pass
         time.sleep(0.1)
@@ -519,7 +527,9 @@ def stop_server(server: RedisServer, cluster_folder: str, use_tls: bool, auth: s
                     f"Failed to shutdown host {server.host}:{server.port}:\n {err}"
                 )
                 logging.error(err_msg)
-                raise Exception(err)
+                raise Exception(
+                    f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+                )
             if not wait_for_server_shutdown(server, cluster_folder, use_tls, auth):
                 err_msg = "Timeout elapsed while waiting for the node to shutdown"
                 logging.error(err_msg)
@@ -562,7 +572,7 @@ def wait_for_server_shutdown(
             output, err = p.communicate(timeout=1)
             if output.strip() == "PONG":
                 logging.debug(f"Server {server} is still up")
-            if err:
+            if p.returncode != 0:
                 verify_times -= 1
                 if verify_times == 0:
                     logging.debug(f"Success: server is down: {err}")
@@ -587,8 +597,10 @@ def remove_folder(folder_path: str):
         text=True,
     )
     output, err = p.communicate(timeout=3)
-    if err:
-        raise Exception(f"Failed to execute command {p}:\n {err}")
+    if p.returncode != 0:
+        raise Exception(
+            f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+        )
     logging.debug(f"Folder {folder_path} removed")
 
 
