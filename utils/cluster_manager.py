@@ -8,7 +8,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 LOG_LEVELS = {
     "critical": logging.CRITICAL,
@@ -255,7 +255,7 @@ def create_cluster_folder(path: str, prefix: str) -> str:
 
 def start_redis_server(
     host: str, port: Optional[int], cluster_folder: str, tls: bool, tls_args: List[str]
-) -> tuple[RedisServer, str]:
+) -> Tuple[RedisServer, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
     # Create sub-folder for each node
