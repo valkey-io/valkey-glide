@@ -152,7 +152,7 @@ async fn perform_benchmark(args: Args) {
     .unwrap();
 }
 
-fn calculate_latencies(values: &Vec<Duration>, prefix: &str) -> HashMap<String, Value> {
+fn calculate_latencies(values: &[Duration], prefix: &str) -> HashMap<String, Value> {
     let values: Vec<f64> = values
         .iter()
         .map(|duration| duration.as_secs_f64() / 1000.0)
