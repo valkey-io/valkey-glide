@@ -18,7 +18,7 @@ use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::{fmt, str};
+use std::{env, fmt, str};
 use std::{io, thread};
 use thiserror::Error;
 use tokio::io::ErrorKind::AddrInUse;
@@ -621,16 +621,19 @@ impl fmt::Display for ClosingError {
 }
 
 /// Get the socket full path.
-/// The socket file name will contain the process ID and will be saved into the user's runtime directory (e.g. /run/user/1000)
-/// in Unix systems, or in %AppData%\Local in Windows
+/// The socket file name will contain the process ID and will try to be saved into the user's runtime directory
+/// (e.g. /run/user/1000) in Unix systems. If the runtime dir isn't found, the socket file will be saved to the temp dir.
+/// For Windows, the socket file will be saved to %AppData%\Local.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
     let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
+    let tmp_dir;
     let folder = if cfg!(windows) {
         base_dirs.data_local_dir()
     } else {
-        base_dirs
-            .runtime_dir()
-            .expect("Failed to find the user's runtime folder")
+        base_dirs.runtime_dir().unwrap_or({
+            tmp_dir = env::temp_dir();
+            tmp_dir.as_path()
+        })
     };
     folder
         .join(socket_name)
