@@ -2,14 +2,16 @@ use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
 use crate::connection_request::{ConnectionRequest, TlsMode};
 use crate::retry_strategies::RetryStrategy;
+use futures::{stream, StreamExt};
 use logger_core::{log_debug, log_trace};
-use redis::RedisResult;
+use redis::RedisError;
 use std::sync::Arc;
 use tokio::task;
 
 struct DropWrapper {
     /// Connection to the primary node in the client.
     primary: ReconnectingConnection,
+    replicas: Vec<ReconnectingConnection>,
 }
 
 impl Drop for DropWrapper {
@@ -23,25 +25,107 @@ pub struct ClientCMD {
     inner: Arc<DropWrapper>,
 }
 
-impl ClientCMD {
-    pub async fn create_client(connection_request: ConnectionRequest) -> RedisResult<Self> {
-        let primary_address = connection_request.addresses.first().unwrap();
+pub enum ClientCMDConnectionError {
+    NoAddressesProvided,
+    NoPrimaryFound,
+    FailedConnection(Vec<(String, RedisError)>),
+}
 
+impl std::fmt::Debug for ClientCMDConnectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientCMDConnectionError::NoAddressesProvided => {
+                write!(f, "No addresses provided")
+            }
+            ClientCMDConnectionError::NoPrimaryFound => {
+                write!(f, "No primary node found")
+            }
+            ClientCMDConnectionError::FailedConnection(errs) => {
+                writeln!(f, "Received errors:")?;
+                for (address, error) in errs {
+                    writeln!(f, "{address}: {error}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl ClientCMD {
+    pub async fn create_client(
+        connection_request: ConnectionRequest,
+    ) -> Result<Self, ClientCMDConnectionError> {
+        if connection_request.addresses.is_empty() {
+            return Err(ClientCMDConnectionError::NoAddressesProvided);
+        }
         let retry_strategy = RetryStrategy::new(&connection_request.connection_retry_strategy.0);
         let redis_connection_info =
             get_redis_connection_info(connection_request.authentication_info.0);
 
         let tls_mode = connection_request.tls_mode.enum_value_or(TlsMode::NoTls);
-        let primary = ReconnectingConnection::new(
-            primary_address,
-            retry_strategy.clone(),
-            redis_connection_info,
-            tls_mode,
-        )
-        .await?;
+        let connections = stream::iter(connection_request.addresses.iter())
+            .map(|address| async {
+                (
+                    format!("{}:{}", address.host, address.port),
+                    async {
+                        let reconnecting_connection = ReconnectingConnection::new(
+                            address,
+                            retry_strategy.clone(),
+                            redis_connection_info.clone(),
+                            tls_mode,
+                        )
+                        .await?;
+                        let mut multiplexed_connection =
+                            reconnecting_connection.get_connection().await?;
+                        let replication_status = multiplexed_connection
+                            .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
+                            .await?;
+                        Ok((reconnecting_connection, replication_status))
+                    }
+                    .await,
+                )
+            })
+            .buffer_unordered(connection_request.addresses.len())
+            .collect::<Vec<_>>()
+            .await;
+
+        if connections.iter().any(|(_, result)| result.is_err()) {
+            let addresses_and_errors: Vec<(String, RedisError)> = connections
+                .into_iter()
+                .filter_map(|(address, result)| result.err().map(|err| (address, err)))
+                .collect();
+            return Err(ClientCMDConnectionError::FailedConnection(
+                addresses_and_errors,
+            ));
+        }
+        let results: Vec<(ReconnectingConnection, redis::Value)> = connections
+            .into_iter()
+            .map(|(_, result)| result.unwrap())
+            .collect();
+        let Some(primary_index) = results.iter().position(|(_, replication_status)| 
+            redis::from_redis_value::<String>(replication_status).ok().and_then(|val|if val.contains("role:master") { Some(())} else {None}).is_some()
+        ) else {
+            return Err(ClientCMDConnectionError::NoPrimaryFound);
+        };
+        let mut connections: Vec<ReconnectingConnection> = results
+            .into_iter()
+            .map(|(connection, _)| connection)
+            .collect();
+        let Some(primary) = connections
+            .drain(primary_index..primary_index+1)
+            .next() else {
+                return Err(ClientCMDConnectionError::NoPrimaryFound);
+            };
+
         Self::start_heartbeat(primary.clone());
+        for connection in connections.iter() {
+            Self::start_heartbeat(connection.clone());
+        }
         Ok(Self {
-            inner: Arc::new(DropWrapper { primary }),
+            inner: Arc::new(DropWrapper {
+                primary,
+                replicas: connections,
+            }),
         })
     }
 
