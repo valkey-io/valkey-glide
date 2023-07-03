@@ -419,7 +419,10 @@ async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
 ) -> Result<Client, ClientCreationError> {
-    let client = Client::new(request).await?;
+    let client = match Client::new(request).await {
+        Ok(client) => client,
+        Err(err) => return Err(ClientCreationError::ConnectionError(err)),
+    };
     write_result(Ok(Value::Nil), 0, writer).await?;
     Ok(client)
 }
@@ -492,7 +495,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
         }
         Err(e @ ClientCreationError::UnhandledError(_))
         | Err(e @ ClientCreationError::IO(_))
-        | Err(e @ ClientCreationError::RedisError(_)) => {
+        | Err(e @ ClientCreationError::ConnectionError(_)) => {
             let err_message = e.to_string();
             let _res = write_closing_error(ClosingError { err_message }, u32::MAX, &writer).await;
             return;
@@ -642,14 +645,14 @@ impl From<io::Error> for ClosingReason {
 enum ClientCreationError {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
-    #[error("Redis error: {0}")]
-    RedisError(#[from] RedisError),
     /// An error was returned during the client creation process.
     #[error("Unhandled error: {0}")]
     UnhandledError(String),
     /// Socket listener was closed before receiving the server address.
     #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),
+    #[error("Connection error: {0:?}")]
+    ConnectionError(crate::client::ConnectionError),
 }
 
 /// Enum describing errors received during client usage.
