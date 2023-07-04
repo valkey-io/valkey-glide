@@ -14,14 +14,17 @@ const KEY_LENGTH: usize = 6;
 
 #[cfg(test)]
 mod socket_listener {
+    use crate::utilities::mocks::{Mock, ServerMock};
+
     use super::*;
     use babushka::redis_request::command::{Args, ArgsArray};
     use babushka::redis_request::{Command, Transaction};
     use babushka::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
-    use redis::{ConnectionAddr, Value};
+    use redis::{Cmd, ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
+    use std::collections::HashMap;
     use std::mem::size_of;
     use tokio::{net::UnixListener, runtime::Builder};
 
@@ -41,6 +44,12 @@ mod socket_listener {
     struct TestBasics {
         server: RedisServer,
         socket: UnixStream,
+    }
+
+    struct TestBasicsWithMock {
+        // socket needs to be declared before the mock, so it will be dropped first and release the mock's socket.
+        socket: UnixStream,
+        server_mock: ServerMock,
     }
 
     struct ClusterTestBasics {
@@ -306,6 +315,21 @@ mod socket_listener {
         socket
     }
 
+    fn setup_mocked_test_basics(socket_path: Option<String>) -> TestBasicsWithMock {
+        let server_mock = ServerMock::new(HashMap::new());
+        let addresses = server_mock.get_addresses();
+        let socket = setup_socket(
+            false,
+            socket_path,
+            addresses.as_slice(),
+            ClusterMode::Disabled,
+        );
+        TestBasicsWithMock {
+            server_mock,
+            socket,
+        }
+    }
+
     fn setup_test_basics_with_server_and_socket_path(
         use_tls: bool,
         socket_path: Option<String>,
@@ -536,31 +560,30 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
-    fn test_socket_get_returns_null(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-    ) {
+    fn test_socket_get_returns_null(#[values(false, true)] use_arg_pointer: bool) {
         const CALLBACK_INDEX: u32 = 99;
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls);
+        let mut expected_command = Cmd::new();
         let key = generate_random_string(KEY_LENGTH);
+        expected_command.arg("GET").arg(key.clone());
+        let mut test_basics = setup_mocked_test_basics(None);
+        test_basics
+            .server_mock
+            .add_response(&expected_command, "*-1\r\n".to_string());
         let mut buffer = Vec::with_capacity(key.len() * 2);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), args_pointer);
+        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), use_arg_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
+        println!("test reading from socket");
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
 
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
-    fn test_socket_report_error(#[values(false, true)] use_tls: bool) {
-        let mut test_basics = setup_test_basics(use_tls);
-
+    fn test_socket_report_error() {
         const CALLBACK_INDEX: u32 = 99;
+        let mut test_basics = setup_mocked_test_basics(None);
+
         let key = "a";
         let request_type = i32::MAX; // here we send an erroneous enum
                                      // Send a set request
@@ -581,6 +604,7 @@ mod socket_listener {
             response.closing_error(),
             format!("Received invalid request type: {request_type}")
         );
+        assert_eq!(test_basics.server_mock.get_number_of_received_commands(), 0);
     }
 
     #[rstest]
@@ -624,7 +648,8 @@ mod socket_listener {
 
         let response_header_length = u32::required_space(size_of::<usize>() as u32);
         let expected_length = size_of::<usize>() + response_header_length + 2; // 2 bytes for callbackIdx and value type
-                                                                               // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
+
+        // we set the length to a longer value, just in case we'll get more data - which is a failure for the test.
         buffer.resize(approx_message_length, 0);
         let mut size = 0;
         while size < expected_length {
