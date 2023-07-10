@@ -560,5 +560,5 @@ pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    logger_core::init_console(logger_core::Level::Debug);
+    logger_core::init(Some(logger_core::Level::Debug), None);
 }
