@@ -2,7 +2,13 @@ import * as net from "net";
 import { connection_request } from "./ProtobufMessage";
 import { ConnectionOptions, SocketConnection } from "./SocketConnection";
 
-type Routes = "all_shards";
+export type Routes =
+    | "all_primaries"
+    | "all_nodes"
+    | "multi_shard"
+    | "random"
+    | "master_slot"
+    | "replica_slot";
 export class ClusterSocketConnection extends SocketConnection {
     protected createConnectionRequest(
         options: ConnectionOptions
@@ -22,10 +28,13 @@ export class ClusterSocketConnection extends SocketConnection {
         );
     }
 
-    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument
     /// See https://redis.io/commands/ping/ for details.
     // TODO: implement routing
-    public ping(str?: string, route: Routes = "all_shards"): Promise<string> {
+    public ping(
+        str?: string,
+        route: Routes = "all_primaries"
+    ): Promise<string> {
         return super.ping(str);
     }
 }

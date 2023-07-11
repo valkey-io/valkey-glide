@@ -22,7 +22,7 @@ export class Transaction {
         this.commands.push(createSet(key, value, options));
     }
 
-    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument
     /// See https://redis.io/commands/ping/ for details.
     public ping(str?: string) {
         this.commands.push(createPing(str));

@@ -39,6 +39,7 @@ enum RequestType {
     GetString = 2;
     /// Type of a set string request.
     SetString = 3;
+<<<<<<< HEAD
     Ping = 4;
     Info = 5;
     Del = 6;
@@ -66,6 +67,10 @@ enum RequestType {
     HashGet = 28;
     HashDel = 29;
     HashExists = 30;
+=======
+    /// Type of a ping request.
+    Ping = 4;
+>>>>>>> 86aaa7fa (rev 1 fix)
 }
 
 message Command {
@@ -86,7 +91,7 @@ message Transaction {
 
 message RedisRequest {
     uint32 callback_idx = 1;
-    
+
     oneof command {
         Command single_command = 2;
         Transaction transaction = 3;

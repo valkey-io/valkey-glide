@@ -236,7 +236,7 @@ export class RedisClient {
         return this.createWritePromise(createSet(key, value, options));
     }
 
-    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument
     /// See https://redis.io/commands/ping/ for details.
     public ping(str?: string): Promise<string> {
         return this.createWritePromise(createPing(str));

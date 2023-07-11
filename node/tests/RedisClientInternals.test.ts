@@ -255,14 +255,14 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should pass return PONG from socket", async () => {
+    it("should return PONG", async () => {
         await testWithResources(async (connection, socket) => {
             const expected = "PONG";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.Ping
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
                     0
@@ -280,14 +280,14 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should pass return HELLO from socket", async () => {
+    it("should return HELLO", async () => {
         await testWithResources(async (connection, socket) => {
             const expected = "HELLO";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.Ping
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
                     1

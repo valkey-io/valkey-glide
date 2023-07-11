@@ -43,8 +43,8 @@ export function createGet(key: string): redis_request.Command {
 }
 
 export function createPing(str?: string): redis_request.Command {
-    if (str) return createCommand(RequestType.GetString, [str]);
-    return createCommand(RequestType.GetString, []);
+    if (str !== undefined) return createCommand(RequestType.Ping, [str]);
+    return createCommand(RequestType.Ping, []);
 }
 
 export type SetOptions = {
