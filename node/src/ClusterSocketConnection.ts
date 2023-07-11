@@ -3,6 +3,7 @@ import { connection_request } from "./ProtobufMessage";
 import { ConnectionOptions, SocketConnection } from "./SocketConnection";
 import { Routes, createPing } from "./Commands";
 
+type Routes = "all_shards";
 export class ClusterSocketConnection extends SocketConnection {
     protected createConnectionRequest(
         options: ConnectionOptions

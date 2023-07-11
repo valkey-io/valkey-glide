@@ -170,12 +170,8 @@ export class RedisClient {
     }
 
     protected createWritePromise<T>(
-<<<<<<< HEAD:node/src/RedisClient.ts
         command: redis_request.Command | redis_request.Command[],
         route?: redis_request.Routes
-=======
-        command: redis_request.Command | redis_request.Command[]
->>>>>>> 23d4f5a3 (added types handeling):node/src/SocketConnection.ts
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
