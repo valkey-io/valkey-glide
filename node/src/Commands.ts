@@ -42,6 +42,11 @@ export function createGet(key: string): redis_request.Command {
     return createCommand(RequestType.GetString, [key]);
 }
 
+export function createPing(str?: string): redis_request.Command {
+    if (str) return createCommand(RequestType.GetString, [str]);
+    return createCommand(RequestType.GetString, []);
+}
+
 export type SetOptions = {
     /// `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
     /// `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.

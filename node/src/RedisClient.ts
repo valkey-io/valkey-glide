@@ -10,6 +10,7 @@ import {
     createCustomCommand,
     createGet,
     createSet,
+    createPing,
 } from "./Commands";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
@@ -233,6 +234,12 @@ export class RedisClient {
         options?: SetOptions
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
+    }
+
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk
+    /// See https://redis.io/commands/ping/ for details.
+    public ping(str?: string): Promise<string> {
+        return this.createWritePromise(createPing(str));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

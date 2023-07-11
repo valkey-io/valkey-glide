@@ -3,6 +3,7 @@ import {
     createCustomCommand,
     createGet,
     createSet,
+    createPing,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -19,6 +20,12 @@ export class Transaction {
     /// See https://redis.io/commands/set/ for details.
     public set(key: string, value: string, options?: SetOptions) {
         this.commands.push(createSet(key, value, options));
+    }
+
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk
+    /// See https://redis.io/commands/ping/ for details.
+    public ping(str?: string) {
+        this.commands.push(createPing(str));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

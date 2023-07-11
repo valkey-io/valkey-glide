@@ -255,6 +255,56 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
+    it("should pass return PONG from socket", async () => {
+        await testWithResources(async (connection, socket) => {
+            const expected = "PONG";
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    0
+                );
+
+                sendResponse(
+                    socket,
+                    ResponseType.Value,
+                    request.callbackIdx,
+                    expected
+                );
+            });
+            const result = await connection.ping();
+            expect(result).toEqual(expected);
+        });
+    });
+
+    it("should pass return HELLO from socket", async () => {
+        await testWithResources(async (connection, socket) => {
+            const expected = "HELLO";
+            socket.once("data", (data) => {
+                const reader = Reader.create(data);
+                const request = RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.GetString
+                );
+                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
+                    1
+                );
+
+                sendResponse(
+                    socket,
+                    ResponseType.Value,
+                    request.callbackIdx,
+                    expected
+                );
+            });
+            const result = await connection.ping(expected);
+            expect(result).toEqual(expected);
+        });
+    });
+
     it("should reject requests that received a response error", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
