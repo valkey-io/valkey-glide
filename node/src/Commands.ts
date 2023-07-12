@@ -6,6 +6,24 @@ import Long from "long";
 import { redis_request } from "./ProtobufMessage";
 import RequestType = redis_request.RequestType;
 
+type slotIdTypes = {
+    type: "master_slot_id" | "replica_slot_id";
+    id: number;
+};
+
+type slotKeyTypes = {
+    type: "master_slot_key" | "replica_slot_key";
+    key: string;
+};
+
+export type Routes =
+    | "all_primaries"
+    | "all_nodes"
+    | "multi_shard"
+    | "random"
+    | slotIdTypes
+    | slotKeyTypes;
+
 function isLargeCommand(args: string[]) {
     let lenSum = 0;
     for (const arg of args) {
@@ -42,7 +60,10 @@ export function createGet(key: string): redis_request.Command {
     return createCommand(RequestType.GetString, [key]);
 }
 
-export function createPing(str?: string): redis_request.Command {
+export function createPing(
+    str?: string,
+    route?: Routes
+): redis_request.Command {
     if (str !== undefined) return createCommand(RequestType.Ping, [str]);
     return createCommand(RequestType.Ping, []);
 }

@@ -1,14 +1,8 @@
 import * as net from "net";
 import { connection_request } from "./ProtobufMessage";
 import { ConnectionOptions, SocketConnection } from "./SocketConnection";
+import { Routes, createPing } from "./Commands";
 
-export type Routes =
-    | "all_primaries"
-    | "all_nodes"
-    | "multi_shard"
-    | "random"
-    | "master_slot"
-    | "replica_slot";
 export class ClusterSocketConnection extends SocketConnection {
     protected createConnectionRequest(
         options: ConnectionOptions
@@ -35,6 +29,6 @@ export class ClusterSocketConnection extends SocketConnection {
         str?: string,
         route: Routes = "all_primaries"
     ): Promise<string> {
-        return super.ping(str);
+        return this.createWritePromise(createPing(str, route));
     }
 }

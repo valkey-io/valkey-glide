@@ -39,7 +39,6 @@ enum RequestType {
     GetString = 2;
     /// Type of a set string request.
     SetString = 3;
-<<<<<<< HEAD
     Ping = 4;
     Info = 5;
     Del = 6;
@@ -67,22 +66,18 @@ enum RequestType {
     HashGet = 28;
     HashDel = 29;
     HashExists = 30;
-=======
-    /// Type of a ping request.
-    Ping = 4;
->>>>>>> 86aaa7fa (rev 1 fix)
 }
 
 message Command {
     message ArgsArray {
         repeated string args = 1;
     }
-
     RequestType request_type = 1;
     oneof args {
         ArgsArray args_array = 2;
         uint64 args_vec_pointer = 3;
     }
+    routes.Routes route = 4;
 }
 
 message Transaction {

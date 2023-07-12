@@ -1,0 +1,36 @@
+syntax = "proto3";
+package routes;
+
+enum SimpleRoutes {
+    AllNodes=0;
+    AllMasters=1;
+    Random=2;
+}
+
+enum SlotIdTypes {
+    MasterSlotId=0;
+    ReplicaSlotId=1;
+}
+
+message SlotIdRoute {
+    SlotIdTypes slotIdTypes = 1;
+    int32 slot_id = 2;
+}
+
+enum SlotKeyTypes {
+    MasterSlotKey=0;
+    ReplicaSlotKey=1;
+}
+
+message SlotKeyRoute {
+    SlotKeyTypes slotKeyType = 1;
+    string slot_key = 2;
+}
+
+message Routes {
+    oneof routes {
+        SimpleRoutes simmpleRoutes = 1;
+        SlotKeyRoute slotKeyRoute = 2;
+        SlotIdRoute slotIdRoute = 3;
+    }
+}
