@@ -34,7 +34,6 @@ function isLargeCommand(args: string[]) {
     }
     return false;
 }
-// TODO - implement route handdeling
 
 function createCommand(
     requestType: redis_request.RequestType,
