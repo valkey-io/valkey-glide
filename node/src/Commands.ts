@@ -34,10 +34,12 @@ function isLargeCommand(args: string[]) {
     }
     return false;
 }
+// TODO - implement route handdeling
 
 function createCommand(
     requestType: redis_request.RequestType,
-    args: string[]
+    args: string[],
+    route?: Routes
 ): redis_request.Command {
     const singleCommand = redis_request.Command.create({
         requestType,
@@ -64,8 +66,10 @@ export function createPing(
     str?: string,
     route?: Routes
 ): redis_request.Command {
-    if (str !== undefined) return createCommand(RequestType.Ping, [str]);
-    return createCommand(RequestType.Ping, []);
+    const args = str !== undefined ? [str] : [];
+    if (route !== undefined)
+        return createCommand(RequestType.Ping, args, route);
+    return createCommand(RequestType.Ping, args);
 }
 
 export type SetOptions = {
