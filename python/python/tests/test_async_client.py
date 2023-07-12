@@ -2,7 +2,7 @@ import asyncio
 import random
 import string
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, List
 
 import pytest
 from packaging import version
@@ -42,7 +42,12 @@ async def async_socket_client(request, cluster_mode) -> RedisAsyncSocketClient:
     client.close()
 
 
-def parse_info_response(res: str) -> Dict[str, str]:
+def to_str(res: str | List[str]) -> str:
+    return res[0] if isinstance(res, list) else res
+
+
+def parse_info_response(res: str | List[str]) -> Dict[str, str]:
+    res = to_str(res)
     info_lines = [
         line for line in res.splitlines() if line and not line.startswith("#")
     ]
@@ -170,8 +175,10 @@ class TestSocketClient:
         self, async_socket_client: RedisAsyncSocketClient
     ):
         # Test multi args command
-        res: str = await async_socket_client.custom_command(
-            ["CLIENT", "LIST", "TYPE", "NORMAL"]
+        res: str = to_str(
+            await async_socket_client.custom_command(
+                ["CLIENT", "LIST", "TYPE", "NORMAL"]
+            )
         )
         assert res is not None
         assert "id" in res
@@ -182,8 +189,10 @@ class TestSocketClient:
         self, async_socket_client: RedisAsyncSocketClient
     ):
         # Test multi args command
-        res: str = await async_socket_client.custom_command(
-            ["client", "LIST", "type", "NORMAL"]
+        res: str = to_str(
+            await async_socket_client.custom_command(
+                ["client", "LIST", "type", "NORMAL"]
+            )
         )
         assert res is not None
         assert "id" in res
