@@ -18,7 +18,7 @@ use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::{env, fmt, str};
+use std::{env, str};
 use std::{io, thread};
 use thiserror::Error;
 use tokio::io::ErrorKind::AddrInUse;
@@ -161,11 +161,11 @@ async fn write_closing_error(
     callback_index: u32,
     writer: &Rc<Writer>,
 ) -> Result<(), io::Error> {
+    let err = err.err_message;
+    log_error("client creation", err.as_str());
     let mut response = Response::new();
     response.callback_idx = callback_index;
-    response.value = Some(response::response::Value::ClosingError(
-        err.to_string().into(),
-    ));
+    response.value = Some(response::response::Value::ClosingError(err.into()));
     write_to_writer(response, writer).await
 }
 
@@ -422,22 +422,15 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
-            let error_message = format!("Socket listener closed due to {reason:?}");
-            let _res = write_closing_error(
-                ClosingError {
-                    err: error_message.clone(),
-                },
-                u32::MAX,
-                &writer,
-            )
-            .await;
+            let err_message = format!("Socket listener closed due to {reason:?}");
+            let _res = write_closing_error(ClosingError { err_message }, u32::MAX, &writer).await;
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_))
         | Err(e @ ClientCreationError::IO(_))
         | Err(e @ ClientCreationError::RedisError(_)) => {
-            let _res =
-                write_closing_error(ClosingError { err: e.to_string() }, u32::MAX, &writer).await;
+            let err_message = e.to_string();
+            let _res = write_closing_error(ClosingError { err_message }, u32::MAX, &writer).await;
             return;
         }
     };
@@ -445,7 +438,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
     tokio::select! {
             reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
-                    let _res = write_closing_error(ClosingError{err: err.to_string()}, u32::MAX, &writer).await;
+                    let _res = write_closing_error(ClosingError{err_message: err.to_string()}, u32::MAX, &writer).await;
                 };
                 log_trace("client closing", "reader closed");
             },
@@ -608,16 +601,10 @@ enum ClienUsageError {
 type ClientUsageResult<T> = Result<T, ClienUsageError>;
 
 /// Defines errors caused the connection to close.
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone)]
 struct ClosingError {
     /// A string describing the closing reason
-    err: String,
-}
-
-impl fmt::Display for ClosingError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.err)
-    }
+    err_message: String,
 }
 
 /// Get the socket full path.
