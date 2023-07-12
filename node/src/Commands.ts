@@ -34,13 +34,15 @@ function isLargeCommand(args: string[]) {
     }
     return false;
 }
-// TODO - implement route handdeling
 
 function createCommand(
     requestType: redis_request.RequestType,
     args: string[],
     route?: Routes
 ): redis_request.Command {
+    if (route !== undefined) {
+        // TODO - implement route handling
+    }
     const singleCommand = redis_request.Command.create({
         requestType,
     });
