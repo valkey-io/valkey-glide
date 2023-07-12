@@ -181,7 +181,8 @@ mod shared_client_tests {
             cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
             let result = test_basics.client.req_packed_command(&cmd).await;
             assert!(result.is_err());
-            assert!(result.unwrap_err().is_timeout());
+            let err = result.unwrap_err();
+            assert!(err.is_timeout(), "{err}");
         });
     }
 
