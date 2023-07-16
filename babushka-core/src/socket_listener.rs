@@ -249,10 +249,10 @@ fn get_command(request: &Command) -> Option<Cmd> {
         .request_type
         .enum_value_or(RequestType::InvalidRequest);
     match request_enum {
+        RequestType::InvalidRequest => None,
         RequestType::CustomCommand => Some(Cmd::new()),
         RequestType::GetString => Some(cmd("GET")),
         RequestType::SetString => Some(cmd("SET")),
-        _ => None,
     }
 }
 
