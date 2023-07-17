@@ -2,6 +2,7 @@ use futures_intrusive::sync::ManualResetEvent;
 use redis::{Cmd, ConnectionAddr, Value};
 use std::collections::HashMap;
 use std::io;
+use std::net::TcpListener;
 use std::str::from_utf8;
 use std::sync::{
     atomic::{AtomicU16, Ordering},
@@ -95,6 +96,13 @@ pub trait Mock {
 impl ServerMock {
     pub fn new(constant_responses: HashMap<String, Value>) -> Self {
         let listener = super::get_listener_on_available_port();
+        Self::new_with_listener(constant_responses, listener)
+    }
+
+    pub fn new_with_listener(
+        constant_responses: HashMap<String, Value>,
+        listener: TcpListener,
+    ) -> Self {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
         let received_commands_clone = received_commands.clone();

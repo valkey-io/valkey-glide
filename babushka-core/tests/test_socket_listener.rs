@@ -24,7 +24,6 @@ mod socket_listener {
     use redis::{Cmd, ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
-    use std::collections::HashMap;
     use std::mem::size_of;
     use tokio::{net::UnixListener, runtime::Builder};
 
@@ -325,7 +324,12 @@ mod socket_listener {
     }
 
     fn setup_mocked_test_basics(socket_path: Option<String>) -> TestBasicsWithMock {
-        let server_mock = ServerMock::new(HashMap::new());
+        let mut responses = std::collections::HashMap::new();
+        responses.insert(
+            "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
+            Value::Data(b"role:master\r\nconnected_slaves:0\r\n".to_vec()),
+        );
+        let server_mock = ServerMock::new(responses);
         let addresses = server_mock.get_addresses();
         let socket = setup_socket(
             false,
@@ -625,7 +629,6 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), use_arg_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        println!("test reading from socket");
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_null_response(&buffer, CALLBACK_INDEX);
     }
