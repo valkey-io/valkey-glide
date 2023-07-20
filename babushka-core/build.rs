@@ -9,6 +9,7 @@ fn main() {
         .input("src/protobuf/redis_request.proto")
         .input("src/protobuf/response.proto")
         .input("src/protobuf/connection_request.proto")
+        .input("src/protobuf/routes.proto")
         .customize(customization_options)
         .run_from_script();
 }

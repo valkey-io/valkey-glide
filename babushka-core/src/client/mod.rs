@@ -2,6 +2,7 @@ use crate::connection_request::{AddressInfo, AuthenticationInfo, ConnectionReque
 pub use client_cmd::ClientCMD;
 use futures::FutureExt;
 use redis::cluster_async::ClusterConnection;
+use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
 use redis::{
     aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
     RedisResult,
@@ -18,7 +19,6 @@ pub trait BabushkaClient: ConnectionLike + Send + Clone {}
 impl BabushkaClient for MultiplexedConnection {}
 impl BabushkaClient for ConnectionManager {}
 impl BabushkaClient for ClusterConnection {}
-impl BabushkaClient for Client {}
 
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
@@ -96,26 +96,31 @@ async fn run_with_timeout<T>(
         .and_then(|res| res)
 }
 
-impl ConnectionLike for Client {
-    fn req_packed_command<'a>(
+impl Client {
+    pub fn req_packed_command<'a>(
         &'a mut self,
         cmd: &'a redis::Cmd,
+        routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         run_with_timeout(self.response_timeout, async {
             match self.internal_client {
                 ClientWrapper::CMD(ref mut client) => client.send_packed_command(cmd).await,
 
-                ClientWrapper::CME(ref mut client) => client.req_packed_command(cmd).await,
+                ClientWrapper::CME(ref mut client) => {
+                    let routing = routing.or_else(|| RoutingInfo::for_routable(cmd));
+                    client.send_packed_command(cmd, routing).await
+                }
             }
         })
         .boxed()
     }
 
-    fn req_packed_commands<'a>(
+    pub fn req_packed_commands<'a>(
         &'a mut self,
         cmd: &'a redis::Pipeline,
         offset: usize,
         count: usize,
+        routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
         (async move {
             match self.internal_client {
@@ -124,22 +129,21 @@ impl ConnectionLike for Client {
                 }
 
                 ClientWrapper::CME(ref mut client) => {
+                    let route = match routing {
+                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                            route,
+                        ))) => Some(route),
+                        _ => None,
+                    };
                     run_with_timeout(
                         self.response_timeout,
-                        client.req_packed_commands(cmd, offset, count),
+                        client.send_packed_commands(cmd, offset, count, route),
                     )
                     .await
                 }
             }
         })
         .boxed()
-    }
-
-    fn get_db(&self) -> i64 {
-        match self.internal_client {
-            ClientWrapper::CMD(ref client) => client.get_db(),
-            ClientWrapper::CME(ref client) => client.get_db(),
-        }
     }
 }
 

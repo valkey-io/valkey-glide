@@ -3,7 +3,7 @@ use babushka::{
     connection_request::{AddressInfo, ConnectionRequest, TlsMode},
 };
 use iai_callgrind::{black_box, main};
-use redis::{aio::ConnectionLike, cmd, Value};
+use redis::{cmd, Value};
 use tokio::runtime::Builder;
 
 fn create_connection_request() -> ConnectionRequest {
@@ -39,7 +39,7 @@ fn just_setup() {
 fn send_message() {
     runner(|mut client| async move {
         client
-            .req_packed_command(&black_box(cmd("PING")))
+            .req_packed_command(&black_box(cmd("PING")), None)
             .await
             .unwrap();
     });
@@ -52,19 +52,19 @@ fn send_and_receive_messages() {
         let mut command = cmd("SET");
         command.arg("foo").arg("bar");
         client
-            .req_packed_command(&black_box(command))
+            .req_packed_command(&black_box(command), None)
             .await
             .unwrap();
         let mut command = cmd("SET");
         command.arg("baz").arg("foo");
         client
-            .req_packed_command(&black_box(command))
+            .req_packed_command(&black_box(command), None)
             .await
             .unwrap();
         let mut command = cmd("MGET");
         command.arg("baz").arg("foo");
         let result = client
-            .req_packed_command(&black_box(command))
+            .req_packed_command(&black_box(command), None)
             .await
             .unwrap();
         assert!(

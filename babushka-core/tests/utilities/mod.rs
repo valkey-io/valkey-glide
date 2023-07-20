@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use babushka::{
-    client::ClientCMD,
+    client::{Client, ClientCMD},
     connection_request::{self, AddressInfo, AuthenticationInfo},
 };
 use futures::Future;
@@ -417,22 +417,22 @@ pub fn generate_random_string(length: usize) -> String {
         .collect()
 }
 
-pub async fn send_get(client: &mut impl ConnectionLike, key: &str) -> RedisResult<Value> {
+pub async fn send_get(client: &mut Client, key: &str) -> RedisResult<Value> {
     let mut get_command = redis::Cmd::new();
     get_command.arg("GET").arg(key);
-    client.req_packed_command(&get_command).await
+    client.req_packed_command(&get_command, None).await
 }
 
-pub async fn send_set_and_get(mut client: impl ConnectionLike, key: String) {
+pub async fn send_set_and_get(mut client: Client, key: String) {
     const VALUE_LENGTH: usize = 10;
     let value = generate_random_string(VALUE_LENGTH);
 
     let mut set_command = redis::Cmd::new();
     set_command.arg("SET").arg(key.as_str()).arg(value.clone());
-    let set_result = client.req_packed_command(&set_command).await.unwrap();
+    let set_result = client.req_packed_command(&set_command, None).await.unwrap();
     let mut get_command = redis::Cmd::new();
     get_command.arg("GET").arg(key);
-    let get_result = client.req_packed_command(&get_command).await.unwrap();
+    let get_result = client.req_packed_command(&get_command, None).await.unwrap();
 
     assert_eq!(set_result, Value::Okay);
     assert_eq!(get_result, Value::Data(value.into_bytes()));
