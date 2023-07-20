@@ -1,6 +1,8 @@
 syntax = "proto3";
 package redis_request;
 
+import "protobuf/routes.proto";
+
 enum RequestType {
     /// Invalid request type
     InvalidRequest = 0;
@@ -35,4 +37,5 @@ message RedisRequest {
         Command single_command = 2;
         Transaction transaction = 3;
     }
+    routes.Routes route = 4;
 }
