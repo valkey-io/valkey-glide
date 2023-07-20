@@ -11,6 +11,7 @@ use std::{env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process
 use tempfile::TempDir;
 
 pub mod cluster;
+pub mod mocks;
 
 pub(crate) const SHORT_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
 pub(crate) const LONG_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
@@ -33,15 +34,19 @@ pub enum Module {
     Json,
 }
 
-pub fn get_available_port() -> u16 {
-    // this is technically a race but we can't do better with
-    // the tools that redis gives us :(
+pub fn get_listener_on_available_port() -> TcpListener {
     let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
     let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
     socket.set_reuse_address(true).unwrap();
     socket.bind(addr).unwrap();
     socket.listen(1).unwrap();
-    let listener = TcpListener::from(socket);
+    TcpListener::from(socket)
+}
+
+pub fn get_available_port() -> u16 {
+    // this is technically a race but we can't do better with
+    // the tools that redis gives us :(
+    let listener = get_listener_on_available_port();
     listener.local_addr().unwrap().port()
 }
 
