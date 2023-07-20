@@ -78,10 +78,6 @@ impl ClientCMD {
         }
     }
 
-    pub(super) fn get_db(&self) -> i64 {
-        self.inner.primary.get_db()
-    }
-
     fn start_heartbeat(reconnecting_connection: ReconnectingConnection) {
         task::spawn(async move {
             loop {

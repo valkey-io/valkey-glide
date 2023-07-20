@@ -4,7 +4,6 @@ mod utilities;
 mod shared_client_tests {
     use super::*;
     use babushka::client::Client;
-    use redis::aio::ConnectionLike;
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::*;
@@ -179,7 +178,7 @@ mod shared_client_tests {
 
             let mut cmd = redis::Cmd::new();
             cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
-            let result = test_basics.client.req_packed_command(&cmd).await;
+            let result = test_basics.client.req_packed_command(&cmd, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");

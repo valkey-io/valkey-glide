@@ -2,7 +2,7 @@ use crate::connection_request::{AddressInfo, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_trace};
-use redis::aio::{ConnectionLike, MultiplexedConnection};
+use redis::aio::MultiplexedConnection;
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -198,13 +198,5 @@ impl ReconnectingConnection {
                 }
             }
         });
-    }
-
-    pub(super) fn get_db(&self) -> i64 {
-        let guard = self.inner.state.lock().unwrap();
-        match &*guard {
-            ConnectionState::Connected(connection) => connection.get_db(),
-            _ => -1,
-        }
     }
 }
