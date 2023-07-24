@@ -54,7 +54,7 @@ impl ClientCMD {
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
-                self.inner.primary.reconnect().await;
+                self.inner.primary.reconnect();
                 Err(err)
             }
             _ => result,
@@ -71,7 +71,7 @@ impl ClientCMD {
         let result = connection.send_packed_commands(cmd, offset, count).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
-                self.inner.primary.reconnect().await;
+                self.inner.primary.reconnect();
                 Err(err)
             }
             _ => result,
@@ -110,7 +110,7 @@ impl ClientCMD {
                     .is_err_and(|err| err.is_connection_dropped() || err.is_connection_refusal())
                 {
                     log_debug("ClientCMD", "heartbeat triggered reconnect");
-                    reconnecting_connection.reconnect().await;
+                    reconnecting_connection.reconnect();
                 }
             }
         });
