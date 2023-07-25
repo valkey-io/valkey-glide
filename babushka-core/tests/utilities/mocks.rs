@@ -1,3 +1,4 @@
+use futures_intrusive::sync::ManualResetEvent;
 use redis::{Cmd, ConnectionAddr, Value};
 use std::collections::HashMap;
 use std::io;
@@ -20,6 +21,7 @@ pub struct ServerMock {
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
+    closing_signal: Arc<ManualResetEvent>,
 }
 
 async fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut TcpStream) -> Option<usize> {
@@ -50,10 +52,19 @@ async fn receive_and_respond_to_next_message(
     socket: &mut TcpStream,
     received_commands: &Arc<AtomicU16>,
     constant_responses: &HashMap<String, Value>,
+    closing_signal: &Arc<ManualResetEvent>,
 ) -> bool {
     let mut buffer = Vec::with_capacity(1024);
-    let Some(size) = read_from_socket(&mut buffer, socket).await else {
-        return false;
+    let size = tokio::select! {
+        size = read_from_socket(&mut buffer, socket) => {
+            let Some(size) = size else {
+                return false;
+            };
+            size
+        },
+        _ = closing_signal.wait() => {
+            return false;
+        }
     };
 
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
@@ -67,8 +78,8 @@ async fn receive_and_respond_to_next_message(
     let Ok(request) = receiver.try_recv() else {
         panic!("Received unexpected message: {}", message);
     };
-    received_commands.fetch_add(1, Ordering::Relaxed);
-    assert_eq!(message, request.expected_message,);
+    received_commands.fetch_add(1, Ordering::AcqRel);
+    assert_eq!(message, request.expected_message);
     socket.write_all(request.response.as_bytes()).await.unwrap();
     true
 }
@@ -91,6 +102,8 @@ impl ServerMock {
             "localhost".to_string(),
             listener.local_addr().unwrap().port(),
         );
+        let closing_signal = Arc::new(ManualResetEvent::new(false));
+        let closing_signal_clone = closing_signal.clone();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .thread_name(format!("ServerMock - {address}"))
@@ -106,6 +119,7 @@ impl ServerMock {
                 &mut socket,
                 &received_commands_clone,
                 &constant_responses,
+                &closing_signal_clone,
             )
             .await
             {}
@@ -115,6 +129,7 @@ impl ServerMock {
             address,
             received_commands,
             runtime: Some(runtime),
+            closing_signal,
         }
     }
 }
@@ -133,12 +148,13 @@ impl Mock for ServerMock {
     }
 
     fn get_number_of_received_commands(&self) -> u16 {
-        self.received_commands.load(Ordering::Relaxed)
+        self.received_commands.load(Ordering::Acquire)
     }
 }
 
 impl Drop for ServerMock {
     fn drop(&mut self) {
+        self.closing_signal.set();
         self.runtime.take().unwrap().shutdown_background();
     }
 }
