@@ -1,15 +1,15 @@
+use futures_intrusive::sync::ManualResetEvent;
 use redis::{Cmd, ConnectionAddr, Value};
 use std::collections::HashMap;
+use std::io;
 use std::str::from_utf8;
-use std::{
-    io::{Read, Write},
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        mpsc::Sender,
-        Arc,
-    },
-    thread,
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
 };
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub struct MockedRequest {
     pub expected_message: String,
@@ -17,37 +17,70 @@ pub struct MockedRequest {
 }
 
 pub struct ServerMock {
-    request_sender: Sender<MockedRequest>,
+    request_sender: UnboundedSender<MockedRequest>,
     address: ConnectionAddr,
     received_commands: Arc<AtomicU16>,
-    thread_handle: Option<thread::JoinHandle<()>>, // option so that we can take the handle and join on it later.
+    runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
+    closing_signal: Arc<ManualResetEvent>,
 }
 
-fn receive_and_respond_to_next_message(
-    receiver: &std::sync::mpsc::Receiver<MockedRequest>,
-    socket: &mut std::net::TcpStream,
+async fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut TcpStream) -> Option<usize> {
+    let _ = socket.readable().await;
+
+    loop {
+        match socket.try_read_buf(buffer) {
+            Ok(0) => {
+                return None;
+            }
+            Ok(size) => return Some(size),
+            Err(ref e)
+                if e.kind() == io::ErrorKind::WouldBlock
+                    || e.kind() == io::ErrorKind::Interrupted =>
+            {
+                tokio::task::yield_now().await;
+                continue;
+            }
+            Err(_) => {
+                return None;
+            }
+        }
+    }
+}
+
+async fn receive_and_respond_to_next_message(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
+    socket: &mut TcpStream,
     received_commands: &Arc<AtomicU16>,
     constant_responses: &HashMap<String, Value>,
+    closing_signal: &Arc<ManualResetEvent>,
 ) -> bool {
-    let mut buffer = vec![0_u8; 1024];
-    let size = socket.read(&mut buffer).unwrap();
+    let mut buffer = Vec::with_capacity(1024);
+    let size = tokio::select! {
+        size = read_from_socket(&mut buffer, socket) => {
+            let Some(size) = size else {
+                return false;
+            };
+            size
+        },
+        _ = closing_signal.wait() => {
+            return false;
+        }
+    };
+
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
-    if size == 0 {
-        return false;
-    }
 
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
         super::encode_value(response, &mut buffer).unwrap();
-        socket.write_all(&buffer).unwrap();
+        socket.write_all(&buffer).await.unwrap();
         return true;
     }
     let Ok(request) = receiver.try_recv() else {
         panic!("Received unexpected message: {}", message);
     };
-    received_commands.fetch_add(1, Ordering::Relaxed);
-    assert_eq!(message, request.expected_message,);
-    socket.write_all(request.response.as_bytes()).unwrap();
+    received_commands.fetch_add(1, Ordering::AcqRel);
+    assert_eq!(message, request.expected_message);
+    socket.write_all(request.response.as_bytes()).await.unwrap();
     true
 }
 
@@ -62,33 +95,41 @@ pub trait Mock {
 impl ServerMock {
     pub fn new(constant_responses: HashMap<String, Value>) -> Self {
         let listener = super::get_listener_on_available_port();
-        let (request_sender, receiver) = std::sync::mpsc::channel();
+        let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
+        let received_commands_clone = received_commands.clone();
         let address = ConnectionAddr::Tcp(
             "localhost".to_string(),
             listener.local_addr().unwrap().port(),
         );
-        let thread_handle = Some({
-            let received_commands = received_commands.clone();
-            thread::Builder::new()
-                .name(format!("ServerMock - {address}"))
-                .spawn(move || {
-                    let mut socket = listener.accept().unwrap().0;
+        let closing_signal = Arc::new(ManualResetEvent::new(false));
+        let closing_signal_clone = closing_signal.clone();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .thread_name(format!("ServerMock - {address}"))
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.spawn(async move {
+            let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+            let mut socket = listener.accept().await.unwrap().0;
 
-                    while receive_and_respond_to_next_message(
-                        &receiver,
-                        &mut socket,
-                        &received_commands,
-                        &constant_responses,
-                    ) {}
-                })
-                .unwrap()
+            while receive_and_respond_to_next_message(
+                &mut receiver,
+                &mut socket,
+                &received_commands_clone,
+                &constant_responses,
+                &closing_signal_clone,
+            )
+            .await
+            {}
         });
         Self {
             request_sender,
             address,
             received_commands,
-            thread_handle,
+            runtime: Some(runtime),
+            closing_signal,
         }
     }
 }
@@ -100,21 +141,20 @@ impl Mock for ServerMock {
 
     fn add_response(&self, request: &Cmd, response: String) {
         let expected_message = String::from_utf8(request.get_packed_command()).unwrap();
-        self.request_sender
-            .send(MockedRequest {
-                expected_message,
-                response,
-            })
-            .unwrap();
+        let _ = self.request_sender.send(MockedRequest {
+            expected_message,
+            response,
+        });
     }
 
     fn get_number_of_received_commands(&self) -> u16 {
-        self.received_commands.load(Ordering::Relaxed)
+        self.received_commands.load(Ordering::Acquire)
     }
 }
 
 impl Drop for ServerMock {
     fn drop(&mut self) {
-        self.thread_handle.take().unwrap().join().unwrap();
+        self.closing_signal.set();
+        self.runtime.take().unwrap().shutdown_background();
     }
 }
