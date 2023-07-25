@@ -47,8 +47,8 @@ mod socket_listener {
     }
 
     struct TestBasicsWithMock {
-        socket: UnixStream,
         server_mock: ServerMock,
+        socket: UnixStream,
     }
 
     struct ClusterTestBasics {
