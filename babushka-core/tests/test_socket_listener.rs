@@ -47,9 +47,8 @@ mod socket_listener {
     }
 
     struct TestBasicsWithMock {
-        // socket needs to be declared before the mock, so it will be dropped first and release the mock's socket.
-        socket: UnixStream,
         server_mock: ServerMock,
+        socket: UnixStream,
     }
 
     struct ClusterTestBasics {
