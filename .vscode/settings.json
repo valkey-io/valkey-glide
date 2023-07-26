@@ -9,18 +9,16 @@
     "files.trimFinalNewlines": true,
     "python.formatting.provider": "black",
     "rust-analyzer.linkedProjects": [
-        "babushka-core/Cargo.toml",
-        "python/Cargo.toml",
-        "node/rust-client/Cargo.toml",
-        "logger_core/Cargo.toml",
-        "csharp/lib/Cargo.toml",
         "submodules/redis-rs/Cargo.toml",
-        "benchmarks/rust/Cargo.toml"
+        // "submodules/redis-rs/redis-test/Cargo.toml",
+        "submodules/redis-rs/redis/Cargo.toml",
     ],
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"
     },
-    "python.testing.pytestArgs": ["python"],
+    "python.testing.pytestArgs": [
+        "python"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[yaml]": {
@@ -32,6 +30,25 @@
         "--extend-ignore=E203",
         "--max-line-length=127"
     ],
-    "python.formatting.blackArgs": ["--target-version", "py36"],
-    "isort.args": ["--profile", "black"]
+    "python.formatting.blackArgs": [
+        "--target-version",
+        "py36"
+    ],
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
+    "rust-analyzer.cargo.features": [
+        "futures",
+        "aio",
+        "tokio-comp",
+        "tls",
+        "tokio-rustls-comp",
+        "connection-manager",
+        "cluster",
+        "cluster-async"
+    ],
+    "[rust]": {
+        "editor.formatOnSave": true,
+    },
 }
