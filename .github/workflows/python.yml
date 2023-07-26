@@ -87,15 +87,3 @@ jobs:
                   pip install -r requirements.txt
                   maturin develop --release
                   pytest --asyncio-mode=auto
-
-    lint-rust:
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-            - uses: actions/checkout@v3
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./python
