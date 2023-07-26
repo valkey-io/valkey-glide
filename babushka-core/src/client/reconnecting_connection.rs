@@ -6,8 +6,8 @@ use redis::aio::{ConnectionLike, MultiplexedConnection};
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::task;
 use tokio_retry::Retry;
 
@@ -132,7 +132,7 @@ impl ReconnectingConnection {
     }
 
     pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
-        let guard = self.inner.state.lock().await;
+        let guard = self.inner.state.lock().unwrap();
         if let ConnectionState::Connected(connection) = &*guard {
             Some(connection.clone())
         } else {
@@ -149,9 +149,9 @@ impl ReconnectingConnection {
         }
     }
 
-    pub(super) async fn reconnect(&self) {
+    pub(super) fn reconnect(&self) {
         {
-            let mut guard = self.inner.state.lock().await;
+            let mut guard = self.inner.state.lock().unwrap();
             match &*guard {
                 ConnectionState::Connected(_) => {
                     self.inner.backend.connection_available_signal.reset();
@@ -183,7 +183,7 @@ impl ReconnectingConnection {
                 match get_multiplexed_connection(client).await {
                     Ok(connection) => {
                         {
-                            let mut guard = connection_clone.inner.state.lock().await;
+                            let mut guard = connection_clone.inner.state.lock().unwrap();
                             log_debug("reconnect", "completed succesfully");
                             connection_clone
                                 .inner
@@ -201,7 +201,7 @@ impl ReconnectingConnection {
     }
 
     pub(super) fn get_db(&self) -> i64 {
-        let guard = self.inner.state.blocking_lock();
+        let guard = self.inner.state.lock().unwrap();
         match &*guard {
             ConnectionState::Connected(connection) => connection.get_db(),
             _ => -1,
