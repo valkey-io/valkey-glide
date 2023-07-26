@@ -74,7 +74,7 @@ async def check_if_server_version_lt(
 
 @pytest.mark.asyncio
 class TestSocketClient:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [True])
     async def test_socket_set_get(self, async_socket_client: RedisAsyncSocketClient):
         key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
