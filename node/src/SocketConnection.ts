@@ -15,6 +15,7 @@ import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
+// tslint:disable-next-line:no-explicit-any
 type PromiseFunction = (value?: any) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
@@ -173,8 +174,9 @@ export class SocketConnection {
         });
     }
 
-    private createWritePromise<T>(
-        command: redis_request.Command | redis_request.Command[]
+    protected createWritePromise<T>(
+        command: redis_request.Command | redis_request.Command[],
+        route?: redis_request.Routes
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
@@ -182,13 +184,14 @@ export class SocketConnection {
             }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(callbackIndex, command);
+            this.writeOrBufferRedisRequest(callbackIndex, command, route);
         });
     }
 
     private writeOrBufferRedisRequest(
         callbackIdx: number,
-        command: redis_request.Command | redis_request.Command[]
+        command: redis_request.Command | redis_request.Command[],
+        route?: redis_request.Routes
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
@@ -201,6 +204,7 @@ export class SocketConnection {
                   callbackIdx,
                   singleCommand: command,
               });
+        message.route = route;
 
         this.writeOrBufferRequest(
             message,
@@ -329,11 +333,16 @@ export class SocketConnection {
         this.socket.end();
     }
 
-    private static async __CreateConnectionInternal(
+    protected static async __CreateConnectionInternal<
+        TConnection extends SocketConnection
+    >(
         options: ConnectionOptions,
         connectedSocket: net.Socket,
-        constructor: (socket: net.Socket, options?: ConnectionOptions) => any
-    ): Promise<any> {
+        constructor: (
+            socket: net.Socket,
+            options?: ConnectionOptions
+        ) => TConnection
+    ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
         Logger.instance.log("info", "Client lifetime", "connected to server");
@@ -361,7 +370,9 @@ export class SocketConnection {
         });
     }
 
-    protected static async CreateConnectionInternal<TConnection>(
+    protected static async CreateConnectionInternal<
+        TConnection extends SocketConnection
+    >(
         options: ConnectionOptions,
         constructor: (
             socket: net.Socket,
@@ -370,7 +381,7 @@ export class SocketConnection {
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__CreateConnectionInternal(
+        return await this.__CreateConnectionInternal<TConnection>(
             options,
             socket,
             constructor
