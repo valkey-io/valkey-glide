@@ -581,8 +581,8 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             false,
         );
-        let mut routes = routes::Routes::default();
-        routes.set_simple_routes(routes::SimpleRoutes::AllPrimaries);
+        let mut routes = redis_request::Routes::default();
+        routes.set_simple_routes(redis_request::SimpleRoutes::AllPrimaries);
         request.route = Some(routes).into();
         write_message(&mut buffer, request);
         test_basics.socket.write_all(&buffer).unwrap();
