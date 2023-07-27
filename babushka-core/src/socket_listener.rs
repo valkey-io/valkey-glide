@@ -3,10 +3,10 @@ use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
 use crate::redis_request::{command, redis_request};
 use crate::redis_request::{Command, RedisRequest, RequestType, Transaction};
+use crate::redis_request::{Routes, SlotTypes};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
-use crate::routes::{Routes, SlotTypes};
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
@@ -331,7 +331,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
 }
 
 fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo>> {
-    use crate::routes::routes::Value;
+    use crate::redis_request::routes::Value;
     let Some(route) = route.and_then(|route|route.value) else {
         return Ok(None)
     };
@@ -343,13 +343,13 @@ fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo
                 ))
             })?;
             match simple_route {
-                crate::routes::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode(
+                crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode(
                     MultipleNodeRoutingInfo::AllNodes,
                 ))),
-                crate::routes::SimpleRoutes::AllPrimaries => Ok(Some(RoutingInfo::MultiNode(
-                    MultipleNodeRoutingInfo::AllMasters,
-                ))),
-                crate::routes::SimpleRoutes::Random => {
+                crate::redis_request::SimpleRoutes::AllPrimaries => Ok(Some(
+                    RoutingInfo::MultiNode(MultipleNodeRoutingInfo::AllMasters),
+                )),
+                crate::redis_request::SimpleRoutes::Random => {
                     Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
                 }
             }
