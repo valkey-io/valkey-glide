@@ -1,7 +1,4 @@
-use babushka::{
-    client::{BabushkaClient, Client},
-    connection_request::{AddressInfo, ConnectionRequest, TlsMode},
-};
+use babushka::client::BabushkaClient;
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
 use redis::{
@@ -93,44 +90,6 @@ fn connection_manager_benchmark(c: &mut Criterion, address: ConnectionAddr, grou
     );
 }
 
-fn create_connection_request(address: ConnectionAddr) -> ConnectionRequest {
-    let mut request = ConnectionRequest::new();
-    match address {
-        ConnectionAddr::Tcp(host, port) => {
-            request.tls_mode = TlsMode::NoTls.into();
-            let mut address_info = AddressInfo::new();
-            address_info.host = host.into();
-            address_info.port = port as u32;
-            request.addresses.push(address_info);
-        }
-        ConnectionAddr::TcpTls {
-            host,
-            port,
-            insecure,
-        } => {
-            request.tls_mode = if insecure {
-                TlsMode::InsecureTls.into()
-            } else {
-                TlsMode::SecureTls.into()
-            };
-            let mut address_info = AddressInfo::new();
-            address_info.host = host.into();
-            address_info.port = port as u32;
-            request.addresses.push(address_info);
-        }
-        _ => unreachable!(),
-    };
-    request
-}
-
-fn client_cmd_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
-    benchmark(c, address, "ClientCMD", group, |address, runtime| {
-        runtime
-            .block_on(Client::new(create_connection_request(address)))
-            .unwrap()
-    });
-}
-
 fn cluster_connection_benchmark(
     c: &mut Criterion,
     address: ConnectionAddr,
@@ -191,11 +150,6 @@ fn connection_manager_benchmarks(c: &mut Criterion) {
     local_benchmark(c, connection_manager_benchmark)
 }
 
-fn client_cmd_benchmarks(c: &mut Criterion) {
-    remote_benchmark(c, client_cmd_benchmark);
-    local_benchmark(c, client_cmd_benchmark)
-}
-
 fn cluster_connection_benchmarks(c: &mut Criterion) {
     let Ok(address) = env::var("CLUSTER_HOST").map(|host| ConnectionAddr::TcpTls {
         host,
@@ -212,7 +166,6 @@ criterion_group!(
     benches,
     connection_manager_benchmarks,
     multiplexer_benchmarks,
-    client_cmd_benchmarks,
     cluster_connection_benchmarks
 );
 

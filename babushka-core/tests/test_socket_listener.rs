@@ -187,13 +187,12 @@ mod socket_listener {
         command
     }
 
-    fn write_command_request(
-        buffer: &mut Vec<u8>,
+    fn get_command_request(
         callback_index: u32,
         args: Vec<String>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
-    ) -> u32 {
+    ) -> RedisRequest {
         let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
 
@@ -204,6 +203,17 @@ mod socket_listener {
                 args_pointer,
             }),
         ));
+        request
+    }
+
+    fn write_command_request(
+        buffer: &mut Vec<u8>,
+        callback_index: u32,
+        args: Vec<String>,
+        request_type: EnumOrUnknown<RequestType>,
+        args_pointer: bool,
+    ) -> u32 {
+        let request = get_command_request(callback_index, args, request_type, args_pointer);
 
         write_message(buffer, request)
     }
@@ -555,6 +565,49 @@ mod socket_listener {
         let mut test_basics = setup_cluster_test_basics(use_tls);
 
         handle_custom_command(&mut test_basics.socket, args_pointer);
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socket_pass_manual_route_to_all_primaries() {
+        let mut test_basics = setup_cluster_test_basics(false);
+
+        const CALLBACK1_INDEX: u32 = 100;
+        let approx_message_length = 4 + APPROX_RESP_HEADER_LEN;
+        let mut buffer = Vec::with_capacity(approx_message_length);
+        let mut request = get_command_request(
+            CALLBACK1_INDEX,
+            vec!["ECHO".to_string(), "foo".to_string()],
+            RequestType::CustomCommand.into(),
+            false,
+        );
+        let mut routes = redis_request::Routes::default();
+        routes.set_simple_routes(redis_request::SimpleRoutes::AllPrimaries);
+        request.route = Some(routes).into();
+        write_message(&mut buffer, request);
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let (message_length, header_bytes) = parse_header(&buffer);
+        let response = decode_response(&buffer, header_bytes, message_length as usize);
+
+        assert_eq!(response.callback_idx, CALLBACK1_INDEX);
+        let Some(response::Value::RespPointer(pointer)) = response.value else {
+            panic!("Unexpected response {:?}", response.value);
+        };
+        let pointer = pointer as *mut Value;
+        let received_value = unsafe { Box::from_raw(pointer) };
+        let Value::Bulk(values) = *received_value else {
+            panic!("Unexpected value {:?}", received_value);
+        };
+        assert_eq!(values.len(), 3);
+        for i in 0..3 {
+            let Value::Bulk(nested_values) = values.get(i).unwrap() else {
+                panic!("Unexpected value {:?}", values[i]);
+            };
+            assert_eq!(nested_values.len(), 2);
+            assert_eq!(nested_values[1], Value::Data(b"foo".to_vec()));
+        }
     }
 
     #[rstest]
