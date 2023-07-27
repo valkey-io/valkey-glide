@@ -42,11 +42,18 @@ async def async_socket_client(request, cluster_mode) -> RedisAsyncSocketClient:
     client.close()
 
 
-def to_str(res: str | List[str]) -> str:
-    return res[0] if isinstance(res, list) else res
+def to_str(res: str | List[str] | List[List[str]]) -> str:
+    while isinstance(res, list):
+        res = (
+            res[1]
+            if not isinstance(res[0], list) and res[0].startswith("127.0.0.1")
+            else res[0]
+        )
+
+    return res
 
 
-def parse_info_response(res: str | List[str]) -> Dict[str, str]:
+def parse_info_response(res: str | List[str] | List[List[str]]) -> Dict[str, str]:
     res = to_str(res)
     info_lines = [
         line for line in res.splitlines() if line and not line.startswith("#")
