@@ -1,8 +1,10 @@
-use babushka::connection_request::{AddressInfo, ConnectionRequest, TlsMode};
+use babushka::{
+    client::Client,
+    connection_request::{AddressInfo, ConnectionRequest, TlsMode},
+};
 use clap::Parser;
 use futures::{self, future::join_all, stream, StreamExt};
 use rand::{thread_rng, Rng};
-use redis::aio::ConnectionLike;
 use serde_json::Value;
 use std::{
     cmp::max,
@@ -189,7 +191,7 @@ fn generate_random_string(length: usize) -> String {
         .collect()
 }
 
-async fn get_connection(args: &Args) -> impl ConnectionLike + Clone {
+async fn get_connection(args: &Args) -> Client {
     let mut connection_request = ConnectionRequest::new();
     connection_request.tls_mode = if args.tls {
         TlsMode::SecureTls
@@ -210,7 +212,7 @@ async fn get_connection(args: &Args) -> impl ConnectionLike + Clone {
 }
 
 async fn single_benchmark_task(
-    connections: &Vec<impl ConnectionLike + Clone>,
+    connections: &Vec<Client>,
     counter: Arc<AtomicUsize>,
     number_of_operations: usize,
     number_of_concurrent_tasks: usize,
@@ -246,7 +248,7 @@ async fn single_benchmark_task(
 }
 
 async fn perform_operation(
-    connection: &mut impl ConnectionLike,
+    connection: &mut Client,
     buffer: &mut itoa::Buffer,
     data_size: usize,
 ) -> ChosenAction {
@@ -267,6 +269,6 @@ async fn perform_operation(
             .arg(generate_random_string(data_size));
         ChosenAction::Set
     };
-    connection.req_packed_command(&cmd).await.unwrap();
+    connection.req_packed_command(&cmd, None).await.unwrap();
     action
 }

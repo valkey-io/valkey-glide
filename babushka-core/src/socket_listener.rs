@@ -1,9 +1,9 @@
-use super::client::BabushkaClient;
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
 use crate::redis_request::{command, redis_request};
 use crate::redis_request::{Command, RedisRequest, RequestType, Transaction};
+use crate::redis_request::{Routes, SlotTypes};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
@@ -12,6 +12,9 @@ use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
 use logger_core::{log_debug, log_error, log_info, log_trace};
 use protobuf::Message;
+use redis::cluster_routing::{
+    MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+};
 use redis::RedisError;
 use redis::{cmd, Cmd, Value};
 use signal_hook::consts::signal::*;
@@ -285,44 +288,105 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
 
 async fn send_command(
     request: Command,
-    mut connection: impl BabushkaClient + 'static,
+    mut client: Client,
+    routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let cmd = get_redis_command(&request)?;
 
-    cmd.query_async(&mut connection)
+    client
+        .req_packed_command(&cmd, routing)
         .await
         .map_err(|err| err.into())
 }
 
 async fn send_transaction(
     request: Transaction,
-    mut connection: impl BabushkaClient + 'static,
+    mut client: Client,
+    routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
+    let offset = request.commands.len() + 1;
     pipeline.atomic();
     for command in request.commands {
         pipeline.add_command(get_redis_command(&command)?);
     }
 
-    pipeline
-        .query_async(&mut connection)
+    client
+        .req_packed_commands(&pipeline, offset, 1, routing)
         .await
+        .map(|mut values| values.pop().unwrap_or(Value::Nil))
         .map_err(|err| err.into())
 }
 
-fn handle_request(
-    request: RedisRequest,
-    connection: impl BabushkaClient + 'static,
-    writer: Rc<Writer>,
-) {
+fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
+    slot_type
+        .enum_value()
+        .map(|slot_type| match slot_type {
+            SlotTypes::Primary => SlotAddr::Master,
+            SlotTypes::Replica => SlotAddr::Replica,
+        })
+        .map_err(|id| {
+            ClienUsageError::InternalError(format!("Received unexpected slot id type {id}"))
+        })
+}
+
+fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo>> {
+    use crate::redis_request::routes::Value;
+    let Some(route) = route.and_then(|route|route.value) else {
+        return Ok(None)
+    };
+    match route {
+        Value::SimpleRoutes(simple_route) => {
+            let simple_route = simple_route.enum_value().map_err(|id| {
+                ClienUsageError::InternalError(format!(
+                    "Received unexpected simple route type {id}"
+                ))
+            })?;
+            match simple_route {
+                crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode(
+                    MultipleNodeRoutingInfo::AllNodes,
+                ))),
+                crate::redis_request::SimpleRoutes::AllPrimaries => Ok(Some(
+                    RoutingInfo::MultiNode(MultipleNodeRoutingInfo::AllMasters),
+                )),
+                crate::redis_request::SimpleRoutes::Random => {
+                    Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
+                }
+            }
+        }
+        Value::SlotKeyRoute(slot_key_route) => Ok(Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                redis::cluster_routing::get_slot(slot_key_route.slot_key.as_bytes()),
+                get_slot_addr(&slot_key_route.slot_type)?,
+            )),
+        ))),
+        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                slot_id_route.slot_id as u16,
+                get_slot_addr(&slot_id_route.slot_type)?,
+            )),
+        ))),
+    }
+}
+
+fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
+        let routes = get_route(request.route.0);
+        let routing = match routes {
+            Ok(route) => route,
+            Err(err) => {
+                let _res = write_result(Err(err), request.callback_idx, &writer).await;
+                return;
+            }
+        };
+
         let result = match request.command {
             Some(action) => match action {
                 redis_request::Command::SingleCommand(command) => {
-                    send_command(command, connection).await
+                    send_command(command, client, routing).await
                 }
                 redis_request::Command::Transaction(transaction) => {
-                    send_transaction(transaction, connection).await
+                    send_transaction(transaction, client, routing).await
                 }
             },
             None => Err(ClienUsageError::InternalError(
@@ -336,11 +400,11 @@ fn handle_request(
 
 async fn handle_requests(
     received_requests: Vec<RedisRequest>,
-    connection: &(impl BabushkaClient + 'static),
+    client: &Client,
     writer: &Rc<Writer>,
 ) {
     for request in received_requests {
-        handle_request(request, connection.clone(), writer.clone())
+        handle_request(request, client.clone(), writer.clone())
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -351,7 +415,7 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
-async fn create_connection(
+async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
 ) -> Result<Client, ClientCreationError> {
@@ -360,7 +424,7 @@ async fn create_connection(
     Ok(client)
 }
 
-async fn wait_for_connection_configuration_and_create_connection(
+async fn wait_for_connection_configuration_and_create_client(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
 ) -> Result<Client, ClientCreationError> {
@@ -369,7 +433,7 @@ async fn wait_for_connection_configuration_and_create_connection(
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(mut received_requests) => {
             if let Some(request) = received_requests.pop() {
-                create_connection(writer, request).await
+                create_client(writer, request).await
             } else {
                 Err(ClientCreationError::UnhandledError(
                     "No received requests".to_string(),
@@ -381,7 +445,7 @@ async fn wait_for_connection_configuration_and_create_connection(
 
 async fn read_values_loop(
     mut client_listener: UnixStreamListener,
-    connection: impl BabushkaClient + 'static,
+    client: &Client,
     writer: Rc<Writer>,
 ) -> ClosingReason {
     loop {
@@ -390,7 +454,7 @@ async fn read_values_loop(
                 return reason;
             }
             ReceivedValues(received_requests) => {
-                handle_requests(received_requests, &connection, &writer).await;
+                handle_requests(received_requests, client, &writer).await;
             }
         }
     }
@@ -409,9 +473,9 @@ async fn listen_on_client_stream(socket: UnixStream) {
         accumulated_outputs,
         closing_sender: sender,
     });
-    let connection_creation =
-        wait_for_connection_configuration_and_create_connection(&mut client_listener, &writer);
-    let connection = match connection_creation.await {
+    let client_creation =
+        wait_for_connection_configuration_and_create_client(&mut client_listener, &writer);
+    let client = match client_creation.await {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
             // This isn't an error - it can happen when a new wrapper-client creates a connection in order to check whether something already listens on the socket.
@@ -436,7 +500,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
     };
     log_info("connection", "new connection started");
     tokio::select! {
-            reader_closing = read_values_loop(client_listener, connection, writer.clone()) => {
+            reader_closing = read_values_loop(client_listener, &client, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
                     let _res = write_closing_error(ClosingError{err_message: err.to_string()}, u32::MAX, &writer).await;
                 };
