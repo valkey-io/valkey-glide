@@ -108,7 +108,7 @@ function getConnectionAndSocket(
         connectionPromise = new Promise((resolve) => {
             const socket = new net.Socket();
             socket.connect(socketName).once("connect", async () => {
-                let options = connectionOptions ?? {
+                const options = connectionOptions ?? {
                     addresses: [{ host: "foo" }],
                 };
                 const connection = isCluster
