@@ -15,7 +15,7 @@ import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
-// tslint:disable-next-line:no-explicit-any
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
