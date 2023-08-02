@@ -206,7 +206,15 @@ impl ReconnectingConnection {
                     return;
                 }
                 match get_multiplexed_connection(client).await {
-                    Ok(connection) => {
+                    Ok(mut connection) => {
+                        if connection
+                            .send_packed_command(&redis::cmd("PING"))
+                            .await
+                            .is_err()
+                        {
+                            tokio::time::sleep(sleep_duration).await;
+                            continue;
+                        }
                         {
                             let mut guard = connection_clone.inner.state.lock().unwrap();
                             log_debug("reconnect", "completed succesfully");
