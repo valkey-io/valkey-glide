@@ -6,6 +6,7 @@ import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
 import {
+    ClusterSocketConnection,
     ConnectionOptions,
     SocketConnection,
     setLoggerConfig,
@@ -65,10 +66,11 @@ function sendResponse(
 
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?: ConnectionOptions
+    connectionOptions?: ConnectionOptions,
+    isCluster?: boolean
 ): Promise<{
     socket: net.Socket;
-    connection: SocketConnection;
+    connection: SocketConnection | ClusterSocketConnection;
     server: net.Server;
 }> {
     return new Promise((resolve, reject) => {
@@ -76,8 +78,9 @@ function getConnectionAndSocket(
             path.join(os.tmpdir(), `socket_listener`)
         );
         const socketName = path.join(temporaryFolder, "read");
-        let connectionPromise: Promise<SocketConnection> | undefined =
-            undefined;
+        let connectionPromise:
+            | Promise<SocketConnection | ClusterSocketConnection>
+            | undefined = undefined;
         const server = net
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
@@ -105,12 +108,19 @@ function getConnectionAndSocket(
         connectionPromise = new Promise((resolve) => {
             const socket = new net.Socket();
             socket.connect(socketName).once("connect", async () => {
-                const connection = await SocketConnection.__CreateConnection(
-                    connectionOptions ?? {
-                        addresses: [{ host: "foo" }],
-                    },
-                    socket
-                );
+                const options = connectionOptions ?? {
+                    addresses: [{ host: "foo" }],
+                };
+                const connection = isCluster
+                    ? await ClusterSocketConnection.__CreateConnection(
+                          options,
+                          socket
+                      )
+                    : await SocketConnection.__CreateConnection(
+                          options,
+                          socket
+                      );
+
                 resolve(connection);
             });
         });
@@ -142,6 +152,30 @@ async function testWithResources(
     await testFunction(connection, socket);
 
     closeTestResources(connection, server, socket);
+}
+
+async function testWithClusterResources(
+    testFunction: (
+        connection: ClusterSocketConnection,
+        socket: net.Socket
+    ) => Promise<void>,
+    connectionOptions?: ConnectionOptions
+) {
+    const { connection, server, socket } = await getConnectionAndSocket(
+        undefined,
+        connectionOptions,
+        true
+    );
+
+    try {
+        if (connection instanceof ClusterSocketConnection) {
+            await testFunction(connection, socket);
+        } else {
+            throw new Error("Not cluster connection");
+        }
+    } finally {
+        closeTestResources(connection, server, socket);
+    }
 }
 
 describe("SocketConnectionInternals", () => {
@@ -415,5 +449,52 @@ describe("SocketConnectionInternals", () => {
                 responseTimeout: 1,
             }
         );
+    });
+
+    it("should pass routing information from user", async () => {
+        const route1 = "allPrimaries";
+        const route2 = {
+            type: "replicaSlotKey" as const,
+            key: "foo",
+        };
+        await testWithClusterResources(async (connection, socket) => {
+            socket.on("data", (data) => {
+                const reader = Reader.create(data);
+                const request =
+                    redis_request.RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.CustomCommand
+                );
+                if (request.singleCommand?.argsArray?.args?.at(0) === "SET") {
+                    expect(request.route?.simpleRoutes).toEqual(
+                        redis_request.SimpleRoutes.AllPrimaries
+                    );
+                } else if (
+                    request.singleCommand?.argsArray?.args?.at(0) === "GET"
+                ) {
+                    expect(request.route?.slotKeyRoute).toEqual({
+                        slotType: redis_request.SlotTypes.Replica,
+                        slotKey: "foo",
+                    });
+                } else {
+                    throw new Error("unexpected command");
+                }
+
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
+            });
+            const result1 = await connection.customCommand(
+                "SET",
+                ["foo", "bar"],
+                route1
+            );
+            expect(result1).toBeNull();
+
+            const result2 = await connection.customCommand(
+                "GET",
+                ["foo"],
+                route2
+            );
+            expect(result2).toBeNull();
+        });
     });
 });
