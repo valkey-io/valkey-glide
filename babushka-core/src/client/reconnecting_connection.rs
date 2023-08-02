@@ -29,6 +29,8 @@ enum ConnectionState {
     Connected(MultiplexedConnection),
     /// There's a reconnection effort on the way, no need to try reconnecting again.
     Reconnecting,
+    /// Initial state of connection when no connection was created during initialization.
+    InitializedDisconnected,
 }
 
 struct InnerReconnectingConnection {
@@ -86,15 +88,14 @@ async fn create_connection(
                         .addr
                 ),
             );
-            Err((
-                ReconnectingConnection {
-                    inner: Arc::new(InnerReconnectingConnection {
-                        state: Mutex::new(ConnectionState::Reconnecting),
-                        backend: connection_backend,
-                    }),
-                },
-                err,
-            ))
+            let connection = ReconnectingConnection {
+                inner: Arc::new(InnerReconnectingConnection {
+                    state: Mutex::new(ConnectionState::InitializedDisconnected),
+                    backend: connection_backend,
+                }),
+            };
+            connection.reconnect();
+            Err((connection, err))
         }
     }
 }
@@ -177,22 +178,19 @@ impl ReconnectingConnection {
         }
     }
 
-    pub(super) fn reconnect(&self, force_reconnect: bool) {
-        if !force_reconnect {
+    pub(super) fn reconnect(&self) {
+        {
             let mut guard = self.inner.state.lock().unwrap();
-            match &*guard {
-                ConnectionState::Connected(_) => {
-                    self.inner.backend.connection_available_signal.reset();
-                }
-                _ => {
-                    log_trace("reconnect", "already started");
-                    // exit early - if reconnection already started or failed, there's nothing else to do.
-                    return;
-                }
-            };
+            if matches!(*guard, ConnectionState::Reconnecting) {
+                log_trace("reconnect", "already started");
+                // exit early - if reconnection already started or failed, there's nothing else to do.
+                return;
+            }
+            self.inner.backend.connection_available_signal.reset();
             *guard = ConnectionState::Reconnecting;
         };
         log_debug("reconnect", "starting");
+
         let connection_clone = self.clone();
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.

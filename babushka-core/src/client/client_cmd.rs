@@ -182,7 +182,7 @@ impl ClientCMD {
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
-                reconnecting_connection.reconnect(false);
+                reconnecting_connection.reconnect();
                 Err(err)
             }
             _ => result,
@@ -200,7 +200,7 @@ impl ClientCMD {
         let result = connection.send_packed_commands(cmd, offset, count).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
-                reconnecting_connection.reconnect(false);
+                reconnecting_connection.reconnect();
                 Err(err)
             }
             _ => result,
@@ -235,7 +235,7 @@ impl ClientCMD {
                     .is_err_and(|err| err.is_connection_dropped() || err.is_connection_refusal())
                 {
                     log_debug("ClientCMD", "heartbeat triggered reconnect");
-                    reconnecting_connection.reconnect(false);
+                    reconnecting_connection.reconnect();
                 }
             }
         });
@@ -255,28 +255,25 @@ async fn get_connection_and_replication_info(
         tls_mode,
     )
     .await;
-    match result {
-        Ok(reconnecting_connection) => {
-            let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
-                Ok(multiplexed_connection) => multiplexed_connection,
-                Err(err) => {
-                    reconnecting_connection.reconnect(true);
-                    return Err((reconnecting_connection, err));
-                }
-            };
+    let reconnecting_connection = match result {
+        Ok(reconnecting_connection) => reconnecting_connection,
+        Err(tuple) => return Err(tuple),
+    };
 
-            match multiplexed_connection
-                .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
-                .await
-            {
-                Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
-                Err(err) => Err((reconnecting_connection, err)),
-            }
+    let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
+        Ok(multiplexed_connection) => multiplexed_connection,
+        Err(err) => {
+            reconnecting_connection.reconnect();
+            return Err((reconnecting_connection, err));
         }
-        Err(tuple) => {
-            tuple.0.reconnect(true);
-            Err(tuple)
-        }
+    };
+
+    match multiplexed_connection
+        .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
+        .await
+    {
+        Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
+        Err(err) => Err((reconnecting_connection, err)),
     }
 }
 
