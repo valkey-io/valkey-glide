@@ -162,10 +162,7 @@ mod client_cmd_tests {
         let mut addresses: Vec<redis::ConnectionAddr> =
             mocks.iter().flat_map(|mock| mock.get_addresses()).collect();
 
-        for i in 4
-            - config.number_of_missing_replicas
-            - config.number_of_replicas_dropped_after_connection..4
-        {
+        for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
                 "foo".to_string(),
                 6379 + i as u16,
@@ -177,7 +174,9 @@ mod client_cmd_tests {
 
         block_on_all(async {
             let mut client = ClientCMD::create_client(connection_request).await.unwrap();
-            mocks.drain(1..config.number_of_replicas_dropped_after_connection + 1);
+            for mock in mocks.drain(1..config.number_of_replicas_dropped_after_connection + 1) {
+                mock.close().await;
+            }
             for _ in 0..config.number_of_requests_sent {
                 let _ = client.send_packed_command(&cmd).await;
             }
