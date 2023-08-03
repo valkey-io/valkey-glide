@@ -2,6 +2,7 @@ use futures_intrusive::sync::ManualResetEvent;
 use redis::{Cmd, ConnectionAddr, Value};
 use std::collections::HashMap;
 use std::io;
+use std::net::TcpListener;
 use std::str::from_utf8;
 use std::sync::{
     atomic::{AtomicU16, Ordering},
@@ -22,6 +23,7 @@ pub struct ServerMock {
     received_commands: Arc<AtomicU16>,
     runtime: Option<tokio::runtime::Runtime>, // option so that we can take the runtime on drop.
     closing_signal: Arc<ManualResetEvent>,
+    closing_completed_signal: Arc<ManualResetEvent>,
 }
 
 async fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut TcpStream) -> Option<usize> {
@@ -95,6 +97,13 @@ pub trait Mock {
 impl ServerMock {
     pub fn new(constant_responses: HashMap<String, Value>) -> Self {
         let listener = super::get_listener_on_available_port();
+        Self::new_with_listener(constant_responses, listener)
+    }
+
+    pub fn new_with_listener(
+        constant_responses: HashMap<String, Value>,
+        listener: TcpListener,
+    ) -> Self {
         let (request_sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let received_commands = Arc::new(AtomicU16::new(0));
         let received_commands_clone = received_commands.clone();
@@ -104,6 +113,8 @@ impl ServerMock {
         );
         let closing_signal = Arc::new(ManualResetEvent::new(false));
         let closing_signal_clone = closing_signal.clone();
+        let closing_completed_signal = Arc::new(ManualResetEvent::new(false));
+        let closing_completed_signal_clone = closing_completed_signal.clone();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .thread_name(format!("ServerMock - {address}"))
@@ -123,6 +134,8 @@ impl ServerMock {
             )
             .await
             {}
+
+            closing_completed_signal_clone.set();
         });
         Self {
             request_sender,
@@ -130,7 +143,13 @@ impl ServerMock {
             received_commands,
             runtime: Some(runtime),
             closing_signal,
+            closing_completed_signal,
         }
+    }
+
+    pub async fn close(self) {
+        self.closing_signal.set();
+        self.closing_completed_signal.wait().await;
     }
 }
 
