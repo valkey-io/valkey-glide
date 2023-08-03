@@ -180,8 +180,35 @@ async fn create_cluster_client(
     client.get_async_connection().await
 }
 
+#[derive(thiserror::Error)]
+pub enum ConnectionError {
+    CMD(client_cmd::ClientCMDConnectionError),
+    CME(redis::RedisError),
+    Timeout,
+}
+
+impl std::fmt::Debug for ConnectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CMD(arg0) => f.debug_tuple("CMD").field(arg0).finish(),
+            Self::CME(arg0) => f.debug_tuple("CME").field(arg0).finish(),
+            Self::Timeout => write!(f, "Timeout"),
+        }
+    }
+}
+
+impl std::fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionError::CMD(err) => write!(f, "{err:?}"),
+            ConnectionError::CME(err) => write!(f, "{err}"),
+            ConnectionError::Timeout => f.write_str("connection attempt timed out"),
+        }
+    }
+}
+
 impl Client {
-    pub async fn new(request: ConnectionRequest) -> RedisResult<Self> {
+    pub async fn new(request: ConnectionRequest) -> Result<Self, ConnectionError> {
         const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_millis(2500);
 
         let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
@@ -189,11 +216,19 @@ impl Client {
             request.client_creation_timeout,
             DEFAULT_CLIENT_CREATION_TIMEOUT,
         );
-        run_with_timeout(total_connection_timeout, async move {
+        tokio::time::timeout(total_connection_timeout, async move {
             let internal_client = if request.cluster_mode_enabled {
-                ClientWrapper::CME(create_cluster_client(request).await?)
+                ClientWrapper::CME(
+                    create_cluster_client(request)
+                        .await
+                        .map_err(ConnectionError::CME)?,
+                )
             } else {
-                ClientWrapper::CMD(ClientCMD::create_client(request).await?)
+                ClientWrapper::CMD(
+                    ClientCMD::create_client(request)
+                        .await
+                        .map_err(ConnectionError::CMD)?,
+                )
             };
 
             Ok(Self {
@@ -202,5 +237,7 @@ impl Client {
             })
         })
         .await
+        .map_err(|_| ConnectionError::Timeout)
+        .and_then(|res| res)
     }
 }

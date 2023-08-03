@@ -205,7 +205,7 @@ mod shared_client_tests {
                 .await
                 .map(|_| ())
                 .unwrap_err();
-            assert!(err.is_timeout());
+            assert!(matches!(err, babushka::client::ConnectionError::Timeout));
         }
 
         block_on_all(async {
