@@ -1,6 +1,10 @@
+# Python Wrapper
+
 Using [Pyo3](https://github.com/PyO3/pyo3) and [Maturin](https://github.com/PyO3/maturin).
 
 ### Create venv
+
+Install python-venv: run `sudo apt install python3.10-venv` (with the relevant python version), in order to be able to create a virtual environment.
 
 `cd python` cd into babushka/python folder
 `python -m venv .env` in order to create a new virtual env.
@@ -36,14 +40,14 @@ Autogenerate python's protobuf files with:
 
 Run `pytest --asyncio-mode=auto` from this folder, or from the `tests` folder. Make sure your shell uses your virtual environment.
 
-#### Running linters:
+#### Running linters
 
 Using VS code, install the following extensions:
 
--   Python
--   isort
--   Black Formatter
--   Flake8
+-   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
+-   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
+-   [Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
+-   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 
 Or, run in a terminal:
 
