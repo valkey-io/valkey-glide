@@ -24,8 +24,8 @@ jobs:
             fail-fast: false
             matrix:
                 redis:
-                    - 6.2.4
-                    - 7.0.0
+                    - 6.2.13
+                    - 7.0.12
 
         steps:
             - uses: actions/checkout@v3
