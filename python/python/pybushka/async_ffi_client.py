@@ -33,7 +33,7 @@ class RedisAsyncFFIClient(FFICoreCommands):
             to_url(self.config.addresses[0].host, self.config.addresses[0].port)
         )
 
-    async def execute_command(self, command, *args, **kwargs):
+    async def _execute_command(self, command, *args, **kwargs):
         conn_rust_func = self.rust_functions.get(command)
         return await conn_rust_func(*args, **kwargs)
 

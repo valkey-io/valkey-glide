@@ -89,10 +89,10 @@ class ExpirySet:
 
 class FFICoreCommands:
     def get(self, key, *args, **kwargs):
-        return self.execute_command("get", key, *args, **kwargs)
+        return self._execute_command("get", key, *args, **kwargs)
 
     def set(self, key, value, *args, **kwargs):
-        return self.execute_command("set", key, value, *args, **kwargs)
+        return self._execute_command("set", key, value, *args, **kwargs)
 
     def get_direct(self, key):
         return self.connection.get(key)
@@ -196,7 +196,7 @@ class CoreCommands:
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return await self.execute_command(RequestType.SetString, args)
+        return await self._execute_command(RequestType.SetString, args)
 
     async def get(self, key: str) -> Union[str, None]:
         """Get the value associated with the given key, or null if no such value exists.
@@ -208,23 +208,9 @@ class CoreCommands:
         Returns:
             Union[str, None]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
-        return await self.execute_command(RequestType.GetString, [key])
+        return await self._execute_command(RequestType.GetString, [key])
 
     async def exec(self, transaction: Transaction) -> List[Union[str, None, TResult]]:
         commands = transaction.commands[:]
         transaction.dispose()
         return await self.execute_transaction(commands)
-
-    async def custom_command(self, command_args: List[str]) -> TResult:
-        """Executes a single command, without checking inputs.
-            @example - Return a list of all pub/sub clients:
-
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
-        Args:
-            command_args (List[str]): List of strings of the command's arguements.
-            Every part of the command, including the command name and subcommands, should be added as a separate value in args.
-
-        Returns:
-            TResult: The returning value depends on the executed command
-        """
-        return await self.execute_command(RequestType.CustomCommand, command_args)
