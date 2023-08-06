@@ -402,19 +402,19 @@ def create_cluster(
                 f"Waiting for server with log {log_file} to reach status OK.\n"
                 f"See {dir}/redis.log for more information"
             )
-    if replica_count > 0:
-        wait_for_nodes_to_become_replicas(
-            shard_count * replica_count, servers, cluster_folder, use_tls
-        )
-        wait_for_sync_to_finish(servers, cluster_folder, use_tls)
+    wait_for_all_topology_views(servers, cluster_folder, use_tls)
     logging.debug("The cluster was successfully created!")
     toc = time.perf_counter()
     logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
 
 
-def wait_for_nodes_to_become_replicas(
-    num_of_replicas: int, servers: List[RedisServer], cluster_folder: str, use_tls: bool
+def wait_for_all_topology_views(
+    servers: List[RedisServer], cluster_folder: str, use_tls: bool
 ):
+    """
+    Wait for each of the nodes to have a topology view that contains all nodes.
+    Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
+    """
     for server in servers:
         cmd_args = [
             "redis-cli",
@@ -424,7 +424,7 @@ def wait_for_nodes_to_become_replicas(
             str(server.port),
             *get_redis_cli_option_args(cluster_folder, use_tls),
             "cluster",
-            "nodes",
+            "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
         retries = 50
@@ -441,53 +441,8 @@ def wait_for_nodes_to_become_replicas(
                     raise Exception(
                         f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
                     )
-                if output.count("slave") == num_of_replicas:
-                    logging.debug(
-                        f"All replicas found in the topology view of {server}"
-                    )
-                    break
-                else:
-                    retries -= 1
-                    time.sleep(0.5)
-            except subprocess.TimeoutExpired:
-                time.sleep(0.5)
-                retries -= 1
-        if retries == 0:
-            raise Exception(
-                "Timeout exceeded trying to wait for nodes to become replicas"
-            )
 
-
-def wait_for_sync_to_finish(
-    servers: List[RedisServer], cluster_folder: str, use_tls: bool
-):
-    for server in servers:
-        cmd_args = [
-            "redis-cli",
-            "-h",
-            server.host,
-            "-p",
-            str(server.port),
-            *get_redis_cli_option_args(cluster_folder, use_tls),
-            "info",
-            "replication",
-        ]
-        logging.debug(f"Executing: {cmd_args}")
-        retries = 50
-        while retries >= 0:
-            try:
-                p = subprocess.Popen(
-                    cmd_args,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                output, err = p.communicate(timeout=5)
-                if err:
-                    raise Exception(
-                        f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
-                    )
-                if "role:master" in output or "master_link_status:up" in output:
+                if output.count(f"{server.host}") == len(servers):
                     logging.debug(f"Server {server} is ready!")
                     break
                 else:
