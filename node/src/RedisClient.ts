@@ -76,7 +76,7 @@ export type ConnectionOptions = {
     readFromReplicaStrategy?: ReadFromReplicaStrategy;
 };
 
-export class SocketConnection {
+export class RedisClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
         PromiseFunction,
@@ -334,7 +334,7 @@ export class SocketConnection {
     }
 
     protected static async __CreateConnectionInternal<
-        TConnection extends SocketConnection
+        TConnection extends RedisClient
     >(
         options: ConnectionOptions,
         connectedSocket: net.Socket,
@@ -352,11 +352,11 @@ export class SocketConnection {
     static async __CreateConnection(
         options: ConnectionOptions,
         connectedSocket: net.Socket
-    ): Promise<SocketConnection> {
+    ): Promise<RedisClient> {
         return this.__CreateConnectionInternal(
             options,
             connectedSocket,
-            (socket, options) => new SocketConnection(socket, options)
+            (socket, options) => new RedisClient(socket, options)
         );
     }
 
@@ -371,7 +371,7 @@ export class SocketConnection {
     }
 
     protected static async CreateConnectionInternal<
-        TConnection extends SocketConnection
+        TConnection extends RedisClient
     >(
         options: ConnectionOptions,
         constructor: (
@@ -390,10 +390,10 @@ export class SocketConnection {
 
     public static CreateConnection(
         options: ConnectionOptions
-    ): Promise<SocketConnection> {
-        return this.CreateConnectionInternal<SocketConnection>(
+    ): Promise<RedisClient> {
+        return this.CreateConnectionInternal<RedisClient>(
             options,
-            (socket: net.Socket) => new SocketConnection(socket)
+            (socket: net.Socket) => new RedisClient(socket)
         );
     }
 }

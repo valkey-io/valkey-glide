@@ -8,7 +8,7 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
-import { ConnectionOptions, SocketConnection } from "..";
+import { ConnectionOptions, RedisClient } from "../build-ts";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort } from "./TestUtilities";
@@ -16,12 +16,12 @@ import { flushallOnPort } from "./TestUtilities";
 const FreePort = require("find-free-port");
 
 type Context = {
-    client: SocketConnection;
+    client: RedisClient;
 };
 
 const PORT_NUMBER = 3000;
 
-describe("SocketConnection", () => {
+describe("RedisClient", () => {
     let server: RedisServer;
     let port: number;
     beforeAll(async () => {
@@ -105,9 +105,7 @@ describe("SocketConnection", () => {
 
     runBaseTests<Context>({
         init: async () => {
-            const client = await SocketConnection.CreateConnection(
-                getOptions(port)
-            );
+            const client = await RedisClient.CreateConnection(getOptions(port));
 
             return { client, context: { client } };
         },

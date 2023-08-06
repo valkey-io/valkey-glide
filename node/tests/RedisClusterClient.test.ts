@@ -1,11 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { exec } from "child_process";
-import { ClusterSocketConnection, ConnectionOptions } from "..";
+import { ConnectionOptions, RedisClusterClient } from "../build-ts";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort } from "./TestUtilities";
 
 type Context = {
-    client: ClusterSocketConnection;
+    client: RedisClusterClient;
 };
 
 const TIMEOUT = 10000;
@@ -85,7 +85,7 @@ class RedisCluster {
     }
 }
 
-describe("ClusterSocketConnection", () => {
+describe("RedisClusterClient", () => {
     let testsFailed = 0;
     let cluster: RedisCluster;
     beforeAll(async () => {
@@ -114,7 +114,7 @@ describe("ClusterSocketConnection", () => {
     runBaseTests<Context>({
         init: async () => {
             testsFailed += 1;
-            const client = await ClusterSocketConnection.CreateConnection(
+            const client = await RedisClusterClient.CreateConnection(
                 getOptions(cluster.ports())
             );
             return {
