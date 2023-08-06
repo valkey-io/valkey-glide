@@ -32,7 +32,7 @@ def _protobuf_encode_delimited(b_arr, request: TRequest) -> None:
     b_arr.extend(bytes_request)
 
 
-class RedisClient(CoreCommands):
+class BaseRedisClient(CoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None) -> Self:
         config = config or ClientConfiguration()
@@ -226,3 +226,12 @@ class RedisClient(CoreCommands):
                         res_future.set_result(OK)
                     else:
                         res_future.set_result(None)
+
+
+class RedisClusterClient(BaseRedisClient):
+    def _get_protobuf_conn_request(self) -> TConnectionRequest:
+        return self.config.convert_to_protobuf_request(cluster_mode=True)
+
+
+class RedisClient(BaseRedisClient):
+    pass
