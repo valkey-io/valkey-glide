@@ -1,21 +1,40 @@
 # babushka
 
-## developer pre-requirements:
+Babushka (temporary name, final name pending) is a collection of open source Redis clients in various managed languages, based around shared logic written in Rust. We call the clients "wrappers", and the shared logic "core".
 
- - GCC
- - pkg-config
- - protobuf-compiler (protoc)
- - openssl
- - libssl-dev
+## Supported languages
+
+-   [node](./node/README.md).
+-   [python](./python/README.md)
+
+## Folder structure
+
+-   babushka-core - [the Rust core](./babushka-core/README.md). This code is compiled into binaries which are used by the various wrappers.
+-   benchmarks - [benchmarks for the wrappers](./benchmarks/README.md), and for the current leading Redis client in each language.
+-   csharp - [the C# wrapper](./csharp/README.md). currently not in a usable state.
+-   logger_core - [the logger we use](./logger_core/).
+-   node - [the NodeJS wrapper](./node/README.md).
+-   python - [the Python3 wrapper](./python/README.md)
+-   submodules - git submodules.
+-   utils - Utility scripts used in testing, building, and deploying.
+
+## development pre-requirements
+
+-   GCC
+-   pkg-config
+-   protobuf-compiler (protoc)
+-   openssl
+-   libssl-dev
+-   python3
 
 Installation for ubuntu:
-`sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev`
+`sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev python3`
 
-### git submodule -
+### git submodule
 
 run `git submodule update --init --recursive` on first usage, and on any update to the redis-rs fork.
 
-### rustup -
+### rustup
 
 https://rustup.rs/
 
@@ -26,6 +45,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 after the instalation will show-up in the terminal steps to add rustup to the path - do it.
 
 ### redis-server
+
+This is required for running tests and local benchmarks.
 
 https://redis.io/docs/getting-started/
 
@@ -42,10 +63,12 @@ sudo mkdir /etc/redis
 sudo cp src/redis-server src/redis-cli /usr/local/bin
 ```
 
-change {0} to the version you want, e.g. 7.0.7. version names are available here: http://download.redis.io/releases/
-recommended version - 7.0.7 ATM
+change {0} to the version you want, e.g. 7.0.12. version names are available here: http://download.redis.io/releases/
+recommended version - 7.0.12 ATM
 
 ### node 16 (or newer)
+
+This is required for the NodeJS wrapper, and for running benchmarks.
 
 ```
 curl -s https://deb.nodesource.com/setup_16.x | sudo bash
@@ -53,45 +76,6 @@ apt-get install nodejs npm
 npm i -g npm@8
 ```
 
-## benchmarks:
-
-`benchmarks/install_and_test.sh` is the benchmark script we use to check performance. run `install_and_test.sh -h` to get the full list of available flags.
-
-If while running benchmarks your redis-server is killed every time the program runs the 4000 data-size benchmark, it might be because you don't have enough available storage on your machine.
-To solve this issue, you have two options -
-
-1. Allocate more storage to your'e machine. for me the case was allocating from 500 gb to 1000 gb.
-2. Go to benchmarks/install_and_test.sh and change the "dataSize="100 4000"" to a data-size that your machine can handle. try for example dataSize="100 1000".
-
-## Additional packages
-
-For python, run `sudo apt install python3.10-venv` (with the relevant python version), in order to be able to create a virtual environment.
-In order to run rust-analyzer through remote VScode, you need to run `sudo apt install pkg-config libssl-dev`.
-
 ## Recommended VSCode extensions
 
-### General
-
 [GitLens](https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens)
-
-### Rust development
-
-[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language server.
-[CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb) - Debugger.
-[Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) - TOML language support.
-
-### C# development
-
-[C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp) - lightweight language server and in-editor test runner.
-
-### TypeScript development
-
-[Prettier - Code formatter](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) -JavaScript / TypeScript formatter.
-[Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
-[Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
-[ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) - linter.
-
-### Python development
-
-[Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) - Language server
-[Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter) - Formatter
