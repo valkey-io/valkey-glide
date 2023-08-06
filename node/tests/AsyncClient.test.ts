@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import RedisServer from "redis-server";
-import { AsyncClient } from "..";
+import { AsyncClient } from "babushka-rs-internal";
 import { runCommonTests } from "./SharedTests";
 import { flushallOnPort } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */

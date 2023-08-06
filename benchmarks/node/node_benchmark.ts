@@ -1,9 +1,4 @@
-import {
-    AsyncClient,
-    ClusterSocketConnection,
-    SocketConnection,
-    setLoggerConfig,
-} from "babushka-rs";
+import { RedisClient, RedisClusterClient, setLoggerConfig } from "babushka-rs";
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
 import percentile from "percentile";
@@ -227,40 +222,13 @@ async function main(
 ) {
     const data = generate_value(data_size);
     if (
-        !clusterModeEnabled && // no FFI support for CME yet
-        (clients_to_run == "ffi" ||
-            clients_to_run == "all" ||
-            clients_to_run == "babushka")
-    ) {
-        const clients = await createClients(clientCount, () =>
-            Promise.resolve(
-                AsyncClient.CreateConnection(
-                    getAddressWithProtocol(host, useTLS)
-                )
-            )
-        );
-        await run_clients(
-            clients,
-            "babushka FFI",
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
-            data,
-            () => {
-                /* disposed by GC */
-            },
-            clusterModeEnabled
-        );
-    }
-
-    if (
         clients_to_run == "socket" ||
         clients_to_run == "all" ||
         clients_to_run == "babushka"
     ) {
         const clientClass = clusterModeEnabled
-            ? ClusterSocketConnection
-            : SocketConnection;
+            ? RedisClusterClient
+            : RedisClient;
         const clients = await createClients(clientCount, () =>
             clientClass.CreateConnection({
                 addresses: [{ host }],
@@ -275,7 +243,7 @@ async function main(
             data_size,
             data,
             (client) => {
-                (client as SocketConnection).dispose();
+                (client as RedisClient).dispose();
             },
             clusterModeEnabled
         );
