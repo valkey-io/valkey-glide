@@ -3,10 +3,13 @@ use super::reconnecting_connection::ReconnectingConnection;
 use crate::connection_request::{AddressInfo, ConnectionRequest, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::{stream, StreamExt};
-use logger_core::{log_debug, log_trace, log_warn};
+#[cfg(cmd_heartbeat)]
+use logger_core::log_debug;
+use logger_core::{log_trace, log_warn};
 use protobuf::EnumOrUnknown;
 use redis::{RedisError, RedisResult, Value};
 use std::sync::Arc;
+#[cfg(cmd_heartbeat)]
 use tokio::task;
 
 enum ReadFromReplicaStrategy {
@@ -119,6 +122,7 @@ impl ClientCMD {
         let read_from_replica_strategy =
             get_read_from_replica_strategy(&connection_request.read_from_replica_strategy);
 
+        #[cfg(cmd_heartbeat)]
         for node in nodes.iter() {
             Self::start_heartbeat(node.clone());
         }
@@ -207,6 +211,7 @@ impl ClientCMD {
         }
     }
 
+    #[cfg(cmd_heartbeat)]
     fn start_heartbeat(reconnecting_connection: ReconnectingConnection) {
         task::spawn(async move {
             loop {
