@@ -5,7 +5,9 @@ from typing import Awaitable, List, Optional, Type, Union
 import async_timeout
 from google.protobuf.internal.decoder import _DecodeVarint32
 from google.protobuf.internal.encoder import _VarintBytes
-from pybushka.async_commands import CoreCommands
+from pybushka.async_commands.cmd_commands import CMDCommands
+from pybushka.async_commands.cme_commands import CMECommands
+from pybushka.async_commands.core import CoreCommands
 from pybushka.config import ClientConfiguration
 from pybushka.constants import (
     DEFAULT_READ_BYTES_SIZE,
@@ -20,6 +22,7 @@ from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
 from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
 from pybushka.protobuf.response_pb2 import Response
+from pybushka.routes import TRoute, set_protobuf_route
 from typing_extensions import Self
 
 from .pybushka import start_socket_listener_external, value_from_pointer
@@ -142,13 +145,17 @@ class BaseRedisClient(CoreCommands):
             # might not be threadsafe, we should consider adding a lock
             await self._write_buffered_requests_to_socket()
 
-    async def execute_command(
-        self, request_type: TRequestType, args: List[str]
+    async def _execute_command(
+        self,
+        request_type: TRequestType,
+        args: List[str],
+        route: Optional[TRoute] = None,
     ) -> TResult:
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = args  # TODO - use arg pointer
+        set_protobuf_route(request, route)
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
@@ -228,10 +235,10 @@ class BaseRedisClient(CoreCommands):
                         res_future.set_result(None)
 
 
-class RedisClusterClient(BaseRedisClient):
+class RedisClusterClient(BaseRedisClient, CMECommands):
     def _get_protobuf_conn_request(self) -> TConnectionRequest:
         return self.config.convert_to_protobuf_request(cluster_mode=True)
 
 
-class RedisClient(BaseRedisClient):
+class RedisClient(BaseRedisClient, CMDCommands):
     pass

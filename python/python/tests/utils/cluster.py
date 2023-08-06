@@ -20,7 +20,7 @@ class RedisCluster:
             stderr=subprocess.PIPE,
             text=True,
         )
-        output, err = p.communicate(timeout=20)
+        output, err = p.communicate(timeout=40)
         if p.returncode != 0:
             raise Exception(f"Failed to create a CME cluster. Executed: {p}:\n{err}")
         self.parse_cluster_script_start_output(output)
