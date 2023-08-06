@@ -60,6 +60,7 @@ mod client_cmd_tests {
 
     #[rstest]
     #[timeout(LONG_CMD_TEST_TIMEOUT)]
+    #[cfg(cmd_heartbeat)]
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         block_on_all(async move {
