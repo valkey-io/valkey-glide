@@ -356,7 +356,7 @@ fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo
         }
         Value::SlotKeyRoute(slot_key_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
-                redis::cluster_routing::get_slot(slot_key_route.slot_key.as_bytes()),
+                redis::cluster_topology::get_slot(slot_key_route.slot_key.as_bytes()),
                 get_slot_addr(&slot_key_route.slot_type)?,
             )),
         ))),
