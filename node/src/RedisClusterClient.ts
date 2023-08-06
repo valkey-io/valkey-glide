@@ -1,11 +1,7 @@
 import * as net from "net";
 import { createCustomCommand } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
-import {
-    ConnectionOptions,
-    ReturnType,
-    SocketConnection,
-} from "./SocketConnection";
+import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
 export type SlotIdTypes = {
     type: "primarySlotId" | "replicaSlotId";
@@ -78,7 +74,7 @@ function toProtobufRoute(
     }
 }
 
-export class ClusterSocketConnection extends SocketConnection {
+export class RedisClusterClient extends RedisClient {
     protected createConnectionRequest(
         options: ConnectionOptions
     ): connection_request.IConnectionRequest {
@@ -89,22 +85,22 @@ export class ClusterSocketConnection extends SocketConnection {
 
     public static async CreateConnection(
         options: ConnectionOptions
-    ): Promise<ClusterSocketConnection> {
+    ): Promise<RedisClusterClient> {
         return await super.CreateConnectionInternal(
             options,
             (socket: net.Socket, options?: ConnectionOptions) =>
-                new ClusterSocketConnection(socket, options)
+                new RedisClusterClient(socket, options)
         );
     }
 
     static async __CreateConnection(
         options: ConnectionOptions,
         connectedSocket: net.Socket
-    ): Promise<ClusterSocketConnection> {
+    ): Promise<RedisClusterClient> {
         return super.__CreateConnectionInternal(
             options,
             connectedSocket,
-            (socket, options) => new ClusterSocketConnection(socket, options)
+            (socket, options) => new RedisClusterClient(socket, options)
         );
     }
 
