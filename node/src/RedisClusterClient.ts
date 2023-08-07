@@ -75,29 +75,29 @@ function toProtobufRoute(
 }
 
 export class RedisClusterClient extends RedisClient {
-    protected createConnectionRequest(
+    protected createClientRequest(
         options: ConnectionOptions
     ): connection_request.IConnectionRequest {
-        const configuration = super.createConnectionRequest(options);
+        const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
         return configuration;
     }
 
-    public static async CreateConnection(
+    public static async createClient(
         options: ConnectionOptions
     ): Promise<RedisClusterClient> {
-        return await super.CreateConnectionInternal(
+        return await super.createClientInternal(
             options,
             (socket: net.Socket, options?: ConnectionOptions) =>
                 new RedisClusterClient(socket, options)
         );
     }
 
-    static async __CreateConnection(
+    static async __createClient(
         options: ConnectionOptions,
         connectedSocket: net.Socket
     ): Promise<RedisClusterClient> {
-        return super.__CreateConnectionInternal(
+        return super.__createClientInternal(
             options,
             connectedSocket,
             (socket, options) => new RedisClusterClient(socket, options)
