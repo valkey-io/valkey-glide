@@ -112,11 +112,8 @@ function getConnectionAndSocket(
                     addresses: [{ host: "foo" }],
                 };
                 const connection = isCluster
-                    ? await RedisClusterClient.__CreateConnection(
-                          options,
-                          socket
-                      )
-                    : await RedisClient.__CreateConnection(options, socket);
+                    ? await RedisClusterClient.__createClient(options, socket)
+                    : await RedisClient.__createClient(options, socket);
 
                 resolve(connection);
             });
