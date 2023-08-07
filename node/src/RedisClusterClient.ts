@@ -1,11 +1,7 @@
 import * as net from "net";
 import { createCustomCommand } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
-import {
-    ConnectionOptions,
-    ReturnType,
-    SocketConnection,
-} from "./SocketConnection";
+import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
 export type SlotIdTypes = {
     type: "primarySlotId" | "replicaSlotId";
@@ -78,33 +74,33 @@ function toProtobufRoute(
     }
 }
 
-export class ClusterSocketConnection extends SocketConnection {
-    protected createConnectionRequest(
+export class RedisClusterClient extends RedisClient {
+    protected createClientRequest(
         options: ConnectionOptions
     ): connection_request.IConnectionRequest {
-        const configuration = super.createConnectionRequest(options);
+        const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
         return configuration;
     }
 
-    public static async CreateConnection(
+    public static async createClient(
         options: ConnectionOptions
-    ): Promise<ClusterSocketConnection> {
-        return await super.CreateConnectionInternal(
+    ): Promise<RedisClusterClient> {
+        return await super.createClientInternal(
             options,
             (socket: net.Socket, options?: ConnectionOptions) =>
-                new ClusterSocketConnection(socket, options)
+                new RedisClusterClient(socket, options)
         );
     }
 
-    static async __CreateConnection(
+    static async __createClient(
         options: ConnectionOptions,
         connectedSocket: net.Socket
-    ): Promise<ClusterSocketConnection> {
-        return super.__CreateConnectionInternal(
+    ): Promise<RedisClusterClient> {
+        return super.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new ClusterSocketConnection(socket, options)
+            (socket, options) => new RedisClusterClient(socket, options)
         );
     }
 

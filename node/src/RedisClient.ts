@@ -76,7 +76,7 @@ export type ConnectionOptions = {
     readFromReplicaStrategy?: ReadFromReplicaStrategy;
 };
 
-export class SocketConnection {
+export class RedisClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
         PromiseFunction,
@@ -272,7 +272,7 @@ export class SocketConnection {
         lowestLatency: connection_request.ReadFromReplicaStrategy.LowestLatency,
     };
 
-    protected createConnectionRequest(
+    protected createClientRequest(
         options: ConnectionOptions
     ): connection_request.IConnectionRequest {
         const readFromReplicaStrategy = options.readFromReplicaStrategy
@@ -307,7 +307,7 @@ export class SocketConnection {
             this.promiseCallbackFunctions[0] = [resolve, reject];
 
             const message = connection_request.ConnectionRequest.create(
-                this.createConnectionRequest(options)
+                this.createClientRequest(options)
             );
 
             this.writeOrBufferRequest(
@@ -333,8 +333,8 @@ export class SocketConnection {
         this.socket.end();
     }
 
-    protected static async __CreateConnectionInternal<
-        TConnection extends SocketConnection
+    protected static async __createClientInternal<
+        TConnection extends RedisClient
     >(
         options: ConnectionOptions,
         connectedSocket: net.Socket,
@@ -349,14 +349,14 @@ export class SocketConnection {
         return connection;
     }
 
-    static async __CreateConnection(
+    static async __createClient(
         options: ConnectionOptions,
         connectedSocket: net.Socket
-    ): Promise<SocketConnection> {
-        return this.__CreateConnectionInternal(
+    ): Promise<RedisClient> {
+        return this.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new SocketConnection(socket, options)
+            (socket, options) => new RedisClient(socket, options)
         );
     }
 
@@ -370,8 +370,8 @@ export class SocketConnection {
         });
     }
 
-    protected static async CreateConnectionInternal<
-        TConnection extends SocketConnection
+    protected static async createClientInternal<
+        TConnection extends RedisClient
     >(
         options: ConnectionOptions,
         constructor: (
@@ -381,19 +381,19 @@ export class SocketConnection {
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__CreateConnectionInternal<TConnection>(
+        return await this.__createClientInternal<TConnection>(
             options,
             socket,
             constructor
         );
     }
 
-    public static CreateConnection(
+    public static createClient(
         options: ConnectionOptions
-    ): Promise<SocketConnection> {
-        return this.CreateConnectionInternal<SocketConnection>(
+    ): Promise<RedisClient> {
+        return this.createClientInternal<RedisClient>(
             options,
-            (socket: net.Socket) => new SocketConnection(socket)
+            (socket: net.Socket) => new RedisClient(socket)
         );
     }
 }
