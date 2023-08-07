@@ -1,4 +1,6 @@
-use crate::connection_request::{AddressInfo, AuthenticationInfo, ConnectionRequest, TlsMode};
+use crate::connection_request::{
+    AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFromReplicaStrategy, TlsMode,
+};
 pub use client_cmd::ClientCMD;
 use futures::FutureExt;
 use redis::cluster_async::ClusterConnection;
@@ -77,7 +79,10 @@ pub(super) fn get_connection_info(
 #[derive(Clone)]
 pub enum ClientWrapper {
     CMD(ClientCMD),
-    CME(ClusterConnection),
+    CME {
+        client: ClusterConnection,
+        read_from_replicas: bool,
+    },
 }
 
 #[derive(Clone)]
@@ -106,8 +111,12 @@ impl Client {
             match self.internal_client {
                 ClientWrapper::CMD(ref mut client) => client.send_packed_command(cmd).await,
 
-                ClientWrapper::CME(ref mut client) => {
-                    let routing = routing.or_else(|| RoutingInfo::for_routable(cmd));
+                ClientWrapper::CME {
+                    ref mut client,
+                    read_from_replicas,
+                } => {
+                    let routing =
+                        routing.or_else(|| RoutingInfo::for_routable(cmd, read_from_replicas));
                     client.send_packed_command(cmd, routing).await
                 }
             }
@@ -128,7 +137,10 @@ impl Client {
                     client.send_packed_commands(cmd, offset, count).await
                 }
 
-                ClientWrapper::CME(ref mut client) => {
+                ClientWrapper::CME {
+                    ref mut client,
+                    read_from_replicas: _,
+                } => {
                     let route = match routing {
                         Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
                             route,
@@ -157,7 +169,7 @@ fn to_duration(time_in_millis: u32, default: Duration) -> Duration {
 
 async fn create_cluster_client(
     request: ConnectionRequest,
-) -> RedisResult<redis::cluster_async::ClusterConnection> {
+) -> RedisResult<(redis::cluster_async::ClusterConnection, bool)> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
     let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
@@ -166,8 +178,17 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
+    let read_from_replica_strategy = request
+        .read_from_replica_strategy
+        .enum_value()
+        .unwrap_or(ReadFromReplicaStrategy::AlwaysFromPrimary);
+    let read_from_replicas = !matches!(
+        read_from_replica_strategy,
+        ReadFromReplicaStrategy::AlwaysFromPrimary,
+    ); // TODO - implement different read from replica strategies.
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT);
+        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .read_from_replicas();
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
@@ -177,7 +198,7 @@ async fn create_cluster_client(
         builder = builder.tls(tls);
     }
     let client = builder.build()?;
-    client.get_async_connection().await
+    Ok((client.get_async_connection().await?, read_from_replicas))
 }
 
 #[derive(thiserror::Error)]
@@ -218,11 +239,13 @@ impl Client {
         );
         tokio::time::timeout(total_connection_timeout, async move {
             let internal_client = if request.cluster_mode_enabled {
-                ClientWrapper::CME(
-                    create_cluster_client(request)
-                        .await
-                        .map_err(ConnectionError::CME)?,
-                )
+                let (client, read_from_replicas) = create_cluster_client(request)
+                    .await
+                    .map_err(ConnectionError::CME)?;
+                ClientWrapper::CME {
+                    client,
+                    read_from_replicas,
+                }
             } else {
                 ClientWrapper::CMD(
                     ClientCMD::create_client(request)
