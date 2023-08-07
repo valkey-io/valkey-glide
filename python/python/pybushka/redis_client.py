@@ -32,7 +32,7 @@ def _protobuf_encode_delimited(b_arr, request: TRequest) -> None:
     b_arr.extend(bytes_request)
 
 
-class RedisAsyncSocketClient(CoreCommands):
+class RedisClient(CoreCommands):
     @classmethod
     async def create(cls, config: ClientConfiguration = None) -> Self:
         config = config or ClientConfiguration()

@@ -14,9 +14,8 @@ from pybushka import (
     AddressInfo,
     ClientConfiguration,
     LogLevel,
-    RedisAsyncFFIClient,
-    RedisAsyncSocketClient,
-    RedisClusterAsyncSocket,
+    RedisClient,
+    RedisClusterClient,
     set_logger_config,
 )
 
@@ -265,36 +264,12 @@ async def main(
         )
 
     if (
-        is_cluster is False  # We dont have CME support in FFI
-        and clients_to_run == "all"
-        or clients_to_run == "ffi"
-        or clients_to_run == "babushka"
-    ):
-        # Babushka FFI
-        config = ClientConfiguration(
-            [AddressInfo(host=host, port=PORT)], use_tls=use_tls
-        )
-        clients = await create_clients(
-            client_count,
-            lambda: RedisAsyncFFIClient.create(config),
-        )
-        await run_clients(
-            clients,
-            "babushka-FFI",
-            event_loop_name,
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
-            is_cluster,
-        )
-
-    if (
         clients_to_run == "all"
         or clients_to_run == "socket"
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
-        client_class = RedisClusterAsyncSocket if is_cluster else RedisAsyncSocketClient
+        client_class = RedisClusterClient if is_cluster else RedisClient
         config = ClientConfiguration(
             [AddressInfo(host=host, port=PORT)], use_tls=use_tls
         )

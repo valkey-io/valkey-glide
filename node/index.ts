@@ -1,10 +1,5 @@
-export { AsyncClient } from "babushka-rs-internal";
-export { ClusterSocketConnection } from "./src/ClusterSocketConnection";
 export { SetOptions } from "./src/Commands";
 export { setLoggerConfig } from "./src/Logger";
-export {
-    ConnectionOptions,
-    ReturnType,
-    SocketConnection,
-} from "./src/SocketConnection";
+export { ConnectionOptions, RedisClient, ReturnType } from "./src/RedisClient";
+export { RedisClusterClient } from "./src/RedisClusterClient";
 export { Transaction } from "./src/Transaction";

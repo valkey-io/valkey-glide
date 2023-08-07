@@ -6,11 +6,11 @@ import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
 import {
-    ClusterSocketConnection,
     ConnectionOptions,
-    SocketConnection,
+    RedisClient,
+    RedisClusterClient,
     setLoggerConfig,
-} from "..";
+} from "../build-ts";
 import {
     connection_request,
     redis_request,
@@ -70,7 +70,7 @@ function getConnectionAndSocket(
     isCluster?: boolean
 ): Promise<{
     socket: net.Socket;
-    connection: SocketConnection | ClusterSocketConnection;
+    connection: RedisClient | RedisClusterClient;
     server: net.Server;
 }> {
     return new Promise((resolve, reject) => {
@@ -79,7 +79,7 @@ function getConnectionAndSocket(
         );
         const socketName = path.join(temporaryFolder, "read");
         let connectionPromise:
-            | Promise<SocketConnection | ClusterSocketConnection>
+            | Promise<RedisClient | RedisClusterClient>
             | undefined = undefined;
         const server = net
             .createServer(async (socket) => {
@@ -112,14 +112,8 @@ function getConnectionAndSocket(
                     addresses: [{ host: "foo" }],
                 };
                 const connection = isCluster
-                    ? await ClusterSocketConnection.__CreateConnection(
-                          options,
-                          socket
-                      )
-                    : await SocketConnection.__CreateConnection(
-                          options,
-                          socket
-                      );
+                    ? await RedisClusterClient.__createClient(options, socket)
+                    : await RedisClient.__createClient(options, socket);
 
                 resolve(connection);
             });
@@ -128,7 +122,7 @@ function getConnectionAndSocket(
 }
 
 function closeTestResources(
-    connection: SocketConnection,
+    connection: RedisClient,
     server: net.Server,
     socket: net.Socket
 ) {
@@ -139,7 +133,7 @@ function closeTestResources(
 
 async function testWithResources(
     testFunction: (
-        connection: SocketConnection,
+        connection: RedisClient,
         socket: net.Socket
     ) => Promise<void>,
     connectionOptions?: ConnectionOptions
@@ -156,7 +150,7 @@ async function testWithResources(
 
 async function testWithClusterResources(
     testFunction: (
-        connection: ClusterSocketConnection,
+        connection: RedisClusterClient,
         socket: net.Socket
     ) => Promise<void>,
     connectionOptions?: ConnectionOptions
@@ -168,7 +162,7 @@ async function testWithClusterResources(
     );
 
     try {
-        if (connection instanceof ClusterSocketConnection) {
+        if (connection instanceof RedisClusterClient) {
             await testFunction(connection, socket);
         } else {
             throw new Error("Not cluster connection");
