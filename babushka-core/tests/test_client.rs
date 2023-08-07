@@ -9,8 +9,8 @@ mod shared_client_tests {
     use utilities::*;
 
     enum BackingServer {
-        Cmd(RedisServer),
-        Cme(RedisCluster),
+        Cmd(Option<RedisServer>),
+        Cme(Option<RedisCluster>),
     }
 
     struct TestBasics {
@@ -26,25 +26,28 @@ mod shared_client_tests {
                 client: cluster_basics.client,
             }
         } else {
-            let server = RedisServer::new(ServerType::Tcp {
-                tls: configuration.use_tls,
-            });
-            if let Some(redis_connection_info) = &configuration.connection_info {
-                setup_acl(&server.get_client_addr(), redis_connection_info).await;
-            }
+            let test_basics = utilities::setup_test_basics_internal(&configuration).await;
+
+            let connection_addr = test_basics
+                .server
+                .as_ref()
+                .map(|server| server.get_client_addr())
+                .unwrap_or(get_shared_server_address(configuration.use_tls));
+
             // TODO - this is a patch, handling the situation where the new server
             // still isn't available to connection. This should be fixed in [RedisServer].
             let client = repeat_try_create(|| async {
                 Client::new(create_connection_request(
-                    &[server.get_client_addr()],
+                    &[connection_addr.clone()],
                     &configuration,
                 ))
                 .await
                 .ok()
             })
             .await;
+
             TestBasics {
-                server: BackingServer::Cmd(server),
+                server: BackingServer::Cmd(test_basics.server),
                 client,
             }
         }
@@ -61,11 +64,12 @@ mod shared_client_tests {
                 use_cme,
                 TestConfiguration {
                     use_tls,
+                    shared_server: true,
                     ..Default::default()
                 },
             )
             .await;
-            let key = "hello";
+            let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
         });
     }
@@ -81,6 +85,7 @@ mod shared_client_tests {
                 use_cme,
                 TestConfiguration {
                     use_tls,
+                    shared_server: true,
                     ..Default::default()
                 },
             )
@@ -136,7 +141,7 @@ mod shared_client_tests {
                 },
             )
             .await;
-            let key = "hello";
+            let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
         });
     }
@@ -158,7 +163,7 @@ mod shared_client_tests {
                 },
             )
             .await;
-            let key = "hello";
+            let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
         });
     }
@@ -171,6 +176,7 @@ mod shared_client_tests {
                 use_cme,
                 TestConfiguration {
                     response_timeout: Some(1),
+                    shared_server: true,
                     ..Default::default()
                 },
             )

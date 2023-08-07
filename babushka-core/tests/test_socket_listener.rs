@@ -41,7 +41,7 @@ mod socket_listener {
     }
 
     struct TestBasics {
-        server: RedisServer,
+        server: Option<RedisServer>,
         socket: UnixStream,
     }
 
@@ -51,7 +51,7 @@ mod socket_listener {
     }
 
     struct ClusterTestBasics {
-        _cluster: RedisCluster,
+        _cluster: Option<RedisCluster>,
         socket: UnixStream,
     }
 
@@ -346,9 +346,12 @@ mod socket_listener {
     fn setup_test_basics_with_server_and_socket_path(
         use_tls: bool,
         socket_path: Option<String>,
-        server: RedisServer,
+        server: Option<RedisServer>,
     ) -> TestBasics {
-        let address = server.get_client_addr();
+        let address = server
+            .as_ref()
+            .map(|server| server.get_client_addr())
+            .unwrap_or(get_shared_server_address(use_tls));
         let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
         TestBasics { server, socket }
     }
@@ -356,21 +359,33 @@ mod socket_listener {
     fn setup_test_basics_with_socket_path(
         use_tls: bool,
         socket_path: Option<String>,
+        shared_server: bool,
     ) -> TestBasics {
-        let server = RedisServer::new(ServerType::Tcp { tls: use_tls });
+        let server = if !shared_server {
+            Some(RedisServer::new(ServerType::Tcp { tls: use_tls }))
+        } else {
+            None
+        };
         setup_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
 
-    fn setup_test_basics(use_tls: bool) -> TestBasics {
-        setup_test_basics_with_socket_path(use_tls, None)
+    fn setup_test_basics(use_tls: bool, shared_server: bool) -> TestBasics {
+        setup_test_basics_with_socket_path(use_tls, None, shared_server)
     }
 
-    fn setup_cluster_test_basics(use_tls: bool) -> ClusterTestBasics {
-        let cluster = RedisCluster::new(use_tls, &None, None, None);
+    fn setup_cluster_test_basics(use_tls: bool, shared_cluster: bool) -> ClusterTestBasics {
+        let cluster = if !shared_cluster {
+            Some(RedisCluster::new(use_tls, &None, None, None))
+        } else {
+            None
+        };
         let socket = setup_socket(
             use_tls,
             None,
-            &cluster.get_server_addresses(),
+            &cluster
+                .as_ref()
+                .map(|cluster| cluster.get_server_addresses())
+                .unwrap_or(get_shared_cluster_addresses(use_tls)),
             ClusterMode::Enabled,
         );
         ClusterTestBasics {
@@ -395,7 +410,8 @@ mod socket_listener {
             });
 
         const CALLBACK_INDEX: u32 = 99;
-        let mut test_basics = setup_test_basics_with_socket_path(false, Some(socket_path.clone()));
+        let mut test_basics =
+            setup_test_basics_with_socket_path(false, Some(socket_path.clone()), true);
         let key = generate_random_string(KEY_LENGTH);
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -489,7 +505,7 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls);
+        let mut test_basics = setup_test_basics(use_tls, true);
         test_set_and_get(&mut test_basics.socket, args_pointer);
     }
 
@@ -537,7 +553,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
-        let mut test_basics = setup_test_basics(false);
+        let mut test_basics = setup_test_basics(false, true);
         handle_custom_command(&mut test_basics.socket, args_pointer);
     }
 
@@ -552,7 +568,7 @@ mod socket_listener {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
 
-        let mut test_basics = setup_cluster_test_basics(use_tls);
+        let mut test_basics = setup_cluster_test_basics(use_tls, true);
         test_set_and_get(&mut test_basics.socket, args_pointer);
     }
 
@@ -566,7 +582,7 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_cluster_test_basics(use_tls);
+        let mut test_basics = setup_cluster_test_basics(use_tls, true);
 
         handle_custom_command(&mut test_basics.socket, args_pointer);
     }
@@ -574,7 +590,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_manual_route_to_all_primaries() {
-        let mut test_basics = setup_cluster_test_basics(false);
+        let mut test_basics = setup_cluster_test_basics(false, true);
 
         const CALLBACK1_INDEX: u32 = 100;
         let approx_message_length = 4 + APPROX_RESP_HEADER_LEN;
@@ -639,7 +655,7 @@ mod socket_listener {
         const CALLBACK_INDEX: u32 = 99;
         let mut test_basics = setup_mocked_test_basics(None);
 
-        let key = "a";
+        let key = generate_random_string(1);
         let request_type = i32::MAX; // here we send an erroneous enum
                                      // Send a set request
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
@@ -647,7 +663,7 @@ mod socket_listener {
         write_command_request(
             &mut buffer,
             CALLBACK_INDEX,
-            vec![key.to_string()],
+            vec![key],
             EnumOrUnknown::from_i32(request_type),
             false,
         );
@@ -672,7 +688,7 @@ mod socket_listener {
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls);
+        let mut test_basics = setup_test_basics(use_tls, true);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -739,7 +755,7 @@ mod socket_listener {
         }
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let test_basics = setup_test_basics(use_tls);
+        let test_basics = setup_test_basics(use_tls, true);
         const VALUE_LENGTH: usize = 1000000;
         const NUMBER_OF_THREADS: usize = 10;
         let values = Arc::new(Mutex::new(vec![Vec::<u8>::new(); NUMBER_OF_THREADS]));
@@ -851,7 +867,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
-        let mut test_basics = setup_test_basics(false);
+        let mut test_basics = setup_test_basics(false, false);
         let server = test_basics.server;
 
         drop(server);
@@ -869,9 +885,9 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
-        let test_basics = setup_test_basics(false);
+        let test_basics = setup_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
-        let address = test_basics.server.get_client_addr();
+        let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
 
         let new_server = RedisServer::new_with_addr_and_modules(address, &[]);
@@ -900,9 +916,9 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
-        let test_basics = setup_test_basics(false);
+        let test_basics = setup_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
-        let address = test_basics.server.get_client_addr();
+        let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
 
         const CALLBACK_INDEX: u32 = 0;
@@ -930,7 +946,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CMD_TEST_TIMEOUT)]
     fn test_send_transaction_and_get_array_of_results() {
-        let test_basics = setup_test_basics(false);
+        let test_basics = setup_test_basics(false, true);
         let mut socket = test_basics.socket;
 
         const CALLBACK_INDEX: u32 = 0;

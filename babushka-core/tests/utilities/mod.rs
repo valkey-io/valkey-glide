@@ -4,10 +4,14 @@ use babushka::{
     connection_request::{self, AddressInfo, AuthenticationInfo},
 };
 use futures::Future;
+use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{aio::ConnectionLike, ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
-use std::{env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, time::Duration};
+use std::{
+    env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, sync::Mutex,
+    time::Duration,
+};
 use tempfile::TempDir;
 
 pub mod cluster;
@@ -22,6 +26,49 @@ pub(crate) const LONG_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(20_000)
 pub enum ServerType {
     Tcp { tls: bool },
     Unix,
+}
+
+type SharedServer = Lazy<Mutex<Option<RedisServer>>>;
+static SHARED_SERVER: SharedServer =
+    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
+
+static SHARED_TLS_SERVER: SharedServer =
+    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
+
+static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
+    SHARED_SERVER
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .get_client_addr()
+});
+
+static SHARED_TLS_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
+    SHARED_TLS_SERVER
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .get_client_addr()
+});
+
+pub fn get_shared_server_address(use_tls: bool) -> ConnectionAddr {
+    if use_tls {
+        SHARED_TLS_SERVER_ADDRESS.clone()
+    } else {
+        SHARED_SERVER_ADDRESS.clone()
+    }
+}
+
+#[ctor::dtor]
+fn clean_shared_clusters() {
+    if let Some(mutex) = SharedServer::get(&SHARED_SERVER) {
+        drop(mutex.lock().unwrap().take());
+    }
+    if let Some(mutex) = SharedServer::get(&SHARED_TLS_SERVER) {
+        drop(mutex.lock().unwrap().take());
+    }
 }
 
 pub struct RedisServer {
@@ -439,7 +486,7 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
 }
 
 pub struct TestBasics {
-    pub server: RedisServer,
+    pub server: Option<RedisServer>,
     pub client: ClientCMD,
 }
 
@@ -536,21 +583,33 @@ pub struct TestConfiguration {
     pub cluster_mode: ClusterMode,
     pub response_timeout: Option<u32>,
     pub connection_timeout: Option<u32>,
+    pub shared_server: bool,
 }
 
-pub async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
-    let server = RedisServer::new(ServerType::Tcp {
-        tls: configuration.use_tls,
-    });
+pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
+    let server = if !configuration.shared_server {
+        Some(RedisServer::new(ServerType::Tcp {
+            tls: configuration.use_tls,
+        }))
+    } else {
+        None
+    };
+    let connection_addr = if !configuration.shared_server {
+        server.as_ref().unwrap().get_client_addr()
+    } else {
+        get_shared_server_address(configuration.use_tls)
+    };
+
     if let Some(redis_connection_info) = &configuration.connection_info {
-        setup_acl(&server.get_client_addr(), redis_connection_info).await;
+        assert!(!configuration.shared_server);
+        setup_acl(&connection_addr, redis_connection_info).await;
     }
-    let mut connection_request =
-        create_connection_request(&[server.get_client_addr()], configuration);
+    let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.connection_retry_strategy =
         protobuf::MessageField::from_option(configuration.connection_retry_strategy.clone());
     connection_request.cluster_mode_enabled = false;
     let client = ClientCMD::create_client(connection_request).await.unwrap();
+
     TestBasics { server, client }
 }
 

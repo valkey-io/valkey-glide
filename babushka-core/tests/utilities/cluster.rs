@@ -3,8 +3,10 @@ use babushka::client::Client;
 use babushka::connection_request::AddressInfo;
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
+use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Duration;
 use which::which;
 
@@ -46,6 +48,49 @@ impl Drop for RedisCluster {
             self.use_tls,
             self.password.clone(),
         );
+    }
+}
+
+type SharedCluster = Lazy<Mutex<Option<RedisCluster>>>;
+static SHARED_CLUSTER: SharedCluster =
+    Lazy::new(|| Mutex::new(Some(RedisCluster::new(false, &None, None, None))));
+
+static SHARED_TLS_CLUSTER: SharedCluster =
+    Lazy::new(|| Mutex::new(Some(RedisCluster::new(true, &None, None, None))));
+
+static SHARED_CLUSTER_ADDRESSES: Lazy<Vec<ConnectionAddr>> = Lazy::new(|| {
+    SHARED_CLUSTER
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .get_server_addresses()
+});
+
+static SHARED_TLS_CLUSTER_ADDRESSES: Lazy<Vec<ConnectionAddr>> = Lazy::new(|| {
+    SHARED_TLS_CLUSTER
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .get_server_addresses()
+});
+
+pub fn get_shared_cluster_addresses(use_tls: bool) -> Vec<ConnectionAddr> {
+    if use_tls {
+        SHARED_TLS_CLUSTER_ADDRESSES.clone()
+    } else {
+        SHARED_CLUSTER_ADDRESSES.clone()
+    }
+}
+
+#[ctor::dtor]
+fn clean_shared_clusters() {
+    if let Some(mutex) = SharedCluster::get(&SHARED_CLUSTER) {
+        drop(mutex.lock().unwrap().take());
+    }
+    if let Some(mutex) = SharedCluster::get(&SHARED_TLS_CLUSTER) {
+        drop(mutex.lock().unwrap().take());
     }
 }
 
@@ -165,7 +210,7 @@ impl RedisCluster {
 }
 
 pub struct ClusterTestBasics {
-    pub cluster: RedisCluster,
+    pub cluster: Option<RedisCluster>,
     pub client: Client,
 }
 
@@ -181,20 +226,31 @@ async fn setup_acl_for_cluster(
 }
 
 pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) -> ClusterTestBasics {
-    let cluster = RedisCluster::new(
-        configuration.use_tls,
-        &configuration.connection_info,
-        None,
-        None,
-    );
+    let cluster = if !configuration.shared_server {
+        Some(RedisCluster::new(
+            configuration.use_tls,
+            &configuration.connection_info,
+            None,
+            None,
+        ))
+    } else {
+        None
+    };
+
+    let addresses = if !configuration.shared_server {
+        cluster.as_ref().unwrap().get_server_addresses()
+    } else {
+        get_shared_cluster_addresses(configuration.use_tls)
+    };
+
     if let Some(redis_connection_info) = &configuration.connection_info {
-        setup_acl_for_cluster(&cluster.get_server_addresses(), redis_connection_info).await;
+        assert!(!configuration.shared_server);
+        setup_acl_for_cluster(&addresses, redis_connection_info).await;
     }
     configuration.cluster_mode = ClusterMode::Enabled;
     configuration.response_timeout = configuration.response_timeout.or(Some(10000));
     configuration.connection_timeout = configuration.connection_timeout.or(Some(10000));
-    let connection_request =
-        create_connection_request(&cluster.get_server_addresses(), &configuration);
+    let connection_request = create_connection_request(&addresses, &configuration);
 
     let client = Client::new(connection_request).await.unwrap();
     ClusterTestBasics { cluster, client }

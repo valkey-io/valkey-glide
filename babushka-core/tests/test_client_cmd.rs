@@ -21,7 +21,7 @@ mod client_cmd_tests {
         let server_available_event_clone = server_available_event.clone();
         block_on_all(async move {
             let test_basics = setup_test_basics(use_tls).await;
-            let server = test_basics.server;
+            let server = test_basics.server.unwrap();
             let mut client = test_basics.client;
             let address = server.get_client_addr();
             drop(server);
