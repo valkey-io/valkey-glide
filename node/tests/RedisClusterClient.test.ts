@@ -114,7 +114,7 @@ describe("RedisClusterClient", () => {
     runBaseTests<Context>({
         init: async () => {
             testsFailed += 1;
-            const client = await RedisClusterClient.CreateConnection(
+            const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports())
             );
             return {

@@ -105,7 +105,7 @@ describe("RedisClient", () => {
 
     runBaseTests<Context>({
         init: async () => {
-            const client = await RedisClient.CreateConnection(getOptions(port));
+            const client = await RedisClient.createClient(getOptions(port));
 
             return { client, context: { client } };
         },

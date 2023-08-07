@@ -230,7 +230,7 @@ async function main(
             ? RedisClusterClient
             : RedisClient;
         const clients = await createClients(clientCount, () =>
-            clientClass.CreateConnection({
+            clientClass.createClient({
                 addresses: [{ host }],
                 useTLS,
             })
