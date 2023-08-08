@@ -187,8 +187,10 @@ async fn create_cluster_client(
         ReadFromReplicaStrategy::AlwaysFromPrimary,
     ); // TODO - implement different read from replica strategies.
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
-        .read_from_replicas();
+        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT);
+    if read_from_replicas {
+        builder = builder.read_from_replicas();
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
