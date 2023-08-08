@@ -19,7 +19,7 @@ permissions:
 jobs:
     build:
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
@@ -90,7 +90,7 @@ jobs:
 
     lint-rust:
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        timeout-minutes: 15
         steps:
             - uses: actions/checkout@v3
               with:
