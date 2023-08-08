@@ -427,7 +427,8 @@ def wait_for_all_topology_views(
             "slots",
         ]
         logging.debug(f"Executing: {cmd_args}")
-        retries = 50
+        retries = 60
+        output = ""
         while retries >= 0:
             try:
                 p = subprocess.Popen(
@@ -454,7 +455,8 @@ def wait_for_all_topology_views(
                 retries -= 1
         if retries < 0:
             raise Exception(
-                f"Timeout exceeded trying to wait for replica {server.host}:{server:port} to finish syncing"
+                f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
+                f"Current CLUSTER SLOTS output:\n{output}"
             )
 
 
