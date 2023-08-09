@@ -18,8 +18,6 @@ class AddressInfo:
 class ReadFromReplica(Enum):
     ALWAYS_FROM_MASTER = ReadFromReplicaStrategy.AlwaysFromPrimary
     ROUND_ROBIN = ReadFromReplicaStrategy.RoundRobin
-    LOWEST_LATENCY = ReadFromReplicaStrategy.LowestLatency
-    AZ_AFFINTY = ReadFromReplicaStrategy.AZAffinity
 
 
 class BackoffStrategy:
@@ -36,27 +34,18 @@ class AuthenticationOptions:
         self,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        credentials_provider: Optional[Callable[..., Tuple[str, str]]] = None,
     ):
-        if (username or password) and credentials_provider:
-            raise Exception(
-                """Please specify only one of the followings:
-                            1. [username] and password
-                            2. credentials provider
-                            """
-            )
         self.username = username
         self.password = password
-        self.credentials_provider = credentials_provider
 
 
 class ClientConfiguration:
     """
     Args:
         addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
-                If the server has Cluster Mode Enabled the list can be partial, as the client will attempt to map out
+                If the server is in cluster mode the list can be partial, as the client will attempt to map out
                 the cluster and find all nodes.
-                If the server has Cluster Mode Disabled, only nodes whose addresses were provided will be used by the
+                If the server is in standalone mode, only nodes whose addresses were provided will be used by the
                 client.
                 For example:
                 [
@@ -77,6 +66,7 @@ class ClientConfiguration:
             connection failures. The time between attempts grows exponentially, to the formula:
             rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts. If not set, a default
             backoff strategy will be used.
+            ATM this setting isn't supported in cluster mode, only in standalone mode.
     """
 
     def __init__(
