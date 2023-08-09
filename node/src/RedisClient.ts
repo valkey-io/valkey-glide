@@ -19,29 +19,22 @@ import { Transaction } from "./Transaction";
 type PromiseFunction = (value?: any) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
-type AuthenticationOptions =
-    | {
-          /// The username that will be passed to the cluster's Access Control Layer.
-          /// If not supplied, "default" will be used.
-          username?: string;
-          /// The password that will be passed to the cluster's Access Control Layer.
-          password: string;
-      }
-    | {
-          /// a callback that allows the client to receive new pairs of username/password. Should be used when connecting to a server that might change the required credentials, such as AWS IAM.
-          credentialsProvider: () => [string, string];
-      };
+type AuthenticationOptions = {
+    /// The username that will be passed to the cluster's Access Control Layer.
+    /// If not supplied, "default" will be used.
+    username?: string;
+    /// The password that will be passed to the cluster's Access Control Layer.
+    password: string;
+};
 
 type ReadFromReplicaStrategy =
     | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data.
-    | "roundRobin" /// Spread the request load between all replicas evenly.
-    | "lowestLatency" /// Send requests to the replica with the lowest latency.
-    | "azAffinity"; /// Send requests to the replica which is in the same AZ as the EC2 instance, otherwise behaves like `lowestLatency`. Only available on AWS ElastiCache.
+    | "roundRobin"; /// Spread the requests between all replicas evenly.
 
 export type ConnectionOptions = {
     /// DNS Addresses and ports of known nodes in the cluster.
-    /// If the server has Cluster Mode Enabled the list can be partial, as the client will attempt to map out the cluster and find all nodes.
-    /// If the server has Cluster Mode Disabled, only nodes whose addresses were provided will be used by the client.
+    /// If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
+    /// If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
     /// For example, [{address:sample-address-0001.use1.cache.amazonaws.com, port:6379}, {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}].
     addresses: {
         host: string;
@@ -63,6 +56,7 @@ export type ConnectionOptions = {
     /// Strategy used to determine how and when to retry connecting, in case of connection failures.
     /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
     /// If not set, a default backoff strategy will be used.
+    /// ATM this setting isn't supported in cluster mode, only in standalone mode.
     connectionBackoff?: {
         /// Number of retry attempts that the client should perform when disconnected from the server.
         /// Value must be an integer.
@@ -268,8 +262,6 @@ export class RedisClient {
         alwaysFromPrimary:
             connection_request.ReadFromReplicaStrategy.AlwaysFromPrimary,
         roundRobin: connection_request.ReadFromReplicaStrategy.RoundRobin,
-        azAffinity: connection_request.ReadFromReplicaStrategy.AZAffinity,
-        lowestLatency: connection_request.ReadFromReplicaStrategy.LowestLatency,
     };
 
     protected createClientRequest(
