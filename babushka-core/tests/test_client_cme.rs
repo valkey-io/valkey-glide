@@ -30,6 +30,7 @@ mod client_cme_tests {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
@@ -54,6 +55,7 @@ mod client_cme_tests {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
@@ -81,6 +83,7 @@ mod client_cme_tests {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
@@ -108,6 +111,7 @@ mod client_cme_tests {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
@@ -137,6 +141,7 @@ mod client_cme_tests {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
