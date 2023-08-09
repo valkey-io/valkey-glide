@@ -12,6 +12,7 @@ Babushka (temporary name, final name pending) is a collection of open source Red
 -   babushka-core - [the Rust core](./babushka-core/README.md). This code is compiled into binaries which are used by the various wrappers.
 -   benchmarks - [benchmarks for the wrappers](./benchmarks/README.md), and for the current leading Redis client in each language.
 -   csharp - [the C# wrapper](./csharp/README.md). currently not in a usable state.
+-   examples - [Sample applications](./examples/), in various languages, demonstrating usage of the client.
 -   logger_core - [the logger we use](./logger_core/).
 -   node - [the NodeJS wrapper](./node/README.md).
 -   python - [the Python3 wrapper](./python/README.md)
