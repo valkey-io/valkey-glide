@@ -16,6 +16,14 @@ async function sendPingToNode() {
     // The empty array signifies that there are no additional arguments.
     const pong = await client.customCommand("PING", []);
     console.log(pong);
+    await send_set_and_get(client);
+}
+
+async function send_set_and_get(client: RedisClient | RedisClusterClient) {
+    const set_response = await client.set("foo", "bar");
+    console.log(`Set response is = ${set_response}`);
+    const get_response = await client.get("foo");
+    console.log(`Get response is = ${get_response}`);
 }
 
 async function sendPingToRandomNodeInCluster() {
@@ -34,6 +42,7 @@ async function sendPingToRandomNodeInCluster() {
     // The empty array signifies that there are no additional arguments.
     const pong = await client.customCommand("PING", [], "randomNode");
     console.log(pong);
+    await send_set_and_get(client);
 }
 
 function setFileLogger() {
