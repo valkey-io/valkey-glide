@@ -39,6 +39,33 @@ enum RequestType {
     GetString = 2;
     /// Type of a set string request.
     SetString = 3;
+    Ping = 4;
+    Info = 5;
+    Del = 6;
+    Select = 7;
+    ConfigGet = 8;
+    ConfigSet = 9;
+    ConfigResetStat = 10;
+    ConfigRewrite = 11;
+    ClientGetName = 12;
+    ClientGetRedir = 13;
+    ClientId = 14;
+    ClientInfo = 15;
+    ClientKill = 16;
+    ClientList = 17;
+    ClientNoEvict = 18;
+    ClientNoTouch = 19;
+    ClientPause = 20;
+    ClientReply = 21;
+    ClientSetInfo = 22;
+    ClientSetName = 23;
+    ClientUnblock = 24;
+    ClientUnpause = 25;
+    Expire = 26;
+    HashSet = 27;
+    HashGet = 28;
+    HashDel = 29;
+    HashExists = 30;
 }
 
 message Command {
