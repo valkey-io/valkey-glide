@@ -247,6 +247,12 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
+fn get_two_word_command(first: &str, second: &str) -> Cmd {
+    let mut cmd = cmd(first);
+    cmd.arg(second);
+    cmd
+}
+
 fn get_command(request: &Command) -> Option<Cmd> {
     let request_enum = request
         .request_type
@@ -256,6 +262,33 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::CustomCommand => Some(Cmd::new()),
         RequestType::GetString => Some(cmd("GET")),
         RequestType::SetString => Some(cmd("SET")),
+        RequestType::Ping => Some(cmd("PING")),
+        RequestType::Info => Some(cmd("INFO")),
+        RequestType::Del => Some(cmd("DEL")),
+        RequestType::Select => Some(cmd("SELECT")),
+        RequestType::ConfigGet => Some(get_two_word_command("CONFIG", "GET")),
+        RequestType::ConfigSet => Some(get_two_word_command("CONFIG", "SET")),
+        RequestType::ConfigResetStat => Some(get_two_word_command("CONFIG", "RESETSTAT")),
+        RequestType::ConfigRewrite => Some(get_two_word_command("CONFIG", "REWRITE")),
+        RequestType::ClientGetName => Some(get_two_word_command("CLIENT", "GETNAME")),
+        RequestType::ClientGetRedir => Some(get_two_word_command("CLIENT", "GETREDIR")),
+        RequestType::ClientId => Some(get_two_word_command("CLIENT", "ID")),
+        RequestType::ClientInfo => Some(get_two_word_command("CLIENT", "INFO")),
+        RequestType::ClientKill => Some(get_two_word_command("CLIENT", "KILL")),
+        RequestType::ClientList => Some(get_two_word_command("CLIENT", "LIST")),
+        RequestType::ClientNoEvict => Some(get_two_word_command("CLIENT", "NO-EVICT")),
+        RequestType::ClientNoTouch => Some(get_two_word_command("CLIENT", "NO-TOUCH")),
+        RequestType::ClientPause => Some(get_two_word_command("CLIENT", "PAUSE")),
+        RequestType::ClientReply => Some(get_two_word_command("CLIENT", "REPLY")),
+        RequestType::ClientSetInfo => Some(get_two_word_command("CLIENT", "SETINFO")),
+        RequestType::ClientSetName => Some(get_two_word_command("CLIENT", "SETNAME")),
+        RequestType::ClientUnblock => Some(get_two_word_command("CLIENT", "UNBLOCK")),
+        RequestType::ClientUnpause => Some(get_two_word_command("CLIENT", "UNPAUSE")),
+        RequestType::Expire => Some(cmd("EXPIRE")),
+        RequestType::HashSet => Some(cmd("HSET")),
+        RequestType::HashGet => Some(cmd("HGET")),
+        RequestType::HashDel => Some(cmd("HDEL")),
+        RequestType::HashExists => Some(cmd("HEXISTS")),
     }
 }
 
