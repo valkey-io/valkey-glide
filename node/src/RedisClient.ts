@@ -14,14 +14,23 @@ import {
     createGet,
     createInfo,
     createSelect,
-    createSet
+    createSet,
 } from "./Commands";
+import {
+    BaseRedisError,
+    ClosingError,
+    ConnectionError,
+    ExecAbortError,
+    RedisError,
+    TimeoutError,
+} from "./Errors";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
+type ErrorFunction = (error: BaseRedisError) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
 type AuthenticationOptions = {
@@ -75,11 +84,30 @@ export type ConnectionOptions = {
     readFromReplicaStrategy?: ReadFromReplicaStrategy;
 };
 
+function getRequestErrorClass(
+    type: response.RequestErrorType | null | undefined
+): typeof RedisError {
+    if (type === response.RequestErrorType.Disconnect) {
+        return ConnectionError;
+    }
+    if (type === response.RequestErrorType.ExecAbort) {
+        return ExecAbortError;
+    }
+    if (type === response.RequestErrorType.Timeout) {
+        return TimeoutError;
+    }
+    if (type === response.RequestErrorType.Unspecified) {
+        return RedisError;
+    }
+
+    return RedisError;
+}
+
 export class RedisClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
         PromiseFunction,
-        PromiseFunction
+        ErrorFunction
     ][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private requestWriter = new BufferWriter();
@@ -111,15 +139,20 @@ export class RedisClient {
                     return;
                 }
             }
-            if (message.closingError !== null) {
+            if (message.closingError) {
                 this.dispose(message.closingError);
                 return;
             }
             const [resolve, reject] =
                 this.promiseCallbackFunctions[message.callbackIdx];
             this.availableCallbackSlots.push(message.callbackIdx);
-            if (message.requestError !== null) {
-                reject(message.requestError);
+            if (message.requestError) {
+                const errorType = getRequestErrorClass(
+                    message.requestError.type
+                );
+                reject(
+                    new errorType(message.requestError.message ?? undefined)
+                );
             } else if (message.respPointer) {
                 const pointer = message.respPointer;
                 if (typeof pointer === "number") {
@@ -179,7 +212,7 @@ export class RedisClient {
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
-                reject("Operation timed out");
+                reject(new TimeoutError("Operation timed out"));
             }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
@@ -256,7 +289,7 @@ export class RedisClient {
 
     /** Change the currently selected Redis database.
      * See https://redis.io/commands/select/ for details.
-     * 
+     *
      * @param index : The index of the database to select.
      * @returns A simple OK response.
      */
@@ -266,10 +299,10 @@ export class RedisClient {
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
-     * 
+     *
      * @returns always "OK"
      */
-    public ConfigResetStat(): Promise<"OK">  {
+    public ConfigResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
     }
 
@@ -357,7 +390,7 @@ export class RedisClient {
 
     public dispose(errorMessage?: string): void {
         this.promiseCallbackFunctions.forEach(([, reject]) => {
-            reject(errorMessage);
+            reject(new ClosingError(errorMessage));
         });
         Logger.instance.log("info", "Client lifetime", "disposing of client");
         this.socket.end();

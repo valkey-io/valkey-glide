@@ -6,9 +6,12 @@ import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
 import {
+    ClosingError,
     ConnectionOptions,
     RedisClient,
     RedisClusterClient,
+    RequestError,
+    TimeoutError,
     setLoggerConfig,
 } from "../build-ts";
 import {
@@ -40,7 +43,8 @@ function sendResponse(
     socket: net.Socket,
     responseType: ResponseType,
     callbackIndex: number,
-    message?: string
+    message?: string,
+    requestErrorType?: response.RequestErrorType
 ) {
     const new_response = response.Response.create();
     new_response.callbackIdx = callbackIndex;
@@ -51,7 +55,10 @@ function sendResponse(
     } else if (responseType == ResponseType.ClosingError) {
         new_response.closingError = message;
     } else if (responseType == ResponseType.RequestError) {
-        new_response.requestError = message;
+        new_response.requestError = new response.RequestError({
+            type: requestErrorType,
+            message,
+        });
     } else if (responseType == ResponseType.Null) {
         // do nothing
     } else if (responseType == ResponseType.OK) {
@@ -276,7 +283,7 @@ describe("SocketConnectionInternals", () => {
             });
             const request = connection.get("foo");
 
-            await expect(request).rejects.toMatch(error);
+            await expect(request).rejects.toEqual(new RequestError(error));
         });
     });
 
@@ -302,8 +309,8 @@ describe("SocketConnectionInternals", () => {
             const request1 = connection.get("foo");
             const request2 = connection.get("bar");
 
-            await expect(request1).rejects.toMatch(error);
-            await expect(request2).rejects.toMatch(error);
+            await expect(request1).rejects.toEqual(new ClosingError(error));
+            await expect(request2).rejects.toEqual(new ClosingError(error));
         });
     });
 
@@ -327,8 +334,8 @@ describe("SocketConnectionInternals", () => {
             const request1 = connection.get("foo");
             const request2 = connection.get("bar");
 
-            await expect(request1).rejects.toMatch(error);
-            await expect(request2).rejects.toMatch(error);
+            await expect(request1).rejects.toEqual(new ClosingError(error));
+            await expect(request2).rejects.toEqual(new ClosingError(error));
         });
     });
 
@@ -434,8 +441,8 @@ describe("SocketConnectionInternals", () => {
                         ).toEqual(1);
                     }, 20)
                 );
-                await expect(connection.get("foo")).rejects.toEqual(
-                    "Operation timed out"
+                await expect(connection.get("foo")).rejects.toThrow(
+                    TimeoutError
                 );
             },
             {
