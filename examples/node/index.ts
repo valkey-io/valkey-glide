@@ -46,4 +46,5 @@ function setConsoleLogger() {
 
 setFileLogger();
 await sendPingToNode();
+setConsoleLogger();
 await sendPingToRandomNodeInCluster();
