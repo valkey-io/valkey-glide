@@ -217,7 +217,7 @@ async fn write_result(
                     )
                     .into();
                 } else if err.is_timeout() {
-                    request_error.type_ = response::RequestErrorType::Disconnect.into();
+                    request_error.type_ = response::RequestErrorType::Timeout.into();
                     request_error.message = error_message.into();
                 } else {
                     request_error.type_ = match err.kind() {
