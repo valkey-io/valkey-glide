@@ -24,6 +24,7 @@ runAllBenchmarks=1
 runPython=0
 runNode=0
 runCsharp=0
+runRust=0
 concurrentTasks="1 10 100 1000"
 dataSize="100 4000"
 clientCount="1"
