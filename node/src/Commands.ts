@@ -104,6 +104,53 @@ export function createSet(
     return createCommand(RequestType.SetString, args);
 }
 
+export enum InfoOptions {
+    /// INFO option: a specific section of information:
+
+    /// -SERVER: General information about the Redis server
+    Server = "server",
+    /// -CLIENTS: Client connections section
+    Clients = "clients",
+    /// -MEMORY: Memory consumption related information
+    Memory = "memory",
+    /// -PERSISTENCE: RDB and AOF related information
+    Persistence = "persistence",
+    /// -STATS: General statistics
+    Stats = "stats",
+    /// -REPLICATION: Master/replica replication information
+    Replication = "replication",
+    /// -CPU: CPU consumption statistics
+    Cpu = "cpu",
+    /// -COMMANDSTATS: Redis command statistics
+    Commandstats = "commandstats",
+    /// -LATENCYSTATS: Redis command latency percentile distribution statistics
+    Latencystats = "latencystats",
+    /// -SENTINEL: Redis Sentinel section (only applicable to Sentinel instances)
+    Sentinel = "sentinel",
+    /// -CLUSTER: Redis Cluster section
+    Cluster = "cluster",
+    /// -MODULES: Modules section
+    Modules = "modules",
+    /// -KEYSPACE: Database related statistics
+    Keyspace = "keyspace",
+    /// -ERRORSTATS: Redis error statistics
+    Errorstats = "errorstats",
+    /// -ALL: Return all sections (excluding module generated ones)
+    All = "all",
+    /// -DEFAULT: Return only the default set of sections
+    Default = "default",
+    /// EVERYTHING: Includes all and modules
+    Everything = "everything"
+    /// When no parameter is provided, the default option is assumed.
+}
+
+export function createInfo(
+    options?: InfoOptions[]
+): redis_request.Command {
+    const args: string[] = (options == undefined) ? [] : options;
+    return createCommand(RequestType.Info, args);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }

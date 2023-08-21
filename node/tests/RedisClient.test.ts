@@ -102,6 +102,16 @@ describe("RedisClient", () => {
             "bar4",
         ]);
     });
+    
+    it("info without parameters", async () => {
+        const client = await RedisClient.createClient(getOptions(port));
+        const result = await client.info();
+        expect(result).toEqual(expect.stringContaining('# Server'));
+        expect(result).toEqual(expect.stringContaining('# Replication'));
+        expect(result).toEqual(expect.not.stringContaining('# Latencystats'));
+        client.dispose();
+    }
+    );
 
     runBaseTests<Context>({
         init: async () => {
