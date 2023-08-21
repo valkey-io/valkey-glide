@@ -1,8 +1,10 @@
 import {
+    InfoOptions,
     SetOptions,
     createCustomCommand,
     createGet,
-    createSet,
+    createInfo,
+    createSet
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -19,6 +21,12 @@ export class Transaction {
     /// See https://redis.io/commands/set/ for details.
     public set(key: string, value: string, options?: SetOptions) {
         this.commands.push(createSet(key, value, options));
+    }
+
+    /// Returns information and statistics about the server according to the given arguments.
+    /// See https://redis.io/commands/info/ for details.
+    public info(options?: InfoOptions[]) {
+        this.commands.push(createInfo(options));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

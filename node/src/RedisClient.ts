@@ -6,10 +6,12 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
+    InfoOptions,
     SetOptions,
     createCustomCommand,
     createGet,
-    createSet,
+    createInfo,
+    createSet
 } from "./Commands";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
@@ -233,6 +235,13 @@ export class RedisClient {
         options?: SetOptions
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
+    }
+
+    /// Returns information and statistics about the server according to the given arguments.
+    /// When no parameter is provided, the default option is assumed.
+    /// See https://redis.io/commands/info/ for details.
+    public info(options?: InfoOptions[]): Promise<string> {
+        return this.createWritePromise(createInfo(options));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
