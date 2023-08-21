@@ -10,6 +10,7 @@ from pybushka.async_commands.core import (
     ConditionalSet,
     ExpirySet,
     ExpiryType,
+    InfoSection,
     Transaction,
 )
 from pybushka.async_ffi_client import RedisAsyncFFIClient
@@ -206,6 +207,28 @@ class TestSocketClient:
         with pytest.raises(Exception) as e:
             await redis_client.custom_command(["HSET", key, "1", "bar"])
         assert "WRONGTYPE" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    async def test_info_server_replication(self, redis_client: BaseRedisClient):
+        sections = [InfoSection.SERVER, InfoSection.REPLICATION]
+        info = get_first_result(await redis_client.info(sections))
+        assert "# Server" in info
+        assert "# Replication" in info
+        assert "# Errorstats" not in info
+        cluster_mode = parse_info_response(info)["redis_mode"]
+        expected_cluster_mode = type(redis_client) == RedisClusterClient
+        assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_info_default(self, redis_client: BaseRedisClient):
+        cluster_mode = type(redis_client) == RedisClusterClient
+        info_result = await redis_client.info()
+        if cluster_mode:
+            cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+            expected_num_of_results = cluster_nodes.count("master")
+            assert len(info_result) == expected_num_of_results
+        info_result = get_first_result(info_result)
+        assert "# Memory" in info_result
 
 
 @pytest.mark.asyncio
@@ -419,6 +442,12 @@ class TestClusterRoutes:
         self, redis_client: BaseRedisClient
     ):
         await self.cluster_route_custom_command_slot_route(redis_client, False)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_info_random_route(self, redis_client: BaseRedisClient):
+        info = await redis_client.info(route=RandomNode())
+        assert type(info) == str
+        assert "# Server" in info
 
 
 @pytest.mark.asyncio

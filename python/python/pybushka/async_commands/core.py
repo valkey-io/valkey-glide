@@ -34,6 +34,49 @@ class ExpiryType(Enum):
     KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
 
 
+class InfoSection(Enum):
+    """
+    INFO option: a specific section of information:
+
+    -SERVER: General information about the Redis server
+    -CLIENTS: Client connections section
+    -MEMORY: Memory consumption related information
+    -PERSISTENCE: RDB and AOF related information
+    -STATS: General statistics
+    -REPLICATION: Master/replica replication information
+    -CPU: CPU consumption statistics
+    -COMMANDSTATS: Redis command statistics
+    -LATENCYSTATS: Redis command latency percentile distribution statistics
+    -SENTINEL: Redis Sentinel section (only applicable to Sentinel instances)
+    -CLUSTER: Redis Cluster section
+    -MODULES: Modules section
+    -KEYSPACE: Database related statistics
+    -ERRORSTATS: Redis error statistics
+    -ALL: Return all sections (excluding module generated ones)
+    -DEFAULT: Return only the default set of sections
+    -EVERYTHING: Includes all and modules
+    When no parameter is provided, the default option is assumed.
+    """
+
+    SERVER = "server"
+    CLIENTS = "clients"
+    MEMORY = "memory"
+    PERSISTENCE = "persistence"
+    STATS = "stats"
+    REPLICATION = "replication"
+    CPU = "cpu"
+    COMMAND_STATS = "commandstats"
+    LATENCY_STATS = "latencystats"
+    SENTINEL = "sentinel"
+    CLUSTER = "cluster"
+    MODULES = "modules"
+    KEYSPACE = "keyspace"
+    ERROR_STATS = "errorstats"
+    ALL = "all"
+    DEFAULT = "default"
+    EVERYTHING = "everything"
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
