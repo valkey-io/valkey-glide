@@ -29,7 +29,7 @@ message SlotKeyRoute {
 
 message Routes {
     oneof routes {
-        SimpleRoutes simmpleRoutes = 1;
+        SimpleRoutes simpleRoutes = 1;
         SlotKeyRoute slotKeyRoute = 2;
         SlotIdRoute slotIdRoute = 3;
     }
