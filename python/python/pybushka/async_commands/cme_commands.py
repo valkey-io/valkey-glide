@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
-from pybushka.async_commands.core import CoreCommands
+from pybushka.async_commands.core import CoreCommands, InfoSection
 from pybushka.constants import TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import TRoute
@@ -26,3 +26,11 @@ class CMECommands(CoreCommands):
         return await self._execute_command(
             RequestType.CustomCommand, command_args, route
         )
+
+    async def info(
+        self,
+        sections: Optional[List[InfoSection]] = None,
+        route: Optional[TRoute] = None,
+    ) -> Union[List[str], str]:
+        args = [section.value for section in sections] if sections else []
+        return await self._execute_command(RequestType.Info, args, route)
