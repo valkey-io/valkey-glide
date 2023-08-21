@@ -1,5 +1,5 @@
 import * as net from "net";
-import { createCustomCommand } from "./Commands";
+import { InfoOptions, createCustomCommand, createInfo } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
@@ -122,5 +122,11 @@ export class RedisClusterClient extends RedisClient {
     ): Promise<ReturnType> {
         const command = createCustomCommand(commandName, args);
         return super.createWritePromise(command, toProtobufRoute(route));
+    }
+
+    /// Returns information and statistics about the server according to the given arguments.
+    /// See https://redis.io/commands/info/ for details.
+    public info(options?: InfoOptions[], route?: Routes): Promise<string> {
+        return this.createWritePromise(createInfo(options), toProtobufRoute(route));
     }
 }
