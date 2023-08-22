@@ -151,6 +151,12 @@ export function createInfo(
     return createCommand(RequestType.Info, args);
 }
 
+export function createDel(
+    keys: string[]
+): redis_request.Command {
+    return createCommand(RequestType.Del, keys);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }

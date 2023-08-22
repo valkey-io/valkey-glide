@@ -2,6 +2,7 @@ import {
     InfoOptions,
     SetOptions,
     createCustomCommand,
+    createDel,
     createGet,
     createInfo,
     createSet
@@ -27,6 +28,13 @@ export class Transaction {
     /// See https://redis.io/commands/info/ for details.
     public info(options?: InfoOptions[]) {
         this.commands.push(createInfo(options));
+    }
+
+    /// Removes the specified keys. A key is ignored if it does not exist.
+    /// Returns the number of keys that were removed.
+    /// See https://redis.io/commands/del/ for details.
+    public del(keys: string[]) {
+        this.commands.push(createDel(keys));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
