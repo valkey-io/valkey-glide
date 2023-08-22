@@ -10,6 +10,7 @@ type BaseClient = {
         options?: SetOptions
     ) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
+    del: (keys: string[]) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
     exec: (transaction: Transaction) => Promise<ReturnType>;
 };
@@ -155,6 +156,29 @@ export function runBaseTests<Context>(config: {
 
                 const result = await client.exec(transaction);
                 expect(result).toEqual(["OK", null, ["bar", "baz"]]);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "delete multiple existing keys and an non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const key3 = "{key}" + uuidv4();
+                const value = uuidv4();
+                let result = await client.set(key1, value);
+                expect(result).toEqual("OK");
+                result = await client.set(key2, value);
+                expect(result).toEqual("OK");
+                result = await client.set(key3, value);
+                expect(result).toEqual("OK");
+                let deletedKeysNum = await client.del([key1, key2, key3]);
+                expect(deletedKeysNum).toEqual(3);
+                deletedKeysNum = await client.del([uuidv4()]);
+                expect(deletedKeysNum).toEqual(0);
             });
         },
         config.timeout

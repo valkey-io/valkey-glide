@@ -9,6 +9,7 @@ import {
     InfoOptions,
     SetOptions,
     createCustomCommand,
+    createDel,
     createGet,
     createInfo,
     createSet
@@ -242,6 +243,13 @@ export class RedisClient {
     /// See https://redis.io/commands/info/ for details.
     public info(options?: InfoOptions[]): Promise<string> {
         return this.createWritePromise(createInfo(options));
+    }
+
+    /// Removes the specified keys. A key is ignored if it does not exist.
+    /// Returns the number of keys that were removed.
+    /// See https://redis.io/commands/del/ for details.
+    public del(keys: string[]): Promise<number> {
+        return this.createWritePromise(createDel(keys));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
