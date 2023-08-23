@@ -31,6 +31,20 @@ class CMECommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[TRoute] = None,
-    ) -> Union[List[str], str]:
+    ) -> Union[List[List[str]], str]:
+        """Get information and statistics about the Redis server.
+        See https://redis.io/commands/info/ for details.
+
+        Args:
+            sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
+            information to retrieve. When no parameter is provided, the default option is assumed.
+            route (Optional[TRoute], optional): The command will be routed automatically, unless `route` is provided, in which
+            case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            Union[List[List[str]], str]: If a single node route is requested, returns a string containing the information for
+            the required sections. Otherwise, returns a list of lists of strings, with each sub-list containing the address of
+            the queried node and the information regarding the requested sections.
+        """
         args = [section.value for section in sections] if sections else []
         return await self._execute_command(RequestType.Info, args, route)
