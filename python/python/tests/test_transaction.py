@@ -107,3 +107,9 @@ class TestTransaction:
         transaction_test_helper(
             transaction, RequestType.Info, ["server", "replication"]
         )
+
+    async def test_transaction_delete(self):
+        key = get_random_string(10)
+        transaction = Transaction()
+        transaction.delete([key])
+        transaction_test_helper(transaction, RequestType.Del, [key])
