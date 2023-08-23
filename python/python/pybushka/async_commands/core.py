@@ -1,7 +1,7 @@
 import threading
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Type, Union, get_args
+from typing import List, Optional, Type, Union, get_args
 
 from pybushka.constants import TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
@@ -193,6 +193,21 @@ class Transaction:
         """
         self.append_command(RequestType.CustomCommand, command_args)
 
+    def info(
+        self,
+        sections: Optional[List[InfoSection]] = None,
+    ):
+        """Get information and statistics about the Redis server.
+        See https://redis.io/commands/info/ for details.
+        Args:
+            sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
+            information to retrieve. When no parameter is provided, the default option is assumed.
+        Returns:
+            str: Returns a string containing the information for the sections requested.
+        """
+        args = [section.value for section in sections] if sections else []
+        self.append_command(RequestType.Info, args)
+
     def dispose(self):
         with self.lock:
             self.commands.clear()
@@ -253,7 +268,18 @@ class CoreCommands:
         """
         return await self._execute_command(RequestType.GetString, [key])
 
-    async def exec(self, transaction: Transaction) -> List[Union[str, None, TResult]]:
+    async def exec(self, transaction: Transaction) -> List[TResult]:
+        """Execute a transaction by processing the queued commands.
+        See https://redis.io/topics/transactions/ for details on Redis transactions.
+
+        Args:
+            transaction (Transaction): A transaction object containing a list of commands to be executed.
+
+        Returns:
+            List[TResult]: A list of results corresponding to the execution of each command
+            in the transaction. If a command returns a value, it will be included in the list. If a command
+            doesn't return a value, the list entry will be None.
+        """
         commands = transaction.commands[:]
         transaction.dispose()
         return await self.execute_transaction(commands)
