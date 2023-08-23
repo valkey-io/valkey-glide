@@ -1,6 +1,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
-import { ReturnType, SetOptions, Transaction } from "../";
+import { ReturnType, SetOptions } from "../";
+import { BaseTransaction } from "../src/Transaction";
 import { Client, GetAndSetRandomValue } from "./TestUtilities";
 
 type BaseClient = {
@@ -12,7 +13,7 @@ type BaseClient = {
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
-    exec: (transaction: Transaction) => Promise<ReturnType>;
+    exec: (transaction: BaseTransaction) => Promise<ReturnType>;
 };
 
 export function runBaseTests<Context>(config: {
@@ -146,7 +147,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}" + uuidv4();
                 const key2 = "{key}" + uuidv4();
-                const transaction = new Transaction();
+                const transaction = new BaseTransaction();
                 transaction.set(key1, "bar");
                 transaction.set(key2, "baz", {
                     conditionalSet: "onlyIfDoesNotExist",

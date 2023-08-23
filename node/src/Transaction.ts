@@ -9,7 +9,8 @@ import {
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
-export class Transaction {
+/// Base class that includes all the shared commands in Client and ClusterClient.
+export class BaseTransaction {
     readonly commands: redis_request.Command[] = [];
 
     /// Get the value associated with the given key, or null if no such value exists.
@@ -49,4 +50,12 @@ export class Transaction {
     public customCommand(commandName: string, args: string[]) {
         return this.commands.push(createCustomCommand(commandName, args));
     }
+}
+
+export class Transaction extends BaseTransaction{
+    /// TODO: add SELECT, MOVE, SLAVEOF and all SENTINEL commands
+}
+
+export class ClusterTransaction extends BaseTransaction{
+    /// TODO: add all CLUSTER commands
 }
