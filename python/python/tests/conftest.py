@@ -1,8 +1,11 @@
+import random
+
 import pytest
 from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
+from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
 from tests.utils.cluster import RedisCluster
 
 default_host = "localhost"
@@ -70,3 +73,22 @@ def pytest_sessionfinish(session, exitstatus):
     except AttributeError:
         # redis_cluster was not set, skip deletion
         pass
+
+
+@pytest.fixture()
+async def redis_client(request, cluster_mode) -> BaseRedisClient:
+    "Get async socket client for tests"
+    host = request.config.getoption("--host")
+    port = request.config.getoption("--port")
+    use_tls = request.config.getoption("--tls")
+    if cluster_mode:
+        seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
+        config = ClientConfiguration(seed_nodes, use_tls=use_tls)
+        client = await RedisClusterClient.create(config)
+    else:
+        config = ClientConfiguration(
+            [AddressInfo(host=host, port=port)], use_tls=use_tls
+        )
+        client = await RedisClient.create(config)
+    yield client
+    client.close()
