@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from pybushka.async_commands.core import CoreCommands, InfoSection
 from pybushka.constants import TResult
@@ -23,6 +23,17 @@ class CMDCommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-    ) -> Union[List[str], str]:
+    ) -> str:
+        """Get information and statistics about the Redis server.
+        See https://redis.io/commands/info/ for details.
+
+        Args:
+            sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
+            information to retrieve. When no parameter is provided, the default option is assumed.
+
+
+        Returns:
+            str: Returns a string containing the information for the sections requested.
+        """
         args = [section.value for section in sections] if sections else []
         return await self._execute_command(RequestType.Info, args)
