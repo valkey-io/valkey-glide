@@ -212,6 +212,18 @@ class Transaction:
         with self.lock:
             self.commands.clear()
 
+    def delete(self, keys: List[str]):
+        """Delete one or more keys from the database. A key is ignored if it does not exist.
+        See https://redis.io/commands/del/ for details.
+
+        Args:
+            keys (List[str]): A list of keys to be deleted from the database.
+
+        Returns:
+            int: The number of keys that were deleted.
+        """
+        self.append_command(RequestType.Del, keys)
+
 
 class CoreCommands:
     async def set(
@@ -283,3 +295,15 @@ class CoreCommands:
         commands = transaction.commands[:]
         transaction.dispose()
         return await self.execute_transaction(commands)
+
+    async def delete(self, keys: List[str]) -> int:
+        """Delete one or more keys from the database. A key is ignored if it does not exist.
+        See https://redis.io/commands/del/ for details.
+
+        Args:
+            keys (List[str]): A list of keys to be deleted from the database.
+
+        Returns:
+            int: The number of keys that were deleted.
+        """
+        return await self._execute_command(RequestType.Del, keys)

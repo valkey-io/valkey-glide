@@ -209,6 +209,18 @@ class TestSocketClient:
         info_result = get_first_result(info_result)
         assert "# Memory" in info_result
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_delete(self, redis_client: BaseRedisClient):
+        keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
+        value = get_random_string(10)
+        [await redis_client.set(key, value) for key in keys]
+        assert await redis_client.get(keys[0]) == value
+        assert await redis_client.get(keys[1]) == value
+        assert await redis_client.get(keys[2]) == value
+        delete_keys = keys + [get_random_string(10)]
+        assert await redis_client.delete(delete_keys) == 3
+        assert await redis_client.delete(keys) == 0
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):
