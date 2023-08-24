@@ -255,7 +255,7 @@ namespace babushka
             });
         }
 
-        private ArraySegment<byte> ParseReadResults(byte[] buffer, int messageLength, MessageContainer messageContainer)
+        private ArraySegment<byte> ParseReadResults(byte[] buffer, int messageLength, MessageContainer<string?> messageContainer)
         {
             var counter = 0;
             while (counter + HEADER_LENGTH_IN_BYTES <= messageLength)
@@ -401,7 +401,7 @@ namespace babushka
         #region private fields
 
         private readonly Socket socket;
-        private readonly MessageContainer messageContainer = new();
+        private readonly MessageContainer<string?> messageContainer = new();
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;
         private bool IsDisposed => disposedFlag == 1;
