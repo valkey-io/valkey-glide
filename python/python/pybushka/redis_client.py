@@ -164,7 +164,9 @@ class BaseRedisClient(CoreCommands):
         return response_future.result()
 
     async def execute_transaction(
-        self, commands: List[Union[TRequestType, List[str]]]
+        self,
+        commands: List[Union[TRequestType, List[str]]],
+        route: Optional[TRoute] = None,
     ) -> TResult:
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
@@ -175,6 +177,7 @@ class BaseRedisClient(CoreCommands):
             command.args_array.args[:] = args
             transaction_commands.append(command)
         request.transaction.commands.extend(transaction_commands)
+        set_protobuf_route(request, route)
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)

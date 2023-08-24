@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 import pytest
-from pybushka.async_commands.core import InfoSection, Transaction
+from pybushka.async_commands.core import BaseTransaction, InfoSection
 from pybushka.constants import OK
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.redis_client import BaseRedisClient
@@ -10,7 +10,7 @@ from tests.test_async_client import get_random_string
 
 
 def transaction_test_helper(
-    transaction: Transaction,
+    transaction: BaseTransaction,
     expected_request_type: RequestType,
     expected_args: List[str],
 ):
@@ -24,7 +24,7 @@ class TestTransaction:
     async def test_transaction_set_get(self, redis_client: BaseRedisClient):
         key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.set(key, value)
         transaction.get(key)
         result = await redis_client.exec(transaction)
@@ -35,7 +35,7 @@ class TestTransaction:
         key = get_random_string(10)
         key2 = "{{{}}}:{}".format(key, get_random_string(3))  # to get the same slot
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.set(key, value)
         transaction.get(key)
         transaction.set(key2, value)
@@ -47,7 +47,7 @@ class TestTransaction:
     async def test_transaction_with_different_slots(
         self, redis_client: BaseRedisClient
     ):
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(Exception) as e:
@@ -57,7 +57,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_transaction_custom_command(self, redis_client: BaseRedisClient):
         key = get_random_string(10)
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
         result = await redis_client.exec(transaction)
@@ -68,7 +68,7 @@ class TestTransaction:
         self, redis_client: BaseRedisClient
     ):
         key = get_random_string(10)
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.custom_command(["WATCH", key])
         with pytest.raises(Exception) as e:
             await redis_client.exec(transaction)
@@ -80,7 +80,7 @@ class TestTransaction:
     async def test_transaction_discard_command(self, redis_client: BaseRedisClient):
         key = get_random_string(10)
         await redis_client.set(key, "1")
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
         with pytest.raises(Exception) as e:
@@ -92,7 +92,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_transaction_exec_abort(self, redis_client: BaseRedisClient):
         key = get_random_string(10)
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
         with pytest.raises(Exception) as e:
             await redis_client.exec(transaction)
@@ -102,7 +102,7 @@ class TestTransaction:
 
     async def test_transaction_info(self):
         sections = [InfoSection.SERVER, InfoSection.REPLICATION]
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.info(sections)
         transaction_test_helper(
             transaction, RequestType.Info, ["server", "replication"]
@@ -110,6 +110,6 @@ class TestTransaction:
 
     async def test_transaction_delete(self):
         key = get_random_string(10)
-        transaction = Transaction()
+        transaction = BaseTransaction()
         transaction.delete([key])
         transaction_test_helper(transaction, RequestType.Del, [key])

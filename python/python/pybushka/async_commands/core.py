@@ -144,7 +144,11 @@ class FFICoreCommands:
         return self.connection.set(key, value)
 
 
-class Transaction:
+class BaseTransaction:
+    """
+    Base class encompassing shared commands for both Client and ClusterClient implementations in transaction.
+    """
+
     def __init__(self) -> None:
         self.commands = []
         self.lock = threading.Lock()
@@ -155,6 +159,10 @@ class Transaction:
             self.commands.append([request_type, args])
         finally:
             self.lock.release()
+
+    def dispose(self):
+        with self.lock:
+            self.commands.clear()
 
     def get(self, key: str):
         self.append_command(RequestType.GetString, [key])
@@ -207,10 +215,6 @@ class Transaction:
         """
         args = [section.value for section in sections] if sections else []
         self.append_command(RequestType.Info, args)
-
-    def dispose(self):
-        with self.lock:
-            self.commands.clear()
 
     def delete(self, keys: List[str]):
         """Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -279,22 +283,6 @@ class CoreCommands:
             Union[str, None]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
         return await self._execute_command(RequestType.GetString, [key])
-
-    async def exec(self, transaction: Transaction) -> List[TResult]:
-        """Execute a transaction by processing the queued commands.
-        See https://redis.io/topics/transactions/ for details on Redis transactions.
-
-        Args:
-            transaction (Transaction): A transaction object containing a list of commands to be executed.
-
-        Returns:
-            List[TResult]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be None.
-        """
-        commands = transaction.commands[:]
-        transaction.dispose()
-        return await self.execute_transaction(commands)
 
     async def delete(self, keys: List[str]) -> int:
         """Delete one or more keys from the database. A key is ignored if it does not exist.

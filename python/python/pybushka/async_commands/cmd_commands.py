@@ -1,8 +1,17 @@
 from typing import List, Optional
 
-from pybushka.async_commands.core import CoreCommands, InfoSection
+from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
 from pybushka.constants import TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
+
+
+class Transaction(BaseTransaction):
+    """
+    Exstands BaseTransaction class for standealone commands.
+    """
+
+    # TODO: add SELECT, MOVE, SLAVEOF and all SENTINEL commands
+    pass
 
 
 class CMDCommands(CoreCommands):
@@ -37,3 +46,21 @@ class CMDCommands(CoreCommands):
         """
         args = [section.value for section in sections] if sections else []
         return await self._execute_command(RequestType.Info, args)
+
+    async def exec(
+        self,
+        transaction: Transaction,
+    ) -> List[TResult]:
+        """Execute a transaction by processing the queued commands.
+        See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+
+        Args:
+            transaction (Transaction): A Transaction object containing a list of commands to be executed.
+
+        Returns:
+            List[TResult]: A list of results corresponding to the execution of each command
+            in the transaction. If a command returns a value, it will be included in the list. If a command
+            doesn't return a value, the list entry will be None.
+        """
+        commands = transaction.commands[:]
+        return await self.execute_transaction(commands)
