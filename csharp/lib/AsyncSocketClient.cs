@@ -25,16 +25,16 @@ namespace babushka
 
         public async Task SetAsync(string key, string value)
         {
-            var (message, task) = messageContainer.GetMessageForCall(null, null);
+            var message = messageContainer.GetMessageForCall(null, null);
             WriteToSocket(new WriteRequest { callbackIndex = message.Index, type = RequestType.SetString, args = new() { key, value } });
-            await task;
+            await message;
         }
 
         public async Task<string?> GetAsync(string key)
         {
-            var (message, task) = messageContainer.GetMessageForCall(null, null);
+            var message = messageContainer.GetMessageForCall(null, null);
             WriteToSocket(new WriteRequest { callbackIndex = message.Index, type = RequestType.GetString, args = new() { key } });
-            return await task;
+            return await message;
         }
 
         private void DisposeWithError(Exception error)
@@ -226,7 +226,7 @@ namespace babushka
             });
         }
 
-        private void ResolveMessage(Message<string?> message, Header header, byte[] buffer, int counter)
+        private void ResolveMessage(Message<string> message, Header header, byte[] buffer, int counter)
         {
             // Work needs to be offloaded from the calling thread, because otherwise we might starve the reader task.
             Task.Run(() =>
@@ -255,7 +255,7 @@ namespace babushka
             });
         }
 
-        private ArraySegment<byte> ParseReadResults(byte[] buffer, int messageLength, MessageContainer<string?> messageContainer)
+        private ArraySegment<byte> ParseReadResults(byte[] buffer, int messageLength, MessageContainer<string> messageContainer)
         {
             var counter = 0;
             while (counter + HEADER_LENGTH_IN_BYTES <= messageLength)
@@ -401,7 +401,7 @@ namespace babushka
         #region private fields
 
         private readonly Socket socket;
-        private readonly MessageContainer<string?> messageContainer = new();
+        private readonly MessageContainer<string> messageContainer = new();
         /// 1 when disposed, 0 before
         private int disposedFlag = 0;
         private bool IsDisposed => disposedFlag == 1;

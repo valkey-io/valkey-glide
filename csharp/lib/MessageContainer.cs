@@ -10,15 +10,11 @@ namespace babushka
             return messages[index];
         }
 
-        internal (Message<T>, Task<T>) GetMessageForCall(string? key, string? value)
+        internal Message<T> GetMessageForCall(string? key, string? value)
         {
             var message = GetFreeMessage();
-            var task = message.CreateTask(key, value, this).ContinueWith(result =>
-            {
-                ReturnFreeMessage(message);
-                return result.Result;
-            });
-            return (message, task);
+            message.StartTask(key, value, this);
+            return message;
         }
 
         private Message<T> GetFreeMessage()
@@ -28,14 +24,14 @@ namespace babushka
                 lock (messages)
                 {
                     var index = messages.Count;
-                    message = new Message<T>(index);
+                    message = new Message<T>(index, this);
                     messages.Add(message);
                 }
             }
             return message;
         }
 
-        private void ReturnFreeMessage(Message<T> message)
+        public void ReturnFreeMessage(Message<T> message)
         {
             availableMessages.Enqueue(message);
         }
@@ -44,7 +40,7 @@ namespace babushka
         {
             lock (messages)
             {
-                foreach (var message in messages)
+                foreach (var message in messages.Where(message => !message.IsCompleted))
                 {
                     try
                     {
