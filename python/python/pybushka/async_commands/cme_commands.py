@@ -8,7 +8,7 @@ from pybushka.routes import TRoute
 
 class ClusterTransaction(BaseTransaction):
     """
-    Exstands BaseTransaction class for cluster mode commands.
+    Extends BaseTransaction class for cluster mode commands.
     """
 
     # TODO: add all CLUSTER commands
