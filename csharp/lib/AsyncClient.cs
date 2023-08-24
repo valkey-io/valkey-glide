@@ -87,7 +87,7 @@ namespace babushka
         /// Raw pointer to the underlying native connection.
         private IntPtr connectionPointer;
 
-        private readonly MessageContainer messageContainer = new();
+        private readonly MessageContainer<string?> messageContainer = new();
 
         #endregion private fields
 
