@@ -1,9 +1,18 @@
 from typing import List, Optional, Union
 
-from pybushka.async_commands.core import CoreCommands, InfoSection
+from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
 from pybushka.constants import TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import TRoute
+
+
+class ClusterTransaction(BaseTransaction):
+    """
+    Exstands BaseTransaction class for cluster mode commands.
+    """
+
+    # TODO: add all CLUSTER commands
+    pass
 
 
 class CMECommands(CoreCommands):
@@ -48,3 +57,24 @@ class CMECommands(CoreCommands):
         """
         args = [section.value for section in sections] if sections else []
         return await self._execute_command(RequestType.Info, args, route)
+
+    async def exec(
+        self,
+        transaction: ClusterTransaction,
+        route: Optional[TRoute] = None,
+    ) -> List[TResult]:
+        """Execute a transaction by processing the queued commands.
+        See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+
+        Args:
+            transaction (ClusterTransaction): A ClusterTransaction object containing a list of commands to be executed.
+            route (Optional[TRoute], optional): The command will be routed automatically, unless `route` is provided, in which
+            case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            List[TResult]: A list of results corresponding to the execution of each command
+            in the transaction. If a command returns a value, it will be included in the list. If a command
+            doesn't return a value, the list entry will be None.
+        """
+        commands = transaction.commands[:]
+        return await self.execute_transaction(commands, route)
