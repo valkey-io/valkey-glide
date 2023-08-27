@@ -294,7 +294,10 @@ fn get_command(request: &Command) -> Option<Cmd> {
 
 fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     let Some(mut cmd) = get_command(command) else {
-        return Err(ClienUsageError::InternalError(format!("Received invalid request type: {:?}", command.request_type)));
+        return Err(ClienUsageError::InternalError(format!(
+            "Received invalid request type: {:?}",
+            command.request_type
+        )));
     };
 
     match &command.args {
@@ -365,8 +368,8 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
 
 fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo>> {
     use crate::redis_request::routes::Value;
-    let Some(route) = route.and_then(|route|route.value) else {
-        return Ok(None)
+    let Some(route) = route.and_then(|route| route.value) else {
+        return Ok(None);
     };
     match route {
         Value::SimpleRoutes(simple_route) => {
