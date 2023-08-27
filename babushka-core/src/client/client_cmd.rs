@@ -109,7 +109,9 @@ impl ClientCMD {
         }
 
         let Some(primary_index) = primary_index else {
-            return Err(ClientCMDConnectionError::FailedConnection(addresses_and_errors));
+            return Err(ClientCMDConnectionError::FailedConnection(
+                addresses_and_errors,
+            ));
         };
         if !addresses_and_errors.is_empty() {
             log_warn(
@@ -165,10 +167,7 @@ impl ClientCMD {
                     if index == self.inner.primary_index {
                         continue;
                     }
-                    let Some(connection) = self
-                        .inner
-                        .nodes
-                        .get(index) else {
+                    let Some(connection) = self.inner.nodes.get(index) else {
                         continue;
                     };
                     if connection.is_connected() {
@@ -225,7 +224,8 @@ impl ClientCMD {
                     return;
                 }
 
-                let Some(mut connection) = reconnecting_connection.try_get_connection().await else {
+                let Some(mut connection) = reconnecting_connection.try_get_connection().await
+                else {
                     log_debug(
                         "ClientCMD",
                         "heartbeat stopped while connection is reconnecting",
