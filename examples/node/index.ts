@@ -17,6 +17,7 @@ async function sendPingToNode() {
     const pong = await client.customCommand("PING", []);
     console.log(pong);
     await send_set_and_get(client);
+    client.dispose()
 }
 
 async function send_set_and_get(client: RedisClient | RedisClusterClient) {
@@ -43,6 +44,7 @@ async function sendPingToRandomNodeInCluster() {
     const pong = await client.customCommand("PING", [], "randomNode");
     console.log(pong);
     await send_set_and_get(client);
+    client.dispose()
 }
 
 function setFileLogger() {
