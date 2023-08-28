@@ -12,6 +12,7 @@ import {
     createDel,
     createGet,
     createInfo,
+    createSelect,
     createSet
 } from "./Commands";
 import { Logger } from "./Logger";
@@ -250,6 +251,16 @@ export class RedisClient {
     /// See https://redis.io/commands/del/ for details.
     public del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
+    }
+
+    /** Change the currently selected Redis database.
+     * See https://redis.io/commands/select/ for details.
+     * 
+     * @param index : The index of the database to select.
+     * @returns A simple OK response.
+     */
+    public select(index: number): Promise<"OK"> {
+        return this.createWritePromise(createSelect(index));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
