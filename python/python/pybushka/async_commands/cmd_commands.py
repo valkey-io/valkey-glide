@@ -1,17 +1,27 @@
 from typing import List, Optional
 
 from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
-from pybushka.constants import TResult
+from pybushka.constants import OK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 
 
 class Transaction(BaseTransaction):
     """
-    Exstands BaseTransaction class for standealone commands.
+    Extends BaseTransaction class for standalone Redis commands.
     """
 
-    # TODO: add SELECT, MOVE, SLAVEOF and all SENTINEL commands
-    pass
+    # TODO: add MOVE, SLAVEOF and all SENTINEL commands
+    def select(self, index: int):
+        """Change the currently selected Redis database.
+        See https://redis.io/commands/select/ for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Command response:
+            A simple OK response.
+        """
+        self.append_command(RequestType.Select, [str(index)])
 
 
 class CMDCommands(CoreCommands):
@@ -64,3 +74,15 @@ class CMDCommands(CoreCommands):
         """
         commands = transaction.commands[:]
         return await self.execute_transaction(commands)
+
+    async def select(self, index: int) -> OK:
+        """Change the currently selected Redis database.
+        See https://redis.io/commands/select/ for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return await self._execute_command(RequestType.Select, [str(index)])
