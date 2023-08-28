@@ -196,7 +196,7 @@ class BaseTransaction:
             command_args (List[str]): List of strings of the command's arguements.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
-        Returns:
+        Command response:
             TResult: The returning value depends on the executed command
         """
         self.append_command(RequestType.CustomCommand, command_args)
@@ -210,7 +210,7 @@ class BaseTransaction:
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
             information to retrieve. When no parameter is provided, the default option is assumed.
-        Returns:
+        Command response:
             str: Returns a string containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
@@ -223,7 +223,7 @@ class BaseTransaction:
         Args:
             keys (List[str]): A list of keys to be deleted from the database.
 
-        Returns:
+        Command response:
             int: The number of keys that were deleted.
         """
         self.append_command(RequestType.Del, keys)

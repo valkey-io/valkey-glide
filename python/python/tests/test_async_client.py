@@ -209,6 +209,18 @@ class TestSocketClient:
         info_result = get_first_result(info_result)
         assert "# Memory" in info_result
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_select(self, redis_client: BaseRedisClient):
+        assert await redis_client.select(0) == OK
+        key = get_random_string(10)
+        value = get_random_string(10)
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.get(key) == value
+        assert await redis_client.select(1) == OK
+        assert await redis_client.get(key) is None
+        assert await redis_client.select(0) == OK
+        assert await redis_client.get(key) == value
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_delete(self, redis_client: BaseRedisClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]

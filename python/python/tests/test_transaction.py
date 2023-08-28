@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List
 
 import pytest
+from pybushka.async_commands.cmd_commands import Transaction
 from pybushka.async_commands.core import BaseTransaction, InfoSection
 from pybushka.constants import OK
 from pybushka.protobuf.redis_request_pb2 import RequestType
@@ -100,7 +101,7 @@ class TestTransaction:
             e
         )  # TODO : add an assert on EXEC ABORT
 
-    async def test_transaction_info(self):
+    def test_transaction_info(self):
         sections = [InfoSection.SERVER, InfoSection.REPLICATION]
         transaction = BaseTransaction()
         transaction.info(sections)
@@ -108,8 +109,13 @@ class TestTransaction:
             transaction, RequestType.Info, ["server", "replication"]
         )
 
-    async def test_transaction_delete(self):
+    def test_transaction_delete(self):
         key = get_random_string(10)
         transaction = BaseTransaction()
         transaction.delete([key])
         transaction_test_helper(transaction, RequestType.Del, [key])
+
+    def test_transaction_select(self):
+        transaction = Transaction()
+        transaction.select(1)
+        transaction_test_helper(transaction, RequestType.Select, ["1"])
