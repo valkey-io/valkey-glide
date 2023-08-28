@@ -94,3 +94,12 @@ class CMDCommands(CoreCommands):
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
         return await self._execute_command(RequestType.ConfigResetStat, [])
+
+    async def config_rewrite(self) -> OK:
+        """Rewrite the configuration file with the current configuration.
+        See https://redis.io/commands/config-rewrite/ for details.
+
+        Returns:
+            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
+        """
+        return await self._execute_command(RequestType.ConfigRewrite, [])
