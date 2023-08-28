@@ -5,6 +5,7 @@ import {
     createDel,
     createGet,
     createInfo,
+    createSelect,
     createSet
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
@@ -52,10 +53,22 @@ export class BaseTransaction {
     }
 }
 
+/// Extends BaseTransaction class for Redis standalone commands.
 export class Transaction extends BaseTransaction{
-    /// TODO: add SELECT, MOVE, SLAVEOF and all SENTINEL commands
+    /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
+
+    /** Change the currently selected Redis database.
+     * See https://redis.io/commands/select/ for details.
+     * 
+     * @param index : The index of the database to select.
+     * @CommandResponse :  A simple OK response.
+     */
+    public select(index: number) {
+        this.commands.push(createSelect(index));
+    }
 }
 
+/// Extends BaseTransaction class for cluster mode commands.
 export class ClusterTransaction extends BaseTransaction{
     /// TODO: add all CLUSTER commands
 }

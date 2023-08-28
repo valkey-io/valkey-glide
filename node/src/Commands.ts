@@ -157,6 +157,12 @@ export function createDel(
     return createCommand(RequestType.Del, keys);
 }
 
+export function createSelect(
+    index: number
+): redis_request.Command {
+    return createCommand(RequestType.Select, [index.toString()]);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }

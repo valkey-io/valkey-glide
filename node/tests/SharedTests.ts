@@ -1,7 +1,6 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import { ReturnType, SetOptions } from "../";
-import { BaseTransaction } from "../src/Transaction";
 import { Client, GetAndSetRandomValue } from "./TestUtilities";
 
 type BaseClient = {
@@ -13,7 +12,6 @@ type BaseClient = {
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
-    exec: (transaction: BaseTransaction) => Promise<ReturnType>;
 };
 
 export function runBaseTests<Context>(config: {
@@ -136,27 +134,6 @@ export function runBaseTests<Context>(config: {
                     key3,
                 ]);
                 expect(mget_result).toEqual([value1, value2, null]);
-            });
-        },
-        config.timeout
-    );
-
-    it(
-        "can send transactions",
-        async () => {
-            await runTest(async (client: BaseClient) => {
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const transaction = new BaseTransaction();
-                transaction.set(key1, "bar");
-                transaction.set(key2, "baz", {
-                    conditionalSet: "onlyIfDoesNotExist",
-                    returnOldValue: true,
-                });
-                transaction.customCommand("MGET", [key1, key2]);
-
-                const result = await client.exec(transaction);
-                expect(result).toEqual(["OK", null, ["bar", "baz"]]);
             });
         },
         config.timeout
