@@ -5,9 +5,10 @@
 -   openssl
 -   libssl-dev
 -   python3
+-   python3-venv
 
 Installation for ubuntu:
-`sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev python3`
+`sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev python3 python3-venv`
 
 ## Build
 To build Babushka's Python client, run (on unix based systems):

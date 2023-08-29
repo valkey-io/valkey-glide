@@ -22,6 +22,7 @@ npm i -g npm@8
 To build Babushka's Node client, run (on unix based systems):
 ```
 cd babushka/node
+git submodule update --init --recursive
 npm install
 rm -rf build-ts
 npm run build:release

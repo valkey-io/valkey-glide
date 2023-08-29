@@ -16,6 +16,7 @@ python3 -m pip install --user virtualenv
 python3 -m venv .env
 source .env/bin/activate
 cd ${PYTHON_FOLDER}
+git submodule update --init --recursive
 # Build the client
 pip install --upgrade --quiet pip
 pip install --quiet -r requirements.txt
