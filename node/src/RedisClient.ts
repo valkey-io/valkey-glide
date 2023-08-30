@@ -8,6 +8,7 @@ import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     InfoOptions,
     SetOptions,
+    createConfigResetStat,
     createCustomCommand,
     createDel,
     createGet,
@@ -261,6 +262,15 @@ export class RedisClient {
      */
     public select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index));
+    }
+
+    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+     * See https://redis.io/commands/config-resetstat/ for details.
+     * 
+     * @returns always "OK"
+     */
+    public ConfigResetStat(): Promise<"OK">  {
+        return this.createWritePromise(createConfigResetStat());
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
