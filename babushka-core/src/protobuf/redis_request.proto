@@ -66,6 +66,13 @@ enum RequestType {
     HashGet = 28;
     HashDel = 29;
     HashExists = 30;
+    MGet=31;
+    MSet=32;
+    Incr=33;
+    IncrBy=34;
+    Decr=35;
+    IncrByFloat=36;
+    DecrBy=37;
 }
 
 message Command {
