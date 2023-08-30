@@ -31,7 +31,7 @@ class CMDCommands(CoreCommands):
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
-            command_args (List[str]): List of strings of the command's arguements.
+            command_args (List[str]): List of strings of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Returns:
@@ -86,3 +86,11 @@ class CMDCommands(CoreCommands):
             A simple OK response.
         """
         return await self._execute_command(RequestType.Select, [str(index)])
+
+    async def config_reset_stat(self) -> OK:
+        """Reset the statistics reported by Redis.
+        See https://redis.io/commands/config-resetstat/ for details.
+        Returns:
+            OK: Returns "OK" to confirm that the statistics were successfully reset.
+        """
+        return await self._execute_command(RequestType.ConfigResetStat, [])
