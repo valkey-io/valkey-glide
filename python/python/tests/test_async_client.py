@@ -233,6 +233,21 @@ class TestSocketClient:
         assert await redis_client.delete(delete_keys) == 3
         assert await redis_client.delete(keys) == 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_config_reset_stat(self, redis_client: BaseRedisClient):
+        await redis_client.set("foo", "bar")
+        info_stats = parse_info_response(
+            get_first_result(await redis_client.info([InfoSection.STATS]))
+        )
+        assert int(info_stats["total_commands_processed"]) > 1
+        assert await redis_client.config_reset_stat() == OK
+        info_stats = parse_info_response(
+            get_first_result(await redis_client.info([InfoSection.STATS]))
+        )
+
+        # 1 stands for the second info command
+        assert info_stats["total_commands_processed"] == "1"
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):

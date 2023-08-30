@@ -193,7 +193,7 @@ class BaseTransaction:
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
-            command_args (List[str]): List of strings of the command's arguements.
+            command_args (List[str]): List of strings of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Command response:
@@ -227,6 +227,14 @@ class BaseTransaction:
             int: The number of keys that were deleted.
         """
         self.append_command(RequestType.Del, keys)
+
+    def config_reset_stat(self):
+        """Reset the statistics reported by Redis.
+        See https://redis.io/commands/config-resetstat/ for details.
+        Command response:
+            OK: Returns "OK" to confirm that the statistics were successfully reset.
+        """
+        self.append_command(RequestType.ConfigResetStat, [])
 
 
 class CoreCommands:
