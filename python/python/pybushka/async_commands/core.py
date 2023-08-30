@@ -228,7 +228,7 @@ class BaseTransaction:
         """
         self.append_command(RequestType.Del, keys)
 
-    def config_reset_stat(self):
+    def config_resetstat(self):
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.
         Command response:
