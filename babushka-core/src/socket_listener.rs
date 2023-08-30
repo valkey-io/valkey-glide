@@ -289,6 +289,13 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::HashGet => Some(cmd("HGET")),
         RequestType::HashDel => Some(cmd("HDEL")),
         RequestType::HashExists => Some(cmd("HEXISTS")),
+        RequestType::MSet => Some(cmd("MSET")),
+        RequestType::MGet => Some(cmd("MGET")),
+        RequestType::Incr => Some(cmd("INCR")),
+        RequestType::IncrBy => Some(cmd("INCRBY")),
+        RequestType::IncrByFloat => Some(cmd("INCRBYFLOAT")),
+        RequestType::Decr => Some(cmd("DECR")),
+        RequestType::DecrBy => Some(cmd("DECRBY")),
     }
 }
 
