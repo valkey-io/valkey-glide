@@ -1,6 +1,7 @@
 import {
     InfoOptions,
     SetOptions,
+    createConfigResetStat,
     createCustomCommand,
     createDel,
     createGet,
@@ -37,6 +38,15 @@ export class BaseTransaction {
     /// See https://redis.io/commands/del/ for details.
     public del(keys: string[]) {
         this.commands.push(createDel(keys));
+    }
+
+    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+     * See https://redis.io/commands/config-resetstat/ for details.
+     * 
+     * Returns always "OK"
+    */
+    public ConfigResetStat() {
+        this.commands.push(createConfigResetStat());
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

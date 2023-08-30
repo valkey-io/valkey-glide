@@ -1,7 +1,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
-import { ReturnType, SetOptions } from "../";
-import { Client, GetAndSetRandomValue } from "./TestUtilities";
+import { InfoOptions, ReturnType, SetOptions, parseInfoResponse } from "../";
+import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
 type BaseClient = {
     set: (
@@ -11,6 +11,8 @@ type BaseClient = {
     ) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
+    info(options?: InfoOptions[]): Promise<string | string[][]>;
+    ConfigResetStat: () => Promise<"OK">;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -157,6 +159,23 @@ export function runBaseTests<Context>(config: {
                 expect(deletedKeysNum).toEqual(3);
                 deletedKeysNum = await client.del([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "info stats before and after Config ResetStat is different",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                /// we execute set and info so the total_commands_processed will be greater than 1
+                /// after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
+                await client.set("foo", "bar");
+                const OldResult = await client.info([InfoOptions.Stats]);
+                expect(Number(parseInfoResponse(getFirstResult(OldResult))["total_commands_processed"])).toBeGreaterThan(1);
+                expect(await client.ConfigResetStat()).toEqual("OK");
+                const result = await client.info([InfoOptions.Stats]);
+                expect(parseInfoResponse(getFirstResult(result))["total_commands_processed"]).toEqual("1");
             });
         },
         config.timeout

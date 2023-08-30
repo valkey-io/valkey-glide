@@ -1,5 +1,5 @@
 import * as net from "net";
-import { InfoOptions, createCustomCommand, createInfo } from "./Commands";
+import { InfoOptions, createConfigResetStat, createCustomCommand, createInfo } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
@@ -128,5 +128,17 @@ export class RedisClusterClient extends RedisClient {
     /// See https://redis.io/commands/info/ for details.
     public info(options?: InfoOptions[], route?: Routes): Promise<string> {
         return this.createWritePromise(createInfo(options), toProtobufRoute(route));
+    }
+
+    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+     * See https://redis.io/commands/config-resetstat/ for details.
+     * 
+     * @param route The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     * 
+     * @returns always "OK"
+    */
+    public ConfigResetStat(route?: Routes): Promise<"OK">  {
+        return this.createWritePromise(createConfigResetStat(), toProtobufRoute(route));
     }
 }
