@@ -208,17 +208,27 @@ async fn write_result(
                 Some(response::response::Value::ClosingError(
                     error_message.into(),
                 ))
-            } else if err.is_connection_dropped() {
-                Some(response::response::Value::RequestError(
-                    format!(
+            } else {
+                let mut request_error = response::RequestError::default();
+                if err.is_connection_dropped() {
+                    request_error.type_ = response::RequestErrorType::Disconnect.into();
+                    request_error.message = format!(
                         "Received connection error `{error_message}`. Will attempt to reconnect"
                     )
-                    .into(),
-                ))
-            } else {
-                Some(response::response::Value::RequestError(
-                    error_message.into(),
-                ))
+                    .into();
+                } else if err.is_timeout() {
+                    request_error.type_ = response::RequestErrorType::Timeout.into();
+                    request_error.message = error_message.into();
+                } else {
+                    request_error.type_ = match err.kind() {
+                        redis::ErrorKind::ExecAbortError => {
+                            response::RequestErrorType::ExecAbort.into()
+                        }
+                        _ => response::RequestErrorType::Unspecified.into(),
+                    };
+                    request_error.message = error_message.into();
+                }
+                Some(response::response::Value::RequestError(request_error))
             }
         }
     };
