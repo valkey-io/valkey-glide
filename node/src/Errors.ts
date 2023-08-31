@@ -21,6 +21,8 @@ export class RedisError extends BaseRedisError {}
 /// Errors that are thrown when a request times out.
 export class TimeoutError extends RedisError {}
 
+export const TIMEOUT_ERROR = new TimeoutError("Operation timed out");
+
 /// Errors that are thrown when a transaction is aborted.
 export class ExecAbortError extends RedisError {}
 

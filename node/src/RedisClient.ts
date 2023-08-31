@@ -22,6 +22,7 @@ import {
     ConnectionError,
     ExecAbortError,
     RedisError,
+    TIMEOUT_ERROR,
     TimeoutError,
 } from "./Errors";
 import { Logger } from "./Logger";
@@ -212,7 +213,7 @@ export class RedisClient {
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
-                reject(new TimeoutError("Operation timed out"));
+                reject(TIMEOUT_ERROR);
             }, this.responseTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
