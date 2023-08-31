@@ -87,7 +87,7 @@ class CMDCommands(CoreCommands):
         """
         return await self._execute_command(RequestType.Select, [str(index)])
 
-    async def config_reset_stat(self) -> OK:
+    async def config_resetstat(self) -> OK:
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.
         Returns:
