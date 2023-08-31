@@ -139,21 +139,21 @@ export class RedisClient {
                     return;
                 }
             }
-            if (message.closingError) {
+            if (message.closingError != null) {
                 this.dispose(message.closingError);
                 return;
             }
             const [resolve, reject] =
                 this.promiseCallbackFunctions[message.callbackIdx];
             this.availableCallbackSlots.push(message.callbackIdx);
-            if (message.requestError) {
+            if (message.requestError != null) {
                 const errorType = getRequestErrorClass(
                     message.requestError.type
                 );
                 reject(
                     new errorType(message.requestError.message ?? undefined)
                 );
-            } else if (message.respPointer) {
+            } else if (message.respPointer != null) {
                 const pointer = message.respPointer;
                 if (typeof pointer === "number") {
                     resolve(valueFromSplitPointer(0, pointer));
