@@ -2,7 +2,7 @@ import asyncio
 import random
 import string
 from datetime import datetime, timedelta
-from typing import Dict, List, Type
+from typing import Dict, List, Type, Union
 
 import pytest
 from packaging import version
@@ -16,7 +16,7 @@ from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.constants import OK
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
-from pybushka.redis_client import BaseRedisClient, RedisClusterClient
+from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
 from pybushka.routes import (
     AllNodes,
     AllPrimaries,
@@ -247,6 +247,15 @@ class TestSocketClient:
 
         # 1 stands for the second info command
         assert info_stats["total_commands_processed"] == "1"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_config_rewrite(
+        self, redis_client: Union[RedisClusterClient, RedisClient]
+    ):
+        # We expect Redis to return an error since the test clusters don't use redis.conf file.
+        with pytest.raises(Exception) as e:
+            await redis_client.config_rewrite()
+        assert "The server is running without a config file" in str(e)
 
 
 class CommandsUnitTests:

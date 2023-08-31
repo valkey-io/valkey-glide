@@ -236,6 +236,15 @@ class BaseTransaction:
         """
         self.append_command(RequestType.ConfigResetStat, [])
 
+    def config_rewrite(self):
+        """Rewrite the configuration file with the current configuration.
+        See https://redis.io/commands/config-rewrite/ for details.
+
+        Command response:
+            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
+        """
+        self.append_command(RequestType.ConfigRewrite, [])
+
 
 class CoreCommands:
     async def set(

@@ -92,3 +92,17 @@ class CMECommands(CoreCommands):
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
         return await self._execute_command(RequestType.ConfigResetStat, [], route)
+
+    async def config_rewrite(
+        self,
+        route: Optional[TRoute] = None,
+    ) -> OK:
+        """Rewrite the configuration file with the current configuration.
+        See https://redis.io/commands/config-rewrite/ for details.
+        Args:
+            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
+        Returns:
+            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
+        """
+        return await self._execute_command(RequestType.ConfigRewrite, [], route)
