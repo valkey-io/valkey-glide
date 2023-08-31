@@ -235,12 +235,14 @@ class TestSocketClient:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_config_reset_stat(self, redis_client: BaseRedisClient):
+        # we execute set and info so the total_commands_processed will be greater than 1
+        # after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
         await redis_client.set("foo", "bar")
         info_stats = parse_info_response(
             get_first_result(await redis_client.info([InfoSection.STATS]))
         )
         assert int(info_stats["total_commands_processed"]) > 1
-        assert await redis_client.config_reset_stat() == OK
+        assert await redis_client.config_resetstat() == OK
         info_stats = parse_info_response(
             get_first_result(await redis_client.info([InfoSection.STATS]))
         )
