@@ -25,7 +25,7 @@ jobs:
             matrix:
                 redis:
                     - 6.2.13
-                    - 7.0.12
+                    - 7.2.0
 
         steps:
             - uses: actions/checkout@v3
