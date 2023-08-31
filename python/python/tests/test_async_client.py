@@ -47,7 +47,9 @@ def parse_info_response(res: str | List[str] | List[List[str]]) -> Dict[str, str
     ]
     info_dict = {}
     for line in info_lines:
-        key, value = line.split(":")
+        splitted_line = line.split(":")
+        key = splitted_line[0]
+        value = splitted_line[1]
         info_dict[key] = value
     return info_dict
 
