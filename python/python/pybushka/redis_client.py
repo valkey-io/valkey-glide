@@ -206,14 +206,17 @@ class BaseRedisClient(CoreCommands):
                     break
                 response = cast(Response, response)
                 res_future = self._available_futures.get(response.callback_idx)
-                if not res_future:
-                    self.close(f"Got wrong callback index: {response.callback_idx}")
+                if not res_future or response.HasField("closing_error"):
+                    err_msg = (
+                        response.closing_error
+                        if response.HasField("closing_error")
+                        else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
+                    )
+                    self.close(err_msg)
+
                 else:
                     if response.HasField("request_error"):
                         res_future.set_exception(Exception(response.request_error))
-                    elif response.HasField("closing_error"):
-                        res_future.set_exception(Exception(response.closing_error))
-                        self.close(response.closing_error)
                     elif response.HasField("resp_pointer"):
                         res_future.set_result(value_from_pointer(response.resp_pointer))
                     elif response.HasField("constant_response"):

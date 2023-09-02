@@ -12,6 +12,7 @@ from pybushka.async_commands.core import (
     ExpiryType,
     InfoSection,
 )
+from pybushka.config import AuthenticationOptions
 from pybushka.constants import OK
 from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from pybushka.routes import (
@@ -23,6 +24,7 @@ from pybushka.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from tests.conftest import create_client
 
 
 def get_first_result(res: str | List[str] | List[List[str]]) -> str:
@@ -66,13 +68,6 @@ async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> 
 
 @pytest.mark.asyncio
 class TestRedisClients:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_socket_set_get(self, redis_client: TRedisClient):
-        key = get_random_string(10)
-        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_register_client_name_and_version(self, redis_client: TRedisClient):
         min_version = "7.2.0"
@@ -120,6 +115,80 @@ class TestRedisClients:
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
         await asyncio.gather(*(list(running_tasks)))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_can_connect_with_auth_requirepass(
+        self, redis_client: TRedisClient, request
+    ):
+        is_cluster = type(redis_client) == RedisClusterClient
+        password = "TEST_AUTH"
+        credentials = AuthenticationOptions(password)
+        try:
+            await redis_client.custom_command(
+                ["CONFIG", "SET", "requirepass", password]
+            )
+
+            with pytest.raises(Exception) as e:
+                # Creation of a new client without password should fail
+                await create_client(request, is_cluster)
+            assert "NOAUTH" in str(e)
+
+            auth_client = await create_client(request, is_cluster, credentials)
+            key = get_random_string(10)
+            assert await auth_client.set(key, key) == OK
+            assert await auth_client.get(key) == key
+        finally:
+            # Reset the password
+            auth_client = await create_client(request, is_cluster, credentials)
+            await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_can_connect_with_auth_acl(
+        self, redis_client: Union[RedisClient, RedisClusterClient], request
+    ):
+        is_cluster = type(redis_client) == RedisClusterClient
+        username = "testuser"
+        password = "TEST_AUTH"
+        try:
+            assert (
+                await redis_client.custom_command(
+                    [
+                        "ACL",
+                        "SETUSER",
+                        username,
+                        "on",
+                        "allkeys",
+                        "+get",
+                        "+cluster",
+                        "+ping",
+                        "+info",
+                        f">{password}",
+                    ]
+                )
+                == OK
+            )
+            key = get_random_string(10)
+            assert await redis_client.set(key, key) == OK
+            credentials = AuthenticationOptions(password, username)
+            testuser_client = await create_client(request, is_cluster, credentials)
+            assert await testuser_client.get(key) == key
+            with pytest.raises(Exception) as e:
+                # This client isn't authorized to perform SET
+                await testuser_client.set("foo", "bar")
+            assert "NOPERM" in str(e)
+        finally:
+            # Delete this user
+            await redis_client.custom_command(["ACL", "DELUSER", username])
+
+
+@pytest.mark.asyncio
+class TestCommands:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_socket_set_get(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_conditional_set(self, redis_client: TRedisClient):

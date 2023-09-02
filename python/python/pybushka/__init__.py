@@ -17,6 +17,7 @@ from pybushka.routes import (
 
 __all__ = [
     "AddressInfo",
+    "AuthenticationOptions",
     "ClientConfiguration",
     "ConditionalSet",
     "ExpirySet",
