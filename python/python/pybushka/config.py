@@ -31,11 +31,11 @@ class BackoffStrategy:
 class AuthenticationOptions:
     def __init__(
         self,
+        password: str,
         username: Optional[str] = None,
-        password: Optional[str] = None,
     ):
-        self.username = username
         self.password = password
+        self.username = username
 
 
 class ClientConfiguration:
@@ -109,4 +109,9 @@ class ClientConfiguration:
                 self.connection_backoff.exponent_base
             )
         request.cluster_mode_enabled = True if cluster_mode else False
+        if self.credentials:
+            if self.credentials.username:
+                request.authentication_info.username = self.credentials.username
+            request.authentication_info.password = self.credentials.password
+
         return request
