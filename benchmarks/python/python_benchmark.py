@@ -13,10 +13,10 @@ import redis.asyncio as redispy
 from pybushka import (
     AddressInfo,
     ClientConfiguration,
+    Logger,
     LogLevel,
     RedisClient,
     RedisClusterClient,
-    set_logger_config,
 )
 
 
@@ -242,7 +242,7 @@ async def main(
 ):
     # Demo - Setting the internal logger to log every log that has a level of info and above,
     # and save the logs to the first log file.
-    set_logger_config(LogLevel.INFO, "first.log")
+    Logger.set_logger_config(LogLevel.INFO, "first.log")
 
     if clients_to_run == "all":
         client_class = redispy.RedisCluster if is_cluster else redispy.Redis

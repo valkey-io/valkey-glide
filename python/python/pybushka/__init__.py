@@ -4,7 +4,7 @@ from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
 from pybushka.config import AddressInfo, ClientConfiguration, ReadFromReplica
 from pybushka.constants import OK
 from pybushka.Logger import Level as LogLevel
-from pybushka.Logger import Logger, set_logger_config
+from pybushka.Logger import Logger
 from pybushka.redis_client import RedisClient, RedisClusterClient
 from pybushka.routes import (
     AllNodes,
@@ -27,7 +27,6 @@ __all__ = [
     "ReadFromReplica",
     "RedisClient",
     "RedisClusterClient",
-    "set_logger_config",
     "Transaction",
     "ClusterTransaction",
     # Routes

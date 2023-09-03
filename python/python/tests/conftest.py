@@ -3,14 +3,14 @@ import random
 import pytest
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
-from pybushka.Logger import set_logger_config
+from pybushka.Logger import Logger
 from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
 from tests.utils.cluster import RedisCluster
 
 default_host = "localhost"
 default_port = 6379
 
-set_logger_config(logLevel.INFO)
+Logger.set_logger_config(logLevel.INFO)
 
 
 def pytest_addoption(parser):

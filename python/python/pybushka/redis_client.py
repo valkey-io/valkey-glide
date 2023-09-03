@@ -17,7 +17,7 @@ from pybushka.constants import (
     TResult,
 )
 from pybushka.Logger import Level as LogLevel
-from pybushka.Logger import Logger
+from pybushka.Logger import Logger as ClientLogger
 from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
 from pybushka.protobuf.response_pb2 import Response
 from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
@@ -58,7 +58,7 @@ class BaseRedisClient(CoreCommands):
 
         # will log if the logger was created (wrapper or costumer) on info
         # level or higher
-        Logger.log(LogLevel.INFO, "connection info", "new connection established")
+        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
         # Wait for the socket listener to complete its initialization
         await init_future
         # Create UDS connection
