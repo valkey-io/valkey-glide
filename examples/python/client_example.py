@@ -5,27 +5,25 @@ from pybushka import (
     AddressInfo,
     AllNodes,
     ClientConfiguration,
+    Logger,
     LogLevel,
     RedisClient,
     RedisClusterClient,
-    set_logger_config,
 )
 
 
-def set_console_logger(level: Type["LogLevel"] = LogLevel.WARN):
-    set_logger_config(level)
+def set_console_logger(level: LogLevel = LogLevel.WARN):
+    Logger.set_logger_config(level)
 
 
-def set_file_logger(
-    level: Type["LogLevel"] = LogLevel.WARN, file: Optional[str] = None
-):
+def set_file_logger(level: LogLevel = LogLevel.WARN, file: Optional[str] = None):
     if file is None:
         from datetime import datetime, timezone
 
         curr_time = datetime.now(timezone.utc)
-        curr_time = curr_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        file = f"{curr_time}-babushka.log"
-    set_logger_config(level, file)
+        curr_time_str = curr_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        file = f"{curr_time_str}-babushka.log"
+    Logger.set_logger_config(level, file)
 
 
 async def send_set_and_get(
