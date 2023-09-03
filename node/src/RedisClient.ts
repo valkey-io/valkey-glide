@@ -258,14 +258,27 @@ export class RedisClient {
         this.writeBufferedRequestsToSocket();
     }
 
-    /// Get the value associated with the given key, or null if no such value exists.
-    /// See https://redis.io/commands/get/ for details.
+    
+    /** Get the value associated with the given key, or null if no such value exists.
+     *  See https://redis.io/commands/get/ for details.
+     * 
+     * @param key - The key to retrieve from the database.
+     * @returns If the key exists, returns the value of the key as a string. Otherwise, return null.
+     */
     public get(key: string): Promise<string | null> {
         return this.createWritePromise(createGet(key));
     }
 
-    /// Set the given key with the given value. Return value is dependent on the passed options.
-    /// See https://redis.io/commands/set/ for details.
+     /** Set the given key with the given value. Return value is dependent on the passed options.
+     *  See https://redis.io/commands/set/ for details.
+     * 
+     * @param key - The key to store.
+     * @param value - The value to store with the given key.
+     * @param options - The set options.
+     * @returns - If the value is successfully set, return OK.
+     *          If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return null.
+     *          If return_old_value is set, return the old value as a string.
+     */
     public set(
         key: string,
         value: string,
@@ -274,16 +287,24 @@ export class RedisClient {
         return this.createWritePromise(createSet(key, value, options));
     }
 
-    /// Returns information and statistics about the server according to the given arguments.
-    /// When no parameter is provided, the default option is assumed.
-    /// See https://redis.io/commands/info/ for details.
+    /** Get information and statistics about the Redis server.
+     *  See https://redis.io/commands/info/ for details.
+     * 
+     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
+     *  When no parameter is provided, the default option is assumed.
+     * @returns a string containing the information for the sections requested.
+     */
     public info(options?: InfoOptions[]): Promise<string> {
         return this.createWritePromise(createInfo(options));
     }
 
-    /// Removes the specified keys. A key is ignored if it does not exist.
-    /// Returns the number of keys that were removed.
-    /// See https://redis.io/commands/del/ for details.
+    /** Get information and statistics about the Redis server.
+     *  See https://redis.io/commands/info/ for details.
+     * 
+     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
+     *  When no parameter is provided, the default option is assumed.
+     * @returns a string containing the information for the sections requested.
+     */
     public del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
@@ -291,7 +312,7 @@ export class RedisClient {
     /** Change the currently selected Redis database.
      * See https://redis.io/commands/select/ for details.
      *
-     * @param index : The index of the database to select.
+     * @param index - The index of the database to select.
      * @returns A simple OK response.
      */
     public select(index: number): Promise<"OK"> {
