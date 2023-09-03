@@ -2,6 +2,7 @@ import {
     InfoOptions,
     SetOptions,
     createConfigResetStat,
+    createConfigRewrite,
     createCustomCommand,
     createDel,
     createGet,
@@ -58,6 +59,15 @@ export class BaseTransaction {
      */
     public del(keys: string[]) {
         this.commands.push(createDel(keys));
+    }
+
+    /** Rewrite the configuration file with the current configuration.
+     * See https://redis.io/commands/select/ for details.
+     * 
+     * Returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     */
+    public configRewrite() {
+        this.commands.push(createConfigRewrite());
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
