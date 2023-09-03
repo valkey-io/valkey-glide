@@ -53,7 +53,7 @@ export class BaseTransaction {
     /** Remove the specified keys. A key is ignored if it does not exist.
      *  See https://redis.io/commands/del/ for details.
      * 
-     * @param keys: A list of keys to be deleted from the database. 
+     * @param keys - A list of keys to be deleted from the database. 
      * @returns the number of keys that were removed.
      */
     public del(keys: string[]) {
