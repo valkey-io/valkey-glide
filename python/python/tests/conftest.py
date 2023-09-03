@@ -1,7 +1,6 @@
 import random
 
 import pytest
-from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
@@ -42,15 +41,6 @@ def pytest_addoption(parser):
         action="store_false",
         help="TLS disabled, defaults to `%(default)s`",
     )
-
-
-@pytest.fixture()
-async def async_ffi_client(request) -> RedisAsyncFFIClient:
-    "Get async FFI client for tests"
-    host = request.config.getoption("--host")
-    port = request.config.getoption("--port")
-    config = ClientConfiguration([AddressInfo(host=host, port=port)])
-    return await RedisAsyncFFIClient.create(config)
 
 
 @pytest.fixture(autouse=True, scope="session")
