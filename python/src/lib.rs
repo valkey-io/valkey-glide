@@ -1,16 +1,10 @@
 use babushka::start_socket_listener;
 use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyList, PyString};
-use pyo3::{PyErr, Python};
-use redis::aio::MultiplexedConnection;
-use redis::Value;
-use redis::{AsyncCommands, RedisResult};
+use pyo3::types::PyList;
+use pyo3::Python;
 
-#[pyclass]
-struct AsyncClient {
-    multiplexer: MultiplexedConnection,
-}
+use redis::Value;
 
 #[pyclass]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -30,99 +24,9 @@ impl Level {
     }
 }
 
-fn to_py_err(err: impl std::error::Error) -> PyErr {
-    PyErr::new::<PyString, _>(err.to_string())
-}
-
-#[pymethods]
-impl AsyncClient {
-    #[staticmethod]
-    fn create_client(address: String, py: Python) -> PyResult<&PyAny> {
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let client = redis::Client::open(address).map_err(to_py_err)?;
-            let multiplexer = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(to_py_err)?;
-            let client = AsyncClient { multiplexer };
-            Ok(Python::with_gil(|py| client.into_py(py)))
-        })
-    }
-
-    fn get<'a>(&self, key: String, py: Python<'a>) -> PyResult<&'a PyAny> {
-        let mut connection = self.multiplexer.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: RedisResult<Option<String>> = connection.get(key).await;
-            result
-                .map_err(to_py_err)
-                .map(|result| Python::with_gil(|py| result.into_py(py)))
-        })
-    }
-
-    fn set<'a>(&self, key: String, value: String, py: Python<'a>) -> PyResult<&'a PyAny> {
-        let mut connection = self.multiplexer.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: RedisResult<()> = connection.set(key, value).await;
-            result
-                .map_err(to_py_err)
-                .map(|_| Python::with_gil(|py| py.None()))
-        })
-    }
-
-    fn create_pipeline(&self) -> AsyncPipeline {
-        AsyncPipeline::new(self.multiplexer.clone())
-    }
-}
-
-#[pyclass]
-struct AsyncPipeline {
-    internal_pipeline: redis::Pipeline,
-    multiplexer: MultiplexedConnection,
-}
-
-impl AsyncPipeline {
-    fn new(multiplexer: MultiplexedConnection) -> Self {
-        AsyncPipeline {
-            internal_pipeline: redis::Pipeline::new(),
-            multiplexer,
-        }
-    }
-}
-
-#[pymethods]
-impl AsyncPipeline {
-    fn get(this: &PyCell<Self>, key: String) -> &PyCell<Self> {
-        let mut pipeline = this.borrow_mut();
-        pipeline.internal_pipeline.get(key);
-        this
-    }
-
-    #[pyo3(signature = (key, value, ignore_result = false))]
-    fn set(this: &PyCell<Self>, key: String, value: String, ignore_result: bool) -> &PyCell<Self> {
-        let mut pipeline = this.borrow_mut();
-        pipeline.internal_pipeline.set(key, value);
-        if ignore_result {
-            pipeline.internal_pipeline.ignore();
-        }
-        this
-    }
-
-    fn execute<'a>(&self, py: Python<'a>) -> PyResult<&'a PyAny> {
-        let mut connection = self.multiplexer.clone();
-        let pipeline = self.internal_pipeline.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result: RedisResult<Vec<String>> = pipeline.query_async(&mut connection).await;
-            result
-                .map_err(to_py_err)
-                .map(|results| Python::with_gil(|py| results.into_py(py)))
-        })
-    }
-}
-
 /// A Python module implemented in Rust.
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<AsyncClient>()?;
     m.add_class::<Level>()?;
 
     #[pyfn(m)]
