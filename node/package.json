@@ -20,7 +20,8 @@
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
-        "test": "jest --verbose --runInBand"
+        "test": "jest --verbose --runInBand",
+        "lint": "eslint -f unix \"src/**/*.{ts,tsx}\""
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
@@ -32,6 +33,7 @@
         "@typescript-eslint/parser": "^5.54.1",
         "babel-jest": "^28.1.3",
         "eslint": "^8.36.0",
+        "eslint-plugin-tsdoc": "^0.2.17",
         "find-free-port": "^2.0.0",
         "jest": "^28.1.3",
         "protobufjs-cli": "^1.1.1",
