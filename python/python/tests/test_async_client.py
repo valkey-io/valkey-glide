@@ -12,7 +12,6 @@ from pybushka.async_commands.core import (
     ExpiryType,
     InfoSection,
 )
-from pybushka.async_ffi_client import RedisAsyncFFIClient
 from pybushka.constants import OK
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import set_logger_config
@@ -396,43 +395,3 @@ class TestClusterRoutes:
         info = await redis_client.info(route=RandomNode())
         assert type(info) == str
         assert "# Server" in info
-
-
-@pytest.mark.asyncio
-class TestFFICoreCommands:
-    async def test_ffi_set_get(self, async_ffi_client: RedisAsyncFFIClient):
-        time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        await async_ffi_client.set("key", time_str)
-        result = await async_ffi_client.get("key")
-        assert result == time_str
-
-
-@pytest.mark.asyncio
-class TestPipeline:
-    async def test_set_get_pipeline(self, async_ffi_client: RedisAsyncFFIClient):
-        pipeline = async_ffi_client.create_pipeline()
-        time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        pipeline.set("pipeline_key", time_str)
-        pipeline.get("pipeline_key")
-        result = await pipeline.execute()
-        assert result == ["OK", time_str]
-
-    async def test_set_get_pipeline_chained_requests(
-        self, async_ffi_client: RedisAsyncFFIClient
-    ):
-        pipeline = async_ffi_client.create_pipeline()
-        time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        result = (
-            await pipeline.set("pipeline_key", time_str).get("pipeline_key").execute()
-        )
-        assert result == ["OK", time_str]
-
-    async def test_set_with_ignored_result(self, async_ffi_client: RedisAsyncFFIClient):
-        pipeline = async_ffi_client.create_pipeline()
-        time_str = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        result = (
-            await pipeline.set("pipeline_key", time_str, True)
-            .get("pipeline_key")
-            .execute()
-        )
-        assert result == [time_str]
