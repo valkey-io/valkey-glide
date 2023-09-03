@@ -9,6 +9,6 @@ module.exports = {
         jest: true,
     },
     rules: {
-        'tsdoc/syntax': 'warn'
+        'tsdoc/syntax': 'error'
     }
 };
