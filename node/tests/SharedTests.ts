@@ -173,7 +173,7 @@ export function runBaseTests<Context>(config: {
                     /// We expect Redis to return an error since the test clusters don't use redis.conf file.
                     expect(await client.configRewrite()).toThrow();
                 } catch(e){
-                    expect(e).toMatch("The server is running without a config file");
+                    expect((e as Error).message).toMatch('The server is running without a config file');
                 }
             });
         },
