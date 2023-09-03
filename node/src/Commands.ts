@@ -176,6 +176,11 @@ export function createSelect(
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
+export function createConfigRewrite(
+): redis_request.Command {
+    return createCommand(RequestType.ConfigRewrite, []);
+}
+
 export function createConfigResetStat(
     ): redis_request.Command {
         return createCommand(RequestType.ConfigResetStat, []);

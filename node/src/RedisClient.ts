@@ -9,6 +9,7 @@ import {
     InfoOptions,
     SetOptions,
     createConfigResetStat,
+    createConfigRewrite,
     createCustomCommand,
     createDel,
     createGet,
@@ -317,6 +318,15 @@ export class RedisClient {
      */
     public select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index));
+    }
+
+    /** Rewrite the configuration file with the current configuration.
+     * See https://redis.io/commands/select/ for details.
+     * 
+     * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     */
+    public configRewrite(): Promise<"OK"> {
+        return this.createWritePromise(createConfigRewrite());
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
