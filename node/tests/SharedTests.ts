@@ -11,6 +11,7 @@ type BaseClient = {
     ) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
+    configRewrite: () => Promise<"OK">;
     info(options?: InfoOptions[]): Promise<string | string[][]>;
     ConfigResetStat: () => Promise<"OK">;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
@@ -159,6 +160,21 @@ export function runBaseTests<Context>(config: {
                 expect(deletedKeysNum).toEqual(3);
                 deletedKeysNum = await client.del([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "test config rewrite",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                try{
+                    /// We expect Redis to return an error since the test clusters don't use redis.conf file.
+                    expect(await client.configRewrite()).toThrow();
+                } catch(e){
+                    expect(e).toMatch("The server is running without a config file");
+                }
             });
         },
         config.timeout
