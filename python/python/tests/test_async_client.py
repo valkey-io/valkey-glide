@@ -14,7 +14,7 @@ from pybushka.async_commands.core import (
 )
 from pybushka.constants import OK
 from pybushka.Logger import Level as logLevel
-from pybushka.Logger import set_logger_config
+from pybushka.Logger import Logger
 from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
 from pybushka.routes import (
     AllNodes,
@@ -25,7 +25,7 @@ from pybushka.routes import (
     SlotType,
 )
 
-set_logger_config(logLevel.INFO)
+Logger.set_logger_config(logLevel.INFO)
 
 
 def get_first_result(res: str | List[str] | List[List[str]]) -> str:
