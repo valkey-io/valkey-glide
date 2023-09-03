@@ -20,6 +20,6 @@ jobs:
             - uses: actions/checkout@v3
             - name: lint ts
               run: |
-                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint typescript
+                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin -plugin-tsdoc eslint eslint typescript
                   npm i
                   npx eslint .

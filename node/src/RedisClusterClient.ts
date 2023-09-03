@@ -124,8 +124,16 @@ export class RedisClusterClient extends RedisClient {
         return super.createWritePromise(command, toProtobufRoute(route));
     }
 
-    /// Returns information and statistics about the server according to the given arguments.
-    /// See https://redis.io/commands/info/ for details.
+    
+    /** Get information and statistics about the Redis server.
+     *  See https://redis.io/commands/info/ for details.
+     * 
+     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
+     *  When no parameter is provided, the default option is assumed.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     * @returns a string containing the information for the sections requested.
+     */
     public info(options?: InfoOptions[], route?: Routes): Promise<string> {
         return this.createWritePromise(createInfo(options), toProtobufRoute(route));
     }
@@ -133,7 +141,7 @@ export class RedisClusterClient extends RedisClient {
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
      * 
-     * @param route The command will be routed automatically, unless `route` is provided, in which
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * 
      * @returns always "OK"
