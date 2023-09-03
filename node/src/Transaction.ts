@@ -64,7 +64,7 @@ export class BaseTransaction {
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/select/ for details.
      * 
-     * @CommandResponse "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     * Returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
      */
     public configRewrite() {
         this.commands.push(createConfigRewrite());

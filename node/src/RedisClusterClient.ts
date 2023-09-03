@@ -141,7 +141,7 @@ export class RedisClusterClient extends RedisClient {
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/select/ for details.
      * 
-     * @param route The command will be routed automatically, unless `route` is provided, in which
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * 
      * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
