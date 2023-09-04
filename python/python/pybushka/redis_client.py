@@ -1,10 +1,8 @@
 import asyncio
 import threading
-from typing import Awaitable, List, Optional, Type, Union
+from typing import Awaitable, List, Optional, Type, Union, cast
 
 import async_timeout
-from google.protobuf.internal.decoder import _DecodeVarint32
-from google.protobuf.internal.encoder import _VarintBytes
 from pybushka.async_commands.cmd_commands import CMDCommands
 from pybushka.async_commands.cme_commands import CMECommands
 from pybushka.async_commands.core import CoreCommands
@@ -22,17 +20,11 @@ from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger
 from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
 from pybushka.protobuf.response_pb2 import Response
+from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
 from pybushka.routes import TRoute, set_protobuf_route
 from typing_extensions import Self
 
 from .pybushka import start_socket_listener_external, value_from_pointer
-
-
-def _protobuf_encode_delimited(b_arr, request: TRequest) -> None:
-    bytes_request = request.SerializeToString()
-    varint = _VarintBytes(len(bytes_request))
-    b_arr.extend(varint)
-    b_arr.extend(bytes_request)
 
 
 class BaseRedisClient(CoreCommands):
@@ -138,7 +130,7 @@ class BaseRedisClient(CoreCommands):
         self._buffered_requests = list()
         b_arr = bytearray()
         for request in requests:
-            _protobuf_encode_delimited(b_arr, request)
+            ProtobufCodec.encode_delimited(b_arr, request)
         self._writer.write(b_arr)
         await self._writer.drain()
         if len(self._buffered_requests) > 0:
@@ -204,26 +196,17 @@ class BaseRedisClient(CoreCommands):
             offset = 0
             while offset <= len(read_bytes):
                 try:
-                    msg_len, new_pos = _DecodeVarint32(read_bytes_view, offset)
-                except IndexError:
-                    # Didn't read enough bytes to decode the varint,
-                    # break the inner loop
+                    response, offset = ProtobufCodec.decode_delimited(
+                        read_bytes, read_bytes_view, offset, Response
+                    )
+                except PartialMessageException:
+                    # Recieved only partial response, break the inner loop
                     remaining_read_bytes = read_bytes[offset:]
                     break
-                required_read_size = new_pos + msg_len
-                if required_read_size > len(read_bytes):
-                    # Recieved only partial response,
-                    # break the inner loop
-                    remaining_read_bytes = read_bytes[offset:]
-                    break
-                offset = new_pos
-                msg_buf = read_bytes_view[offset : offset + msg_len]
-                offset += msg_len
-                response = Response()
-                response.ParseFromString(msg_buf)
+                response = cast(Response, response)
                 res_future = self._available_futures.get(response.callback_idx)
                 if not res_future:
-                    self.close("Got wrong callback index: {}", response.callback_idx)
+                    self.close(f"Got wrong callback index: {response.callback_idx}")
                 else:
                     if response.HasField("request_error"):
                         res_future.set_exception(Exception(response.request_error))
