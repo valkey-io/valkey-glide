@@ -169,11 +169,17 @@ export function runBaseTests<Context>(config: {
         "test config rewrite",
         async () => {
             await runTest(async (client: BaseClient) => {
-                try{
-                    /// We expect Redis to return an error since the test clusters don't use redis.conf file.
-                    expect(await client.configRewrite()).toThrow();
-                } catch(e){
-                    expect((e as Error).message).toMatch('The server is running without a config file');
+                const serverInfo = await client.info([InfoOptions.Server]);
+                const conf_file = parseInfoResponse(getFirstResult(serverInfo))["config_file"];
+                if (conf_file.length > 0) {
+                    expect(await client.configRewrite()).toEqual("OK");
+                } else {
+                    try{
+                        /// We expect Redis to return an error since the test cluster doesn't use redis.conf file
+                        expect(await client.configRewrite()).toThrow();
+                    } catch(e){
+                        expect((e as Error).message).toMatch('The server is running without a config file');
+                    }
                 }
             });
         },
