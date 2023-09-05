@@ -1,4 +1,4 @@
-import { RedisClient, RedisClusterClient, setLoggerConfig } from "babushka-rs";
+import { Logger, RedisClient, RedisClusterClient } from "babushka-rs";
 
 async function sendPingToNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
@@ -17,7 +17,7 @@ async function sendPingToNode() {
     const pong = await client.customCommand("PING", []);
     console.log(pong);
     await send_set_and_get(client);
-    client.dispose()
+    client.dispose();
 }
 
 async function send_set_and_get(client: RedisClient | RedisClusterClient) {
@@ -44,15 +44,15 @@ async function sendPingToRandomNodeInCluster() {
     const pong = await client.customCommand("PING", [], "randomNode");
     console.log(pong);
     await send_set_and_get(client);
-    client.dispose()
+    client.dispose();
 }
 
 function setFileLogger() {
-    setLoggerConfig("warn", "babushka.log");
+    Logger.setLoggerConfig("warn", "babushka.log");
 }
 
 function setConsoleLogger() {
-    setLoggerConfig("warn");
+    Logger.setLoggerConfig("warn");
 }
 
 setFileLogger();
