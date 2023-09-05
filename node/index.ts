@@ -7,7 +7,7 @@ export {
     RedisError as RequestError,
     TimeoutError,
 } from "./src/Errors";
-export { setLoggerConfig } from "./src/Logger";
+export { Logger } from "./src/Logger";
 export { RedisClient } from "./src/RedisClient";
 export { RedisClusterClient } from "./src/RedisClusterClient";
 export { ClusterTransaction, Transaction } from "./src/Transaction";

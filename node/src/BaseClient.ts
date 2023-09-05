@@ -131,7 +131,7 @@ export class BaseClient {
                 } else {
                     // Unhandled error
                     const err_message = `Failed to decode the response: ${err}`;
-                    Logger.instance.log("error", "connection", err_message);
+                    Logger.log("error", "connection", err_message);
                     this.dispose(err_message);
                     return;
                 }
@@ -170,7 +170,7 @@ export class BaseClient {
 
     protected constructor(socket: net.Socket, options?: ConnectionOptions) {
         // if logger has been initialized by the external-user on info level this log will be shown
-        Logger.instance.log("info", "Client lifetime", `construct client`);
+        Logger.log("info", "Client lifetime", `construct client`);
         this.responseTimeout =
             options?.responseTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
@@ -381,7 +381,7 @@ export class BaseClient {
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
         });
-        Logger.instance.log("info", "Client lifetime", "disposing of client");
+        Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
     }
 
@@ -397,7 +397,7 @@ export class BaseClient {
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
-        Logger.instance.log("info", "Client lifetime", "connected to server");
+        Logger.log("info", "Client lifetime", "connected to server");
         return connection;
     }
 
