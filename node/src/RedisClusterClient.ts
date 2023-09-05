@@ -158,7 +158,7 @@ export class RedisClusterClient extends RedisClient {
      * 
      * @returns always "OK"
     */
-    public ConfigResetStat(route?: Routes): Promise<"OK">  {
+    public configResetStat(route?: Routes): Promise<"OK">  {
         return this.createWritePromise(createConfigResetStat(), toProtobufRoute(route));
     }
 }

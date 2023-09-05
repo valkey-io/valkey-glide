@@ -13,9 +13,11 @@ import {
     createCustomCommand,
     createDel,
     createGet,
+    createIncr,
+    createIncrBy,
     createInfo,
     createSelect,
-    createSet,
+    createSet
 } from "./Commands";
 import {
     BaseRedisError,
@@ -334,8 +336,31 @@ export class RedisClient {
      *
      * @returns always "OK"
      */
-    public ConfigResetStat(): Promise<"OK"> {
+    public configResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
+    }
+
+    /** Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/incr/ for details.
+     *
+     * @param key - The key to increment it's value.
+     * @returns the value of key after the increment, An error is returned if the key contains a value
+     *  of the wrong type or contains a string that can not be represented as integer.
+     */
+    public incr(key: string): Promise<number> {
+        return this.createWritePromise(createIncr(key));
+    }
+
+    /** Increments the number stored at key by increment. If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/incrby/ for details.
+     *
+     * @param key - The key to increment it's value.
+     * @param increment - The increment to the key's value.
+     * @returns the value of key after the increment, An error is returned if the key contains a value
+     *  of the wrong type or contains a string that can not be represented as integer.
+     */
+    public incrBy(key: string, increment: number): Promise<number> {
+        return this.createWritePromise(createIncrBy(key,increment));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
