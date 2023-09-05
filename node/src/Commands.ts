@@ -186,6 +186,19 @@ export function createConfigResetStat(
         return createCommand(RequestType.ConfigResetStat, []);
 }
 
+export function createIncr(
+    key: string
+): redis_request.Command {
+    return createCommand(RequestType.Incr, [key]);
+}
+
+export function createIncrBy(
+    key: string, 
+    increment: number
+): redis_request.Command {
+    return createCommand(RequestType.IncrBy, [key, increment.toString()]);
+}
+    
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
