@@ -255,10 +255,16 @@ class TestSocketClient:
     async def test_config_rewrite(
         self, redis_client: Union[RedisClusterClient, RedisClient]
     ):
-        # We expect Redis to return an error since the test clusters don't use redis.conf file.
-        with pytest.raises(Exception) as e:
-            await redis_client.config_rewrite()
-        assert "The server is running without a config file" in str(e)
+        info_server = parse_info_response(
+            get_first_result(await redis_client.info([InfoSection.SERVER]))
+        )
+        if len(info_server["config_file"]) > 0:
+            assert await redis_client.config_rewrite() == OK
+        else:
+            # We expect Redis to return an error since the test cluster doesn't use redis.conf file
+            with pytest.raises(Exception) as e:
+                await redis_client.config_rewrite()
+            assert "The server is running without a config file" in str(e)
 
 
 class CommandsUnitTests:
