@@ -10,8 +10,8 @@ name = "pybushka"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "^0.18", features = ["extension-module"] }
-pyo3-asyncio = { version =  "^0.18", features = ["tokio-runtime"] }
+pyo3 = { version = "^0.19", features = ["extension-module"] }
+pyo3-asyncio = { version =  "^0.19", features = ["tokio-runtime"] }
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tls", "tokio-rustls-comp"] }
 babushka = { path = "../babushka-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
