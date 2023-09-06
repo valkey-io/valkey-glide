@@ -38,13 +38,13 @@ function runPythonBenchmark(){
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
-  pip install --upgrade --quiet pip
-  pip install --quiet -r requirements.txt
+  $pythonCommand -m pip install --upgrade --quiet pip
+  $pythonCommand -m pip install --quiet -r requirements.txt
   maturin develop --release
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
-  pip install --quiet -r requirements.txt
-  python python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
+  $pythonCommand -m pip install --quiet -r requirements.txt
+  $pythonCommand python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
   # exit python virtualenv
   deactivate
   echo "done python benchmark"
