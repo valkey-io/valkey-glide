@@ -70,6 +70,15 @@ async fn receive_and_respond_to_next_message(
     };
 
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
+    let setinfo_count = message.matches("SETINFO").count();
+    if setinfo_count > 0 {
+        let mut buffer = Vec::new();
+        for _ in 0..setinfo_count {
+            super::encode_value(&Value::Okay, &mut buffer).unwrap();
+        }
+        socket.write_all(&buffer).await.unwrap();
+        return true;
+    }
 
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
