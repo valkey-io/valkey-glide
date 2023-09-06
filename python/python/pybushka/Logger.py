@@ -15,11 +15,13 @@ class Level(Enum):
 
 class Logger:
     """
-    A class that allows logging which is consistent with logs from the internal rust core.
-    Logger.set_logger_config should be called before starting to use the client.
-    The loggeing setting can be changed by calling set_logger_config, which replaces the existing logger, and means that new logs will
-    not be saved with the logs that were sent before the call.
-    If set_logger_config wasn't called, the first log attempt will initialize a new logger with default level (console, WARN).
+    A singleton class that allows logging which is consistent with logs from the internal rust core.
+    The logger can be set up in 2 ways -
+    1. By calling Logger.init, which configures the logger only if it wasn't previously configured.
+    2. By calling Logger.set_logger_config, which replaces the existing configuration, and means that new logs will not be
+        saved with the logs that were sent before the call.
+    If set_logger_config wasn't called, the first log attempt will initialize a new logger with default configuration decided
+    by the Rust core.
     """
 
     _instance = None
@@ -29,6 +31,23 @@ class Logger:
         if level is not None:
             level = level.value
         Logger.logger_level = py_init(level, file_name)
+
+    @classmethod
+    def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
+        """_summary_
+        Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to
+        replace an existing logger.
+        The logger will filter all logs with a level lower than the given level,
+        If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided,
+        the logs will be written to the console.
+        Args:
+            level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE].
+            If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
+            file_name (Optional[str]):  If providedv the target of the logs will be the file mentioned.
+            Otherwise, logs will be printed to the console.
+        """
+        if cls._instance is None:
+            cls._instance = cls(level, file_name)
 
     @classmethod
     def log(cls, log_level: Level, log_identifier: str, message: str):
@@ -53,8 +72,8 @@ class Logger:
 
         Args:
             level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE].
-                If log level isn't provided, the default level will be set to WARN.
+            If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
             file_name (Optional[str]):  If providedv the target of the logs will be the file mentioned.
-                Otherwise, logs will be printed to the console.
+            Otherwise, logs will be printed to the console.
         """
         Logger._instance = Logger(level, file_name)
