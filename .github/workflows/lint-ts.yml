@@ -17,7 +17,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
             - name: lint ts
               run: |
                   npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript
