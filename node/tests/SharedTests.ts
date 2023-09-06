@@ -1,4 +1,5 @@
 import { expect, it } from "@jest/globals";
+import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import { InfoOptions, ReturnType, SetOptions, parseInfoResponse } from "../";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -19,6 +20,24 @@ type BaseClient = {
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
+async function getVersion(): Promise<[number, number, number]> {
+    const versioString = await new Promise<string>((resolve, reject) => {
+        exec(`redis-server -v`, (error, stdout) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve(stdout);
+            }
+        });
+    });
+    const version = versioString.split("v=")[1].split(" ")[0];
+    const numbers = version?.split(".");
+    if (numbers.length != 3) {
+        return [0, 0, 0];
+    }
+    return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
+}
+
 export function runBaseTests<Context>(config: {
     init: () => Promise<{ context: Context; client: BaseClient }>;
     close: (context: Context, testSucceeded: boolean) => void;
@@ -36,6 +55,24 @@ export function runBaseTests<Context>(config: {
             config.close(context, testSucceeded);
         }
     };
+
+    it(
+        "should register client name and version",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const version = await getVersion();
+                if (version[0] < 7 || (version[0] === 7 && version[1] < 2)) {
+                    return;
+                }
+
+                const result = await client.customCommand("CLIENT", ["INFO"]);
+
+                expect(result).toContain("lib-name=BabushkaJS");
+                expect(result).toContain("lib-ver=0.1.0");
+            });
+        },
+        config.timeout
+    );
 
     it(
         "set with return of old value works",
