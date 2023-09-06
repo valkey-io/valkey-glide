@@ -66,13 +66,25 @@ async def check_if_server_version_lt(client: BaseRedisClient, min_version: str) 
 
 
 @pytest.mark.asyncio
-class TestSocketClient:
+class TestRedisClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_socket_set_get(self, redis_client: BaseRedisClient):
         key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
         assert await redis_client.get(key) == value
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_register_client_name_and_version(
+        self, redis_client: BaseRedisClient
+    ):
+        min_version = "7.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            # TODO: change it to pytest fixture after we'll implement a sync client
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+        info = await redis_client.custom_command(["CLIENT", "INFO"])
+        assert "lib-name=BabushkaPy" in info
+        assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_large_values(self, redis_client: BaseRedisClient):

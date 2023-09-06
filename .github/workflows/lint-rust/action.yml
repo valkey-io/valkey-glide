@@ -22,17 +22,19 @@ runs:
               sudo apt install protobuf-compiler
           shell: bash
 
-        - run: cargo fmt --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all -- --check
+        - run: cargo fmt --all -- --check
+          working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
-        - run: cargo clippy --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
+        - run: cargo clippy --all-features --all-targets -- -D warnings
+          working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
         - run: |
-              cd ${{ inputs.cargo-toml-folder }}
               cargo update
               cargo install cargo-deny
               cargo deny check licenses --config ${GITHUB_WORKSPACE}/deny.toml
+          working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
         - name: doc
