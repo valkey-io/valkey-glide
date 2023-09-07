@@ -1,0 +1,210 @@
+diff --git a/java/benchmarks/build.gradle b/java/benchmarks/build.gradle
+index 083fd57..20a4142 100644
+--- a/java/benchmarks/build.gradle
++++ b/java/benchmarks/build.gradle
+@@ -27,3 +27,11 @@ java {
+         languageVersion = JavaLanguageVersion.of(17)
+     }
+ }
++
++tasks.withType(Test) { 
++  testLogging {
++    exceptionFormat "full"
++    events "started", "skipped", "passed", "failed"
++    showStandardStreams true
++  }
++}
+diff --git a/java/benchmarks/src/test/java/javabushka/client/Benchmarking.java b/java/benchmarks/src/test/java/javabushka/client/Benchmarking.java
+new file mode 100644
+index 0000000..ba5d6f5
+--- /dev/null
++++ b/java/benchmarks/src/test/java/javabushka/client/Benchmarking.java
+@@ -0,0 +1,68 @@
++package javabushka.client;
++
++import javabushka.client.LatencyResults;
++import java.util.ArrayList;
++import java.util.stream.Collectors;
++import java.util.Collections;
++
++public class Benchmarking {
++    static final int SIZE_SET_KEYSPACE = 3000000;
++   
++    public static String generateKeySet() {
++        return (Math.floor(Math.random() * SIZE_SET_KEYSPACE) + 1) + "";
++    }
++
++    public interface Operation {
++        void go();
++    }
++
++    public static ArrayList<Long> getLatencies(int iterations, Operation op) {
++        ArrayList<Long> latencies = new ArrayList<Long>();
++        for (int i = 0; i<iterations; i++) {
++            long before = System.nanoTime();
++            op.go();
++            long after = System.nanoTime();
++            latencies.add(after - before);
++        }
++        return latencies;
++    }
++
++    // Assumption: latencies is sorted in ascending order
++    private static Long percentile(ArrayList<Long> latencies, int percentile) {
++        return latencies.get((int) Math.ceil((percentile / 100.0) * latencies.size()));
++    }
++
++    private static double stdDeviation(ArrayList<Long> latencies, Double avgLatency) {
++        double stdDeviation = latencies.stream()
++            .mapToDouble(Long::doubleValue)
++            .reduce(0.0, (stdDev, latency) -> stdDev + Math.pow(latency - avgLatency, 2));
++        return Math.sqrt(stdDeviation / latencies.size());
++    }
++
++    // This has the side-effect of sorting the latencies ArrayList
++    public static LatencyResults calculateResults(ArrayList<Long> latencies) {
++        Double avgLatency = latencies
++            .stream()
++            .collect(Collectors.summingLong(Long::longValue)) / Double.valueOf(latencies.size());
++
++        Collections.sort(latencies);
++        return new LatencyResults(
++            avgLatency,
++            percentile(latencies, 50),
++            percentile(latencies, 90),
++            percentile(latencies, 99),
++            stdDeviation(latencies, avgLatency)
++        );
++    }
++
++    public static void printResults(String operation, LatencyResults results) {
++        System.out.println(
++            "Avg. time in ms per " + operation + ": " + results.avgLatency / 1000000.0
++        );
++        System.out.println(operation + " p50 latency in ms: " + results.p50Latency / 1000000.0);
++        System.out.println(operation + " p90 latency in ms: " + results.p90Latency / 1000000.0);
++        System.out.println(operation + " p99 latency in ms: " + results.p99Latency / 1000000.0);
++        System.out.println(operation + " std dev in ms: " + results.stdDeviation / 1000000.0);
++    }
++
++}
+\ No newline at end of file
+diff --git a/java/benchmarks/src/test/java/javabushka/client/LatencyResults.java b/java/benchmarks/src/test/java/javabushka/client/LatencyResults.java
+new file mode 100644
+index 0000000..320ec07
+--- /dev/null
++++ b/java/benchmarks/src/test/java/javabushka/client/LatencyResults.java
+@@ -0,0 +1,24 @@
++package javabushka.client;
++
++// Raw timing results in nanoseconds
++public class LatencyResults {
++    public final double avgLatency;
++    public final long p50Latency;
++    public final long p90Latency;
++    public final long p99Latency;
++    public final double stdDeviation;
++
++    public LatencyResults(
++        double avgLatency,
++        long p50Latency,
++        long p90Latency,
++        long p99Latency,
++        double stdDeviation
++    ) {
++        this.avgLatency = avgLatency;
++        this.p50Latency = p50Latency;
++        this.p90Latency = p90Latency;
++        this.p99Latency = p99Latency;
++        this.stdDeviation = stdDeviation;
++    }
++}
+diff --git a/java/benchmarks/src/test/java/javabushka/client/jedis/JedisClientIT.java b/java/benchmarks/src/test/java/javabushka/client/jedis/JedisClientIT.java
+index 86b2ae0..249be43 100644
+--- a/java/benchmarks/src/test/java/javabushka/client/jedis/JedisClientIT.java
++++ b/java/benchmarks/src/test/java/javabushka/client/jedis/JedisClientIT.java
+@@ -6,6 +6,7 @@ package javabushka.client.jedis;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertTrue;
+ 
++import javabushka.client.Benchmarking;
+ import org.junit.Before;
+ import org.junit.Test;
+ 
+@@ -39,12 +40,27 @@ public class JedisClientIT {
+     }
+ 
+     @Test public void testResourceSetGet() {
+-        String key = "name";
++        int iterations = 100000;
+         String value = "my-value";
+ 
+-        jedisClient.set(key, value);
+-        String result = jedisClient.get(key);
+-
+-        assertEquals(value, result);
++        Benchmarking.printResults(
++            "SET",
++            Benchmarking.calculateResults(
++                Benchmarking.getLatencies(
++                    iterations, 
++                    () -> jedisClient.set(Benchmarking.generateKeySet(), value)
++                )
++            )
++        );
++        Benchmarking.printResults(
++            "GET",
++            Benchmarking.calculateResults(
++                Benchmarking.getLatencies(
++                    iterations,
++                    () -> jedisClient.get(Benchmarking.generateKeySet())
++                )
++            )
++        );
+     }
+ }
++
+diff --git a/java/benchmarks/src/test/java/javabushka/client/lettuce/LettuceClientIT.java b/java/benchmarks/src/test/java/javabushka/client/lettuce/LettuceClientIT.java
+index 20100e0..da986ac 100644
+--- a/java/benchmarks/src/test/java/javabushka/client/lettuce/LettuceClientIT.java
++++ b/java/benchmarks/src/test/java/javabushka/client/lettuce/LettuceClientIT.java
+@@ -5,6 +5,7 @@ package javabushka.client.lettuce;
+ 
+ import static org.junit.Assert.assertEquals;
+ 
++import javabushka.client.Benchmarking;
+ import org.junit.After;
+ import org.junit.Before;
+ import org.junit.Test;
+@@ -25,12 +26,26 @@ public class LettuceClientIT {
+     }
+ 
+     @Test public void testResourceSetGet() {
+-        String key = "name";
++        int iterations = 100000;
+         String value = "my-value";
+ 
+-        lettuceClient.set(key, value);
+-        String result = lettuceClient.get(key);
+-
+-        assertEquals(value, result);
++        Benchmarking.printResults(
++            "SET",
++            Benchmarking.calculateResults(
++                Benchmarking.getLatencies(
++                    iterations, 
++                    () -> lettuceClient.set(Benchmarking.generateKeySet(), value)
++                )
++            )
++        );
++        Benchmarking.printResults(
++            "GET",
++            Benchmarking.calculateResults(
++                Benchmarking.getLatencies(
++                    iterations,
++                    () -> lettuceClient.get(Benchmarking.generateKeySet())
++                )
++            )
++        );
+     }
+ }
