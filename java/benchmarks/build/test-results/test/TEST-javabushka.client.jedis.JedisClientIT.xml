@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="javabushka.client.jedis.JedisClientIT" tests="4" skipped="0" failures="0" errors="0" timestamp="2023-09-07T03:33:38" hostname="Jonathans-MacBook-Pro.local" time="14.703">
+  <properties/>
+  <testcase name="testResourceInfoBySection" classname="javabushka.client.jedis.JedisClientIT" time="0.142"/>
+  <testcase name="testResourceSetGet" classname="javabushka.client.jedis.JedisClientIT" time="14.558"/>
+  <testcase name="someLibraryMethodReturnsTrue" classname="javabushka.client.jedis.JedisClientIT" time="0.002"/>
+  <testcase name="testResourceInfo" classname="javabushka.client.jedis.JedisClientIT" time="0.001"/>
+  <system-out><![CDATA[Avg. time in ms per SET: 0.07751362659
+SET p50 latency in ms: 0.0456
+SET p90 latency in ms: 0.070699
+SET p99 latency in ms: 0.127282
+SET std dev in ms: 0.665195671610232
+Avg. time in ms per GET: 0.06613250047
+GET p50 latency in ms: 0.040224
+GET p90 latency in ms: 0.058583
+GET p99 latency in ms: 0.10689
+GET std dev in ms: 0.6044885619384261
+]]></system-out>
+  <system-err><![CDATA[SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+]]></system-err>
+</testsuite>
