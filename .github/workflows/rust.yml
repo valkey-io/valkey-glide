@@ -28,7 +28,7 @@ jobs:
                     - 7.2.0
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
@@ -42,14 +42,8 @@ jobs:
                   sudo apt update
                   sudo apt install protobuf-compiler
 
-            - name: Install toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
-                  override: true
-                  components: rustfmt
-
-            - uses: Swatinem/rust-cache@v1
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
 
             - name: Run tests
               working-directory: ./babushka-core
@@ -69,7 +63,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 20
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 

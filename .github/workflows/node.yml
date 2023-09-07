@@ -28,7 +28,7 @@ jobs:
                     - 7.2.0
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
@@ -67,7 +67,7 @@ jobs:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
