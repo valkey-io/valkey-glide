@@ -74,3 +74,4 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./node/rust-client
+              name: lint node rust
