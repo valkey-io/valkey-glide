@@ -70,11 +70,14 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./babushka-core
+              name: lint babushka-core
 
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./logger_core
+              name: lint logger
 
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./benchmarks/rust
+              name: lint benchmark
