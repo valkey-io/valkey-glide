@@ -1,4 +1,5 @@
 import { expect, it } from "@jest/globals";
+import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import { InfoOptions, ReturnType, SetOptions, parseInfoResponse } from "../";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -19,6 +20,24 @@ type BaseClient = {
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
+async function getVersion(): Promise<[number, number, number]> {
+    const versioString = await new Promise<string>((resolve, reject) => {
+        exec(`redis-server -v`, (error, stdout) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve(stdout);
+            }
+        });
+    });
+    const version = versioString.split("v=")[1].split(" ")[0];
+    const numbers = version?.split(".");
+    if (numbers.length != 3) {
+        return [0, 0, 0];
+    }
+    return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
+}
+
 export function runBaseTests<Context>(config: {
     init: () => Promise<{ context: Context; client: BaseClient }>;
     close: (context: Context, testSucceeded: boolean) => void;
@@ -36,6 +55,24 @@ export function runBaseTests<Context>(config: {
             config.close(context, testSucceeded);
         }
     };
+
+    it(
+        "should register client name and version",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const version = await getVersion();
+                if (version[0] < 7 || (version[0] === 7 && version[1] < 2)) {
+                    return;
+                }
+
+                const result = await client.customCommand("CLIENT", ["INFO"]);
+
+                expect(result).toContain("lib-name=BabushkaJS");
+                expect(result).toContain("lib-ver=0.1.0");
+            });
+        },
+        config.timeout
+    );
 
     it(
         "set with return of old value works",
@@ -172,15 +209,19 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const serverInfo = await client.info([InfoOptions.Server]);
-                const conf_file = parseInfoResponse(getFirstResult(serverInfo))["config_file"];
+                const conf_file = parseInfoResponse(getFirstResult(serverInfo))[
+                    "config_file"
+                ];
                 if (conf_file.length > 0) {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
-                    try{
+                    try {
                         /// We expect Redis to return an error since the test cluster doesn't use redis.conf file
                         expect(await client.configRewrite()).toThrow();
-                    } catch(e){
-                        expect((e as Error).message).toMatch('The server is running without a config file');
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "The server is running without a config file"
+                        );
                     }
                 }
             });
@@ -196,10 +237,20 @@ export function runBaseTests<Context>(config: {
                 /// after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
                 await client.set("foo", "bar");
                 const OldResult = await client.info([InfoOptions.Stats]);
-                expect(Number(parseInfoResponse(getFirstResult(OldResult))["total_commands_processed"])).toBeGreaterThan(1);
+                expect(
+                    Number(
+                        parseInfoResponse(getFirstResult(OldResult))[
+                            "total_commands_processed"
+                        ]
+                    )
+                ).toBeGreaterThan(1);
                 expect(await client.configResetStat()).toEqual("OK");
                 const result = await client.info([InfoOptions.Stats]);
-                expect(parseInfoResponse(getFirstResult(result))["total_commands_processed"]).toEqual("1");
+                expect(
+                    parseInfoResponse(getFirstResult(result))[
+                        "total_commands_processed"
+                    ]
+                ).toEqual("1");
             });
         },
         config.timeout
@@ -226,7 +277,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
-                /// key1 and key2 does not exist, so it set to 0 before performing the operation. 
+                /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.incr(key1)).toEqual(1);
                 expect(await client.get(key1)).toEqual("1");
                 expect(await client.incrBy(key2, 2)).toEqual(2);
@@ -245,13 +296,17 @@ export function runBaseTests<Context>(config: {
                 try {
                     expect(await client.incr(key)).toThrow();
                 } catch (e) {
-                    expect((e as Error).message).toMatch("value is not an integer");
+                    expect((e as Error).message).toMatch(
+                        "value is not an integer"
+                    );
                 }
 
                 try {
                     expect(await client.incrBy(key, 1)).toThrow();
                 } catch (e) {
-                    expect((e as Error).message).toMatch("value is not an integer");
+                    expect((e as Error).message).toMatch(
+                        "value is not an integer"
+                    );
                 }
             });
         },
