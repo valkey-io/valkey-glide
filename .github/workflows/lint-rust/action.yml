@@ -10,33 +10,24 @@ runs:
     using: "composite"
 
     steps:
-        - uses: actions/checkout@v3
+        - uses: actions/checkout@v4
           with:
               submodules: recursive
-        
-        - uses: actions-rs/toolchain@v1
-          with:
-              profile: minimal
-              toolchain: stable
-              override: true
-              components: rustfmt, clippy
 
-        - uses: Swatinem/rust-cache@v1
-        
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+
         - run: |
-            sudo apt update
-            sudo apt install protobuf-compiler
+              sudo apt update
+              sudo apt install protobuf-compiler
           shell: bash
-        - uses: actions-rs/cargo@v1
-          with:
-              command: fmt
-              args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all -- --check
 
-        - uses: actions-rs/cargo@v1
-          with:
-              command: clippy
-              args: --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
-        
+        - run: cargo fmt --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all -- --check
+          shell: bash
+
+        - run: cargo clippy --manifest-path ${{ inputs.cargo-toml-folder }}/Cargo.toml --all-features --all-targets -- -D warnings
+          shell: bash
+
         - run: |
               cd ${{ inputs.cargo-toml-folder }}
               cargo update
