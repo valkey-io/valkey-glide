@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="javabushka.client.lettuce.LettuceClientIT" tests="1" skipped="0" failures="0" errors="0" timestamp="2023-09-07T03:33:53" hostname="Jonathans-MacBook-Pro.local" time="19.114">
+  <properties/>
+  <testcase name="testResourceSetGet" classname="javabushka.client.lettuce.LettuceClientIT" time="19.114"/>
+  <system-out><![CDATA[Avg. time in ms per SET: 0.09530544199
+SET p50 latency in ms: 0.055105
+SET p90 latency in ms: 0.089829
+SET p99 latency in ms: 0.184804
+SET std dev in ms: 0.7259927555734456
+Avg. time in ms per GET: 0.08870054313
+GET p50 latency in ms: 0.052371
+GET p90 latency in ms: 0.081338
+GET p99 latency in ms: 0.145727
+GET std dev in ms: 0.6983375291436595
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
