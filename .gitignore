@@ -15,10 +15,7 @@ Cargo.lock
 *.pdb
 dump.rdb
 .env
-.idea
 benchmarks/results
-benchmarks/build
-lib/build
 
 # lock files
 
