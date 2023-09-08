@@ -47,5 +47,14 @@ public class LettuceClientIT {
                 )
             )
         );
+        Benchmarking.printResults(
+            "GET non-existing",
+            Benchmarking.calculateResults(
+                Benchmarking.getLatencies(
+                    iterations,
+                    () -> lettuceClient.get(Benchmarking.generateKeyGet())
+                )
+            )
+        );
     }
 }

@@ -61,6 +61,15 @@ public class JedisClientIT {
                 )
             )
         );
+        Benchmarking.printResults(
+            "GET non-existing",
+            Benchmarking.calculateResults(
+                Benchmarking.getLatencies(
+                    iterations,
+                    () -> jedisClient.get(Benchmarking.generateKeyGet())
+                )
+            )
+        );
     }
 }
 

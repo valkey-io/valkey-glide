@@ -6,7 +6,13 @@ import java.util.stream.Collectors;
 import java.util.Collections;
 
 public class Benchmarking {
+    static final int SIZE_GET_KEYSPACE = 3750000;
     static final int SIZE_SET_KEYSPACE = 3000000;
+
+    public static String generateKeyGet() {
+        int range = SIZE_GET_KEYSPACE - SIZE_SET_KEYSPACE;
+        return Math.floor(Math.random() * range + SIZE_SET_KEYSPACE + 1) + "";
+    }
    
     public static String generateKeySet() {
         return (Math.floor(Math.random() * SIZE_SET_KEYSPACE) + 1) + "";
