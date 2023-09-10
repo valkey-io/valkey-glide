@@ -1,14 +1,12 @@
-from typing import List, Type, Union
+from typing import List, Literal, Union
 
 from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
-from pybushka.protobuf.redis_request_pb2 import RedisRequest, RequestType
+from pybushka.protobuf.redis_request_pb2 import RedisRequest
 
 OK: str = "OK"
 DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)
 # Typing
 
-TRedisRequest = Type["RedisRequest"]
-TConnectionRequest = Type["ConnectionRequest"]
-TResult = Union[OK, str, List[str], List[List[str]], None]
-TRequest = Union[TRedisRequest, TConnectionRequest]
-TRequestType = Type["RequestType"]
+TOK = Literal["OK"]
+TResult = Union[TOK, str, List[str], List[List[str]], int, None]
+TRequest = Union[RedisRequest, ConnectionRequest]

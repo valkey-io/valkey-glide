@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import Optional
 
@@ -25,12 +27,11 @@ class Logger:
     """
 
     _instance = None
-    logger_level = None
+    logger_level: internalLevel
 
-    def __init__(self, level: Optional[Level] = None, file_name: str = None) -> super:
-        if level is not None:
-            level = level.value
-        Logger.logger_level = py_init(level, file_name)
+    def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
+        level_value = level.value if level else None
+        Logger.logger_level = py_init(level_value, file_name)
 
     @classmethod
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):

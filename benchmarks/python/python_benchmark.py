@@ -7,9 +7,10 @@ import time
 from datetime import datetime
 from enum import Enum
 from statistics import mean
+from typing import List
 
 import numpy as np
-import redis.asyncio as redispy
+import redis.asyncio as redispy  # type: ignore
 from pybushka import (
     AddressInfo,
     ClientConfiguration,
@@ -76,7 +77,7 @@ SIZE_GET_KEYSPACE = 3750000  # 3.75 million
 SIZE_SET_KEYSPACE = 3000000  # 3 million
 started_tasks_counter = 0
 running_tasks = set()
-bench_json_results = []
+bench_json_results: List[str] = []
 
 
 def generate_value(size):

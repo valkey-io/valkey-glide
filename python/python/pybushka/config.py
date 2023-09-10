@@ -1,7 +1,6 @@
 from enum import Enum
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional
 
-from pybushka.constants import TConnectionRequest
 from pybushka.protobuf.connection_request_pb2 import (
     ConnectionRequest,
     ReadFromReplicaStrategy,
@@ -89,7 +88,7 @@ class ClientConfiguration:
 
     def convert_to_protobuf_request(
         self, cluster_mode: bool = False
-    ) -> TConnectionRequest:
+    ) -> ConnectionRequest:
         request = ConnectionRequest()
         for address in self.addresses:
             address_info = request.addresses.add()

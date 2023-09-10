@@ -1,44 +1,45 @@
 import asyncio
 import threading
-from typing import Awaitable, List, Optional, Type, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import async_timeout
 from pybushka.async_commands.cmd_commands import CMDCommands
 from pybushka.async_commands.cme_commands import CMECommands
 from pybushka.async_commands.core import CoreCommands
 from pybushka.config import ClientConfiguration
-from pybushka.constants import (
-    DEFAULT_READ_BYTES_SIZE,
-    OK,
-    TConnectionRequest,
-    TRedisRequest,
-    TRequest,
-    TRequestType,
-    TResult,
-)
+from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
 from pybushka.Logger import Level as LogLevel
 from pybushka.Logger import Logger as ClientLogger
-from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest
+from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
+from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
 from pybushka.protobuf.response_pb2 import Response
 from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
-from pybushka.routes import TRoute, set_protobuf_route
+from pybushka.routes import Route, set_protobuf_route
 from typing_extensions import Self
 
 from .pybushka import start_socket_listener_external, value_from_pointer
 
 
 class BaseRedisClient(CoreCommands):
-    @classmethod
-    async def create(cls, config: ClientConfiguration = None) -> Self:
-        config = config or ClientConfiguration()
-        self = cls()
-        self.config: Type[ClientConfiguration] = config
+    def __init__(self, config: ClientConfiguration):
+        """
+        To create a new client, use the `create` classmethod
+        """
+        self.config: ClientConfiguration = config
         self._write_buffer: bytearray = bytearray(1024)
-        self._available_futures: dict[int, Awaitable[TResult]] = {}
+        self._available_futures: dict[int, asyncio.Future] = {}
         self._available_callbackIndexes: set[int] = set()
-        self._buffered_requests: List[TRedisRequest] = list()
+        self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
-        init_future = asyncio.Future()
+        self.socket_path: Optional[str] = None
+        self._reader_task: Optional[asyncio.Task] = None
+        self._done_init = None
+
+    @classmethod
+    async def create(cls, config: Optional[ClientConfiguration] = None) -> Self:
+        config = config or ClientConfiguration()
+        self = cls(config)
+        init_future: asyncio.Future = asyncio.Future()
         loop = asyncio.get_event_loop()
 
         def init_callback(socket_path: Optional[str], err: Optional[str]):
@@ -98,20 +99,20 @@ class BaseRedisClient(CoreCommands):
     def close(self, err: str = "") -> None:
         for response_future in self._available_futures.values():
             if not response_future.done():
-                response_future.set_exception(err)
+                response_future.set_exception(Exception(err))
         self.__del__()
 
-    def _get_future(self, callback_idx: int) -> Type[asyncio.Future]:
-        response_future = asyncio.Future()
+    def _get_future(self, callback_idx: int) -> asyncio.Future:
+        response_future: asyncio.Future = asyncio.Future()
         self._available_futures.update({callback_idx: response_future})
         return response_future
 
-    def _get_protobuf_conn_request(self) -> TConnectionRequest:
+    def _get_protobuf_conn_request(self) -> ConnectionRequest:
         return self.config.convert_to_protobuf_request()
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
-        response_future = self._get_future(0)
+        response_future: asyncio.Future = self._get_future(0)
         await self._write_or_buffer_request(conn_request)
         await response_future
         if response_future.result() is not None:
@@ -139,9 +140,9 @@ class BaseRedisClient(CoreCommands):
 
     async def _execute_command(
         self,
-        request_type: TRequestType,
+        request_type: RequestType.ValueType,
         args: List[str],
-        route: Optional[TRoute] = None,
+        route: Optional[Route] = None,
     ) -> TResult:
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
@@ -157,9 +158,9 @@ class BaseRedisClient(CoreCommands):
 
     async def execute_transaction(
         self,
-        commands: List[Union[TRequestType, List[str]]],
-        route: Optional[TRoute] = None,
-    ) -> TResult:
+        commands: List[Tuple[RequestType.ValueType, List[str]]],
+        route: Optional[Route] = None,
+    ) -> List[TResult]:
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         transaction_commands = []
@@ -222,9 +223,12 @@ class BaseRedisClient(CoreCommands):
 
 
 class RedisClusterClient(BaseRedisClient, CMECommands):
-    def _get_protobuf_conn_request(self) -> TConnectionRequest:
+    def _get_protobuf_conn_request(self) -> ConnectionRequest:
         return self.config.convert_to_protobuf_request(cluster_mode=True)
 
 
 class RedisClient(BaseRedisClient, CMDCommands):
     pass
+
+
+TRedisClient = Union[RedisClient, RedisClusterClient]
