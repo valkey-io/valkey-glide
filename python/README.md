@@ -57,4 +57,9 @@ isort . --profile black --skip-glob python/pybushka/protobuf
 black --target-version py36 . --exclude python/pybushka/protobuf
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
 flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
+# generate protobuf type files
+MYPY_PROTOC_PATH=`which protoc-gen-mypy`
+protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=../babushka-core/src/protobuf/ --python_out=$./python/pybushka --mypy_out=./python/pybushka ../babushka-core/src/protobuf/*.proto
+# run type check 
+mypy .
 ```

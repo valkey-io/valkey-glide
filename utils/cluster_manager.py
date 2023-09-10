@@ -89,7 +89,7 @@ def generate_tls_certs():
         output, err = p.communicate(timeout=10)
         if p.returncode != 0:
             raise Exception(
-                f"Failed to make key for {name}. Executed: {p.args}:\n{err}"
+                f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
             )
 
     # Build CA key
@@ -122,7 +122,9 @@ def generate_tls_certs():
     )
     output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to make create CA cert. Executed: {p.args}:\n{err}")
+        raise Exception(
+            f"Failed to make create CA cert. Executed: {str(p.args)}:\n{err}"
+        )
 
     # Read Redis key
     p1 = subprocess.Popen(
@@ -142,7 +144,7 @@ def generate_tls_certs():
     )
     redis_key_output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to read Redis key. Executed: {p.args}:\n{err}")
+        raise Exception(f"Failed to read Redis key. Executed: {str(p.args)}:\n{err}")
 
     # Build redis cert
     p = subprocess.Popen(
@@ -172,7 +174,7 @@ def generate_tls_certs():
     )
     output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to create redis cert. Executed: {p.args}:\n{err}")
+        raise Exception(f"Failed to create redis cert. Executed: {str(p.args)}:\n{err}")
     toc = time.perf_counter()
     logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
     logging.debug(f"TLS files= {REDIS_CRT}, {REDIS_KEY}, {CA_CRT}")
@@ -249,8 +251,8 @@ def create_cluster_folder(path: str, prefix: str) -> str:
         str: The full path of the cluster folder
     """
     time = datetime.now(timezone.utc)
-    time = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    cluster_folder = f"{path}/{prefix}-{time}-{get_random_string(6)}"
+    time_str = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cluster_folder = f"{path}/{prefix}-{time_str}-{get_random_string(6)}"
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
@@ -287,7 +289,7 @@ def start_redis_server(
     output, err = p.communicate(timeout=2)
     if p.returncode != 0:
         raise Exception(
-            f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+            f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
     server = RedisServer(host, port)
     return server, node_folder
@@ -440,7 +442,7 @@ def wait_for_all_topology_views(
                 output, err = p.communicate(timeout=5)
                 if err:
                     raise Exception(
-                        f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+                        f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
                     )
 
                 if output.count(f"{server.host}") == len(servers):
@@ -490,7 +492,7 @@ def wait_for_server(
                 return True
             if p.returncode != 0:
                 logging.debug(
-                    f"Got error while waiting for server. Executed command: {p.args}\n "
+                    f"Got error while waiting for server. Executed command: {str(p.args)}\n "
                     f"Return code: {p.returncode}\n Error: {err}"
                 )
         except subprocess.TimeoutExpired:
@@ -561,7 +563,7 @@ def stop_server(server: RedisServer, cluster_folder: str, use_tls: bool, auth: s
         "-h",
         server.host,
         "-p",
-        server.port,
+        str(server.port),
         *get_redis_cli_option_args(cluster_folder, use_tls, auth),
         "shutdown",
         "nosave",
@@ -584,7 +586,7 @@ def stop_server(server: RedisServer, cluster_folder: str, use_tls: bool, auth: s
                 )
                 logging.error(err_msg)
                 raise Exception(
-                    f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+                    f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
                 )
             if not wait_for_server_shutdown(server, cluster_folder, use_tls, auth):
                 err_msg = "Timeout elapsed while waiting for the node to shutdown"
@@ -655,7 +657,7 @@ def remove_folder(folder_path: str):
     output, err = p.communicate(timeout=3)
     if p.returncode != 0:
         raise Exception(
-            f"Failed to execute command: {p.args}\n Return code: {p.returncode}\n Error: {err}"
+            f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
     logging.debug(f"Folder {folder_path} removed")
 
@@ -676,7 +678,9 @@ def stop_clusters(
         cluster_folders = [
             os.path.abspath(f"{folder_path}/{dirname}")
             for dirname in os.listdir(folder_path)
-            if os.path.isdir(f"{folder_path}/{dirname}") and dirname.startswith(prefix)
+            if os.path.isdir(f"{folder_path}/{dirname}")
+            and prefix is not None
+            and dirname.startswith(prefix)
         ]
     for folder in cluster_folders:
         stop_cluster(host, folder, use_tls, auth, logfile, keep_folder)
@@ -701,7 +705,7 @@ def stop_cluster(
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
             port = it.name
-            stop_server(RedisServer(host, port), cluster_folder, use_tls, auth)
+            stop_server(RedisServer(host, int(port)), cluster_folder, use_tls, auth)
     logging.debug("All hosts were stopped")
     if not keep_folder:
         remove_folder(cluster_folder)

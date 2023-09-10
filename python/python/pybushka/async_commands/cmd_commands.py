@@ -1,7 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
-from pybushka.constants import OK, TResult
+from pybushka.constants import TOK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 
 
@@ -55,11 +55,11 @@ class CMDCommands(CoreCommands):
             str: Returns a string containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
-        return await self._execute_command(RequestType.Info, args)
+        return cast(str, await self._execute_command(RequestType.Info, args))
 
     async def exec(
         self,
-        transaction: Transaction,
+        transaction: BaseTransaction | Transaction,
     ) -> List[TResult]:
         """Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
@@ -75,7 +75,7 @@ class CMDCommands(CoreCommands):
         commands = transaction.commands[:]
         return await self.execute_transaction(commands)
 
-    async def select(self, index: int) -> OK:
+    async def select(self, index: int) -> TOK:
         """Change the currently selected Redis database.
         See https://redis.io/commands/select/ for details.
 
@@ -85,21 +85,21 @@ class CMDCommands(CoreCommands):
         Returns:
             A simple OK response.
         """
-        return await self._execute_command(RequestType.Select, [str(index)])
+        return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
 
-    async def config_resetstat(self) -> OK:
+    async def config_resetstat(self) -> TOK:
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
-        return await self._execute_command(RequestType.ConfigResetStat, [])
+        return cast(TOK, await self._execute_command(RequestType.ConfigResetStat, []))
 
-    async def config_rewrite(self) -> OK:
+    async def config_rewrite(self) -> TOK:
         """Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
         """
-        return await self._execute_command(RequestType.ConfigRewrite, [])
+        return cast(TOK, await self._execute_command(RequestType.ConfigRewrite, []))

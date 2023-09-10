@@ -1,16 +1,17 @@
 import random
+from typing import AsyncGenerator
 
 import pytest
 from pybushka.config import AddressInfo, ClientConfiguration
 from pybushka.Logger import Level as logLevel
 from pybushka.Logger import Logger
-from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
+from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.utils.cluster import RedisCluster
 
 default_host = "localhost"
 default_port = 6379
 
-Logger.set_logger_config(logLevel.INFO)
+Logger.set_logger_config(logLevel.WARN)
 
 
 def pytest_addoption(parser):
@@ -66,12 +67,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 @pytest.fixture()
-async def redis_client(request, cluster_mode) -> BaseRedisClient:
+async def redis_client(request, cluster_mode) -> AsyncGenerator[TRedisClient, None]:
     "Get async socket client for tests"
     host = request.config.getoption("--host")
     port = request.config.getoption("--port")
     use_tls = request.config.getoption("--tls")
+    client: TRedisClient
     if cluster_mode:
+        assert type(pytest.redis_cluster) is RedisCluster
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
         config = ClientConfiguration(seed_nodes, use_tls=use_tls)
         client = await RedisClusterClient.create(config)

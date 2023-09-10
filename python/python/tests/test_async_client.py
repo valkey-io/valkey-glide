@@ -2,7 +2,7 @@ import asyncio
 import random
 import string
 from datetime import datetime, timedelta
-from typing import Dict, List, Type, Union
+from typing import Dict, List, Union
 
 import pytest
 from packaging import version
@@ -13,19 +13,16 @@ from pybushka.async_commands.core import (
     InfoSection,
 )
 from pybushka.constants import OK
-from pybushka.Logger import Level as logLevel
-from pybushka.Logger import Logger
-from pybushka.redis_client import BaseRedisClient, RedisClient, RedisClusterClient
+from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from pybushka.routes import (
     AllNodes,
     AllPrimaries,
     RandomNode,
+    Route,
     SlotIdRoute,
     SlotKeyRoute,
     SlotType,
 )
-
-Logger.set_logger_config(logLevel.INFO)
 
 
 def get_first_result(res: str | List[str] | List[List[str]]) -> str:
@@ -58,36 +55,37 @@ def get_random_string(length):
     return result_str
 
 
-async def check_if_server_version_lt(client: BaseRedisClient, min_version: str) -> bool:
+async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> bool:
     # TODO: change it to pytest fixture after we'll implement a sync client
     info_str = await client.custom_command(["INFO", "server"])
+    assert type(info_str) == str or type(info_str) == list
     redis_version = parse_info_response(info_str).get("redis_version")
+    assert redis_version is not None
     return version.parse(redis_version) < version.parse(min_version)
 
 
 @pytest.mark.asyncio
 class TestRedisClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_socket_set_get(self, redis_client: BaseRedisClient):
+    async def test_socket_set_get(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_register_client_name_and_version(
-        self, redis_client: BaseRedisClient
-    ):
+    async def test_register_client_name_and_version(self, redis_client: TRedisClient):
         min_version = "7.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
+        assert type(info) is str
         assert "lib-name=BabushkaPy" in info
         assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_large_values(self, redis_client: BaseRedisClient):
+    async def test_large_values(self, redis_client: TRedisClient):
         length = 2**16
         key = get_random_string(length)
         value = get_random_string(length)
@@ -97,7 +95,7 @@ class TestRedisClients:
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_non_ascii_unicode(self, redis_client: BaseRedisClient):
+    async def test_non_ascii_unicode(self, redis_client: TRedisClient):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
@@ -106,7 +104,7 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_concurrent_tasks(self, redis_client: BaseRedisClient, value_size):
+    async def test_concurrent_tasks(self, redis_client: TRedisClient, value_size):
         num_of_concurrent_tasks = 100
         running_tasks = set()
 
@@ -124,7 +122,7 @@ class TestRedisClients:
         await asyncio.gather(*(list(running_tasks)))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_conditional_set(self, redis_client: BaseRedisClient):
+    async def test_conditional_set(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value = get_random_string(10)
         res = await redis_client.set(
@@ -143,7 +141,7 @@ class TestRedisClients:
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_set_return_old_value(self, redis_client: BaseRedisClient):
+    async def test_set_return_old_value(self, redis_client: TRedisClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
@@ -159,40 +157,44 @@ class TestRedisClients:
         assert await redis_client.get(key) == new_value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_custom_command_single_arg(self, redis_client: BaseRedisClient):
+    async def test_custom_command_single_arg(self, redis_client: TRedisClient):
         # Test single arg command
-        res: str = await redis_client.custom_command(["INFO"])
+        res = await redis_client.custom_command(["INFO"])
+        assert type(res) == str or type(res) == list
         info_dict = parse_info_response(res)
         assert info_dict.get("redis_version") is not None
-        assert (
-            info_dict.get("connected_clients").isdigit()
-            and int(info_dict.get("connected_clients")) >= 1
-        )
+        connected_client = info_dict.get("connected_clients")
+        assert type(connected_client) == str
+        assert connected_client.isdigit() and int(connected_client) >= 1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_custom_command_multi_arg(self, redis_client: BaseRedisClient):
+    async def test_custom_command_multi_arg(self, redis_client: TRedisClient):
         # Test multi args command
-        res: str = get_first_result(
-            await redis_client.custom_command(["CLIENT", "LIST", "TYPE", "NORMAL"])
+        client_list = await redis_client.custom_command(
+            ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
+        assert type(client_list) == str or type(client_list) == list
+        res: str = get_first_result(client_list)
         assert res is not None
         assert "id" in res
         assert "cmd=client" in res
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_lower_and_upper_case(
-        self, redis_client: BaseRedisClient
+        self, redis_client: TRedisClient
     ):
         # Test multi args command
-        res: str = get_first_result(
-            await redis_client.custom_command(["client", "LIST", "type", "NORMAL"])
+        client_list = await redis_client.custom_command(
+            ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
+        assert type(client_list) == str or type(client_list) == list
+        res: str = get_first_result(client_list)
         assert res is not None
         assert "id" in res
         assert "cmd=client" in res
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_request_error_raises_exception(self, redis_client: BaseRedisClient):
+    async def test_request_error_raises_exception(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value = get_random_string(10)
         await redis_client.set(key, value)
@@ -201,7 +203,7 @@ class TestRedisClients:
         assert "WRONGTYPE" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
-    async def test_info_server_replication(self, redis_client: BaseRedisClient):
+    async def test_info_server_replication(self, redis_client: TRedisClient):
         sections = [InfoSection.SERVER, InfoSection.REPLICATION]
         info = get_first_result(await redis_client.info(sections))
         assert "# Server" in info
@@ -212,18 +214,20 @@ class TestRedisClients:
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_info_default(self, redis_client: BaseRedisClient):
+    async def test_info_default(self, redis_client: TRedisClient):
         cluster_mode = type(redis_client) == RedisClusterClient
         info_result = await redis_client.info()
         if cluster_mode:
             cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+            assert type(cluster_nodes) == str or type(cluster_nodes) == list
+            cluster_nodes = get_first_result(cluster_nodes)
             expected_num_of_results = cluster_nodes.count("master")
             assert len(info_result) == expected_num_of_results
         info_result = get_first_result(info_result)
         assert "# Memory" in info_result
 
     @pytest.mark.parametrize("cluster_mode", [False])
-    async def test_select(self, redis_client: BaseRedisClient):
+    async def test_select(self, redis_client: RedisClient):
         assert await redis_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
@@ -235,7 +239,7 @@ class TestRedisClients:
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_delete(self, redis_client: BaseRedisClient):
+    async def test_delete(self, redis_client: TRedisClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         value = get_random_string(10)
         [await redis_client.set(key, value) for key in keys]
@@ -247,7 +251,7 @@ class TestRedisClients:
         assert await redis_client.delete(keys) == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_config_reset_stat(self, redis_client: BaseRedisClient):
+    async def test_config_reset_stat(self, redis_client: TRedisClient):
         # we execute set and info so the total_commands_processed will be greater than 1
         # after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
         await redis_client.set("foo", "bar")
@@ -320,9 +324,13 @@ class CommandsUnitTests:
 @pytest.mark.asyncio
 class TestClusterRoutes:
     async def cluster_route_custom_command_multi_nodes(
-        self, redis_client: BaseRedisClient, route: Type["RandomNode"]
+        self,
+        redis_client: RedisClusterClient,
+        route: Route,
     ):
         cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+        assert type(cluster_nodes) == str or type(cluster_nodes) == list
+        cluster_nodes = get_first_result(cluster_nodes)
         num_of_nodes = len(cluster_nodes.splitlines())
         expected_num_of_results = (
             num_of_nodes
@@ -335,6 +343,7 @@ class TestClusterRoutes:
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
+        assert type(all_results) == list
         assert len(all_results) == expected_num_of_results
         primary_count = 0
         replica_count = 0
@@ -350,13 +359,13 @@ class TestClusterRoutes:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_cluster_route_custom_command_all_nodes(
-        self, redis_client: BaseRedisClient
+        self, redis_client: RedisClusterClient
     ):
         await self.cluster_route_custom_command_multi_nodes(redis_client, AllNodes())
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_cluster_route_custom_command_all_primaries(
-        self, redis_client: BaseRedisClient
+        self, redis_client: RedisClusterClient
     ):
         await self.cluster_route_custom_command_multi_nodes(
             redis_client, AllPrimaries()
@@ -364,7 +373,7 @@ class TestClusterRoutes:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_cluster_route_custom_command_random_node(
-        self, redis_client: BaseRedisClient
+        self, redis_client: RedisClusterClient
     ):
         info_res = await redis_client.custom_command(
             ["INFO", "REPLICATION"], RandomNode()
@@ -373,7 +382,7 @@ class TestClusterRoutes:
         assert "role:master" in info_res or "role:slave" in info_res
 
     async def cluster_route_custom_command_slot_route(
-        self, redis_client: BaseRedisClient, is_slot_key: bool
+        self, redis_client: RedisClusterClient, is_slot_key: bool
     ):
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
@@ -390,6 +399,7 @@ class TestClusterRoutes:
         replica_res = await redis_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)
         )
+        assert type(replica_res) == str
         assert "myself,slave" in replica_res
         for node_line in replica_res:
             if "myself" in node_line:
@@ -398,18 +408,18 @@ class TestClusterRoutes:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_cluster_route_custom_command_slot_key_route(
-        self, redis_client: BaseRedisClient
+        self, redis_client: RedisClusterClient
     ):
         await self.cluster_route_custom_command_slot_route(redis_client, True)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_cluster_route_custom_command_slot_id_route(
-        self, redis_client: BaseRedisClient
+        self, redis_client: RedisClusterClient
     ):
         await self.cluster_route_custom_command_slot_route(redis_client, False)
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_info_random_route(self, redis_client: BaseRedisClient):
-        info = await redis_client.info(route=RandomNode())
+    async def test_info_random_route(self, redis_client: RedisClusterClient):
+        info = await redis_client.info([InfoSection.SERVER], RandomNode())
         assert type(info) == str
         assert "# Server" in info

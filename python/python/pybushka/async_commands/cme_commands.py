@@ -1,9 +1,9 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, cast
 
 from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
-from pybushka.constants import OK, TResult
+from pybushka.constants import TOK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
-from pybushka.routes import TRoute
+from pybushka.routes import Route
 
 
 class ClusterTransaction(BaseTransaction):
@@ -17,7 +17,7 @@ class ClusterTransaction(BaseTransaction):
 
 class CMECommands(CoreCommands):
     async def custom_command(
-        self, command_args: List[str], route: Optional[TRoute] = None
+        self, command_args: List[str], route: Optional[Route] = None
     ) -> TResult:
         """Executes a single command, without checking inputs.
             @example - Return a list of all pub/sub clients from all nodes:
@@ -26,7 +26,7 @@ class CMECommands(CoreCommands):
         Args:
             command_args (List[str]): List of strings of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
-            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -39,7 +39,7 @@ class CMECommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-        route: Optional[TRoute] = None,
+        route: Optional[Route] = None,
     ) -> Union[List[List[str]], str]:
         """Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -47,7 +47,7 @@ class CMECommands(CoreCommands):
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
             information to retrieve. When no parameter is provided, the default option is assumed.
-            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -56,19 +56,22 @@ class CMECommands(CoreCommands):
             the queried node and the information regarding the requested sections.
         """
         args = [section.value for section in sections] if sections else []
-        return await self._execute_command(RequestType.Info, args, route)
+        return cast(
+            Union[List[List[str]], str],
+            await self._execute_command(RequestType.Info, args, route),
+        )
 
     async def exec(
         self,
-        transaction: ClusterTransaction,
-        route: Optional[TRoute] = None,
+        transaction: BaseTransaction | ClusterTransaction,
+        route: Optional[Route] = None,
     ) -> List[TResult]:
         """Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
         Args:
             transaction (ClusterTransaction): A ClusterTransaction object containing a list of commands to be executed.
-            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -81,22 +84,24 @@ class CMECommands(CoreCommands):
 
     async def config_resetstat(
         self,
-        route: Optional[TRoute] = None,
-    ) -> OK:
+        route: Optional[Route] = None,
+    ) -> TOK:
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.
         Args:
-            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
-        return await self._execute_command(RequestType.ConfigResetStat, [], route)
+        return cast(
+            TOK, await self._execute_command(RequestType.ConfigResetStat, [], route)
+        )
 
     async def config_rewrite(
         self,
-        route: Optional[TRoute] = None,
-    ) -> OK:
+        route: Optional[Route] = None,
+    ) -> TOK:
         """Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
         Args:
@@ -105,4 +110,6 @@ class CMECommands(CoreCommands):
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
         """
-        return await self._execute_command(RequestType.ConfigRewrite, [], route)
+        return cast(
+            TOK, await self._execute_command(RequestType.ConfigRewrite, [], route)
+        )

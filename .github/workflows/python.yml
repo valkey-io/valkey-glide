@@ -51,7 +51,7 @@ jobs:
               working-directory: ./python
               run: |
                   python -m pip install --upgrade pip
-                  pip install flake8 isort black
+                  pip install flake8 isort black mypy-protobuf
 
             - name: Lint with isort
               working-directory: ./python
@@ -78,15 +78,32 @@ jobs:
             - name: Generate protobuf files
               working-directory: .
               run: |
-                  protoc -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
+                  MYPY_PROTOC_PATH=`which protoc-gen-mypy`
+                  protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka --mypy_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
 
-            - name: Test with pytest
+            - name: Build Pybushka
               working-directory: ./python
               run: |
                   python -m venv .env
                   source .env/bin/activate
                   pip install -r requirements.txt
                   maturin develop --release
+
+            - name: Type check with mypy
+              working-directory: ./python
+              run: |
+                  # The type check should run inside the virtual env to get
+                  # all installed dependencies and build files
+                  source .env/bin/activate
+                  pip install mypy types-protobuf
+                  # Install the benchmark requirements 
+                  pip install -r ../benchmarks/python/requirements.txt
+                  python -m mypy ..
+              
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
                   pytest --asyncio-mode=auto
 
     lint-rust:

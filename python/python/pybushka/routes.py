@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Type
+from typing import Optional
 
 from pybushka.protobuf.redis_request_pb2 import RedisRequest, SimpleRoutes
 from pybushka.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
@@ -13,10 +13,6 @@ class SlotType(Enum):
 class Route:
     def __init__(self) -> None:
         pass
-
-
-TSlotType = Type["SlotType"]
-TRoute = Type["Route"]
 
 
 # CME routes
@@ -35,20 +31,20 @@ class RandomNode(Route):
 
 
 class SlotKeyRoute(Route):
-    def __init__(self, slot_type: TSlotType, slot_key: str) -> None:
+    def __init__(self, slot_type: SlotType, slot_key: str) -> None:
         super().__init__()
         self.slot_type = slot_type
         self.slot_key = slot_key
 
 
 class SlotIdRoute(Route):
-    def __init__(self, slot_type: TSlotType, slot_id: int) -> None:
+    def __init__(self, slot_type: SlotType, slot_id: int) -> None:
         super().__init__()
         self.slot_type = slot_type
         self.slot_id = slot_id
 
 
-def to_protobuf_slot_type(slot_type: Type["SlotType"]) -> Type["ProtoSlotTypes"]:
+def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
     return (
         ProtoSlotTypes.Primary
         if slot_type == SlotType.PRIMARY
@@ -56,7 +52,7 @@ def to_protobuf_slot_type(slot_type: Type["SlotType"]) -> Type["ProtoSlotTypes"]
     )
 
 
-def set_protobuf_route(request: Type["RedisRequest"], route: Optional[TRoute]) -> None:
+def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
     if route is None:
         return
     elif type(route) == AllNodes:

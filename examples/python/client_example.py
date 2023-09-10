@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional, Type, Union
+from typing import Optional, Union
 
 from pybushka import (
     AddressInfo,
@@ -26,9 +26,7 @@ def set_file_logger(level: LogLevel = LogLevel.WARN, file: Optional[str] = None)
     Logger.set_logger_config(level, file)
 
 
-async def send_set_and_get(
-    client: Union[Type["RedisClient"], Type["RedisClusterClient"]]
-):
+async def send_set_and_get(client: Union[RedisClient, RedisClusterClient]):
     set_response = await client.set("foo", "bar")
     print(f"Set response is = {set_response}")
     get_response = await client.get("foo")
@@ -36,7 +34,8 @@ async def send_set_and_get(
 
 
 async def test_standalone_client(host: str = "localhost", port: int = 6379):
-    # When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
+    # When in Redis is in standalone mode, add address of the primary node,
+    # and any replicas you'd like to be able to read from.
     addresses = [AddressInfo(host, port)]
     # Check `ClientConfiguration` for additional options.
     config = ClientConfiguration(

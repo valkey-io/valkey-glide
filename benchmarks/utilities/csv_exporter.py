@@ -45,7 +45,7 @@ with open(output_file_name, "w+") as output_file:
             )
 
             if not language:
-                raise "Unknown language for " + json_file_name
+                raise Exception(f"Unknown language for {json_file_name}")
             for json_object in json_objects:
                 json_object["language"] = language
                 values = [json_object[field] for field in base_fields]
