@@ -80,3 +80,11 @@ npm i -g npm@8
 ## Recommended VSCode extensions
 
 [GitLens](https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens)
+
+## Releasing a new version
+
+-   run `cargo update` in the wrapper dir.
+-   Compile the rust binaries for the library in release mode.
+-   TBD - version testing. Maybe use a "use precompiled library" mode in the benchmark to ensure that we use the correct binaries, and that we're not releasing a version with bad perf.
+-   create an attribution file for the rust binaries. Follow [these instructions](https://w.amazon.com/bin/Open_Source/Champions/Using-package-managers-to-generate-a-Bill-of-Materials/).
+-   TBD - Send a new version to the relevant package manager. Instructions for this will be in each relevant folder.
