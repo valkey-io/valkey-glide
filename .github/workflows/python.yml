@@ -99,4 +99,5 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./python
+                  cargo-toml-folder: ./python                  
+              name: lint python-rust
