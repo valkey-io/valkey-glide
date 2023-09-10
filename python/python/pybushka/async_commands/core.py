@@ -1,10 +1,12 @@
 import threading
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Optional, Type, Union, get_args
+from typing import List, Optional, Protocol, Tuple, Type, Union, cast, get_args
 
 from pybushka.constants import TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
+from pybushka.routes import Route
+from pyparsing import Any
 
 
 class ConditionalSet(Enum):
@@ -136,13 +138,13 @@ class BaseTransaction:
     """
 
     def __init__(self) -> None:
-        self.commands = []
+        self.commands: List[Tuple[RequestType.ValueType, List[str]]] = []
         self.lock = threading.Lock()
 
-    def append_command(self, request_type: RequestType, args: List[str]):
+    def append_command(self, request_type: RequestType.ValueType, args: List[str]):
         self.lock.acquire()
         try:
-            self.commands.append([request_type, args])
+            self.commands.append((request_type, args))
         finally:
             self.lock.release()
 
@@ -232,7 +234,19 @@ class BaseTransaction:
         self.append_command(RequestType.ConfigRewrite, [])
 
 
-class CoreCommands:
+class CoreCommands(Protocol):
+    async def _execute_command(
+        self, request_type: Any, args: List[str], route: Optional[Route] = ...
+    ) -> TResult:
+        ...
+
+    async def execute_transaction(
+        self,
+        commands: List[Tuple[RequestType.ValueType, List[str]]],
+        route: Optional[Route] = None,
+    ) -> List[TResult]:
+        ...
+
     async def set(
         self,
         key: str,
@@ -275,7 +289,7 @@ class CoreCommands:
             args.extend(expiry.get_cmd_args())
         return await self._execute_command(RequestType.SetString, args)
 
-    async def get(self, key: str) -> Union[str, None]:
+    async def get(self, key: str) -> Optional[str]:
         """Get the value associated with the given key, or null if no such value exists.
          See https://redis.io/commands/get/ for details.
 
@@ -285,7 +299,9 @@ class CoreCommands:
         Returns:
             Union[str, None]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
-        return await self._execute_command(RequestType.GetString, [key])
+        return cast(
+            Optional[str], await self._execute_command(RequestType.GetString, [key])
+        )
 
     async def delete(self, keys: List[str]) -> int:
         """Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -297,4 +313,4 @@ class CoreCommands:
         Returns:
             int: The number of keys that were deleted.
         """
-        return await self._execute_command(RequestType.Del, keys)
+        return cast(int, await self._execute_command(RequestType.Del, keys))

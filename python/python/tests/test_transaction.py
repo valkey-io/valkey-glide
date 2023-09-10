@@ -1,12 +1,13 @@
 from datetime import datetime
-from typing import List
+from typing import List, Union
 
 import pytest
 from pybushka.async_commands.cmd_commands import Transaction
-from pybushka.async_commands.core import BaseTransaction, InfoSection
-from pybushka.constants import OK
+from pybushka.async_commands.cme_commands import ClusterTransaction
+from pybushka.async_commands.core import BaseTransaction
+from pybushka.constants import OK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
-from pybushka.redis_client import BaseRedisClient
+from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.test_async_client import get_random_string
 
 
@@ -19,36 +20,29 @@ def transaction_test_helper(
     assert transaction.commands[-1][1] == expected_args
 
 
+def transaction_test(
+    transaction: Union[Transaction, ClusterTransaction], keyslot: str
+) -> List[TResult]:
+    key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+    key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+    value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+    transaction.set(key, value)
+    transaction.get(key)
+    transaction.set(key2, value)
+    transaction.get(key2)
+    transaction.delete([key])
+    transaction.get(key)
+
+    return [OK, value, OK, value, 1, None]
+
+
 @pytest.mark.asyncio
 class TestTransaction:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_transaction_set_get(self, redis_client: BaseRedisClient):
-        key = get_random_string(10)
-        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = BaseTransaction()
-        transaction.set(key, value)
-        transaction.get(key)
-        result = await redis_client.exec(transaction)
-        assert result == [OK, value]
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_transaction_multiple_commands(self, redis_client: BaseRedisClient):
-        key = get_random_string(10)
-        key2 = "{{{}}}:{}".format(key, get_random_string(3))  # to get the same slot
-        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        transaction = BaseTransaction()
-        transaction.set(key, value)
-        transaction.get(key)
-        transaction.set(key2, value)
-        transaction.get(key2)
-        result = await redis_client.exec(transaction)
-        assert result == [OK, value, OK, value]
-
     @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_transaction_with_different_slots(
-        self, redis_client: BaseRedisClient
-    ):
-        transaction = BaseTransaction()
+    async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
+        transaction = (
+            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+        )
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(Exception) as e:
@@ -56,9 +50,11 @@ class TestTransaction:
         assert "Moved" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_transaction_custom_command(self, redis_client: BaseRedisClient):
+    async def test_transaction_custom_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
-        transaction = BaseTransaction()
+        transaction = (
+            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+        )
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
         result = await redis_client.exec(transaction)
@@ -66,10 +62,12 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_transaction_custom_unsupported_command(
-        self, redis_client: BaseRedisClient
+        self, redis_client: TRedisClient
     ):
         key = get_random_string(10)
-        transaction = BaseTransaction()
+        transaction = (
+            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+        )
         transaction.custom_command(["WATCH", key])
         with pytest.raises(Exception) as e:
             await redis_client.exec(transaction)
@@ -78,10 +76,13 @@ class TestTransaction:
         )  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_transaction_discard_command(self, redis_client: BaseRedisClient):
+    async def test_transaction_discard_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         await redis_client.set(key, "1")
-        transaction = BaseTransaction()
+        transaction = (
+            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+        )
+
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
         with pytest.raises(Exception) as e:
@@ -91,7 +92,7 @@ class TestTransaction:
         assert value == "1"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_transaction_exec_abort(self, redis_client: BaseRedisClient):
+    async def test_transaction_exec_abort(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
@@ -101,21 +102,32 @@ class TestTransaction:
             e
         )  # TODO : add an assert on EXEC ABORT
 
-    def test_transaction_info(self):
-        sections = [InfoSection.SERVER, InfoSection.REPLICATION]
-        transaction = BaseTransaction()
-        transaction.info(sections)
-        transaction_test_helper(
-            transaction, RequestType.Info, ["server", "replication"]
-        )
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_cluster_transaction(self, redis_client: RedisClusterClient):
+        keyslot = get_random_string(3)
+        transaction = ClusterTransaction()
+        transaction.info()
+        expected = transaction_test(transaction, keyslot)
+        result = await redis_client.exec(transaction)
+        assert type(result[0]) == str
+        assert "# Memory" in result[0]
+        assert result[1:] == expected
 
-    def test_transaction_delete(self):
-        key = get_random_string(10)
-        transaction = BaseTransaction()
-        transaction.delete([key])
-        transaction_test_helper(transaction, RequestType.Del, [key])
-
-    def test_transaction_select(self):
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_standalone_transaction(self, redis_client: RedisClient):
+        keyslot = get_random_string(3)
+        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        value = get_random_string(5)
         transaction = Transaction()
+        transaction.info()
         transaction.select(1)
-        transaction_test_helper(transaction, RequestType.Select, ["1"])
+        transaction.set(key, value)
+        transaction.get(key)
+        transaction.select(0)
+        transaction.get(key)
+        expected = transaction_test(transaction, keyslot)
+        result = await redis_client.exec(transaction)
+        assert type(result[0]) == str
+        assert "# Memory" in result[0]
+        assert result[1:6] == [OK, OK, value, OK, None]
+        assert result[6:] == expected
