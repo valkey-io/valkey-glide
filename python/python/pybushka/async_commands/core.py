@@ -1,9 +1,9 @@
 import threading
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Optional, Protocol, Tuple, Type, Union, cast, get_args
+from typing import List, Mapping, Optional, Protocol, Tuple, Type, Union, cast, get_args
 
-from pybushka.constants import TResult
+from pybushka.constants import TOK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import Route
 from pyparsing import Any
@@ -224,6 +224,34 @@ class BaseTransaction:
         """
         self.append_command(RequestType.ConfigResetStat, [])
 
+    def mset(self, key_value_map: Mapping[str, str]):
+        """Set multiple keys to multiple values in a single operation.
+        See https://redis.io/commands/mset/ for more details.
+
+        Args:
+            parameters (Mapping[str, str]): A map of key value pairs.
+
+        Command response:
+            OK: a simple OK response.
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        self.append_command(RequestType.MSet, parameters)
+
+    def mget(self, keys: List[str]):
+        """Retrieve the values of multiple keys.
+        See https://redis.io/commands/mget/ for more details.
+
+        Args:
+            keys (List[str]): A list of keys to retrieve values for.
+
+        Command response:
+            List[str]: A list of values corresponding to the provided keys. If a key is not found,
+            its corresponding value in the list will be None.
+        """
+        self.append_command(RequestType.MGet, keys)
+
     def config_rewrite(self):
         """Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
@@ -378,3 +406,31 @@ class CoreCommands(Protocol):
         return cast(
             int, await self._execute_command(RequestType.IncrBy, [key, str(increment)])
         )
+
+    async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
+        """Set multiple keys to multiple values in a single operation.
+        See https://redis.io/commands/mset/ for more details.
+
+        Args:
+            parameters (Mapping[str, str]): A map of key value pairs.
+
+        Returns:
+            OK: a simple OK response.
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
+
+    async def mget(self, keys: List[str]) -> List[str]:
+        """Retrieve the values of multiple keys.
+        See https://redis.io/commands/mget/ for more details.
+
+        Args:
+            keys (List[str]): A list of keys to retrieve values for.
+
+        Returns:
+            List[str]: A list of values corresponding to the provided keys. If a key is not found,
+            its corresponding value in the list will be None.
+        """
+        return cast(List[str], await self._execute_command(RequestType.MGet, keys))
