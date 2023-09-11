@@ -20,7 +20,6 @@ namespace babushka
         1. By calling init, which creates and modifies a new logger only if one doesn't exist.
         2. By calling setConfig, which replaces the existing logger, and means that new logs will not be saved with the logs that were sent before the call.
     If no call to any of these function is received, the first log attempt will initialize a new logger with default level decided by rust core (normally - console, error).
-    External users shouldn't user Logger, and instead setLoggerConfig Before starting to use the client.
     */
     public class Logger
     {
@@ -37,7 +36,7 @@ namespace babushka
         {
             if (Logger.loggerLevel is null)
             {
-                SetConfig(level, filename);
+                SetLoggerConfig(level, filename);
             }
         }
 
@@ -50,7 +49,7 @@ namespace babushka
         {
             if (Logger.loggerLevel is null)
             {
-                SetConfig(logLevel);
+                SetLoggerConfig(logLevel);
             }
             if (!(logLevel <= Logger.loggerLevel)) return;
             log(Convert.ToInt32(logLevel), Encoding.UTF8.GetBytes(logIdentifier), Encoding.UTF8.GetBytes(message));
@@ -64,7 +63,7 @@ namespace babushka
         // 2. external user want to set the logger and we don't want to return to him the logger itself, just config it
         // the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
         // the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
-        public static void SetConfig(Level? level, string? filename = null)
+        public static void SetLoggerConfig(Level? level, string? filename = null)
         {
             var buffer = filename is null ? null : Encoding.UTF8.GetBytes(filename);
             Logger.loggerLevel = InitInternalLogger(Convert.ToInt32(level), buffer);
