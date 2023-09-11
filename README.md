@@ -23,9 +23,9 @@ Babushka (temporary name, final name pending) is a collection of open source Red
 
 -   GCC
 -   pkg-config
--   protobuf-compiler (protoc)
+-   protobuf-compiler (protoc) >= V3
 -   openssl
--   libssl-dev
+-   libssl-dev // for amazon-linux install openssl-devel
 -   python3
 
 Installation for ubuntu:
