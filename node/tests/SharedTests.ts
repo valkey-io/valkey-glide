@@ -11,7 +11,7 @@ type BaseClient = {
         options?: SetOptions
     ) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
-    del: (keys: string[]) => Promise<number>;
+    delete: (keys: string[]) => Promise<number>;
     configRewrite: () => Promise<"OK">;
     info(options?: InfoOptions[]): Promise<string | string[][]>;
     configResetStat: () => Promise<"OK">;
@@ -195,9 +195,9 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual("OK");
                 result = await client.set(key3, value);
                 expect(result).toEqual("OK");
-                let deletedKeysNum = await client.del([key1, key2, key3]);
+                let deletedKeysNum = await client.delete([key1, key2, key3]);
                 expect(deletedKeysNum).toEqual(3);
-                deletedKeysNum = await client.del([uuidv4()]);
+                deletedKeysNum = await client.delete([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
             });
         },

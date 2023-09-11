@@ -288,7 +288,7 @@ export class BaseClient {
      * @param keys - the keys we wanted to remove.
      * @returns the number of keys that were removed.
      */
-    public del(keys: string[]): Promise<number> {
+    public delete(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
 

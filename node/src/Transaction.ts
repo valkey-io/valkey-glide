@@ -59,7 +59,7 @@ export class BaseTransaction {
      * @param keys - A list of keys to be deleted from the database.
      * @returns the number of keys that were removed.
      */
-    public del(keys: string[]) {
+    public delete(keys: string[]) {
         this.commands.push(createDel(keys));
     }
 
