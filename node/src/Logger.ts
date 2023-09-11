@@ -14,8 +14,8 @@ type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
 A singleton class that allows logging which is consistent with logs from the internal rust core.
 The logger can be set up in 2 ways -
     1. By calling init, which configures the logger only if it wasn't previously configured.
-    2. By calling Logger.setLoggerConfig, which replaces the existing configuration, and means that new logs will not be saved with the logs that were sent before the call. The previous logs will remain 
-If no call to any of these function is received, the first log attempt will configure the logger with default configuration decided by rust core (normally - console, error).
+    2. By calling Logger.setLoggerConfig, which replaces the existing configuration, and means that new logs will not be saved with the logs that were sent before the call. The previous logs will remain unchanged.
+If no call to any of these function is received, the first log attempt will configure the logger with default configuration decided by rust core.
 */
 export class Logger {
     private static _instance: Logger;
@@ -48,7 +48,9 @@ export class Logger {
     // The logger will filter all logs with a level lower than the given level,
     // If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided, the logs will be written to the console.
     public static init(level?: LevelOptions, fileName?: string) {
-        return this._instance || (this._instance = new this(level, fileName));
+        if (!this._instance) {
+            this._instance = new this(level, fileName);
+        }
     }
 
     // configure the logger.
@@ -56,6 +58,5 @@ export class Logger {
     // the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
     public static setLoggerConfig(level: LevelOptions, fileName?: string) {
         this._instance = new this(level, fileName);
-        return;
     }
 }
