@@ -1,4 +1,5 @@
 import * as net from "net";
+import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
     createConfigResetStat,
@@ -7,7 +8,6 @@ import {
     createInfo,
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
-import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
 export type SlotIdTypes = {
     type: "primarySlotId" | "replicaSlotId";
@@ -80,7 +80,7 @@ function toProtobufRoute(
     }
 }
 
-export class RedisClusterClient extends RedisClient {
+export class RedisClusterClient extends BaseClient {
     protected createClientRequest(
         options: ConnectionOptions
     ): connection_request.IConnectionRequest {
@@ -147,7 +147,7 @@ export class RedisClusterClient extends RedisClient {
     }
 
     /** Rewrite the configuration file with the current configuration.
-     * See https://redis.io/commands/select/ for details.
+     * See https://redis.io/commands/config-rewrite/ for details.
      *
      * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
