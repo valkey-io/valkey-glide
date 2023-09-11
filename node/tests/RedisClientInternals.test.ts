@@ -8,11 +8,11 @@ import { Reader } from "protobufjs";
 import {
     ClosingError,
     ConnectionOptions,
+    Logger,
     RedisClient,
     RedisClusterClient,
     RequestError,
     TimeoutError,
-    setLoggerConfig,
 } from "../build-ts";
 import {
     connection_request,
@@ -23,7 +23,7 @@ import {
 const { RequestType, RedisRequest } = redis_request;
 
 beforeAll(() => {
-    setLoggerConfig("info");
+    Logger.init("info");
 });
 
 enum ResponseType {
