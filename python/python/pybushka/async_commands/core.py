@@ -233,6 +233,16 @@ class BaseTransaction:
         """
         self.append_command(RequestType.ConfigRewrite, [])
 
+    async def client_id(self):
+        """Returns the current connection id.
+        See https://redis.io/commands/client-id/ for more information.
+
+
+        Returns:
+            int: the id of the client.
+        """
+        self.append_command(RequestType.ClientId, [])
+
 
 class CoreCommands(Protocol):
     async def _execute_command(
