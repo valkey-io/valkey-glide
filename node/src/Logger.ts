@@ -1,14 +1,13 @@
 import { InitInternalLogger, Level, log } from "babushka-rs-internal";
 
-const LEVEL: Map<LevelOptions | undefined, Level | undefined> =
-    new Map([
-        ["error", Level.Error],
-        ["warn", Level.Warn],
-        ["info", Level.Info],
-        ["debug", Level.Debug],
-        ["trace", Level.Trace],
-        [undefined, undefined],
-    ]);
+const LEVEL: Map<LevelOptions | undefined, Level | undefined> = new Map([
+    ["error", Level.Error],
+    ["warn", Level.Warn],
+    ["info", Level.Info],
+    ["debug", Level.Debug],
+    ["trace", Level.Trace],
+    [undefined, undefined],
+]);
 type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
 
 /*
@@ -24,10 +23,7 @@ export class Logger {
     private static logger_level = 0;
 
     private constructor(level?: LevelOptions, fileName?: string) {
-        Logger.logger_level = InitInternalLogger(
-            LEVEL.get(level),
-            fileName
-        );
+        Logger.logger_level = InitInternalLogger(LEVEL.get(level), fileName);
     }
 
     // Initialize a logger instance if none were initialized before - this method is meant to be used when there is no intention to replace an existing logger.

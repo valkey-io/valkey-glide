@@ -17,13 +17,13 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
-export function parseInfoResponse(response : string): Record<string, string>{
-    const lines = response.split('\n');
-    const parsedResponse : Record<string, string> = {};
-    for (const line of lines) { 
+export function parseInfoResponse(response: string): Record<string, string> {
+    const lines = response.split("\n");
+    const parsedResponse: Record<string, string> = {};
+    for (const line of lines) {
         /// Ignore lines that start with '#'
-        if (!line.startsWith('#')) {   
-            const [key, value] = line.trim().split(':');    
+        if (!line.startsWith("#")) {
+            const [key, value] = line.trim().split(":");
             parsedResponse[key] = value;
         }
     }
@@ -153,52 +153,42 @@ export enum InfoOptions {
     /// -DEFAULT: Return only the default set of sections
     Default = "default",
     /// EVERYTHING: Includes all and modules
-    Everything = "everything"
+    Everything = "everything",
     /// When no parameter is provided, the default option is assumed.
 }
 
-export function createInfo(
-    options?: InfoOptions[]
-): redis_request.Command {
-    const args: string[] = (options == undefined) ? [] : options;
+export function createInfo(options?: InfoOptions[]): redis_request.Command {
+    const args: string[] = options == undefined ? [] : options;
     return createCommand(RequestType.Info, args);
 }
 
-export function createDel(
-    keys: string[]
-): redis_request.Command {
+export function createDel(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Del, keys);
 }
 
-export function createSelect(
-    index: number
-): redis_request.Command {
+export function createSelect(index: number): redis_request.Command {
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
-export function createConfigRewrite(
-): redis_request.Command {
+export function createConfigRewrite(): redis_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }
 
-export function createConfigResetStat(
-    ): redis_request.Command {
-        return createCommand(RequestType.ConfigResetStat, []);
+export function createConfigResetStat(): redis_request.Command {
+    return createCommand(RequestType.ConfigResetStat, []);
 }
 
-export function createIncr(
-    key: string
-): redis_request.Command {
+export function createIncr(key: string): redis_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
 export function createIncrBy(
-    key: string, 
+    key: string,
     increment: number
 ): redis_request.Command {
     return createCommand(RequestType.IncrBy, [key, increment.toString()]);
 }
-    
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }

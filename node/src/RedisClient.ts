@@ -17,7 +17,7 @@ import {
     createIncrBy,
     createInfo,
     createSelect,
-    createSet
+    createSet,
 } from "./Commands";
 import {
     BaseRedisError,
@@ -261,10 +261,9 @@ export class RedisClient {
         this.writeBufferedRequestsToSocket();
     }
 
-    
     /** Get the value associated with the given key, or null if no such value exists.
      *  See https://redis.io/commands/get/ for details.
-     * 
+     *
      * @param key - The key to retrieve from the database.
      * @returns If the key exists, returns the value of the key as a string. Otherwise, return null.
      */
@@ -272,9 +271,9 @@ export class RedisClient {
         return this.createWritePromise(createGet(key));
     }
 
-     /** Set the given key with the given value. Return value is dependent on the passed options.
+    /** Set the given key with the given value. Return value is dependent on the passed options.
      *  See https://redis.io/commands/set/ for details.
-     * 
+     *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
      * @param options - The set options.
@@ -292,7 +291,7 @@ export class RedisClient {
 
     /** Get information and statistics about the Redis server.
      *  See https://redis.io/commands/info/ for details.
-     * 
+     *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
      * @returns a string containing the information for the sections requested.
@@ -303,7 +302,7 @@ export class RedisClient {
 
     /** Get information and statistics about the Redis server.
      *  See https://redis.io/commands/info/ for details.
-     * 
+     *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
      * @returns a string containing the information for the sections requested.
@@ -324,7 +323,7 @@ export class RedisClient {
 
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/select/ for details.
-     * 
+     *
      * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
      */
     public configRewrite(): Promise<"OK"> {
@@ -360,7 +359,7 @@ export class RedisClient {
      *  of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, increment: number): Promise<number> {
-        return this.createWritePromise(createIncrBy(key,increment));
+        return this.createWritePromise(createIncrBy(key, increment));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
