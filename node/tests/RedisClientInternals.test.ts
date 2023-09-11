@@ -129,7 +129,7 @@ function getConnectionAndSocket(
 }
 
 function closeTestResources(
-    connection: RedisClient,
+    connection: RedisClient | RedisClusterClient,
     server: net.Server,
     socket: net.Socket
 ) {
@@ -140,7 +140,7 @@ function closeTestResources(
 
 async function testWithResources(
     testFunction: (
-        connection: RedisClient,
+        connection: RedisClient | RedisClusterClient,
         socket: net.Socket
     ) => Promise<void>,
     connectionOptions?: ConnectionOptions
