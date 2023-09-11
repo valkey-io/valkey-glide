@@ -1,4 +1,4 @@
-import { RedisClient, RedisClusterClient, setLoggerConfig } from "babushka-rs";
+import { RedisClient, RedisClusterClient, Logger } from "babushka-rs";
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
 import percentile from "percentile";
@@ -11,7 +11,7 @@ enum ChosenAction {
     SET,
 }
 // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
-setLoggerConfig("info", "first.log");
+Logger.setLoggerConfig("info", "first.log");
 
 const PORT = 6379;
 function getAddress(host: string, port?: number): string {

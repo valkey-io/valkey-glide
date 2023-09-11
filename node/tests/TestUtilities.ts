@@ -1,10 +1,10 @@
 import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import { setLoggerConfig } from "..";
+import { Logger } from "..";
 
 beforeAll(() => {
-    setLoggerConfig("info");
+    Logger.init("info");
 });
 
 export type Client = {
