@@ -1,5 +1,11 @@
 import * as net from "net";
-import { InfoOptions, createConfigResetStat, createConfigRewrite, createCustomCommand, createInfo } from "./Commands";
+import {
+    InfoOptions,
+    createConfigResetStat,
+    createConfigRewrite,
+    createCustomCommand,
+    createInfo,
+} from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ConnectionOptions, RedisClient, ReturnType } from "./RedisClient";
 
@@ -124,10 +130,9 @@ export class RedisClusterClient extends RedisClient {
         return super.createWritePromise(command, toProtobufRoute(route));
     }
 
-    
     /** Get information and statistics about the Redis server.
      *  See https://redis.io/commands/info/ for details.
-     * 
+     *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
      * @param route - The command will be routed automatically, unless `route` is provided, in which
@@ -135,30 +140,39 @@ export class RedisClusterClient extends RedisClient {
      * @returns a string containing the information for the sections requested.
      */
     public info(options?: InfoOptions[], route?: Routes): Promise<string> {
-        return this.createWritePromise(createInfo(options), toProtobufRoute(route));
+        return this.createWritePromise(
+            createInfo(options),
+            toProtobufRoute(route)
+        );
     }
 
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/select/ for details.
-     * 
+     *
      * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
-     * 
+     *
      * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
      */
     public configRewrite(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(createConfigRewrite(), toProtobufRoute(route));
+        return this.createWritePromise(
+            createConfigRewrite(),
+            toProtobufRoute(route)
+        );
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
-     * 
+     *
      * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
-     * 
+     *
      * @returns always "OK"
-    */
-    public configResetStat(route?: Routes): Promise<"OK">  {
-        return this.createWritePromise(createConfigResetStat(), toProtobufRoute(route));
+     */
+    public configResetStat(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(
+            createConfigResetStat(),
+            toProtobufRoute(route)
+        );
     }
 }
