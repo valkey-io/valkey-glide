@@ -337,9 +337,7 @@ class TestCommands:
         assert info_stats["total_commands_processed"] == "1"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_config_rewrite(
-        self, redis_client: Union[RedisClusterClient, RedisClient]
-    ):
+    async def test_config_rewrite(self, redis_client: TRedisClient):
         info_server = parse_info_response(
             get_first_result(await redis_client.info([InfoSection.SERVER]))
         )
@@ -350,6 +348,10 @@ class TestCommands:
             with pytest.raises(Exception) as e:
                 await redis_client.config_rewrite()
             assert "The server is running without a config file" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_client_id(self, redis_client: TRedisClient):
+        assert await redis_client.client_id() > 0
 
 
 class CommandsUnitTests:

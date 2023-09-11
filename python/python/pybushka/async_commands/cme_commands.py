@@ -113,3 +113,18 @@ class CMECommands(CoreCommands):
         return cast(
             TOK, await self._execute_command(RequestType.ConfigRewrite, [], route)
         )
+
+    async def client_id(
+        self,
+        route: Optional[Route] = None,
+    ) -> int:
+        """Returns the current connection id.
+        See https://redis.io/commands/client-id/ for more information.
+        Args:
+            route (Optional[Route]): : The command will be sent to a random node, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            int: the id of the client.
+        """
+        return cast(int, await self._execute_command(RequestType.ClientId, [], route))

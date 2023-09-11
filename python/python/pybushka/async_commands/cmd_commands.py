@@ -103,3 +103,14 @@ class CMDCommands(CoreCommands):
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
         """
         return cast(TOK, await self._execute_command(RequestType.ConfigRewrite, []))
+
+    async def client_id(
+        self,
+    ) -> int:
+        """Returns the current connection id.
+        See https://redis.io/commands/client-id/ for more information.
+
+        Returns:
+            int: the id of the client.
+        """
+        return cast(int, await self._execute_command(RequestType.ClientId, []))
