@@ -152,19 +152,17 @@ impl ClientCMD {
             ReadFromReplicaStrategy::RoundRobin {
                 latest_read_replica_index,
             } => {
-                let initial_index = latest_read_replica_index
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                    % self.inner.nodes.len();
+                let initial_index =
+                    latest_read_replica_index.load(std::sync::atomic::Ordering::Relaxed);
+                let mut check_count = 0;
                 loop {
-                    let index = (latest_read_replica_index
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                        + 1)
-                        % self.inner.nodes.len();
+                    check_count += 1;
 
                     // Looped through all replicas, no connected replica was found.
-                    if index == initial_index {
+                    if check_count > self.inner.nodes.len() {
                         return self.get_primary_connection();
                     }
+                    let index = (initial_index + check_count) % self.inner.nodes.len();
                     if index == self.inner.primary_index {
                         continue;
                     }
@@ -172,6 +170,12 @@ impl ClientCMD {
                         continue;
                     };
                     if connection.is_connected() {
+                        let _ = latest_read_replica_index.compare_exchange_weak(
+                            initial_index,
+                            index,
+                            std::sync::atomic::Ordering::Relaxed,
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
                         return connection;
                     }
                 }
