@@ -33,6 +33,7 @@ message ConnectionRequest {
     ReadFromReplicaStrategy read_from_replica_strategy = 6;
     ConnectionRetryStrategy connection_retry_strategy = 7;
     AuthenticationInfo authentication_info = 8;
+    uint32 database_id = 9;
 }
 
 message ConnectionRetryStrategy {
