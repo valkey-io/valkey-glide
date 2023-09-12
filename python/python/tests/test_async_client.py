@@ -429,6 +429,42 @@ class TestCommands:
         assert type(previous_timeout[-1]) == str
         assert await redis_client.config_set({"timeout": previous_timeout[-1]}) == OK
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_decr_decrby_existing_key(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "10") == OK
+        assert await redis_client.decr(key) == 9
+        assert await redis_client.get(key) == "9"
+        assert await redis_client.decrby(key, 4) == 5
+        assert await redis_client.get(key) == "5"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_decr_decrby_non_existing_key(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(10)
+
+        assert await redis_client.get(key) is None
+        assert await redis_client.decr(key) == -1
+        assert await redis_client.get(key) == "-1"
+
+        assert await redis_client.get(key2) is None
+        assert await redis_client.decrby(key2, 3) == -3
+        assert await redis_client.get(key2) == "-3"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_decr_with_str_value(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+        with pytest.raises(Exception) as e:
+            await redis_client.decr(key)
+
+        assert "value is not an integer" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.decrby(key, 3)
+
+        assert "value is not an integer" in str(e)
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):
