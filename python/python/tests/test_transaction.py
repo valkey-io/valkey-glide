@@ -25,6 +25,7 @@ def transaction_test(
 ) -> List[TResult]:
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+    key3 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
     transaction.set(key, value)
     transaction.get(key)
@@ -32,8 +33,9 @@ def transaction_test(
     transaction.get(key2)
     transaction.delete([key])
     transaction.get(key)
-
-    return [OK, value, OK, value, 1, None]
+    transaction.incr(key3)
+    transaction.incr_by(key3, 2)
+    return [OK, value, OK, value, 1, None, 1, 3]
 
 
 @pytest.mark.asyncio

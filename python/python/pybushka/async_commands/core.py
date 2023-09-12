@@ -233,15 +233,41 @@ class BaseTransaction:
         """
         self.append_command(RequestType.ConfigRewrite, [])
 
-    async def client_id(self):
+    def client_id(self):
         """Returns the current connection id.
         See https://redis.io/commands/client-id/ for more information.
 
 
-        Returns:
+        Command response:
             int: the id of the client.
         """
         self.append_command(RequestType.ClientId, [])
+
+    def incr(self, key: str):
+        """Increments the number stored at 'key' by one. If the key does not exist, it is set to 0 before performing the
+        operation. See https://redis.io/commands/incr/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+
+        Command response:
+              int: the value of key after the increment. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        self.append_command(RequestType.Incr, [key])
+
+    def incr_by(self, key: str, increment: int):
+        """Increments the number stored at 'key' by 'increment'. If the key does not exist, it is set to 0 before performing
+        the operation. See https://redis.io/commands/incr/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+
+        Command response:
+              int: The value of key after the increment. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        self.append_command(RequestType.IncrBy, [key, str(increment)])
 
 
 class CoreCommands(Protocol):
@@ -324,3 +350,31 @@ class CoreCommands(Protocol):
             int: The number of keys that were deleted.
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
+
+    async def incr(self, key: str) -> int:
+        """Increments the number stored at 'key' by one. If the key does not exist, it is set to 0 before performing the
+        operation. See https://redis.io/commands/incr/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+
+          Returns:
+              int: The value of key after the increment. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        return cast(int, await self._execute_command(RequestType.Incr, [key]))
+
+    async def incr_by(self, key: str, increment: int) -> int:
+        """Increments the number stored at 'key' by 'increment'. If the key does not exist, it is set to 0 before performing
+        the operation. See https://redis.io/commands/incr/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+
+          Returns:
+              int: The value of key after the increment. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.IncrBy, [key, str(increment)])
+        )
