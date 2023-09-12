@@ -131,6 +131,7 @@ mod client_cmd_tests {
         read_from_replica_strategy: ReadFromReplicaStrategy,
         expected_primary_reads: u16,
         expected_replica_reads: Vec<u16>,
+        number_of_initial_replicas: usize,
         number_of_missing_replicas: usize,
         number_of_replicas_dropped_after_connection: usize,
         number_of_requests_sent: usize,
@@ -142,6 +143,7 @@ mod client_cmd_tests {
                 read_from_replica_strategy: ReadFromReplicaStrategy::AlwaysFromPrimary,
                 expected_primary_reads: 3,
                 expected_replica_reads: vec![0, 0, 0],
+                number_of_initial_replicas: 3,
                 number_of_missing_replicas: 0,
                 number_of_replicas_dropped_after_connection: 0,
                 number_of_requests_sent: 3,
@@ -150,7 +152,9 @@ mod client_cmd_tests {
     }
 
     fn test_read_from_replica(config: ReadFromReplicaTestConfig) {
-        let mut mocks = create_primary_mock_with_replicas(3 - config.number_of_missing_replicas);
+        let mut mocks = create_primary_mock_with_replicas(
+            config.number_of_initial_replicas - config.number_of_missing_replicas,
+        );
         let mut cmd = redis::cmd("GET");
         cmd.arg("foo");
 
@@ -246,6 +250,19 @@ mod client_cmd_tests {
             expected_replica_reads: vec![2, 3],
             number_of_replicas_dropped_after_connection: 1,
             number_of_requests_sent: 6,
+            ..Default::default()
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    fn test_read_from_replica_round_robin_with_single_replica() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![3],
+            number_of_initial_replicas: 1,
+            number_of_requests_sent: 3,
             ..Default::default()
         });
     }
