@@ -9,11 +9,25 @@ import {
     createPing,
     createSelect,
 } from "./Commands";
+import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
+export type StandaloneConnectionOptions = ConnectionOptions & {
+    /// index of the logical database to connect to.
+    databaseId?: number;
+};
+
 export class RedisClient extends BaseClient {
+    protected createClientRequest(
+        options: StandaloneConnectionOptions
+    ): connection_request.IConnectionRequest {
+        const configuration = super.createClientRequest(options);
+        configuration.databaseId = options.databaseId;
+        return configuration;
+    }
+
     public static createClient(
-        options: ConnectionOptions
+        options: StandaloneConnectionOptions
     ): Promise<RedisClient> {
         return super.createClientInternal<RedisClient>(
             options,
