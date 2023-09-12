@@ -45,14 +45,18 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 
 pub(super) fn get_redis_connection_info(
     authentication_info: Option<Box<AuthenticationInfo>>,
+    database_id: u32,
 ) -> redis::RedisConnectionInfo {
     match authentication_info {
         Some(info) => redis::RedisConnectionInfo {
-            db: 0,
+            db: database_id as i64,
             username: chars_to_string_option(&info.username),
             password: chars_to_string_option(&info.password),
         },
-        None => redis::RedisConnectionInfo::default(),
+        None => redis::RedisConnectionInfo {
+            db: database_id as i64,
+            ..Default::default()
+        },
     }
 }
 
@@ -162,7 +166,7 @@ async fn create_cluster_client(
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
-    let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
+    let redis_connection_info = get_redis_connection_info(request.authentication_info.0, 0);
     let initial_nodes = request
         .addresses
         .into_iter()
