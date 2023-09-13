@@ -216,6 +216,33 @@ class BaseTransaction:
         """
         self.append_command(RequestType.Del, keys)
 
+    def config_get(self, parameters: List[str]):
+        """Get the values of configuration parameters.
+        See https://redis.io/commands/config-get/ for details.
+
+        Args:
+            parameters (List[str]): A list of configuration parameter names to retrieve values for.
+
+        Command response:
+            List[str]: A list of values corresponding to the configuration parameters.
+        """
+        self.append_command(RequestType.ConfigGet, parameters)
+
+    def config_set(self, parameters_map: Mapping[str, str]):
+        """Set configuration parameters to the specified values.
+        See https://redis.io/commands/config-set/ for details.
+
+        Args:
+            parameters_map (Mapping[str, str]): A map consisting of configuration
+            parameters and their respective values to set.
+        Command response:
+            OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
+        """
+        parameters: List[str] = []
+        for pair in parameters_map.items():
+            parameters.extend(pair)
+        self.append_command(RequestType.ConfigSet, parameters)
+
     def config_resetstat(self):
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.

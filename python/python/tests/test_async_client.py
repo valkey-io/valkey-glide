@@ -420,6 +420,15 @@ class TestCommands:
         assert await redis_client.ping() == "PONG"
         assert await redis_client.ping("HELLO") == "HELLO"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_config_get_set(self, redis_client: TRedisClient):
+        previous_timeout = await redis_client.config_get(["timeout"])
+        assert await redis_client.config_set({"timeout": "1000"}) == OK
+        assert await redis_client.config_get(["timeout"]) == ["timeout", "1000"]
+        # revert changes to previous timeout
+        assert type(previous_timeout[-1]) == str
+        assert await redis_client.config_set({"timeout": previous_timeout[-1]}) == OK
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):
