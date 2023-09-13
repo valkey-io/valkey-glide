@@ -9,6 +9,10 @@ import {
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 
+/// If the command's routing is to one node we will get T as a response type,
+/// otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
+type ClusterResponse<T> = T | [string, T][];
+
 export type SlotIdTypes = {
     type: "primarySlotId" | "replicaSlotId";
     id: number;
@@ -139,7 +143,10 @@ export class RedisClusterClient extends BaseClient {
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * @returns a string containing the information for the sections requested.
      */
-    public info(options?: InfoOptions[], route?: Routes): Promise<string> {
+    public info(
+        options?: InfoOptions[],
+        route?: Routes
+    ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
             createInfo(options),
             toProtobufRoute(route)
