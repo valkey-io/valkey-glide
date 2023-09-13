@@ -7,8 +7,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import javabushka.client.Benchmarking;
+import javabushka.client.Benchmarking.Operation;
+import javabushka.client.ChosenAction;
 import org.junit.Before;
 import org.junit.Test;
+import java.util.HashMap;
+import java.util.Map;
 
 public class JedisClientIT {
 
@@ -43,31 +47,14 @@ public class JedisClientIT {
         int iterations = 100000;
         String value = "my-value";
 
+        Map<ChosenAction, Operation> actions = new HashMap<ChosenAction, Operation>();
+        actions.put(ChosenAction.GET_EXISTING, () -> jedisClient.get(Benchmarking.generateKeySet()));
+        actions.put(ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
+        actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));
+
         Benchmarking.printResults(
-            "SET",
             Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations, 
-                    () -> jedisClient.set(Benchmarking.generateKeySet(), value)
-                )
-            )
-        );
-        Benchmarking.printResults(
-            "GET",
-            Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations,
-                    () -> jedisClient.get(Benchmarking.generateKeySet())
-                )
-            )
-        );
-        Benchmarking.printResults(
-            "GET non-existing",
-            Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations,
-                    () -> jedisClient.get(Benchmarking.generateKeyGet())
-                )
+                Benchmarking.getLatencies(iterations, actions)
             )
         );
     }

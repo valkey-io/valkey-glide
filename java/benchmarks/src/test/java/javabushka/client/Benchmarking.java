@@ -1,13 +1,28 @@
 package javabushka.client;
 
 import javabushka.client.LatencyResults;
+import javabushka.client.ChosenAction;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Collections;
 
 public class Benchmarking {
+    static final double PROB_GET = 0.8;
+    static final double PROB_GET_EXISTING_KEY = 0.8;
     static final int SIZE_GET_KEYSPACE = 3750000;
     static final int SIZE_SET_KEYSPACE = 3000000;
+
+    private static ChosenAction chooseAction() {
+        if (Math.random() > PROB_GET) {
+            return ChosenAction.SET;
+        }
+        if (Math.random() > PROB_GET_EXISTING_KEY) {
+            return ChosenAction.GET_NON_EXISTING;
+        }
+        return ChosenAction.GET_EXISTING;
+    }
 
     public static String generateKeyGet() {
         int range = SIZE_GET_KEYSPACE - SIZE_SET_KEYSPACE;
@@ -22,15 +37,27 @@ public class Benchmarking {
         void go();
     }
 
-    public static ArrayList<Long> getLatencies(int iterations, Operation op) {
-        ArrayList<Long> latencies = new ArrayList<Long>();
-        for (int i = 0; i<iterations; i++) {
-            long before = System.nanoTime();
-            op.go();
-            long after = System.nanoTime();
-            latencies.add(after - before);
+    public static Map<ChosenAction, ArrayList<Long>> getLatencies(int iterations, Map<ChosenAction, Operation> actions) {
+        Map<ChosenAction, ArrayList<Long>> latencies = new HashMap<ChosenAction, ArrayList<Long>>();
+        for (ChosenAction action : actions.keySet()) {
+            latencies.put(action, new ArrayList<Long>());
         }
+        
+        for (int i = 0; i<iterations; i++) {
+            ChosenAction action = chooseAction();
+            Operation op = actions.get(action);
+            ArrayList<Long> actionLatencies = latencies.get(action);
+            addLatency(op, actionLatencies);
+        }
+
         return latencies;
+    }
+
+    private static void addLatency(Operation op, ArrayList<Long> latencies) {
+        long before = System.nanoTime();
+        op.go();
+        long after = System.nanoTime();
+        latencies.add(after - before);
     }
 
     // Assumption: latencies is sorted in ascending order
@@ -45,30 +72,42 @@ public class Benchmarking {
         return Math.sqrt(stdDeviation / latencies.size());
     }
 
-    // This has the side-effect of sorting the latencies ArrayList
-    public static LatencyResults calculateResults(ArrayList<Long> latencies) {
-        Double avgLatency = latencies
-            .stream()
-            .collect(Collectors.summingLong(Long::longValue)) / Double.valueOf(latencies.size());
+    // This has the side-effect of sorting each latencies ArrayList
+    public static Map<ChosenAction, LatencyResults> calculateResults(Map<ChosenAction, ArrayList<Long>> actionLatencies) {
+        Map<ChosenAction, LatencyResults> results = new HashMap<ChosenAction, LatencyResults>();
 
-        Collections.sort(latencies);
-        return new LatencyResults(
-            avgLatency,
-            percentile(latencies, 50),
-            percentile(latencies, 90),
-            percentile(latencies, 99),
-            stdDeviation(latencies, avgLatency)
-        );
+        for (Map.Entry<ChosenAction, ArrayList<Long>> entry : actionLatencies.entrySet()) {
+            ChosenAction action = entry.getKey();
+            ArrayList<Long> latencies = entry.getValue();
+
+            Double avgLatency = latencies
+                .stream()
+                .collect(Collectors.summingLong(Long::longValue)) / Double.valueOf(latencies.size());
+
+            Collections.sort(latencies);
+            results.put(action, new LatencyResults(
+                avgLatency,
+                percentile(latencies, 50),
+                percentile(latencies, 90),
+                percentile(latencies, 99),
+                stdDeviation(latencies, avgLatency)
+            ));
+        }
+
+        return results;
     }
 
-    public static void printResults(String operation, LatencyResults results) {
-        System.out.println(
-            "Avg. time in ms per " + operation + ": " + results.avgLatency / 1000000.0
-        );
-        System.out.println(operation + " p50 latency in ms: " + results.p50Latency / 1000000.0);
-        System.out.println(operation + " p90 latency in ms: " + results.p90Latency / 1000000.0);
-        System.out.println(operation + " p99 latency in ms: " + results.p99Latency / 1000000.0);
-        System.out.println(operation + " std dev in ms: " + results.stdDeviation / 1000000.0);
+    public static void printResults(Map<ChosenAction, LatencyResults> resultsMap) {
+        for (Map.Entry<ChosenAction, LatencyResults> entry : resultsMap.entrySet()) {
+            ChosenAction action = entry.getKey();
+            LatencyResults results = entry.getValue();
+            System.out.println(
+                "Avg. time in ms per " + action + ": " + results.avgLatency / 1000000.0
+            );
+            System.out.println(action + " p50 latency in ms: " + results.p50Latency / 1000000.0);
+            System.out.println(action + " p90 latency in ms: " + results.p90Latency / 1000000.0);
+            System.out.println(action + " p99 latency in ms: " + results.p99Latency / 1000000.0);
+            System.out.println(action + " std dev in ms: " + results.stdDeviation / 1000000.0);
+        }
     }
-
 }

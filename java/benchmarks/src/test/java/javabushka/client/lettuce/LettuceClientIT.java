@@ -6,9 +6,12 @@ package javabushka.client.lettuce;
 import static org.junit.Assert.assertEquals;
 
 import javabushka.client.Benchmarking;
+import javabushka.client.Benchmarking.Operation;
+import javabushka.client.ChosenAction;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import java.util.HashMap;
 
 public class LettuceClientIT {
 
@@ -29,32 +32,9 @@ public class LettuceClientIT {
         int iterations = 100000;
         String value = "my-value";
 
-        Benchmarking.printResults(
-            "SET",
-            Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations, 
-                    () -> lettuceClient.set(Benchmarking.generateKeySet(), value)
-                )
-            )
-        );
-        Benchmarking.printResults(
-            "GET",
-            Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations,
-                    () -> lettuceClient.get(Benchmarking.generateKeySet())
-                )
-            )
-        );
-        Benchmarking.printResults(
-            "GET non-existing",
-            Benchmarking.calculateResults(
-                Benchmarking.getLatencies(
-                    iterations,
-                    () -> lettuceClient.get(Benchmarking.generateKeyGet())
-                )
-            )
-        );
+        HashMap<ChosenAction, Operation> actions = new HashMap<ChosenAction, Operation>();
+        actions.put(ChosenAction.GET_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeySet()));
+        actions.put(ChosenAction.GET_NON_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeyGet()));
+        actions.put(ChosenAction.SET, () -> lettuceClient.set(Benchmarking.generateKeySet(), value));
     }
 }
