@@ -114,8 +114,9 @@ function Help() {
     echo Pass -data and then a space-delimited list of sizes for data.
     echo Pass -tasks and then a space-delimited list of number of concurrent operations.
     echo pass -clients and then a space-delimited list of number of the number of clients to be used concurrently.
+    echo Pass -prefix with a requested prefix, and the resulting CSV file will have that prefix.
     echo 
-    echo Example: passing as options \"-node -tasks 10 100 -data 500 20 -clients 1 2 -python\" will cause the node and python benchmarks to run, with the following configurations:
+    echo Example: passing as options \"-node -tasks 10 100 -data 500 20 -clients 1 2 -python -prefix foo \" will cause the node and python benchmarks to run, with the following configurations:
     echo "         1 client, 10 concurrent tasks and 500 bytes of data per value,"
     echo "         1 client, 10 concurrent tasks and 20 bytes of data per value, "
     echo "         1 client, 100 concurrent tasks and 500 bytes of data per value, "
@@ -124,6 +125,7 @@ function Help() {
     echo "         2 clients, 10 concurrent tasks and 20 bytes of data per value, "
     echo "         2 clients, 100 concurrent tasks and 500 bytes of data per value, "
     echo "         2 clients, 100 concurrent tasks and 20 bytes of data per value, "    
+    echo and the outputs will be saved to a file prefixed with \"foo\".
     echo
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
