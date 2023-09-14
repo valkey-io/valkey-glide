@@ -403,6 +403,11 @@ class TestCommands:
         keys[-1] = None
         assert mget_res == keys
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_ping(self, redis_client: TRedisClient):
+        assert await redis_client.ping() == "PONG"
+        assert await redis_client.ping("HELLO") == "HELLO"
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):

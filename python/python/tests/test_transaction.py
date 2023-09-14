@@ -41,7 +41,9 @@ def transaction_test(
     transaction.incr(key3)
     transaction.incr_by(key3, 2)
 
-    return [OK, value, 1, None, OK, [value, value2], 1, 3]
+    transaction.ping()
+
+    return [OK, value, 1, None, OK, [value, value2], 1, 3, "PONG"]
 
 
 @pytest.mark.asyncio

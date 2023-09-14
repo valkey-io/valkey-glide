@@ -297,6 +297,19 @@ class BaseTransaction:
         """
         self.append_command(RequestType.IncrBy, [key, str(increment)])
 
+    def ping(self, message: Optional[str] = None):
+        """Ping the Redis server.
+        See https://redis.io/commands/ping/ for more details.
+        Args:
+           message (Optional[str]): An optional message to include in the PING command. If not provided,
+            the server will respond with "PONG". If provided, the server will respond with a copy of the message.
+
+        Command response:
+           str: "PONG" if 'message' is not provided, otherwise return a copy of 'message'.
+        """
+        argument = [] if message is None else [message]
+        self.append_command(RequestType.Ping, argument)
+
 
 class CoreCommands(Protocol):
     async def _execute_command(

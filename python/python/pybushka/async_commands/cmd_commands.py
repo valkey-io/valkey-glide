@@ -114,3 +114,22 @@ class CMDCommands(CoreCommands):
             int: the id of the client.
         """
         return cast(int, await self._execute_command(RequestType.ClientId, []))
+
+    async def ping(self, message: Optional[str] = None) -> str:
+        """Ping the Redis server.
+        See https://redis.io/commands/ping/ for more details.
+        Args:
+           message (Optional[str]): An optional message to include in the PING command. If not provided,
+            the server will respond with "PONG". If provided, the server will respond with a copy of the message.
+
+        Returns:
+           str: "PONG" if 'message' is not provided, otherwise return a copy of 'message'.
+
+        Examples:
+            >>> ping()
+            "PONG"
+            >>> ping("Hello")
+            "Hello"
+        """
+        argument = [] if message is None else [message]
+        return cast(str, await self._execute_command(RequestType.Ping, argument))
