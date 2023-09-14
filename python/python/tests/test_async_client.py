@@ -389,6 +389,20 @@ class TestCommands:
 
         assert "value is not an integer" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_mset_mget(self, redis_client: TRedisClient):
+        keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
+        non_existing_key = get_random_string(10)
+        key_value_pairs = {key: value for key, value in zip(keys, keys)}
+
+        assert await redis_client.mset(key_value_pairs) == OK
+
+        # Add the non-existing key
+        keys.append(non_existing_key)
+        mget_res = await redis_client.mget(keys)
+        keys[-1] = None
+        assert mget_res == keys
+
 
 class CommandsUnitTests:
     def test_expiry_cmd_args(self):
