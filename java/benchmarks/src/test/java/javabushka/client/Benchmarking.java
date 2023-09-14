@@ -14,7 +14,7 @@ public class Benchmarking {
     static final int SIZE_GET_KEYSPACE = 3750000;
     static final int SIZE_SET_KEYSPACE = 3000000;
 
-    private static ChosenAction chooseAction() {
+    private static ChosenAction randomAction() {
         if (Math.random() > PROB_GET) {
             return ChosenAction.SET;
         }
@@ -44,7 +44,7 @@ public class Benchmarking {
         }
         
         for (int i = 0; i<iterations; i++) {
-            ChosenAction action = chooseAction();
+            ChosenAction action = randomAction();
             Operation op = actions.get(action);
             ArrayList<Long> actionLatencies = latencies.get(action);
             addLatency(op, actionLatencies);
