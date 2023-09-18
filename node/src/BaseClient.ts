@@ -11,6 +11,7 @@ import {
     createGet,
     createIncr,
     createIncrBy,
+    createIncrByFloat,
     createSet,
 } from "./Commands";
 import {
@@ -307,12 +308,26 @@ export class BaseClient {
      * See https://redis.io/commands/incrby/ for details.
      *
      * @param key - The key to increment it's value.
-     * @param increment - The increment to the key's value.
+     * @param amount - The amount to increment.
      * @returns the value of key after the increment, An error is returned if the key contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
-    public incrBy(key: string, increment: number): Promise<number> {
-        return this.createWritePromise(createIncrBy(key, increment));
+    public incrBy(key: string, amount: number): Promise<number> {
+        return this.createWritePromise(createIncrBy(key, amount));
+    }
+
+    /** Increment the string representing a floating point number stored at key by the specified increment.
+     * By using a negative increment value, the result is that the value stored at the key is decremented.
+     * If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/incrbyfloat/ for details.
+     *
+     * @param key - The key to increment it's value.
+     * @param amount - The amount to increment.
+     * @returns the value of key after the increment as string, An error is returned if the key contains a value of the wrong type.
+     *
+     */
+    public incrByFloat(key: string, amount: number): Promise<string> {
+        return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<

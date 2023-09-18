@@ -8,6 +8,7 @@ import {
     createGet,
     createIncr,
     createIncrBy,
+    createIncrByFloat,
     createInfo,
     createPing,
     createSelect,
@@ -107,12 +108,26 @@ export class BaseTransaction {
      * See https://redis.io/commands/incrby/ for details.
      *
      * @param key - The key to increment it's value.
-     * @param increment - The increment to the key's value.
+     * @param amount - The amount to increment.
      * Returns the value of key after the increment, An error is returned if the key contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
-    public incrBy(key: string, increment: number) {
-        this.commands.push(createIncrBy(key, increment));
+    public incrBy(key: string, amount: number) {
+        this.commands.push(createIncrBy(key, amount));
+    }
+
+    /** Increment the string representing a floating point number stored at key by the specified increment.
+     * By using a negative increment value, the result is that the value stored at the key is decremented.
+     * If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/incrbyfloat/ for details.
+     *
+     * @param key - The key to increment it's value.
+     * @param amount - The amount to increment.
+     * Returns the value of key after the increment as string, An error is returned if the key contains a value of the wrong type.
+     *
+     */
+    public incrByFloat(key: string, amount: number) {
+        this.commands.push(createIncrByFloat(key, amount));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
