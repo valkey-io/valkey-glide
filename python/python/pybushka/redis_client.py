@@ -8,8 +8,8 @@ from pybushka.async_commands.cme_commands import CMECommands
 from pybushka.async_commands.core import CoreCommands
 from pybushka.config import ClientConfiguration
 from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
-from pybushka.Logger import Level as LogLevel
-from pybushka.Logger import Logger as ClientLogger
+from pybushka.logger import Level as LogLevel
+from pybushka.logger import Logger as ClientLogger
 from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
 from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
 from pybushka.protobuf.response_pb2 import Response
