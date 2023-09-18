@@ -9,6 +9,7 @@ import {
     createIncr,
     createIncrBy,
     createInfo,
+    createPing,
     createSelect,
     createSet,
 } from "./Commands";
@@ -40,6 +41,16 @@ export class BaseTransaction {
      */
     public set(key: string, value: string, options?: SetOptions) {
         this.commands.push(createSet(key, value, options));
+    }
+
+    /** Ping the Redis server.
+     * See https://redis.io/commands/ping/ for details.
+     *
+     * @param str - the ping argument that will be returned.
+     * Returns PONG if no argument is provided, otherwise return a copy of the argument.
+     */
+    public ping(str?: string) {
+        this.commands.push(createPing(str));
     }
 
     /** Get information and statistics about the Redis server.

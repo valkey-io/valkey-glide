@@ -6,6 +6,7 @@ import {
     createConfigRewrite,
     createCustomCommand,
     createInfo,
+    createPing,
     createSelect,
 } from "./Commands";
 import { Transaction } from "./Transaction";
@@ -49,6 +50,16 @@ export class RedisClient extends BaseClient {
         args: string[]
     ): Promise<ReturnType> {
         return this.createWritePromise(createCustomCommand(commandName, args));
+    }
+
+    /** Ping the Redis server.
+     * See https://redis.io/commands/ping/ for details.
+     *
+     * @param str - the ping argument that will be returned.
+     * @returns PONG if no argument is provided, otherwise return a copy of the argument.
+     */
+    public ping(str?: string): Promise<string> {
+        return this.createWritePromise(createPing(str));
     }
 
     /** Get information and statistics about the Redis server.
