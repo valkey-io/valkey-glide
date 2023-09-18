@@ -27,6 +27,8 @@ class ChosenAction(Enum):
     SET = 3
 
 
+PORT = 6379
+
 arguments_parser = argparse.ArgumentParser()
 arguments_parser.add_argument(
     "--resultsFile",
@@ -68,9 +70,14 @@ arguments_parser.add_argument(
     help="Should benchmark a cluster mode enabled cluster",
     action="store_true",
 )
+arguments_parser.add_argument(
+    "--port",
+    default=PORT,
+    type=int,
+    help="Which port to connect to, defaults to `%(default)s`",
+)
 args = arguments_parser.parse_args()
 
-PORT = 6379
 PROB_GET = 0.8
 PROB_GET_EXISTING_KEY = 0.8
 SIZE_GET_KEYSPACE = 3750000  # 3.75 million
@@ -250,7 +257,7 @@ async def main(
         clients = await create_clients(
             client_count,
             lambda: client_class(
-                host=host, port=PORT, decode_responses=True, ssl=use_tls
+                host=host, port=port, decode_responses=True, ssl=use_tls
             ),
         )
 
@@ -272,7 +279,7 @@ async def main(
         # Babushka Socket
         client_class = RedisClusterClient if is_cluster else RedisClient
         config = ClientConfiguration(
-            [AddressInfo(host=host, port=PORT)], use_tls=use_tls
+            [AddressInfo(host=host, port=port)], use_tls=use_tls
         )
         clients = await create_clients(
             client_count,
@@ -300,6 +307,7 @@ if __name__ == "__main__":
     client_count = args.clientCount
     host = args.host
     use_tls = args.tls
+    port = args.port
     is_cluster = args.clusterModeEnabled
 
     product_of_arguments = [
