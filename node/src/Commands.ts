@@ -189,9 +189,16 @@ export function createIncr(key: string): redis_request.Command {
 
 export function createIncrBy(
     key: string,
-    increment: number
+    amount: number
 ): redis_request.Command {
-    return createCommand(RequestType.IncrBy, [key, increment.toString()]);
+    return createCommand(RequestType.IncrBy, [key, amount.toString()]);
+}
+
+export function createIncrByFloat(
+    key: string,
+    amount: number
+): redis_request.Command {
+    return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
 export function createCustomCommand(commandName: string, args: string[]) {

@@ -17,7 +17,8 @@ type BaseClient = {
     info(options?: InfoOptions[]): Promise<string | string[][]>;
     configResetStat: () => Promise<"OK">;
     incr: (key: string) => Promise<number>;
-    incrBy: (key: string, increment: number) => Promise<number>;
+    incrBy: (key: string, amount: number) => Promise<number>;
+    incrByFloat: (key: string, amount: number) => Promise<string>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -258,7 +259,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it(
-        "incr and incrBy with existing key",
+        "incr, incrBy and incrByFloat with existing key",
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
@@ -267,29 +268,34 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("11");
                 expect(await client.incrBy(key, 4)).toEqual(15);
                 expect(await client.get(key)).toEqual("15");
+                expect(await client.incrByFloat(key, 1.5)).toEqual("16.5");
+                expect(await client.get(key)).toEqual("16.5");
             });
         },
         config.timeout
     );
 
     it(
-        "incr and incrBy with non existing key",
+        "incr, incrBy and incrByFloat with non existing key",
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
+                const key3 = uuidv4();
                 /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.incr(key1)).toEqual(1);
                 expect(await client.get(key1)).toEqual("1");
                 expect(await client.incrBy(key2, 2)).toEqual(2);
                 expect(await client.get(key2)).toEqual("2");
+                expect(await client.incrByFloat(key3, -0.5)).toEqual("-0.5");
+                expect(await client.get(key3)).toEqual("-0.5");
             });
         },
         config.timeout
     );
 
     it(
-        "incr and incrBy with a key that contains a value of string that can not be represented as integer",
+        "incr, incrBy and incrByFloat with a key that contains a value of string that can not be represented as integer",
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
@@ -307,6 +313,14 @@ export function runBaseTests<Context>(config: {
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "value is not an integer"
+                    );
+                }
+
+                try {
+                    expect(await client.incrByFloat(key, 1.5)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "value is not a valid float"
                     );
                 }
             });
