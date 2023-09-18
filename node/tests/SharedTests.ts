@@ -10,6 +10,7 @@ type BaseClient = {
         value: string,
         options?: SetOptions
     ) => Promise<string | "OK" | null>;
+    ping: (str?: string) => Promise<string>;
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
     configRewrite: () => Promise<"OK">;
@@ -308,6 +309,17 @@ export function runBaseTests<Context>(config: {
                         "value is not an integer"
                     );
                 }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "ping test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.ping()).toEqual("PONG");
+                expect(await client.ping("Hello")).toEqual("Hello");
             });
         },
         config.timeout

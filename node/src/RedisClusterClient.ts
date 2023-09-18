@@ -6,6 +6,7 @@ import {
     createConfigRewrite,
     createCustomCommand,
     createInfo,
+    createPing,
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 
@@ -132,6 +133,18 @@ export class RedisClusterClient extends BaseClient {
     ): Promise<ReturnType> {
         const command = createCustomCommand(commandName, args);
         return super.createWritePromise(command, toProtobufRoute(route));
+    }
+
+    /** Ping the Redis server.
+     * See https://redis.io/commands/ping/ for details.
+     *
+     * @param str - the ping argument that will be returned.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     * @returns PONG if no argument is provided, otherwise return a copy of the argument.
+     */
+    public ping(str?: string, route?: Routes): Promise<string> {
+        return this.createWritePromise(createPing(str), toProtobufRoute(route));
     }
 
     /** Get information and statistics about the Redis server.

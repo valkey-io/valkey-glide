@@ -157,6 +157,11 @@ export enum InfoOptions {
     /// When no parameter is provided, the default option is assumed.
 }
 
+export function createPing(str?: string): redis_request.Command {
+    const args: string[] = str == undefined ? [] : [str];
+    return createCommand(RequestType.Ping, args);
+}
+
 export function createInfo(options?: InfoOptions[]): redis_request.Command {
     const args: string[] = options == undefined ? [] : options;
     return createCommand(RequestType.Info, args);
