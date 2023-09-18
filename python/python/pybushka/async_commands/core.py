@@ -177,9 +177,9 @@ class BaseTransaction:
 
     def custom_command(self, command_args: List[str]):
         """Executes a single command, without checking inputs.
-            @example - Return a list of all pub/sub clients:
+            @example - Append a command to list of all pub/sub clients:
 
-                connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+                transaction.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
             command_args (List[str]): List of strings of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
