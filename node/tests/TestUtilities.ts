@@ -35,7 +35,7 @@ export function flushallOnPort(port: number): Promise<void> {
     );
 }
 
-/// This function takes the first result of the response if it got more than one response (like CME responses).
+/// This function takes the first result of the response if it got more than one response (like cluster responses).
 export function getFirstResult(res: string | string[][]): string {
     if (typeof res == "string") {
         return res;

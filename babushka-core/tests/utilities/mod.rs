@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use babushka::{
-    client::{Client, ClientCMD},
+    client::{Client, StandaloneClient},
     connection_request::{self, AddressInfo, AuthenticationInfo},
 };
 use futures::Future;
@@ -17,8 +17,8 @@ use tempfile::TempDir;
 pub mod cluster;
 pub mod mocks;
 
-pub(crate) const SHORT_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
-pub(crate) const LONG_CMD_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
+pub(crate) const SHORT_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(10_000);
+pub(crate) const LONG_STANDALONE_TEST_TIMEOUT: Duration = Duration::from_millis(20_000);
 
 // Code copied from redis-rs
 
@@ -487,7 +487,7 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
 
 pub struct TestBasics {
     pub server: Option<RedisServer>,
-    pub client: ClientCMD,
+    pub client: StandaloneClient,
 }
 
 fn set_connection_info_to_connection_request(
@@ -608,7 +608,9 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     connection_request.connection_retry_strategy =
         protobuf::MessageField::from_option(configuration.connection_retry_strategy.clone());
     connection_request.cluster_mode_enabled = false;
-    let client = ClientCMD::create_client(connection_request).await.unwrap();
+    let client = StandaloneClient::create_client(connection_request)
+        .await
+        .unwrap();
 
     TestBasics { server, client }
 }
