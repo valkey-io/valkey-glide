@@ -40,6 +40,10 @@ def transaction_test(
 
     transaction.incr(key3)
     transaction.incrby(key3, 2)
+
+    transaction.decr(key3)
+    transaction.decrby(key3, 2)
+
     transaction.incrbyfloat(key3, 0.5)
 
     transaction.ping()
@@ -56,7 +60,9 @@ def transaction_test(
         [value, value2],
         1,
         3,
-        "3.5",
+        2,
+        0,
+        "0.5",
         "PONG",
         OK,
         ["timeout", "1000"],
