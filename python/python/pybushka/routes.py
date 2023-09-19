@@ -68,4 +68,4 @@ def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
         request.route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
         request.route.slot_id_route.slot_id = route.slot_id
     else:
-        raise Exception(f"Recieved invalid route type: {type(route)}")
+        raise Exception(f"Received invalid route type: {type(route)}")

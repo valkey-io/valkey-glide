@@ -44,7 +44,23 @@ def transaction_test(
 
     transaction.ping()
 
-    return [OK, value, 1, None, OK, [value, value2], 1, 3, "3.5", "PONG"]
+    transaction.config_set({"timeout": "1000"})
+    transaction.config_get(["timeout"])
+
+    return [
+        OK,
+        value,
+        1,
+        None,
+        OK,
+        [value, value2],
+        1,
+        3,
+        "3.5",
+        "PONG",
+        OK,
+        ["timeout", "1000"],
+    ]
 
 
 @pytest.mark.asyncio
