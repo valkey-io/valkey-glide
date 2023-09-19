@@ -3,8 +3,8 @@ from typing import AsyncGenerator, Optional, Union
 
 import pytest
 from pybushka.config import AddressInfo, AuthenticationOptions, ClientConfiguration
-from pybushka.Logger import Level as logLevel
-from pybushka.Logger import Logger
+from pybushka.logger import Level as logLevel
+from pybushka.logger import Logger
 from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.utils.cluster import RedisCluster
 
