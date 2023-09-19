@@ -14,16 +14,9 @@ async function flush_database(
             tls,
             port
         )) as RedisClusterType;
-        await client.connect();
-
-        // since the cluster client doesn't support fan-out commands, we need to create a client to each node, and send the flush command there.
         await Promise.all(
             client.masters.map((master) => {
                 return flush_database(master.host, false, tls, port);
-            })
-        );
-        await client.quit();
-    } else {
         const client = (await createRedisClient(
             host,
             isCluster,
@@ -42,10 +35,10 @@ Promise.resolve()
         await flush_database(
             receivedOptions.host,
             receivedOptions.clusterModeEnabled,
+<<<<<<< HEAD
             receivedOptions.tls,
             receivedOptions.port
+=======
+>>>>>>> 8bb5f01f (removed duplicated logic to utils and changed js to ts)
         );
-    })
-    .then(() => {
-        process.exit(0);
     });
