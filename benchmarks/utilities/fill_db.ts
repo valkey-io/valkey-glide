@@ -16,12 +16,14 @@ async function fill_database(
     await client.connect();
 
     const CONCURRENT_SETS = 1000;
-    let sets = Array.from(Array(CONCURRENT_SETS).keys()).map(async (index) => {
-        for (let i = 0; i < SIZE_SET_KEYSPACE / CONCURRENT_SETS; ++i) {
-            let key = (index * CONCURRENT_SETS + index).toString();
-            await client.set(key, data);
+    const sets = Array.from(Array(CONCURRENT_SETS).keys()).map(
+        async (index) => {
+            for (let i = 0; i < SIZE_SET_KEYSPACE / CONCURRENT_SETS; ++i) {
+                const key = (index * CONCURRENT_SETS + index).toString();
+                await client.set(key, data);
+            }
         }
-    });
+    );
 
     await Promise.all(sets);
     await client.quit();
