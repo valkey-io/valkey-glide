@@ -313,9 +313,14 @@ class BaseTransaction:
         self.append_command(RequestType.Incr, [key])
 
     def incrby(self, key: str, amount: int):
+<<<<<<< HEAD
         """Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
         See https://redis.io/commands/incrby/ for more details.
+=======
+        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
+        the operation. See https://redis.io/commands/incr/ for more details.
+>>>>>>> c1003140 (Python - INCRBYFLOAT command )
 
         Args:
           key (str): The key to increment it's value.
@@ -482,7 +487,11 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
     async def incrby(self, key: str, amount: int) -> int:
+<<<<<<< HEAD
         """Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+=======
+        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
+>>>>>>> c1003140 (Python - INCRBYFLOAT command )
         the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
