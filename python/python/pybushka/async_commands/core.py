@@ -299,28 +299,30 @@ class BaseTransaction:
         self.append_command(RequestType.ClientId, [])
 
     def incr(self, key: str):
-        """Increments the number stored at 'key' by one. If the key does not exist, it is set to 0 before performing the
-        operation. See https://redis.io/commands/incr/ for more details.
+        """Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        operation.
+        See https://redis.io/commands/incr/ for more details.
 
         Args:
           key (str): The key to increment it's value.
 
         Command response:
-              int: the value of key after the increment. An error is returned if the key contains a value
+              int: the value of `key` after the increment. An error is returned if the key contains a value
               of the wrong type or contains a string that can not be represented as integer.
         """
         self.append_command(RequestType.Incr, [key])
 
     def incrby(self, key: str, amount: int):
-        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
-        the operation. See https://redis.io/commands/incr/ for more details.
+        """Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+        the operation.
+        See https://redis.io/commands/incrby/ for more details.
 
         Args:
           key (str): The key to increment it's value.
           amount (int) : The amount to increment.
 
         Command response:
-              int: The value of key after the increment. An error is returned if the key contains a value
+              int: The value of `key` after the increment. An error is returned if the key contains a value
               of the wrong type or contains a string that can not be represented as integer.
         """
         self.append_command(RequestType.IncrBy, [key, str(amount)])
@@ -353,6 +355,35 @@ class BaseTransaction:
         """
         argument = [] if message is None else [message]
         self.append_command(RequestType.Ping, argument)
+
+    def decr(self, key: str):
+        """Decrements the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        operation.
+        See https://redis.io/commands/decr/ for more details.
+
+        Args:
+          key (str): The key to decrement it's value.
+
+        Command response:
+              int: the value of `key` after the decrement. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        self.append_command(RequestType.Decr, [key])
+
+    def decrby(self, key: str, amount: int):
+        """Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+        the operation.
+        See https://redis.io/commands/decrby/ for more details.
+
+        Args:
+          key (str): The key to decrement it's value.
+         amount (int) : The amount to decrement.
+
+        Command response:
+              int: The value of `key` after the decrement. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        self.append_command(RequestType.DecrBy, [key, str(amount)])
 
 
 class CoreCommands(Protocol):
@@ -437,20 +468,21 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
     async def incr(self, key: str) -> int:
-        """Increments the number stored at 'key' by one. If the key does not exist, it is set to 0 before performing the
-        operation. See https://redis.io/commands/incr/ for more details.
+        """Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        operation.
+        See https://redis.io/commands/incr/ for more details.
 
         Args:
           key (str): The key to increment it's value.
 
           Returns:
-              int: The value of key after the increment. An error is returned if the key contains a value
+              int: The value of `key` after the increment. An error is returned if the key contains a value
               of the wrong type or contains a string that can not be represented as integer.
         """
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
     async def incrby(self, key: str, amount: int) -> int:
-        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
+        """Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
@@ -511,3 +543,34 @@ class CoreCommands(Protocol):
             its corresponding value in the list will be None.
         """
         return cast(List[str], await self._execute_command(RequestType.MGet, keys))
+
+    async def decr(self, key: str) -> int:
+        """Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        operation.
+        See https://redis.io/commands/decr/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+
+          Returns:
+              int: The value of key after the decrement. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        return cast(int, await self._execute_command(RequestType.Decr, [key]))
+
+    async def decrby(self, key: str, amount: int) -> int:
+        """Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+        the operation.
+        See https://redis.io/commands/decrby/ for more details.
+
+        Args:
+          key (str): The key to decrement it's value.
+          amount (int) : The amount to decrement.
+
+          Returns:
+              int: The value of key after the decrement. An error is returned if the key contains a value
+              of the wrong type or contains a string that can not be represented as integer.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
+        )
