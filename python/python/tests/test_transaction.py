@@ -39,11 +39,12 @@ def transaction_test(
     transaction.mget([key, key2])
 
     transaction.incr(key3)
-    transaction.incr_by(key3, 2)
+    transaction.incrby(key3, 2)
+    transaction.incrbyfloat(key3, 0.5)
 
     transaction.ping()
 
-    return [OK, value, 1, None, OK, [value, value2], 1, 3, "PONG"]
+    return [OK, value, 1, None, OK, [value, value2], 1, 3, "3.5", "PONG"]
 
 
 @pytest.mark.asyncio
