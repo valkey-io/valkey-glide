@@ -395,7 +395,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
         let socket_path =
             get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
@@ -424,7 +424,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
         let socket_path = get_socket_path_from_name(
             "test_multiple_listeners_competing_for_the_socket".to_string(),
@@ -496,7 +496,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_set_and_get(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -551,7 +551,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
         let mut test_basics = setup_test_basics(false, true);
         handle_custom_command(&mut test_basics.socket, args_pointer);
@@ -631,7 +631,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_get_returns_null(#[values(false, true)] use_arg_pointer: bool) {
         const CALLBACK_INDEX: u32 = 99;
         let mut expected_command = Cmd::new();
@@ -650,7 +650,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_report_error() {
         const CALLBACK_INDEX: u32 = 99;
         let mut test_basics = setup_mocked_test_basics(None);
@@ -679,7 +679,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_handle_long_input(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -740,7 +740,7 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
-    #[timeout(LONG_CMD_TEST_TIMEOUT)]
+    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
     fn test_socket_handle_multiple_long_inputs(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
@@ -865,7 +865,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
         let mut test_basics = setup_test_basics(false, false);
         let server = test_basics.server;
@@ -883,7 +883,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
         let test_basics = setup_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
@@ -914,7 +914,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
         let test_basics = setup_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
@@ -944,7 +944,7 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_CMD_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_send_transaction_and_get_array_of_results() {
         let test_basics = setup_test_basics(false, true);
         let mut socket = test_basics.socket;
