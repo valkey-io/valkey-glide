@@ -284,18 +284,35 @@ class BaseTransaction:
         """
         self.append_command(RequestType.Incr, [key])
 
-    def incr_by(self, key: str, increment: int):
-        """Increments the number stored at 'key' by 'increment'. If the key does not exist, it is set to 0 before performing
+    def incrby(self, key: str, amount: int):
+        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
         the operation. See https://redis.io/commands/incr/ for more details.
 
         Args:
           key (str): The key to increment it's value.
+          amount (int) : The amount to increment.
 
         Command response:
               int: The value of key after the increment. An error is returned if the key contains a value
               of the wrong type or contains a string that can not be represented as integer.
         """
-        self.append_command(RequestType.IncrBy, [key, str(increment)])
+        self.append_command(RequestType.IncrBy, [key, str(amount)])
+
+    def incrbyfloat(self, key: str, amount: float):
+        """Increment the string representing a floating point number stored at `key` by `amount`.
+           By using a negative increment value, the value stored at the `key` is decremented.
+           If the key does not exist, it is set to 0 before performing the operation.
+           See https://redis.io/commands/incrbyfloat/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+          amount (float) : The amount to increment.
+
+        Command response:
+              str: The value of key after the increment. An error is returned if the key contains a value
+              of the wrong type.
+        """
+        self.append_command(RequestType.IncrByFloat, [key, str(amount)])
 
     def ping(self, message: Optional[str] = None):
         """Ping the Redis server.
@@ -405,19 +422,39 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
-    async def incr_by(self, key: str, increment: int) -> int:
-        """Increments the number stored at 'key' by 'increment'. If the key does not exist, it is set to 0 before performing
-        the operation. See https://redis.io/commands/incr/ for more details.
+    async def incrby(self, key: str, amount: int) -> int:
+        """Increments the number stored at 'key' by 'amount'. If the key does not exist, it is set to 0 before performing
+        the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
           key (str): The key to increment it's value.
+          amount (int) : The amount to increment.
 
           Returns:
               int: The value of key after the increment. An error is returned if the key contains a value
               of the wrong type or contains a string that can not be represented as integer.
         """
         return cast(
-            int, await self._execute_command(RequestType.IncrBy, [key, str(increment)])
+            int, await self._execute_command(RequestType.IncrBy, [key, str(amount)])
+        )
+
+    async def incrbyfloat(self, key: str, amount: float) -> str:
+        """Increment the string representing a floating point number stored at `key` by `amount`.
+           By using a negative increment value, the value stored at the `key` is decremented.
+           If the key does not exist, it is set to 0 before performing the operation.
+           See https://redis.io/commands/incrbyfloat/ for more details.
+
+        Args:
+          key (str): The key to increment it's value.
+          amount (float) : The amount to increment.
+
+          Returns:
+              str: The value of key after the increment. An error is returned if the key contains a value
+              of the wrong type.
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
         )
 
     async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
