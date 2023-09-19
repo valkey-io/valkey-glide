@@ -88,9 +88,18 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             .with_writer(file_appender)
             .with_filter(LevelFilter::OFF);
         let (file_layer, file_reload) = reload::Layer::new(file_fmt);
+
+        // Enable logging only from allowed crates
+        let targets_filter = filter::Targets::new()
+            .with_target("babushka", LevelFilter::TRACE)
+            .with_target("redis", LevelFilter::TRACE)
+            .with_target("logger_core", LevelFilter::TRACE)
+            .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
+
         tracing_subscriber::registry()
             .with(stdout_layer)
             .with(file_layer)
+            .with(targets_filter)
             .init();
 
         let reloads: Reloads = Reloads {
