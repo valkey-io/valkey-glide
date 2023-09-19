@@ -50,7 +50,6 @@ def transaction_test(
 
     transaction.config_set({"timeout": "1000"})
     transaction.config_get(["timeout"])
-
     return [
         OK,
         value,
@@ -67,9 +66,6 @@ def transaction_test(
         OK,
         ["timeout", "1000"],
     ]
-
-
-@pytest.mark.asyncio
 class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
