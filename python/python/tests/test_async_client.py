@@ -354,29 +354,36 @@ class TestCommands:
         assert await redis_client.client_id() > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_incr_incr_by_existing_key(self, redis_client: TRedisClient):
+    async def test_incr_commands_existing_key(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "10") == OK
         assert await redis_client.incr(key) == 11
         assert await redis_client.get(key) == "11"
-        assert await redis_client.incr_by(key, 4) == 15
+        assert await redis_client.incrby(key, 4) == 15
         assert await redis_client.get(key) == "15"
+        assert await redis_client.incrbyfloat(key, 5.5) == "20.5"
+        assert await redis_client.get(key) == "20.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_incr_incr_by_non_existing_key(self, redis_client: TRedisClient):
+    async def test_incr_commands_non_existing_key(self, redis_client: TRedisClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
+        key3 = get_random_string(10)
 
         assert await redis_client.get(key) is None
         assert await redis_client.incr(key) == 1
         assert await redis_client.get(key) == "1"
 
         assert await redis_client.get(key2) is None
-        assert await redis_client.incr_by(key2, 3) == 3
+        assert await redis_client.incrby(key2, 3) == 3
         assert await redis_client.get(key2) == "3"
 
+        assert await redis_client.get(key3) is None
+        assert await redis_client.incrbyfloat(key3, 0.5) == "0.5"
+        assert await redis_client.get(key3) == "0.5"
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_incr_with_str_value(self, redis_client: TRedisClient):
+    async def test_incr_commands_with_str_value(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
         with pytest.raises(Exception) as e:
@@ -385,9 +392,14 @@ class TestCommands:
         assert "value is not an integer" in str(e)
 
         with pytest.raises(Exception) as e:
-            await redis_client.incr_by(key, 3)
+            await redis_client.incrby(key, 3)
 
         assert "value is not an integer" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.incrbyfloat(key, 3.5)
+
+        assert "value is not a valid float" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mset_mget(self, redis_client: TRedisClient):
