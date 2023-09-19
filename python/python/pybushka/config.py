@@ -61,7 +61,7 @@ class ClientConfiguration:
             default value will be used.
         response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
             determining that the connection has been severed. If not set, a default value will be used.
-        connection_backoff (Optional[int]): Strategy used to determine how and when to retry connecting, in case of
+        connection_backoff (Optional[BackoffStrategy]): Strategy used to determine how and when to retry connecting, in case of
             connection failures. The time between attempts grows exponentially, to the formula:
             rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts. If not set, a default
             backoff strategy will be used.
