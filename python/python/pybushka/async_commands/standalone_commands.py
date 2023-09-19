@@ -24,7 +24,7 @@ class Transaction(BaseTransaction):
         self.append_command(RequestType.Select, [str(index)])
 
 
-class CMDCommands(CoreCommands):
+class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[str]) -> TResult:
         """Executes a single command, without checking inputs.
             @example - Return a list of all pub/sub clients:
