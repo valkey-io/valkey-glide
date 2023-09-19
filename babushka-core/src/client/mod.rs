@@ -1,7 +1,6 @@
 use crate::connection_request::{
     AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFromReplicaStrategy, TlsMode,
 };
-pub use client_cmd::ClientCMD;
 use futures::FutureExt;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
@@ -9,10 +8,11 @@ use redis::{
     aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
     RedisResult,
 };
+pub use standalone_client::StandaloneClient;
 use std::io;
 use std::time::Duration;
-mod client_cmd;
 mod reconnecting_connection;
+mod standalone_client;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
@@ -78,8 +78,8 @@ pub(super) fn get_connection_info(
 
 #[derive(Clone)]
 pub enum ClientWrapper {
-    CMD(ClientCMD),
-    CME {
+    Standalone(StandaloneClient),
+    Cluster {
         client: ClusterConnection,
         read_from_replicas: bool,
     },
@@ -109,9 +109,9 @@ impl Client {
     ) -> redis::RedisFuture<'a, redis::Value> {
         run_with_timeout(self.response_timeout, async {
             match self.internal_client {
-                ClientWrapper::CMD(ref mut client) => client.send_packed_command(cmd).await,
+                ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
 
-                ClientWrapper::CME {
+                ClientWrapper::Cluster {
                     ref mut client,
                     read_from_replicas,
                 } => {
@@ -133,11 +133,11 @@ impl Client {
     ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
         (async move {
             match self.internal_client {
-                ClientWrapper::CMD(ref mut client) => {
+                ClientWrapper::Standalone(ref mut client) => {
                     client.send_packed_commands(cmd, offset, count).await
                 }
 
-                ClientWrapper::CME {
+                ClientWrapper::Cluster {
                     ref mut client,
                     read_from_replicas: _,
                 } => {
@@ -205,16 +205,16 @@ async fn create_cluster_client(
 
 #[derive(thiserror::Error)]
 pub enum ConnectionError {
-    CMD(client_cmd::ClientCMDConnectionError),
-    CME(redis::RedisError),
+    Standalone(standalone_client::StandaloneClientConnectionError),
+    Cluster(redis::RedisError),
     Timeout,
 }
 
 impl std::fmt::Debug for ConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CMD(arg0) => f.debug_tuple("CMD").field(arg0).finish(),
-            Self::CME(arg0) => f.debug_tuple("CME").field(arg0).finish(),
+            Self::Standalone(arg0) => f.debug_tuple("Standalone").field(arg0).finish(),
+            Self::Cluster(arg0) => f.debug_tuple("Cluster").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
         }
     }
@@ -223,8 +223,8 @@ impl std::fmt::Debug for ConnectionError {
 impl std::fmt::Display for ConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionError::CMD(err) => write!(f, "{err:?}"),
-            ConnectionError::CME(err) => write!(f, "{err}"),
+            ConnectionError::Standalone(err) => write!(f, "{err:?}"),
+            ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
         }
     }
@@ -243,16 +243,16 @@ impl Client {
             let internal_client = if request.cluster_mode_enabled {
                 let (client, read_from_replicas) = create_cluster_client(request)
                     .await
-                    .map_err(ConnectionError::CME)?;
-                ClientWrapper::CME {
+                    .map_err(ConnectionError::Cluster)?;
+                ClientWrapper::Cluster {
                     client,
                     read_from_replicas,
                 }
             } else {
-                ClientWrapper::CMD(
-                    ClientCMD::create_client(request)
+                ClientWrapper::Standalone(
+                    StandaloneClient::create_client(request)
                         .await
-                        .map_err(ConnectionError::CMD)?,
+                        .map_err(ConnectionError::Standalone)?,
                 )
             };
 

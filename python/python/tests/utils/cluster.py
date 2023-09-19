@@ -22,7 +22,7 @@ class RedisCluster:
         )
         output, err = p.communicate(timeout=40)
         if p.returncode != 0:
-            raise Exception(f"Failed to create a CME cluster. Executed: {p}:\n{err}")
+            raise Exception(f"Failed to create a cluster. Executed: {p}:\n{err}")
         self.parse_cluster_script_start_output(output)
 
     def parse_cluster_script_start_output(self, output: str):
@@ -58,5 +58,5 @@ class RedisCluster:
         output, err = p.communicate(timeout=20)
         if p.returncode != 0:
             raise Exception(
-                f"Failed to stop CME cluster {self.cluster_folder}. Executed: {p}:\n{err}"
+                f"Failed to stop a cluster {self.cluster_folder}. Executed: {p}:\n{err}"
             )

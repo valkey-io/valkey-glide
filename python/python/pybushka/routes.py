@@ -15,7 +15,7 @@ class Route:
         pass
 
 
-# CME routes
+# cluster routes
 
 
 class AllNodes(Route):

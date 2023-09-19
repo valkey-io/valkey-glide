@@ -3,9 +3,9 @@ import threading
 from typing import List, Optional, Tuple, Union, cast
 
 import async_timeout
-from pybushka.async_commands.cmd_commands import CMDCommands
-from pybushka.async_commands.cme_commands import CMECommands
+from pybushka.async_commands.cluster_commands import ClusterCommands
 from pybushka.async_commands.core import CoreCommands
+from pybushka.async_commands.standalone_commands import StandaloneCommands
 from pybushka.config import ClientConfiguration
 from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
 from pybushka.logger import Level as LogLevel
@@ -225,12 +225,12 @@ class BaseRedisClient(CoreCommands):
                         res_future.set_result(None)
 
 
-class RedisClusterClient(BaseRedisClient, CMECommands):
+class RedisClusterClient(BaseRedisClient, ClusterCommands):
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
         return self.config.convert_to_protobuf_request(cluster_mode=True)
 
 
-class RedisClient(BaseRedisClient, CMDCommands):
+class RedisClient(BaseRedisClient, StandaloneCommands):
     pass
 
 

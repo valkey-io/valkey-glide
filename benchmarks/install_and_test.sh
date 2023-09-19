@@ -130,7 +130,7 @@ function Help() {
     echo Pass -only-ffi to only run Babushka FFI based clients.
     echo Pass -only-socket to only run Babushka socket based clients.
     echo Pass -only-babushka to only run Babushk clients.
-    echo Pass -is-cluster if the host is a CME server.
+    echo Pass -is-cluster if the host is a Cluster server. Otherwise the server is assumed to be in standalone mode.
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
 }
