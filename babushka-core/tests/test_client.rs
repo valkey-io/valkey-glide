@@ -10,7 +10,7 @@ mod shared_client_tests {
 
     enum BackingServer {
         Cmd(Option<RedisServer>),
-        Cme(Option<RedisCluster>),
+        Cluster(Option<RedisCluster>),
     }
 
     struct TestBasics {
@@ -22,7 +22,7 @@ mod shared_client_tests {
         if use_cme {
             let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
             TestBasics {
-                server: BackingServer::Cme(cluster_basics.cluster),
+                server: BackingServer::Cluster(cluster_basics.cluster),
                 client: cluster_basics.client,
             }
         } else {

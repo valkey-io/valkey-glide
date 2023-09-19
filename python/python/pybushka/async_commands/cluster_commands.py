@@ -15,7 +15,7 @@ class ClusterTransaction(BaseTransaction):
     pass
 
 
-class CMECommands(CoreCommands):
+class ClusterCommands(CoreCommands):
     async def custom_command(
         self, command_args: List[str], route: Optional[Route] = None
     ) -> TResult:
