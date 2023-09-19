@@ -15,7 +15,7 @@ export const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
 
 export function getAddress(host: string, tls: boolean, port?: number) {
     const protocol = tls ? "rediss" : "redis";
-    return `${protocol}://${host}:${PORT}`;
+    return `${protocol}://${host}:${port ? port : PORT}`;
 }
 
 export function createRedisClient(

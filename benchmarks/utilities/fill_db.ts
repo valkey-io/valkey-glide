@@ -16,9 +16,9 @@ async function fill_database(
     await client.connect();
 
     const CONCURRENT_SETS = 1000;
-    var sets = Array.from(Array(CONCURRENT_SETS).keys()).map(async (index) => {
+    let sets = Array.from(Array(CONCURRENT_SETS).keys()).map(async (index) => {
         for (let i = 0; i < SIZE_SET_KEYSPACE / CONCURRENT_SETS; ++i) {
-            var key = (index * CONCURRENT_SETS + index).toString();
+            let key = (index * CONCURRENT_SETS + index).toString();
             await client.set(key, data);
         }
     });
