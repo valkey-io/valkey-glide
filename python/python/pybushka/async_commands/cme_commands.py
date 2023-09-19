@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, cast
+from typing import List, Mapping, Optional, Union, cast
 
 from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
 from pybushka.constants import TOK, TResult
@@ -152,3 +152,60 @@ class CMECommands(CoreCommands):
         """
         argument = [] if message is None else [message]
         return cast(str, await self._execute_command(RequestType.Ping, argument, route))
+
+    async def config_get(
+        self, parameters: List[str], route: Optional[Route] = None
+    ) -> Union[List[str], List[List[Union[str, List[str]]]]]:
+        """Get the values of configuration parameters.
+        See https://redis.io/commands/config-get/ for details.
+
+        Args:
+            parameters (List[str]): A list of configuration parameter names to retrieve values for.
+
+            route (Optional[Route]): The command will be routed to all nodes, unless route is provided,
+            in which case the client will route the command to the nodes defined by route.
+
+        Returns:
+            Union[List[str], List[List[Union[str, List[str]]]]]: A list of values corresponding to the
+            configuration parameters.
+            When specifying a route other than a single node, response will be : [[Address (str) , response (List[str])] , ...]
+            with type of List[List[Union[str, List[str]]]].
+
+        Examples:
+            >>> config_get(["timeout"] , RandomNode())
+            ['timeout', '1000']
+            >>> config_get(["timeout" , "maxmemory"])
+            ['timeout', '1000', "maxmemory", "1GB"]
+        """
+        return cast(
+            Union[List[str], List[List[Union[str, List[str]]]]],
+            await self._execute_command(RequestType.ConfigGet, parameters, route),
+        )
+
+    async def config_set(
+        self, parameters_map: Mapping[str, str], route: Optional[Route] = None
+    ) -> TOK:
+        """Set configuration parameters to the specified values.
+        See https://redis.io/commands/config-set/ for details.
+
+        Args:
+            parameters_map (Mapping[str, str]): A map consisting of configuration
+            parameters and their respective values to set.
+
+            route (Optional[Route]): The command will be routed to all nodes, unless route is provided,
+            in which case the client will route the command to the nodes defined by route.
+
+        Returns:
+            OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
+
+        Examples:
+            >>> config_set([("timeout", "1000")], [("maxmemory", "1GB")])
+            OK
+        """
+        parameters: List[str] = []
+        for pair in parameters_map.items():
+            parameters.extend(pair)
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.ConfigSet, parameters, route),
+        )
