@@ -2,7 +2,7 @@ use test_env_helpers::*;
 
 #[cfg(test)]
 #[after_all]
-#[cfg(test)]
+#[before_all]
 mod tests {
     use logger_core::{init, log_debug, log_trace};
     use rand::{distributions::Alphanumeric, Rng};
@@ -91,7 +91,15 @@ mod tests {
         assert!(contents.is_empty());
     }
 
+    fn clean() -> Result<(), std::io::Error> {
+        remove_dir_all(FILE_DIRECTORY)
+    }
+
     fn after_all() {
-        remove_dir_all(FILE_DIRECTORY).expect("Cannot remove log directory")
+        clean().expect("Cannot remove log directory");
+    }
+
+    fn before_all() {
+        let _ = clean();
     }
 }
