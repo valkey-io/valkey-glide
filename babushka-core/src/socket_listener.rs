@@ -15,6 +15,7 @@ use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
+use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::RedisError;
 use redis::{cmd, Cmd, Value};
 use signal_hook::consts::signal::*;
@@ -340,12 +341,10 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
 }
 
 async fn send_command(
-    request: Command,
+    cmd: Cmd,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    let cmd = get_redis_command(&request)?;
-
     client
         .req_packed_command(&cmd, routing)
         .await
@@ -383,7 +382,10 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
         })
 }
 
-fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo>> {
+fn get_route(
+    route: Option<Box<Routes>>,
+    response_policy: Option<ResponsePolicy>,
+) -> ClientUsageResult<Option<RoutingInfo>> {
     use crate::redis_request::routes::Value;
     let Some(route) = route.and_then(|route| route.value) else {
         return Ok(None);
@@ -396,11 +398,12 @@ fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo
                 ))
             })?;
             match simple_route {
-                crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode(
+                crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode((
                     MultipleNodeRoutingInfo::AllNodes,
-                ))),
+                    response_policy,
+                )))),
                 crate::redis_request::SimpleRoutes::AllPrimaries => Ok(Some(
-                    RoutingInfo::MultiNode(MultipleNodeRoutingInfo::AllMasters),
+                    RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, response_policy)),
                 )),
                 crate::redis_request::SimpleRoutes::Random => {
                     Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
@@ -424,22 +427,28 @@ fn get_route(route: Option<Box<Routes>>) -> ClientUsageResult<Option<RoutingInfo
 
 fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        let routes = get_route(request.route.0);
-        let routing = match routes {
-            Ok(route) => route,
-            Err(err) => {
-                let _res = write_result(Err(err), request.callback_idx, &writer).await;
-                return;
-            }
-        };
-
         let result = match request.command {
             Some(action) => match action {
                 redis_request::Command::SingleCommand(command) => {
-                    send_command(command, client, routing).await
+                    match get_redis_command(&command) {
+                        Ok(cmd) => {
+                            let response_policy = cmd
+                                .command()
+                                .map(|cmd| ResponsePolicy::for_command(&cmd))
+                                .unwrap_or(None);
+                            match get_route(request.route.0, response_policy) {
+                                Ok(routes) => send_command(cmd, client, routes).await,
+                                Err(e) => Err(e),
+                            }
+                        }
+                        Err(e) => Err(e),
+                    }
                 }
                 redis_request::Command::Transaction(transaction) => {
-                    send_transaction(transaction, client, routing).await
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => send_transaction(transaction, client, routes).await,
+                        Err(e) => Err(e),
+                    }
                 }
             },
             None => Err(ClienUsageError::InternalError(
