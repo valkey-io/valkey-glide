@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ConnectionOptions, RedisClient, Transaction } from "../build-ts";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
-import { flushallOnPort } from "./TestUtilities";
+import { flushallOnPort, transactionTest } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
 const FreePort = require("find-free-port");
 
@@ -135,19 +135,12 @@ describe("RedisClient", () => {
 
     it("can send transactions", async () => {
         const client = await RedisClient.createClient(getOptions(port));
-        const key1 = "{key}" + uuidv4();
-        const key2 = "{key}" + uuidv4();
         const transaction = new Transaction();
-        transaction.set(key1, "bar");
-        transaction.set(key2, "baz", {
-            conditionalSet: "onlyIfDoesNotExist",
-            returnOldValue: true,
-        });
-        transaction.customCommand("MGET", [key1, key2]);
+        const expectedRes = transactionTest(transaction);
         transaction.select(0);
-
         const result = await client.exec(transaction);
-        expect(result).toEqual(["OK", null, ["bar", "baz"], "OK"]);
+        expectedRes.push("OK");
+        expect(result).toEqual(expectedRes);
         client.dispose();
     });
 
