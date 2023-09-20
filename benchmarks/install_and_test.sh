@@ -44,7 +44,7 @@ function runPythonBenchmark(){
   echo "Starting Python benchmarks"
   cd ${BENCH_FOLDER}/python 
   $pythonCommand -m pip install --quiet -r requirements.txt
-  $pythonCommand python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
+  $pythonCommand python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag
   # exit python virtualenv
   deactivate
   echo "done python benchmark"
@@ -58,14 +58,14 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
-  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag
+  npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag
 }
 
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build --configuration Release
-  dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag
+  dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag
 }
 
 function runRustBenchmark(){
@@ -75,19 +75,19 @@ function runRustBenchmark(){
     rustConcurrentTasks=$rustConcurrentTasks" --concurrentTasks "$value
   done
   cd ${BENCH_FOLDER}/rust
-  cargo run --release -- --resultsFile=../$1 --dataSize $2 $rustConcurrentTasks --host $host --clientCount $clientCount $tlsFlag $clusterFlag
+  cargo run --release -- --resultsFile=../$1 --dataSize $2 $rustConcurrentTasks --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag
 }
 
 function flushDB() {
   cd $utilitiesDir
   npm install
-  npm run flush -- --host $host $tlsFlag $clusterFlag
+  npm run flush -- --host $host $tlsFlag $clusterFlag $portFlag
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
-  npm run fill -- --dataSize $1 --host $host $tlsFlag $clusterFlag
+  npm run fill -- --dataSize $1 --host $host $tlsFlag $clusterFlag $portFlag
 }
 
 utilitiesDir=`pwd`/utilities
@@ -133,6 +133,7 @@ function Help() {
     echo Pass -is-cluster if the host is a Cluster server. Otherwise the server is assumed to be in standalone mode.
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
+    echo By default, the benchmark runs against port 6379. Pass -port and then the port number in order to connect to a different port.
 }
 
 while test $# -gt 0
@@ -205,7 +206,11 @@ do
             ;;
         -is-cluster) 
             clusterFlag="--clusterModeEnabled"
-            ;;            
+            ;;
+        -port)
+            portFlag="--port "$2
+            shift
+            ;;                    
     esac
     shift
 done
