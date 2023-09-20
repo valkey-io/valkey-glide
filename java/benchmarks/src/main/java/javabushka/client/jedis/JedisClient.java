@@ -8,14 +8,21 @@ import redis.clients.jedis.JedisPool;
 
 public class JedisClient {
 
+    public final static String DEFAULT_HOST = "localhost";
+    public final static int DEFAULT_PORT = 6379;
+
     Jedis jedisResource;
     public boolean someLibraryMethod() {
         return true;
     }
 
-    public void connectToRedis() {
-        JedisPool pool = new JedisPool("localhost", 6379);
+    public void connectToRedis(String host, int port) {
+        JedisPool pool = new JedisPool(host, port);
         jedisResource = pool.getResource();
+    }
+
+    public void connectToRedis() {
+        connectToRedis(DEFAULT_HOST, DEFAULT_PORT);
     }
 
     public String info() {

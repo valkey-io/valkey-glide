@@ -3,11 +3,8 @@
  */
 package javabushka.client.lettuce;
 
-import static org.junit.Assert.assertEquals;
-
-import javabushka.client.Benchmarking;
-import javabushka.client.Benchmarking.Operation;
-import javabushka.client.ChosenAction;
+import javabushka.client.utils.ChosenAction;
+import javabushka.client.utils.Benchmarking;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,7 +29,7 @@ public class LettuceClientIT {
         int iterations = 100000;
         String value = "my-value";
 
-        HashMap<ChosenAction, Operation> actions = new HashMap<ChosenAction, Operation>();
+        HashMap<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
         actions.put(ChosenAction.GET_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeySet()));
         actions.put(ChosenAction.GET_NON_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeyGet()));
         actions.put(ChosenAction.SET, () -> lettuceClient.set(Benchmarking.generateKeySet(), value));

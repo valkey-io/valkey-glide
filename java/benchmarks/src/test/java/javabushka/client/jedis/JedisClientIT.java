@@ -3,12 +3,11 @@
  */
 package javabushka.client.jedis;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import javabushka.client.Benchmarking;
-import javabushka.client.Benchmarking.Operation;
-import javabushka.client.ChosenAction;
+import javabushka.client.utils.ChosenAction;
+import javabushka.client.utils.Benchmarking;
+
 import org.junit.Before;
 import org.junit.Test;
 import java.util.HashMap;
@@ -47,7 +46,7 @@ public class JedisClientIT {
         int iterations = 100000;
         String value = "my-value";
 
-        Map<ChosenAction, Operation> actions = new HashMap<ChosenAction, Operation>();
+        Map<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
         actions.put(ChosenAction.GET_EXISTING, () -> jedisClient.get(Benchmarking.generateKeySet()));
         actions.put(ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
         actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));

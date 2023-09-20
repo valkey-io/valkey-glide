@@ -1,6 +1,6 @@
 plugins {
-    // Apply the java-library plugin for API and implementation separation.
-    id 'java-library'
+    // Apply the application plugin to add support for building a CLI application in Java.
+    id 'application'
 }
 
 repositories {
@@ -12,13 +12,11 @@ dependencies {
     // Use JUnit test framework.
     testImplementation 'junit:junit:4.13.2'
 
-    // This dependency is exported to consumers, that is to say found on their compile classpath.
-    api 'org.apache.commons:commons-math3:3.6.1'
-
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
+    implementation 'commons-cli:commons-cli:1.5.0'
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
@@ -26,6 +24,11 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
     }
+}
+
+application {
+    // Define the main class for the application.
+    mainClass = 'javabushka.client.BenchmarkingApp'
 }
 
 tasks.withType(Test) { 
