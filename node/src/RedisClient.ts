@@ -2,8 +2,10 @@ import * as net from "net";
 import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
+    createConfigSet,
     createCustomCommand,
     createInfo,
     createPing,
@@ -99,5 +101,36 @@ export class RedisClient extends BaseClient {
      */
     public configResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
+    }
+
+    /** Reads the configuration parameters of a running Redis server.
+     *  See https://redis.io/commands/config-get/ for details.
+     *
+     * @param parameters - A list of configuration parameter names to retrieve values for.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *  case the client will initially try to route the command to the nodes defined by `route`.
+     *
+     * @returns A list of values corresponding to the configuration parameters.
+     *
+     */
+    public configGet(parameters: string[]): Promise<string[]> {
+        return this.createWritePromise(createConfigGet(parameters));
+    }
+
+    /** Set configuration parameters to the specified values.
+     *   See https://redis.io/commands/config-set/ for details.
+     *
+     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     *
+     * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
+     *
+     * @example
+     *  config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
+     *
+     */
+    public configSet(parameters: Record<string, string>): Promise<"OK"> {
+        return this.createWritePromise(createConfigSet(parameters));
     }
 }
