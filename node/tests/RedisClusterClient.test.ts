@@ -7,13 +7,14 @@ import {
     it,
 } from "@jest/globals";
 import { exec } from "child_process";
+import { ClusterTransaction } from "../";
 import {
     ConnectionOptions,
     InfoOptions,
     RedisClusterClient,
 } from "../build-ts";
 import { runBaseTests } from "./SharedTests";
-import { flushallOnPort } from "./TestUtilities";
+import { flushallOnPort, transactionTest } from "./TestUtilities";
 
 type Context = {
     client: RedisClusterClient;
@@ -189,6 +190,21 @@ describe("RedisClusterClient", () => {
             expect(typeof result).toEqual("string");
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
+            client.dispose();
+        },
+        TIMEOUT
+    );
+
+    it(
+        "can send transactions",
+        async () => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const transaction = new ClusterTransaction();
+            const expectedRes = transactionTest(transaction);
+            const result = await client.exec(transaction);
+            expect(result).toEqual(expectedRes);
             client.dispose();
         },
         TIMEOUT

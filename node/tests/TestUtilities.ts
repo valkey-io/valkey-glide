@@ -1,7 +1,8 @@
 import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import { Logger } from "..";
+import { Logger, ReturnType } from "..";
+import { BaseTransaction } from "../build-ts/src/Transaction";
 
 beforeAll(() => {
     Logger.init("info");
@@ -41,4 +42,23 @@ export function getFirstResult(res: string | string[][]): string {
         return res;
     }
     return res[0][1];
+}
+
+export function transactionTest(
+    baseTransaction: BaseTransaction
+): ReturnType[] {
+    const key1 = "{key}" + uuidv4();
+    const key2 = "{key}" + uuidv4();
+    const key3 = "{key}" + uuidv4();
+    const value = uuidv4();
+    baseTransaction.set(key1, "bar");
+    baseTransaction.set(key2, "baz", {
+        conditionalSet: "onlyIfDoesNotExist",
+        returnOldValue: true,
+    });
+    baseTransaction.customCommand("MGET", [key1, key2]);
+    baseTransaction.mset({ [key3]: value });
+    baseTransaction.mget([key1, key2]);
+    baseTransaction.del([key1]);
+    return ["OK", null, ["bar", "baz"], "OK", ["bar", "baz"], 1];
 }

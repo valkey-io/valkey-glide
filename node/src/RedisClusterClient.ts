@@ -9,6 +9,7 @@ import {
     createPing,
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
+import { ClusterTransaction } from "./Transaction";
 
 /// If the command's routing is to one node we will get T as a response type,
 /// otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
@@ -133,6 +134,18 @@ export class RedisClusterClient extends BaseClient {
     ): Promise<ReturnType> {
         const command = createCustomCommand(commandName, args);
         return super.createWritePromise(command, toProtobufRoute(route));
+    }
+
+    /** Execute a transaction by processing the queued commands.
+     *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+     *
+     * @param transaction - A ClusterTransaction object containing a list of commands to be executed.
+     * @returns A list of results corresponding to the execution of each command in the transaction.
+     *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
+     *      the list entry will be null.
+     */
+    public exec(transaction: ClusterTransaction): Promise<ReturnType[]> {
+        return this.createWritePromise(transaction.commands);
     }
 
     /** Ping the Redis server.
