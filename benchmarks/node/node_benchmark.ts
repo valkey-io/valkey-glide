@@ -1,4 +1,4 @@
-import { RedisClient, RedisClusterClient, Logger } from "babushka-rs";
+import { Logger, RedisClient, RedisClusterClient } from "babushka-rs";
 import commandLineArgs from "command-line-args";
 import { writeFileSync } from "fs";
 import percentile from "percentile";
@@ -14,17 +14,17 @@ enum ChosenAction {
 Logger.setLoggerConfig("info", "first.log");
 
 const PORT = 6379;
-function getAddress(host: string, port?: number): string {
-    return `${host}:${port === undefined ? PORT : port}`;
+function getAddress(host: string, port: number): string {
+    return `${host}:${port}`;
 }
 
 function getAddressWithProtocol(
     host: string,
     useTLS: boolean,
-    port?: number
+    port: number
 ): string {
     const protocol = useTLS ? "rediss" : "redis";
-    return `${protocol}://${getAddress(host, port ?? PORT)}`;
+    return `${protocol}://${getAddress(host, port)}`;
 }
 
 const PROB_GET = 0.8;
@@ -218,7 +218,8 @@ async function main(
     host: string,
     clientCount: number,
     useTLS: boolean,
-    clusterModeEnabled: boolean
+    clusterModeEnabled: boolean,
+    port: number
 ) {
     const data = generate_value(data_size);
     if (
@@ -231,7 +232,7 @@ async function main(
             : RedisClient;
         const clients = await createClients(clientCount, () =>
             clientClass.createClient({
-                addresses: [{ host }],
+                addresses: [{ host, port }],
                 useTLS,
             })
         );
@@ -253,13 +254,11 @@ async function main(
     if (clients_to_run == "all") {
         const clients = await createClients(clientCount, async () => {
             const node = {
-                url: getAddressWithProtocol(host, useTLS),
+                url: getAddressWithProtocol(host, useTLS, port),
             };
             const node_redis_client = clusterModeEnabled
                 ? createCluster({
-                      rootNodes: [
-                          { socket: { host, port: PORT, tls: useTLS } },
-                      ],
+                      rootNodes: [{ socket: { host, port, tls: useTLS } }],
                       defaults: {
                           socket: {
                               tls: useTLS,
@@ -296,6 +295,7 @@ const optionDefinitions = [
     { name: "clientCount", type: String, multiple: true },
     { name: "tls", type: Boolean, defaultValue: false },
     { name: "clusterModeEnabled", type: Boolean, defaultValue: false },
+    { name: "port", type: Number, defaultValue: PORT },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -335,7 +335,8 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
                 receivedOptions.host,
                 clientCount,
                 receivedOptions.tls,
-                receivedOptions.clusterModeEnabled
+                receivedOptions.clusterModeEnabled,
+                receivedOptions.port
             );
         }
 
