@@ -21,7 +21,7 @@ You can assemble the Java clients benchmarks by compiling using `./gradlew build
 You can run benchmarks using `./gradlew run`.  You can set arguments using the args flag like: 
 
 ```shell
-./gradle run --args="--clients lettuce"
+./gradlew run --args="--clients lettuce"
 ```
 
 The following arguments are accepted: 

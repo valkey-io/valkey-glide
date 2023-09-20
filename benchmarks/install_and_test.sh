@@ -24,12 +24,14 @@ runAllBenchmarks=1
 runPython=0
 runNode=0
 runCsharp=0
+runJava=0
 runRust=0
 concurrentTasks="1 10 100 1000"
 dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
+port=6379
 tlsFlag="--tls"
 
 function runPythonBenchmark(){
@@ -66,6 +68,14 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release
   dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag
+}
+
+function runJavaBenchmark(){
+  cd ${BENCH_FOLDER}/../java
+  echo "./gradlew run --args=\"--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port\""
+#  ./gradlew run --args="--resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --port $port --clientCount $clientCount $tlsFlag"
+  ./gradlew run --args="--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port"
+  cd ${BENCH_FOLDER}/java
 }
 
 function runRustBenchmark(){
@@ -185,6 +195,21 @@ do
             runAllBenchmarks=0
             runNode=1
             ;;
+        -java)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Babushka"
+            ;;
+        -lettuce)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Lettuce"
+            ;;
+        -lettuce)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Jedis"
+            ;;
         -csharp)
             runAllBenchmarks=0
             runCsharp=1
@@ -242,6 +267,13 @@ do
         runCSharpBenchmark $csharpResults $currentDataSize
     fi
 
+    if [ $runAllBenchmarks == 1 ] || [ $runJava == 1 ];
+    then
+        javaResults=$(resultFileName java $currentDataSize)
+        resultFiles+=$javaResults" "
+        runJavaBenchmark $javaResults $currentDataSize
+    fi
+
     if [ $runAllBenchmarks == 1 ] || [ $runRust == 1 ];
     then
         rustResults=$(resultFileName rust $currentDataSize)
@@ -249,8 +281,6 @@ do
         runRustBenchmark $rustResults $currentDataSize
     fi
 done
-
-
 
 flushDB
 
