@@ -66,7 +66,10 @@ mod client_cme_tests {
                 .client
                 .req_packed_command(
                     &cmd,
-                    Some(RoutingInfo::MultiNode(MultipleNodeRoutingInfo::AllMasters)),
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllMasters,
+                        None,
+                    ))),
                 )
                 .await
                 .unwrap();
@@ -94,7 +97,10 @@ mod client_cme_tests {
                 .client
                 .req_packed_command(
                     &cmd,
-                    Some(RoutingInfo::MultiNode(MultipleNodeRoutingInfo::AllNodes)),
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
                 )
                 .await
                 .unwrap();
