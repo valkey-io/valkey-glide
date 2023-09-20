@@ -183,6 +183,16 @@ export function createConfigResetStat(): redis_request.Command {
     return createCommand(RequestType.ConfigResetStat, []);
 }
 
+export function createMGet(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.MGet, keys);
+}
+
+export function createMSet(
+    keyValueMap: Record<string, string>
+): redis_request.Command {
+    return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
+}
+
 export function createIncr(key: string): redis_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }

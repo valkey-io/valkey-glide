@@ -10,6 +10,8 @@ import {
     createIncrBy,
     createIncrByFloat,
     createInfo,
+    createMGet,
+    createMSet,
     createPing,
     createSelect,
     createSet,
@@ -91,6 +93,27 @@ export class BaseTransaction {
      */
     public ConfigResetStat() {
         this.commands.push(createConfigResetStat());
+    }
+
+    /** Retrieve the values of multiple keys.
+     * See https://redis.io/commands/mget/ for details.
+     *
+     * @param keys - A list of keys to retrieve values for.
+     * Returns A list of values corresponding to the provided keys. If a key is not found,
+     *  its corresponding value in the list will be null.
+     */
+    public mget(keys: string[]) {
+        this.commands.push(createMGet(keys));
+    }
+
+    /** Set multiple keys to multiple values in a single atomic operation.
+     * See https://redis.io/commands/mset/ for details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * Returns always "OK".
+     */
+    public mset(keyValueMap: Record<string, string>) {
+        this.commands.push(createMSet(keyValueMap));
     }
 
     /** Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.

@@ -12,6 +12,8 @@ import {
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createMGet,
+    createMSet,
     createSet,
 } from "./Commands";
 import {
@@ -291,6 +293,27 @@ export class BaseClient {
      */
     public del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
+    }
+
+    /** Retrieve the values of multiple keys.
+     * See https://redis.io/commands/mget/ for details.
+     *
+     * @param keys - A list of keys to retrieve values for.
+     * @returns A list of values corresponding to the provided keys. If a key is not found,
+     *  its corresponding value in the list will be null.
+     */
+    public mget(keys: string[]): Promise<(string | null)[]> {
+        return this.createWritePromise(createMGet(keys));
+    }
+
+    /** Set multiple keys to multiple values in a single operation.
+     * See https://redis.io/commands/mset/ for details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @returns always "OK".
+     */
+    public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
+        return this.createWritePromise(createMSet(keyValueMap));
     }
 
     /** Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.

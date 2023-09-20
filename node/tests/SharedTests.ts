@@ -16,6 +16,8 @@ type BaseClient = {
     configRewrite: () => Promise<"OK">;
     info(options?: InfoOptions[]): Promise<string | string[][]>;
     configResetStat: () => Promise<"OK">;
+    mset: (keyValueMap: Record<string, string>) => Promise<"OK">;
+    mget: (keys: string[]) => Promise<(string | null)[]>;
     incr: (key: string) => Promise<number>;
     incrBy: (key: string, amount: number) => Promise<number>;
     incrByFloat: (key: string, amount: number) => Promise<string>;
@@ -253,6 +255,29 @@ export function runBaseTests<Context>(config: {
                         "total_commands_processed"
                     ]
                 ).toEqual("1");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "testing mset and mget with multiple existing keys and one non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+                const nonExistingKey = uuidv4();
+                const value = uuidv4();
+                const keyValueList = {
+                    [key1]: value,
+                    [key2]: value,
+                    [key3]: value,
+                };
+                expect(await client.mset(keyValueList)).toEqual("OK");
+                expect(
+                    await client.mget([key1, key2, nonExistingKey, key3])
+                ).toEqual([value, value, null, value]);
             });
         },
         config.timeout
