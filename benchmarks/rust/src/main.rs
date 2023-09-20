@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(name = "clusterModeEnabled", short, long, default_value_t = false)]
     cluster_mode_enabled: bool,
+
+    #[arg(name = "port", short, long, default_value_t = PORT)]
+    port: u32,
 }
 
 // Connection constants - these should be adjusted to fit your connection.
@@ -56,6 +59,8 @@ enum ChosenAction {
 }
 
 fn main() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
     let args = Args::parse();
 
     // We can test using single or multi threading, by changing the runtime.
@@ -201,9 +206,9 @@ async fn get_connection(args: &Args) -> Client {
     .into();
     let mut address_info: AddressInfo = AddressInfo::new();
     address_info.host = args.host.clone().into();
-    address_info.port = PORT;
+    address_info.port = args.port;
     connection_request.addresses.push(address_info);
-    connection_request.response_timeout = 1000;
+    connection_request.response_timeout = 2000;
     connection_request.cluster_mode_enabled = args.cluster_mode_enabled;
 
     babushka::client::Client::new(connection_request)

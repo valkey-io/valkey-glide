@@ -4,19 +4,19 @@ import { createClient, createCluster } from "redis";
 const SIZE_SET_KEYSPACE = 3000000; // 3 million
 
 const PORT = 6379;
-function getAddress(host, tls) {
+function getAddress(host, tls, port) {
     const protocol = tls ? "rediss" : "redis";
-    return `${protocol}://${host}:${PORT}`;
+    return `${protocol}://${host}:${port ?? PORT}`;
 }
 
 function generate_value(size) {
     return "0".repeat(size);
 }
 
-function createRedisClient(host, isCluster, tls) {
+function createRedisClient(host, isCluster, tls, port) {
     return isCluster
         ? createCluster({
-              rootNodes: [{ socket: { host, port: PORT, tls } }],
+              rootNodes: [{ socket: { host, port: port ?? PORT, tls } }],
               defaults: {
                   socket: {
                       tls,
@@ -25,12 +25,12 @@ function createRedisClient(host, isCluster, tls) {
               useReplicas: true,
           })
         : createClient({
-              url: getAddress(host, tls),
+              url: getAddress(host, tls, port),
           });
 }
 
-async function fill_database(data_size, host, isCluster, tls) {
-    const client = await createRedisClient(host, isCluster, tls);
+async function fill_database(data_size, host, isCluster, tls, port) {
+    const client = await createRedisClient(host, isCluster, tls, port);
     const data = generate_value(data_size);
     await client.connect();
 
@@ -51,6 +51,7 @@ const optionDefinitions = [
     { name: "host", type: String },
     { name: "tls", type: Boolean },
     { name: "clusterModeEnabled", type: Boolean },
+    { name: "port", type: Number },
 ];
 const receivedOptions = commandLineArgs(optionDefinitions);
 
@@ -63,7 +64,8 @@ Promise.resolve()
             receivedOptions.dataSize,
             receivedOptions.host,
             receivedOptions.clusterModeEnabled,
-            receivedOptions.tls
+            receivedOptions.tls,
+            receivedOptions.port
         );
     })
     .then(() => {
