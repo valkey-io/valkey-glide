@@ -18,18 +18,18 @@ namespace babushka
             }
         }
 
-        public Task SetAsync(string key, string value)
+        public async Task SetAsync(string key, string value)
         {
-            var (message, task) = messageContainer.GetMessageForCall(key, value);
+            var message = messageContainer.GetMessageForCall(key, value);
             SetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr, message.ValuePtr);
-            return task;
+            await message;
         }
 
-        public Task<string?> GetAsync(string key)
+        public async Task<string?> GetAsync(string key)
         {
-            var (message, task) = messageContainer.GetMessageForCall(key, null);
+            var message = messageContainer.GetMessageForCall(key, null);
             GetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr);
-            return task;
+            return await message;
         }
 
         public void Dispose()
@@ -87,7 +87,7 @@ namespace babushka
         /// Raw pointer to the underlying native connection.
         private IntPtr connectionPointer;
 
-        private readonly MessageContainer messageContainer = new();
+        private readonly MessageContainer<string> messageContainer = new();
 
         #endregion private fields
 

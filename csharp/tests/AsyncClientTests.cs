@@ -92,12 +92,12 @@ public class AsyncClientTests
         {
             var operations = new List<Task>();
 
-            for (int i = 0; i < 100; ++i)
+            for (int i = 0; i < 1000; ++i)
             {
                 var index = i;
                 operations.Add(Task.Run(async () =>
                 {
-                    for (int i = 0; i < 100; ++i)
+                    for (int i = 0; i < 1000; ++i)
                     {
                         if ((i + index) % 2 == 0)
                         {
