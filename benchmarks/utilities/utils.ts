@@ -13,7 +13,7 @@ export const PROB_GET = 0.8;
 export const PROB_GET_EXISTING_KEY = 0.8;
 export const SIZE_GET_KEYSPACE = 3750000; // 3.75 million
 
-export function getAddress(host: string, tls: boolean, port?: number) {
+export function getAddress(host: string, tls: boolean, port?: number): string {
     const protocol = tls ? "rediss" : "redis";
     return `${protocol}://${host}:${port ? port : PORT}`;
 }
@@ -21,11 +21,12 @@ export function getAddress(host: string, tls: boolean, port?: number) {
 export function createRedisClient(
     host: string,
     isCluster: boolean,
-    tls: boolean
+    tls: boolean,
+    port: number
 ): RedisClusterType | RedisClientType {
     return isCluster
         ? createCluster({
-              rootNodes: [{ socket: { host, port: PORT, tls } }],
+              rootNodes: [{ socket: { host, port: port ?? PORT, tls } }],
               defaults: {
                   socket: {
                       tls,
@@ -34,7 +35,7 @@ export function createRedisClient(
               useReplicas: true,
           })
         : createClient({
-              url: getAddress(host, tls),
+              url: getAddress(host, tls, port),
           });
 }
 
@@ -47,16 +48,20 @@ const optionDefinitions = [
     { name: "clientCount", type: String, multiple: true },
     { name: "tls", type: Boolean, defaultValue: false },
     { name: "clusterModeEnabled", type: Boolean, defaultValue: false },
+    { name: "port", type: Number },
 ];
+
 export const receivedOptions = commandLineArgs(optionDefinitions);
 
-export function generate_value(size: number) {
+export function generate_value(size: number): string {
     return "0".repeat(size);
 }
-export function generate_key_set() {
+
+export function generate_key_set(): string {
     return (Math.floor(Math.random() * SIZE_SET_KEYSPACE) + 1).toString();
 }
-export function generate_key_get() {
+
+export function generate_key_get(): string {
     const range = SIZE_GET_KEYSPACE - SIZE_SET_KEYSPACE;
     return Math.floor(Math.random() * range + SIZE_SET_KEYSPACE + 1).toString();
 }

@@ -9,9 +9,10 @@ async function fill_database(
     data_size: number,
     host: string,
     isCluster: boolean,
-    tls: boolean
+    tls: boolean,
+    port: number
 ) {
-    const client = await createRedisClient(host, isCluster, tls);
+    const client = await createRedisClient(host, isCluster, tls, port);
     const data = generate_value(data_size);
     await client.connect();
 
@@ -38,7 +39,8 @@ Promise.resolve()
             receivedOptions.dataSize,
             receivedOptions.host,
             receivedOptions.clusterModeEnabled,
-            receivedOptions.tls
+            receivedOptions.tls,
+            receivedOptions.port
         );
     })
     .then(() => {
