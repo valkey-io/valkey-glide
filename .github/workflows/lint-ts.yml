@@ -5,10 +5,12 @@ on:
         paths:
             - benchmarks/node/**
             - node/**
+            - benchmarks/utilities/*
     pull_request:
         paths:
             - benchmarks/node/**
             - node/**
+            - benchmarks/utilities/*
 
 env:
     CARGO_TERM_COLOR: always
