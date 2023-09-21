@@ -3,6 +3,7 @@ mod utilities;
 #[cfg(test)]
 mod client_cme_tests {
     use super::*;
+    use babushka::connection_request::ReadFromReplicaStrategy;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
@@ -143,11 +144,12 @@ mod client_cme_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_send_routing_by_slot_to_replica() {
+    fn test_send_routing_by_slot_to_replica_if_read_from_replica_configuration_allows() {
         block_on_all(async {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
+                read_from_replica_strategy: Some(ReadFromReplicaStrategy::RoundRobin),
                 ..Default::default()
             })
             .await;
@@ -159,7 +161,44 @@ mod client_cme_tests {
                 .req_packed_command(
                     &cmd,
                     Some(RoutingInfo::SingleNode(
-                        SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Replica)),
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(
+                            0,
+                            SlotAddr::ReplicaOptional,
+                        )),
+                    )),
+                )
+                .await
+                .unwrap();
+            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
+            let (primaries, replicas) = count_primaries_and_replicas(info);
+            assert_eq!(primaries, 0);
+            assert_eq!(replicas, 1);
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_routing_by_slot_to_replica_override_read_from_replica_configuration() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                read_from_replica_strategy: Some(ReadFromReplicaStrategy::AlwaysFromPrimary),
+                ..Default::default()
+            })
+            .await;
+
+            let mut cmd = redis::cmd("INFO");
+            cmd.arg("REPLICATION");
+            let info = test_basics
+                .client
+                .req_packed_command(
+                    &cmd,
+                    Some(RoutingInfo::SingleNode(
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(
+                            0,
+                            SlotAddr::ReplicaRequired,
+                        )),
                     )),
                 )
                 .await
