@@ -18,12 +18,27 @@ import { ClusterTransaction } from "./Transaction";
 type ClusterResponse<T> = T | [string, T][];
 
 export type SlotIdTypes = {
+    /**
+     * `replicaSlotId` overrides the `readFromReplicaStrategy` configuration. If it's used the request
+     * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
+     */
     type: "primarySlotId" | "replicaSlotId";
+    /**
+     * Slot number. There are 16384 slots in a redis cluster, and each shard manages a slot range.
+     * Unless the slot is known, it's better to route using `SlotKeyTypes`
+     */
     id: number;
 };
 
 export type SlotKeyTypes = {
+    /**
+     * `replicaSlotKey` overrides the `readFromReplicaStrategy` configuration. If it's used the request
+     * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
+     */
     type: "primarySlotKey" | "replicaSlotKey";
+    /**
+     * The request will be sent to nodes managing this key.
+     */
     key: string;
 };
 
