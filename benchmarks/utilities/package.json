@@ -3,7 +3,6 @@
     "version": "1.0.0",
     "description": "",
     "main": "fill_db.js",
-    "type": "module",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "fill": "node fill_db.js",
@@ -13,6 +12,9 @@
     "license": "ISC",
     "dependencies": {
         "command-line-args": "^5.2.1",
-        "redis": "^4.6.2"
+        "redis": "^4.6.8"
+    },
+    "devDependencies": {
+        "@types/command-line-args": "^5.2.1"
     }
 }
