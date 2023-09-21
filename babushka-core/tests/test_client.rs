@@ -18,8 +18,8 @@ mod shared_client_tests {
         client: Client,
     }
 
-    async fn setup_test_basics(use_cme: bool, configuration: TestConfiguration) -> TestBasics {
-        if use_cme {
+    async fn setup_test_basics(use_cluster: bool, configuration: TestConfiguration) -> TestBasics {
+        if use_cluster {
             let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
             TestBasics {
                 server: BackingServer::Cluster(cluster_basics.cluster),
@@ -57,11 +57,11 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_set_and_get(
         #[values(false, true)] use_tls: bool,
-        #[values(false, true)] use_cme: bool,
+        #[values(false, true)] use_cluster: bool,
     ) {
         block_on_all(async {
             let test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     use_tls,
                     shared_server: true,
@@ -78,11 +78,11 @@ mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_client_handle_concurrent_workload(
         #[values(false, true)] use_tls: bool,
-        #[values(false, true)] use_cme: bool,
+        #[values(false, true)] use_cluster: bool,
     ) {
         block_on_all(async {
             let test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     use_tls,
                     shared_server: true,
@@ -105,10 +105,10 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_report_closing_when_server_closes(#[values(false, true)] use_cme: bool) {
+    fn test_report_closing_when_server_closes(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     response_timeout: Some(10000000),
                     ..Default::default()
@@ -127,10 +127,10 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_authenticate_with_password(#[values(false, true)] use_cme: bool) {
+    fn test_authenticate_with_password(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     use_tls: true,
                     connection_info: Some(redis::RedisConnectionInfo {
@@ -148,10 +148,10 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_authenticate_with_password_and_username(#[values(false, true)] use_cme: bool) {
+    fn test_authenticate_with_password_and_username(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     use_tls: true,
                     connection_info: Some(redis::RedisConnectionInfo {
@@ -170,10 +170,10 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_response_timeout(#[values(false, true)] use_cme: bool) {
+    fn test_response_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
-                use_cme,
+                use_cluster,
                 TestConfiguration {
                     response_timeout: Some(1),
                     shared_server: true,
@@ -193,7 +193,7 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_connection_timeout(#[values(false, true)] use_cme: bool) {
+    fn test_connection_timeout(#[values(false, true)] use_cluster: bool) {
         let use_tls = true;
         async fn expect_timeout_on_client_creation(
             addresses: &[redis::ConnectionAddr],
@@ -215,7 +215,7 @@ mod shared_client_tests {
         }
 
         block_on_all(async {
-            if use_cme {
+            if use_cluster {
                 let cluster = RedisCluster::new(use_tls, &None, Some(3), Some(0));
                 expect_timeout_on_client_creation(
                     &cluster.get_server_addresses(),
