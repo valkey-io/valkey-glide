@@ -6,6 +6,7 @@ from typing import Dict, List, Union
 
 import pytest
 from packaging import version
+from pybushka.async_commands.cluster_commands import is_single_response
 from pybushka.async_commands.core import (
     ConditionalSet,
     ExpirySet,
@@ -27,7 +28,7 @@ from pybushka.routes import (
 from tests.conftest import create_client
 
 
-def get_first_result(res: str | List[str] | List[List[str]]) -> str:
+def get_first_result(res: str | List[str] | List[List[str]] | Dict[str, str]) -> str:
     while isinstance(res, list):
         res = (
             res[1]
@@ -35,10 +36,13 @@ def get_first_result(res: str | List[str] | List[List[str]]) -> str:
             else res[0]
         )
 
+    if isinstance(res, dict):
+        res = list(res.values())[0]
+
     return res
 
 
-def parse_info_response(res: str | List[str] | List[List[str]]) -> Dict[str, str]:
+def parse_info_response(res: str | Dict[str, str]) -> Dict[str, str]:
     res = get_first_result(res)
     info_lines = [
         line for line in res.splitlines() if line and not line.startswith("#")
@@ -59,8 +63,7 @@ def get_random_string(length):
 
 async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> bool:
     # TODO: change it to pytest fixture after we'll implement a sync client
-    info_str = await client.custom_command(["INFO", "server"])
-    assert type(info_str) == str or type(info_str) == list
+    info_str = await client.info([InfoSection.SERVER])
     redis_version = parse_info_response(info_str).get("redis_version")
     assert redis_version is not None
     return version.parse(redis_version) < version.parse(min_version)
@@ -228,13 +231,8 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_single_arg(self, redis_client: TRedisClient):
         # Test single arg command
-        res = await redis_client.custom_command(["INFO"])
-        assert type(res) == str or type(res) == list
-        info_dict = parse_info_response(res)
-        assert info_dict.get("redis_version") is not None
-        connected_client = info_dict.get("connected_clients")
-        assert type(connected_client) == str
-        assert connected_client.isdigit() and int(connected_client) >= 1
+        res = await redis_client.custom_command(["PING"])
+        assert res == "PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_custom_command_multi_arg(self, redis_client: TRedisClient):
@@ -351,7 +349,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_client_id(self, redis_client: TRedisClient):
-        assert await redis_client.client_id() > 0
+        client_id = await redis_client.client_id()
+        assert type(client_id) is int
+        assert client_id > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_incr_commands_existing_key(self, redis_client: TRedisClient):
@@ -426,6 +426,7 @@ class TestCommands:
         assert await redis_client.config_set({"timeout": "1000"}) == OK
         assert await redis_client.config_get(["timeout"]) == ["timeout", "1000"]
         # revert changes to previous timeout
+        assert isinstance(previous_timeout, list)
         assert type(previous_timeout[-1]) == str
         assert await redis_client.config_set({"timeout": previous_timeout[-1]}) == OK
 
@@ -466,7 +467,7 @@ class TestCommands:
         assert "value is not an integer" in str(e)
 
 
-class CommandsUnitTests:
+class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
         exp_sec = ExpirySet(ExpiryType.SEC, 5)
         assert exp_sec.get_cmd_args() == ["EX", "5"]
@@ -502,6 +503,14 @@ class CommandsUnitTests:
     def test_expiry_raises_on_value_error(self):
         with pytest.raises(ValueError):
             ExpirySet(ExpiryType.SEC, 5.5)
+
+    def test_is_single_response(self):
+        assert is_single_response("This is a string value", "")
+        assert is_single_response(["value", "value"], [""])
+        assert not is_single_response(
+            [["value", ["value"]], ["value", ["valued"]]], [""]
+        )
+        assert is_single_response(None, None)
 
 
 @pytest.mark.asyncio
