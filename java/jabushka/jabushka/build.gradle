@@ -1,0 +1,46 @@
+import java.nio.file.Paths
+
+plugins {
+    id 'java-library'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.24.3'
+}
+
+tasks.register('protobuf', Exec) {
+    doFirst {
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/org/babushka/jabushka/generated').toString())
+    }
+    commandLine 'protoc',
+        '-Iprotobuf=babushka-core/src/protobuf/',
+        '--java_out=java/jabushka/jabushka/src/main/java/org/babushka/jabushka/generated',
+        'babushka-core/src/protobuf/connection_request.proto',
+        'babushka-core/src/protobuf/redis_request.proto',
+        'babushka-core/src/protobuf/response.proto'
+    workingDir Paths.get(project.rootDir.path, '../..').toFile()
+}
+
+tasks.register('buildRust', Exec) {
+    commandLine 'cargo', 'build'
+    workingDir project.rootDir
+}
+
+tasks.register('buildWithRust') {
+    dependsOn 'buildRust'
+    finalizedBy 'build'
+}
+
+tasks.register('buildWithProto') {
+    dependsOn 'protobuf'
+    finalizedBy 'build'
+}
+
+tasks.register('buildAll') {
+    dependsOn 'protobuf', 'buildRust'
+    finalizedBy 'build'
+}
