@@ -38,7 +38,7 @@ struct Args {
     #[arg(name = "clusterModeEnabled", long, default_value_t = false)]
     cluster_mode_enabled: bool,
 
-    #[arg(name = "port", short, long, default_value_t = PORT)]
+    #[arg(name = "port", long, default_value_t = PORT)]
     port: u32,
 }
 
