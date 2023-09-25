@@ -8,6 +8,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import javabushka.client.AsyncClient;
+import javabushka.client.BenchmarkingApp;
+import javabushka.client.Client;
+import javabushka.client.SyncClient;
 
 public class Benchmarking {
   static final double PROB_GET = 0.8;
@@ -64,7 +68,13 @@ public class Benchmarking {
 
   // Assumption: latencies is sorted in ascending order
   private static Long percentile(ArrayList<Long> latencies, int percentile) {
-    return latencies.get((int) Math.ceil((percentile / 100.0) * latencies.size()));
+    int N = latencies.size();
+    double n = (N - 1) * percentile / 100. + 1;
+    if (n == 1d) return latencies.get(0);
+    else if (n == N) return latencies.get(N - 1);
+    int k = (int) n;
+    double d = n - k;
+    return Math.round(latencies.get(k - 1) + d * (latencies.get(k) - latencies.get(k - 1)));
   }
 
   private static double stdDeviation(ArrayList<Long> latencies, Double avgLatency) {
@@ -137,5 +147,43 @@ public class Benchmarking {
       System.out.println(action + " p99 latency in ms: " + results.p99Latency / 1000000.0);
       System.out.println(action + " std dev in ms: " + results.stdDeviation / 1000000.0);
     }
+  }
+
+  public static Map<ChosenAction, LatencyResults> measurePerformance(
+      Client client, BenchmarkingApp.RunConfiguration config, boolean async) {
+    client.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
+
+    int iterations = 10000;
+    String value = "my-value";
+
+    if (config.resultsFile.isPresent()) {
+      try {
+        config.resultsFile.get().write(client.getName() + " client Benchmarking: ");
+      } catch (Exception ignored) {
+      }
+    } else {
+      System.out.printf("%s client Benchmarking: %n", client.getName());
+    }
+
+    Map<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
+    actions.put(
+        ChosenAction.GET_EXISTING,
+        async
+            ? () -> ((AsyncClient) client).asyncGet(Benchmarking.generateKeySet())
+            : () -> ((SyncClient) client).get(Benchmarking.generateKeySet()));
+    actions.put(
+        ChosenAction.GET_NON_EXISTING,
+        async
+            ? () -> ((AsyncClient) client).asyncGet(Benchmarking.generateKeyGet())
+            : () -> ((SyncClient) client).get(Benchmarking.generateKeyGet()));
+    actions.put(
+        ChosenAction.SET,
+        async
+            ? () -> ((AsyncClient) client).asyncSet(Benchmarking.generateKeySet(), value)
+            : () -> ((SyncClient) client).set(Benchmarking.generateKeySet(), value));
+
+    var results = Benchmarking.calculateResults(Benchmarking.getLatencies(iterations, actions));
+    client.closeConnection();
+    return results;
   }
 }

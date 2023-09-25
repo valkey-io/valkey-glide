@@ -3,27 +3,46 @@
  */
 package javabushka.client.jedis;
 
+import javabushka.client.SyncClient;
+import javabushka.client.utils.ConnectionSettings;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
-public class JedisClient {
+public class JedisClient implements SyncClient {
 
   public static final String DEFAULT_HOST = "localhost";
   public static final int DEFAULT_PORT = 6379;
 
-  Jedis jedisResource;
+  protected Jedis jedisResource;
 
   public boolean someLibraryMethod() {
     return true;
   }
 
-  public void connectToRedis(String host, int port) {
-    JedisPool pool = new JedisPool(host, port);
+  @Override
+  public void connectToRedis() {
+    JedisPool pool = new JedisPool(DEFAULT_HOST, DEFAULT_PORT);
     jedisResource = pool.getResource();
   }
 
-  public void connectToRedis() {
-    connectToRedis(DEFAULT_HOST, DEFAULT_PORT);
+  @Override
+  public void closeConnection() {
+    try {
+      jedisResource.close();
+    } catch (Exception ignored) {
+    }
+  }
+
+  @Override
+  public String getName() {
+    return "Jedis";
+  }
+
+  @Override
+  public void connectToRedis(ConnectionSettings connectionSettings) {
+    jedisResource =
+        new Jedis(connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
+    jedisResource.connect();
   }
 
   public String info() {
@@ -34,10 +53,12 @@ public class JedisClient {
     return jedisResource.info(section);
   }
 
+  @Override
   public void set(String key, String value) {
     jedisResource.set(key, value);
   }
 
+  @Override
   public String get(String key) {
     return jedisResource.get(key);
   }

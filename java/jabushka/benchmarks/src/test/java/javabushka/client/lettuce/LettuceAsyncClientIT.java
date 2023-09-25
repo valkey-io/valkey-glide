@@ -40,8 +40,8 @@ public class LettuceAsyncClientIT {
     String otherKey = "key2";
     String otherValue = "my-value-2";
 
-    RedisFuture setResult = lettuceClient.set(key, value);
-    RedisFuture otherSetResult = otherLettuceClient.set(otherKey, otherValue);
+    RedisFuture setResult = lettuceClient.asyncSet(key, value);
+    RedisFuture otherSetResult = otherLettuceClient.asyncSet(otherKey, otherValue);
 
     // and wait for both clients
     try {
@@ -55,8 +55,8 @@ public class LettuceAsyncClientIT {
       fail("Can SET other redis result without Exception");
     }
 
-    RedisFuture getResult = lettuceClient.get(key);
-    RedisFuture otherGetResult = otherLettuceClient.get(otherKey);
+    RedisFuture getResult = lettuceClient.asyncGet(key);
+    RedisFuture otherGetResult = otherLettuceClient.asyncGet(otherKey);
     String result = "invalid";
     String otherResult = "invalid";
     try {

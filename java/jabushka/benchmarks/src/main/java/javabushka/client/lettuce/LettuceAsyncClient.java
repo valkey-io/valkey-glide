@@ -7,46 +7,67 @@ import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import javabushka.client.AsyncClient;
+import javabushka.client.utils.ConnectionSettings;
 
-public class LettuceAsyncClient {
+public class LettuceAsyncClient implements AsyncClient {
 
   RedisClient client;
-  RedisAsyncCommands lettuceSync;
+  RedisAsyncCommands asyncCommands;
   StatefulRedisConnection<String, String> connection;
 
-  public final long MAX_TIMEOUT_MS = 1000;
-
+  @Override
   public void connectToRedis() {
-    client = RedisClient.create("redis://localhost:6379");
+    connectToRedis(new ConnectionSettings("localhost", 6379, false));
+  }
+
+  @Override
+  public void connectToRedis(ConnectionSettings connectionSettings) {
+    client =
+        RedisClient.create(
+            String.format(
+                "%s://%s:%d",
+                connectionSettings.useSsl ? "rediss" : "redis",
+                connectionSettings.host,
+                connectionSettings.port));
     connection = client.connect();
-    lettuceSync = connection.async();
+    asyncCommands = connection.async();
   }
 
-  public RedisFuture set(String key, String value) {
-    RedisFuture<String> future = lettuceSync.set(key, value);
-    return future;
+  @Override
+  public RedisFuture<?> asyncSet(String key, String value) {
+    return asyncCommands.set(key, value);
   }
 
-  public RedisFuture get(String key) {
-    RedisFuture future = lettuceSync.get(key);
-    return future;
+  @Override
+  public RedisFuture<String> asyncGet(String key) {
+    return asyncCommands.get(key);
   }
 
-  public Object waitForResult(RedisFuture future)
-      throws ExecutionException, InterruptedException, TimeoutException {
-    return this.waitForResult(future, MAX_TIMEOUT_MS);
+  @Override
+  public Object waitForResult(Future future) {
+    return waitForResult(future, DEFAULT_TIMEOUT);
   }
 
-  public Object waitForResult(RedisFuture future, long timeoutMS)
-      throws ExecutionException, InterruptedException, TimeoutException {
-    return future.get(timeoutMS, TimeUnit.MILLISECONDS);
+  @Override
+  public Object waitForResult(Future future, long timeoutMS) {
+    try {
+      return future.get(timeoutMS, TimeUnit.MILLISECONDS);
+    } catch (Exception ignored) {
+      return null;
+    }
   }
 
+  @Override
   public void closeConnection() {
     connection.close();
     client.shutdown();
+  }
+
+  @Override
+  public String getName() {
+    return "Lettuce Async";
   }
 }

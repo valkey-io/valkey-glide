@@ -6,29 +6,51 @@ package javabushka.client.lettuce;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisStringCommands;
+import javabushka.client.SyncClient;
+import javabushka.client.utils.ConnectionSettings;
 
-public class LettuceClient {
+public class LettuceClient implements SyncClient {
 
   RedisClient client;
-  RedisStringCommands lettuceSync;
+  RedisStringCommands syncCommands;
   StatefulRedisConnection<String, String> connection;
 
+  @Override
   public void connectToRedis() {
-    client = RedisClient.create("redis://localhost:6379");
+    connectToRedis(new ConnectionSettings("localhost", 6379, false));
+  }
+
+  @Override
+  public void connectToRedis(ConnectionSettings connectionSettings) {
+    client =
+        RedisClient.create(
+            String.format(
+                "%s://%s:%d",
+                connectionSettings.useSsl ? "rediss" : "redis",
+                connectionSettings.host,
+                connectionSettings.port));
     connection = client.connect();
-    lettuceSync = connection.sync();
+    syncCommands = connection.sync();
   }
 
+  @Override
   public void set(String key, String value) {
-    lettuceSync.set(key, value);
+    syncCommands.set(key, value);
   }
 
+  @Override
   public String get(String key) {
-    return (String) lettuceSync.get(key);
+    return (String) syncCommands.get(key);
   }
 
+  @Override
   public void closeConnection() {
     connection.close();
     client.shutdown();
+  }
+
+  @Override
+  public String getName() {
+    return "Lettuce";
   }
 }

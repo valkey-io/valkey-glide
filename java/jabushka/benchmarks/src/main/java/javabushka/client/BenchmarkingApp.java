@@ -3,15 +3,14 @@ package javabushka.client;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import javabushka.client.jedis.JedisClient;
+import javabushka.client.jedis.JedisPseudoAsyncClient;
 import javabushka.client.lettuce.LettuceAsyncClient;
+import javabushka.client.lettuce.LettuceClient;
 import javabushka.client.utils.Benchmarking;
-import javabushka.client.utils.ChosenAction;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -37,26 +36,41 @@ public class BenchmarkingApp {
       System.err.println("Parsing failed.  Reason: " + exp.getMessage());
     }
 
-    try {
-      switch (runConfiguration.clients) {
+    for (ClientName client : runConfiguration.clients) {
+      switch (client) {
         case ALL:
-          testJedisClientResourceSetGet(runConfiguration);
-          testLettuceClientResourceSetGet(runConfiguration);
+          testClientSetGet(new JedisClient(), runConfiguration);
+          testClientSetGet(new LettuceClient(), runConfiguration);
+          testAsyncClientSetGet(new JedisPseudoAsyncClient(), runConfiguration);
+          testAsyncClientSetGet(new LettuceAsyncClient(), runConfiguration);
+          System.out.println("Babushka not yet configured");
+          break;
+        case ALL_ASYNC:
+          testAsyncClientSetGet(new JedisPseudoAsyncClient(), runConfiguration);
+          testAsyncClientSetGet(new LettuceAsyncClient(), runConfiguration);
+          System.out.println("Babushka not yet configured");
+          break;
+        case ALL_SYNC:
+          testClientSetGet(new JedisClient(), runConfiguration);
+          testClientSetGet(new LettuceClient(), runConfiguration);
           System.out.println("Babushka not yet configured");
           break;
         case JEDIS:
-          testJedisClientResourceSetGet(runConfiguration);
+          testClientSetGet(new JedisClient(), runConfiguration);
+          break;
+        case JEDIS_ASYNC:
+          testAsyncClientSetGet(new JedisPseudoAsyncClient(), runConfiguration);
           break;
         case LETTUCE:
-          testLettuceClientResourceSetGet(runConfiguration);
+          testClientSetGet(new LettuceClient(), runConfiguration);
+          break;
+        case LETTUCE_ASYNC:
+          testAsyncClientSetGet(new LettuceAsyncClient(), runConfiguration);
           break;
         case BABUSHKA:
           System.out.println("Babushka not yet configured");
           break;
       }
-    } catch (IOException ioException) {
-      System.out.println("Error writing to results file");
-      ioException.printStackTrace();
     }
 
     if (runConfiguration.resultsFile.isPresent()) {
@@ -123,18 +137,11 @@ public class BenchmarkingApp {
     }
 
     if (line.hasOption("clients")) {
-      String clients = line.getOptionValue("clients");
-      if (ClientName.ALL.isEqual(clients)) {
-        runConfiguration.clients = ClientName.ALL;
-      } else if (ClientName.JEDIS.isEqual(clients)) {
-        runConfiguration.clients = ClientName.JEDIS;
-      } else if (ClientName.LETTUCE.isEqual(clients)) {
-        runConfiguration.clients = ClientName.LETTUCE;
-      } else if (ClientName.BABUSHKA.isEqual(clients)) {
-        runConfiguration.clients = ClientName.BABUSHKA;
-      } else {
-        throw new ParseException("Invalid clients option: all|jedis|lettuce|babushka");
-      }
+      String[] clients = line.getOptionValue("clients").split(",");
+      runConfiguration.clients =
+          Arrays.stream(clients)
+              .map(c -> Enum.valueOf(ClientName.class, c.toUpperCase()))
+              .toArray(ClientName[]::new);
     }
 
     if (line.hasOption("host")) {
@@ -152,66 +159,27 @@ public class BenchmarkingApp {
     return runConfiguration;
   }
 
-  private static void testJedisClientResourceSetGet(RunConfiguration runConfiguration)
-      throws IOException {
-    JedisClient jedisClient = new JedisClient();
-    jedisClient.connectToRedis(runConfiguration.host, runConfiguration.port);
-
-    int iterations = 100000;
-    String value = "my-value";
-
-    if (runConfiguration.resultsFile.isPresent()) {
-      runConfiguration.resultsFile.get().write("JEDIS client Benchmarking: ");
-    } else {
-      System.out.println("JEDIS client Benchmarking: ");
-    }
-
-    Map<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
-    actions.put(ChosenAction.GET_EXISTING, () -> jedisClient.get(Benchmarking.generateKeySet()));
-    actions.put(
-        ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
-    actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));
-
-    Benchmarking.printResults(
-        Benchmarking.calculateResults(Benchmarking.getLatencies(iterations, actions)),
-        runConfiguration.resultsFile);
+  private static void testClientSetGet(Client client, RunConfiguration runConfiguration) {
+    System.out.printf("%n =====> %s <===== %n%n", client.getName());
+    Benchmarking.printResults(Benchmarking.measurePerformance(client, runConfiguration, false));
+    System.out.println();
   }
 
-  private static LettuceAsyncClient initializeLettuceClient() {
-    LettuceAsyncClient lettuceClient = new LettuceAsyncClient();
-    lettuceClient.connectToRedis();
-    return lettuceClient;
-  }
-
-  private static void testLettuceClientResourceSetGet(RunConfiguration runConfiguration)
-      throws IOException {
-    LettuceAsyncClient lettuceClient = initializeLettuceClient();
-
-    int iterations = 100000;
-    String value = "my-value";
-
-    if (runConfiguration.resultsFile.isPresent()) {
-      runConfiguration.resultsFile.get().write("LETTUCE client Benchmarking: ");
-    } else {
-      System.out.println("LETTUCE client Benchmarking: ");
-    }
-
-    HashMap<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
-    actions.put(ChosenAction.GET_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeySet()));
-    actions.put(
-        ChosenAction.GET_NON_EXISTING, () -> lettuceClient.get(Benchmarking.generateKeyGet()));
-    actions.put(ChosenAction.SET, () -> lettuceClient.set(Benchmarking.generateKeySet(), value));
-
-    Benchmarking.printResults(
-        Benchmarking.calculateResults(Benchmarking.getLatencies(iterations, actions)),
-        runConfiguration.resultsFile);
+  private static void testAsyncClientSetGet(AsyncClient client, RunConfiguration runConfiguration) {
+    System.out.printf("%n =====> %s <===== %n%n", client.getName());
+    Benchmarking.printResults(Benchmarking.measurePerformance(client, runConfiguration, true));
+    System.out.println();
   }
 
   public enum ClientName {
     JEDIS("Jedis"),
+    JEDIS_ASYNC("Jedis async"),
     LETTUCE("Lettuce"),
+    LETTUCE_ASYNC("Lettuce async"),
     BABUSHKA("Babushka"),
-    ALL("All");
+    ALL("All"),
+    ALL_SYNC("All sync"),
+    ALL_ASYNC("All async");
 
     private String name;
 
@@ -233,7 +201,7 @@ public class BenchmarkingApp {
     public String configuration;
     public Optional<FileWriter> resultsFile;
     public List<Integer> concurrentTasks;
-    public ClientName clients;
+    public ClientName[] clients;
     public String host;
     public int port;
     public int clientCount;
@@ -243,11 +211,11 @@ public class BenchmarkingApp {
       configuration = "Release";
       resultsFile = Optional.empty();
       concurrentTasks = List.of(1, 10, 100);
-      clients = ClientName.ALL;
+      clients = new ClientName[] {ClientName.ALL};
       host = "localhost";
       port = 6379;
       clientCount = 1;
-      tls = true;
+      tls = false;
     }
   }
 }
