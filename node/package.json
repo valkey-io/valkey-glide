@@ -10,12 +10,12 @@
         "protobufjs": "^7.2.2"
     },
     "scripts": {
-        "build": "npm run build:debug",
+        "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
         "build:release": "npm run build-internal:release &&  npm run build-protobuf && npm run build-external",
-        "build:debug": "npm run build-internal:debug && npm run build-protobuf && npm run build-external",
-        "build-internal": "npm run build-internal:debug",
-        "build-internal:debug": "cd rust-client && npm run build:debug",
-        "build-internal:release": "cd rust-client && npm run build",
+        "build:benchmark": "npm run build-internal:benchmark &&  npm run build-protobuf && npm run build-external",
+        "build-internal": "cd rust-client && npm run build",
+        "build-internal:release": "cd rust-client && npm run build:release",
+        "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
         "build-external": "rm -rf build-ts && npx tsc",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
