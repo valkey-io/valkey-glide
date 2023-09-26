@@ -54,7 +54,7 @@ function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
   npm install
   rm -rf build-ts
-  npm run build:release
+  npm run build:benchmark
   cd ${BENCH_FOLDER}/node
   npm install
   npx tsc
@@ -81,12 +81,14 @@ function runRustBenchmark(){
 function flushDB() {
   cd $utilitiesDir
   npm install
+  npx tsc
   npm run flush -- --host $host $tlsFlag $clusterFlag $portFlag
 }
 
 function fillDB(){
   flushDB
   cd $utilitiesDir
+  npx tsc
   npm run fill -- --dataSize $1 --host $host $tlsFlag $clusterFlag $portFlag
 }
 

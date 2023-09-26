@@ -23,6 +23,7 @@ On the first install, run `npm i`, to install all dependencies. Also enter the `
 
 make sure that all dependencies, including rustup, have been installed.
 Run `npm run build:release` runs a full build in release mode. This might take a while.
+Run `npm run build:benchmark` runs a fully optimized build with release symbols.
 
 For testing purposes, you can run `npm run build` runs a full, unoptimized build.
 If you've only made changes to the Rust code, run `npm run build-internal` to build the internal package and generates TypeSCript code.

@@ -24,6 +24,7 @@ Install python-venv: run `sudo apt install python3.10-venv` (with the relevant p
 ### [Optional] Build for release
 
 `maturin develop --release` to build rust code optimized for release and create python wrapper.
+`maturin develop --release --strip` to build optimized code without symbols, ready for release.
 
 ### [Optional] Autogenerate protobuf files
 
@@ -60,6 +61,6 @@ flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statist
 # generate protobuf type files
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
 protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=../babushka-core/src/protobuf/ --python_out=$./python/pybushka --mypy_out=./python/pybushka ../babushka-core/src/protobuf/*.proto
-# run type check 
+# run type check
 mypy .
 ```
