@@ -18,7 +18,9 @@ import {
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
-/// Base class that includes all the shared commands in Client and ClusterClient.
+/**
+ * Base class that includes all the shared commands in Client and ClusterClient.
+ */
 export class BaseTransaction {
     readonly commands: redis_request.Command[] = [];
 
@@ -167,7 +169,9 @@ export class BaseTransaction {
     }
 }
 
-/// Extends BaseTransaction class for Redis standalone commands.
+/**
+ * Extends BaseTransaction class for Redis standalone commands.
+ */
 export class Transaction extends BaseTransaction {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
@@ -182,7 +186,9 @@ export class Transaction extends BaseTransaction {
     }
 }
 
-/// Extends BaseTransaction class for cluster mode commands.
+/**
+ * Extends BaseTransaction class for cluster mode commands.
+ */
 export class ClusterTransaction extends BaseTransaction {
     /// TODO: add all CLUSTER commands
 }
