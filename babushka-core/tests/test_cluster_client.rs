@@ -1,7 +1,7 @@
 mod utilities;
 
 #[cfg(test)]
-mod client_cme_tests {
+mod cluster_client_tests {
     use super::*;
     use babushka::connection_request::ReadFromReplicaStrategy;
     use redis::cluster_routing::{
