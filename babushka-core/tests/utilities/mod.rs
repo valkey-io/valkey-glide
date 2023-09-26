@@ -568,6 +568,12 @@ pub fn create_connection_request(
     if let Some(connection_timeout) = configuration.connection_timeout {
         connection_request.client_creation_timeout = connection_timeout;
     }
+    if let Some(strategy) = configuration.read_from_replica_strategy {
+        connection_request.read_from_replica_strategy = strategy.into()
+    }
+
+    connection_request.connection_retry_strategy =
+        protobuf::MessageField::from_option(configuration.connection_retry_strategy.clone());
     set_connection_info_to_connection_request(
         configuration.connection_info.clone().unwrap_or_default(),
         &mut connection_request,
@@ -584,6 +590,7 @@ pub struct TestConfiguration {
     pub response_timeout: Option<u32>,
     pub connection_timeout: Option<u32>,
     pub shared_server: bool,
+    pub read_from_replica_strategy: Option<connection_request::ReadFromReplicaStrategy>,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -605,8 +612,6 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
         setup_acl(&connection_addr, redis_connection_info).await;
     }
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
-    connection_request.connection_retry_strategy =
-        protobuf::MessageField::from_option(configuration.connection_retry_strategy.clone());
     connection_request.cluster_mode_enabled = false;
     let client = StandaloneClient::create_client(connection_request)
         .await

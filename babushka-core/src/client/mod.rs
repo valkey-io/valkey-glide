@@ -79,10 +79,7 @@ pub(super) fn get_connection_info(
 #[derive(Clone)]
 pub enum ClientWrapper {
     Standalone(StandaloneClient),
-    Cluster {
-        client: ClusterConnection,
-        read_from_replicas: bool,
-    },
+    Cluster { client: ClusterConnection },
 }
 
 #[derive(Clone)]
@@ -111,12 +108,8 @@ impl Client {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
 
-                ClientWrapper::Cluster {
-                    ref mut client,
-                    read_from_replicas,
-                } => {
-                    let routing =
-                        routing.or_else(|| RoutingInfo::for_routable(cmd, read_from_replicas));
+                ClientWrapper::Cluster { ref mut client } => {
+                    let routing = routing.or_else(|| RoutingInfo::for_routable(cmd));
                     client.send_packed_command(cmd, routing).await
                 }
             }
@@ -137,10 +130,7 @@ impl Client {
                     client.send_packed_commands(cmd, offset, count).await
                 }
 
-                ClientWrapper::Cluster {
-                    ref mut client,
-                    read_from_replicas: _,
-                } => {
+                ClientWrapper::Cluster { ref mut client } => {
                     let route = match routing {
                         Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
                             route,
@@ -169,7 +159,7 @@ fn to_duration(time_in_millis: u32, default: Duration) -> Duration {
 
 async fn create_cluster_client(
     request: ConnectionRequest,
-) -> RedisResult<(redis::cluster_async::ClusterConnection, bool)> {
+) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
     let redis_connection_info = get_redis_connection_info(request.authentication_info.0);
@@ -200,7 +190,7 @@ async fn create_cluster_client(
         builder = builder.tls(tls);
     }
     let client = builder.build()?;
-    Ok((client.get_async_connection().await?, read_from_replicas))
+    client.get_async_connection().await
 }
 
 #[derive(thiserror::Error)]
@@ -241,13 +231,10 @@ impl Client {
         );
         tokio::time::timeout(total_connection_timeout, async move {
             let internal_client = if request.cluster_mode_enabled {
-                let (client, read_from_replicas) = create_cluster_client(request)
+                let client = create_cluster_client(request)
                     .await
                     .map_err(ConnectionError::Cluster)?;
-                ClientWrapper::Cluster {
-                    client,
-                    read_from_replicas,
-                }
+                ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
                     StandaloneClient::create_client(request)

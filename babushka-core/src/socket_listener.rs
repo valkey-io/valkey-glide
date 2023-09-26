@@ -375,7 +375,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
         .enum_value()
         .map(|slot_type| match slot_type {
             SlotTypes::Primary => SlotAddr::Master,
-            SlotTypes::Replica => SlotAddr::Replica,
+            SlotTypes::Replica => SlotAddr::ReplicaRequired,
         })
         .map_err(|id| {
             ClienUsageError::InternalError(format!("Received unexpected slot id type {id}"))
