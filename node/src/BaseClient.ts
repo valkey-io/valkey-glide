@@ -67,12 +67,15 @@ export type ConnectionOptions = {
     /// If not set, a default value will be used.
     /// Value must be an integer.
     clientCreationTimeout?: number;
-    /// Strategy used to determine how and when to retry connecting, in case of connection failures.
+    /// Strategy used to determine how and when to reconnect, in case of connection failures.
     /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
+    /// The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+    /// reconnect attempt is succesful.
     /// If not set, a default backoff strategy will be used.
-    /// ATM this setting isn't supported in cluster mode, only in standalone mode.
+    /// At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used in cluster mode.
     connectionBackoff?: {
-        /// Number of retry attempts that the client should perform when disconnected from the server.
+        /// Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+        /// Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
         /// Value must be an integer.
         numberOfRetries: number;
         /// Value must be an integer.

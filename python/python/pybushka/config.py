@@ -61,11 +61,15 @@ class ClientConfiguration:
             default value will be used.
         response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
             determining that the connection has been severed. If not set, a default value will be used.
-        connection_backoff (Optional[BackoffStrategy]): Strategy used to determine how and when to retry connecting, in case of
-            connection failures. The time between attempts grows exponentially, to the formula:
-            rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts. If not set, a default
-            backoff strategy will be used.
-            ATM this setting isn't supported in cluster mode, only in standalone mode.
+        connection_backoff (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
+            connection failures.
+            The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is
+            the number of failed attempts.
+            The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time
+            between retry attempts until a reconnect attempt is succesful.
+            If not set, a default backoff strategy will be used.
+            At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used in
+            cluster mode.
     """
 
     def __init__(
