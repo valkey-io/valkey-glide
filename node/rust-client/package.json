@@ -35,8 +35,9 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "npm install && napi build --platform --release --pipe \"prettier -w\"",
-    "build:debug": "npm install && napi build --platform --pipe \"prettier -w\"",
+    "build": "npm install && napi build --platform --pipe \"prettier -w\"",
+    "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\"",
+    "build:benchmark": "npm install && napi build --platform --release --pipe \"prettier -w\"",
     "format": "run-p format:prettier format:rs",
     "format:prettier": "prettier . -w",
     "format:rs": "cargo fmt",
