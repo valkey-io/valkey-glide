@@ -94,32 +94,6 @@ export type ConnectionOptions = {
      */
     clientCreationTimeout?: number;
     /**
-     * Strategy used to determine how and when to reconnect, in case of connection failures.
-     * The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
-     * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
-     * reconnect attempt is succesful.
-     * If not set, a default backoff strategy will be used.
-     * At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used in cluster mode.
-     */
-    connectionBackoff?: {
-        /**
-         * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
-         * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
-         * Value must be an integer.
-         */
-        numberOfRetries: number;
-        /**
-         * The multiplier that will be applied to the waiting time between each retry.
-         * Value must be an integer.
-         */
-        factor: number;
-        /**
-         * The exponent base configured for the strategy. 
-         * Value must be an integer.
-         */
-        exponentBase: number;
-    };
-    /**
      * If not set, `alwaysFromPrimary` will be used.
      */
     readFromReplicaStrategy?: ReadFromReplicaStrategy;
@@ -428,7 +402,6 @@ export class BaseClient {
             clusterModeEnabled: false,
             clientCreationTimeout: options.clientCreationTimeout,
             readFromReplicaStrategy,
-            connectionRetryStrategy: options.connectionBackoff,
             authenticationInfo,
         };
     }
