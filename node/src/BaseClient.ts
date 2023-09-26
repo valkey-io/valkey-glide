@@ -34,56 +34,92 @@ type ErrorFunction = (error: BaseRedisError) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
 type AuthenticationOptions = {
-    /// The username that will be passed to the cluster's Access Control Layer.
-    /// If not supplied, "default" will be used.
+    /**
+     * The username that will be passed to the cluster's Access Control Layer.
+     * If not supplied, "default" will be used.
+     */
     username?: string;
-    /// The password that will be passed to the cluster's Access Control Layer.
+    /**
+     * The password that will be passed to the cluster's Access Control Layer.
+     */
     password: string;
 };
 
 type ReadFromReplicaStrategy =
-    | "alwaysFromPrimary" /// Always get from primary, in order to get the freshest data.
-    | "roundRobin"; /// Spread the requests between all replicas evenly.
+    /** Always get from primary, in order to get the freshest data.*/
+    | "alwaysFromPrimary"
+    /** Spread the requests between all replicas evenly.*/
+    | "roundRobin";
 
 export type ConnectionOptions = {
-    /// DNS Addresses and ports of known nodes in the cluster.
-    /// If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
-    /// If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
-    /// For example, [{address:sample-address-0001.use1.cache.amazonaws.com, port:6379}, {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}].
+    /**
+     * DNS Addresses and ports of known nodes in the cluster.
+     * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
+     * If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
+     * @example
+     * <code>
+     * [
+     *   \{ address:sample-address-0001.use1.cache.amazonaws.com, port:6378 \},
+     *   \{ address: sample-address-0002.use2.cache.amazonaws.com \}
+     *   \{ address: sample-address-0003.use2.cache.amazonaws.com, port:6380 \}
+     * ]
+     * </code>
+     */
     addresses: {
         host: string;
-        port?: number; /// If port isn't supplied, 6379 will be used
+        /**
+         * If port isn't supplied, 6379 will be used
+         */
+        port?: number;
     }[];
-    /// True if communication with the cluster should use Transport Level Security.
+    /**
+     * True if communication with the cluster should use Transport Level Security.
+     */
     useTLS?: boolean;
-    /// Credentials for authentication process.
-    /// If none are set, the client will not authenticate itself with the server.
+    /**
+     * Credentials for authentication process.
+     * If none are set, the client will not authenticate itself with the server.
+     */
     credentials?: AuthenticationOptions;
-    /// Number of milliseconds that the client should wait for response before determining that the connection has been severed.
-    /// If not set, a default value will be used.
-    /// Value must be an integer.
+    /**
+     * Number of milliseconds that the client should wait for response before determining that the connection has been severed.
+     * If not set, a default value will be used.
+     * Value must be an integer.
+     */
     responseTimeout?: number;
-    /// Number of milliseconds that the client should wait for the initial connection attempts before failing to create a client.
-    /// If not set, a default value will be used.
-    /// Value must be an integer.
+    /**
+     * Number of milliseconds that the client should wait for the initial connection attempts before failing to create a client.
+     * If not set, a default value will be used.
+     * Value must be an integer.
+     */
     clientCreationTimeout?: number;
-    /// Strategy used to determine how and when to reconnect, in case of connection failures.
-    /// The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
-    /// The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
-    /// reconnect attempt is succesful.
-    /// If not set, a default backoff strategy will be used.
-    /// At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used in cluster mode.
+    /**
+     * Strategy used to determine how and when to reconnect, in case of connection failures.
+     * The time between attempts grows exponentially, to the formula rand(0 .. factor * (exponentBase ^ N)), where N is the number of failed attempts.
+     * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
+     * reconnect attempt is succesful.
+     * If not set, a default backoff strategy will be used.
+     * At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used in cluster mode.
+     */
     connectionBackoff?: {
-        /// Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
-        /// Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
-        /// Value must be an integer.
+        /**
+         * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
+         * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
+         * Value must be an integer.
+         */
         numberOfRetries: number;
-        /// Value must be an integer.
+        /**
+         * Value must be an integer.
+         */
         factor: number;
-        /// Value must be an integer.
+        /**
+         * Value must be an integer.
+         */
         exponentBase: number;
     };
-    /// If not set, `alwaysFromPrimary` will be used.
+    /**
+     * If not set, `alwaysFromPrimary` will be used.
+     */
     readFromReplicaStrategy?: ReadFromReplicaStrategy;
 };
 

@@ -11,8 +11,10 @@ import {
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
-/// If the command's routing is to one node we will get T as a response type,
-/// otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
+/**
+ * If the command's routing is to one node we will get T as a response type,
+ * otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
+ */
 type ClusterResponse<T> = T | [string, T][];
 
 export type SlotIdTypes = {
@@ -26,15 +28,26 @@ export type SlotKeyTypes = {
 };
 
 export type Routes =
-    /// Route request to all primary nodes.
+    /**
+     * Route request to all primary nodes.
+     */
+
     | "allPrimaries"
-    /// Route request to all nodes.
+    /**
+     * Route request to all nodes.
+     */
     | "allNodes"
-    /// Route request to a random node.
+    /**
+     * Route request to a random node.
+     */
     | "randomNode"
-    /// Route request to the node that contains the slot with the given id.
+    /**
+     * Route request to the node that contains the slot with the given id.
+     */
     | SlotIdTypes
-    /// Route request to the node that contains the slot that the given key matches.
+    /**
+     * Route request to the node that contains the slot that the given key matches.
+     */
     | SlotKeyTypes;
 
 function toProtobufRoute(
