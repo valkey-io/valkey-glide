@@ -88,6 +88,7 @@ public class BenchmarkingApp {
 
     options.addOption("c", "configuration", true, "Configuration flag [Release]");
     options.addOption("f", "resultsFile", true, "Result filepath []");
+    options.addOption("d", "dataSize", true, "Data block size [20]");
     options.addOption("C", "concurrentTasks", true, "Number of concurrent tasks [1 10 100]");
     options.addOption("l", "clients", true, "one of: all|jedis|lettuce|babushka [all]");
     options.addOption("h", "host", true, "host url [localhost]");
@@ -116,6 +117,10 @@ public class BenchmarkingApp {
       } catch (IOException e) {
         throw new ParseException("Unable to write to resultsFile.");
       }
+    }
+
+    if (line.hasOption("dataSize")) {
+      runConfiguration.dataSize = Integer.parseInt(line.getOptionValue("dataSize"));
     }
 
     if (line.hasOption("concurrentTasks")) {
@@ -200,6 +205,7 @@ public class BenchmarkingApp {
   public static class RunConfiguration {
     public String configuration;
     public Optional<FileWriter> resultsFile;
+    public int dataSize;
     public List<Integer> concurrentTasks;
     public ClientName[] clients;
     public String host;
@@ -210,6 +216,7 @@ public class BenchmarkingApp {
     public RunConfiguration() {
       configuration = "Release";
       resultsFile = Optional.empty();
+      dataSize = 20;
       concurrentTasks = List.of(1, 10, 100);
       clients = new ClientName[] {ClientName.ALL};
       host = "localhost";

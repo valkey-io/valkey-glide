@@ -12,6 +12,7 @@ import javabushka.client.AsyncClient;
 import javabushka.client.BenchmarkingApp;
 import javabushka.client.Client;
 import javabushka.client.SyncClient;
+import org.apache.commons.lang3.RandomStringUtils;
 
 public class Benchmarking {
   static final double PROB_GET = 0.8;
@@ -154,7 +155,7 @@ public class Benchmarking {
     client.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
 
     int iterations = 10000;
-    String value = "my-value";
+    String value = RandomStringUtils.randomAlphanumeric(config.dataSize);
 
     if (config.resultsFile.isPresent()) {
       try {

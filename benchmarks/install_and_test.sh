@@ -78,6 +78,14 @@ function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/java
 }
 
+function runJavaBenchmark(){
+  cd ${BENCH_FOLDER}/../java
+  echo "./gradlew run --args=\"--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port\""
+#  ./gradlew run --args="--resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --port $port --clientCount $clientCount $tlsFlag"
+  ./gradlew run --args="--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port"
+  cd ${BENCH_FOLDER}/java
+}
+
 function runRustBenchmark(){
   rustConcurrentTasks=
   for value in $concurrentTasks
@@ -210,6 +218,21 @@ do
             runJava=1
             chosenClients="Jedis"
             ;;
+        -java)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Babushka"
+            ;;
+        -lettuce)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Lettuce"
+            ;;
+        -lettuce)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Jedis"
+            ;;
         -csharp)
             runAllBenchmarks=0
             runCsharp=1
@@ -281,8 +304,6 @@ do
         runRustBenchmark $rustResults $currentDataSize
     fi
 done
-
-
 
 flushDB
 
