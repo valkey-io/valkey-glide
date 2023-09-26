@@ -108,7 +108,7 @@ class BaseRedisClient(CoreCommands):
         return response_future
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config.convert_to_protobuf_request()
+        return self.config._create_a_protobuf_conn_request()
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
@@ -227,7 +227,7 @@ class BaseRedisClient(CoreCommands):
 
 class RedisClusterClient(BaseRedisClient, ClusterCommands):
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config.convert_to_protobuf_request(cluster_mode=True)
+        return self.config._create_a_protobuf_conn_request(cluster_mode=True)
 
 
 class RedisClient(BaseRedisClient, StandaloneCommands):

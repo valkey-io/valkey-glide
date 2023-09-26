@@ -20,7 +20,7 @@ def test_convert_to_protobuf():
         use_tls=True,
         read_from_replica=ReadFromReplica.ROUND_ROBIN,
     )
-    request = config.convert_to_protobuf_request()
+    request = config._create_a_protobuf_conn_request()
     assert type(request) == ConnectionRequest
     assert request.addresses[0].host == "127.0.0.1"
     assert request.addresses[0].port == 6379

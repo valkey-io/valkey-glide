@@ -109,10 +109,12 @@ export type ConnectionOptions = {
          */
         numberOfRetries: number;
         /**
+         * The multiplier that will be applied to the waiting time between each retry.
          * Value must be an integer.
          */
         factor: number;
         /**
+         * The exponent base configured for the strategy. 
          * Value must be an integer.
          */
         exponentBase: number;
