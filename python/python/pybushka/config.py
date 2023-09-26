@@ -83,7 +83,6 @@ class ClientConfiguration:
         read_from_replica: ReadFromReplica = ReadFromReplica.ALWAYS_FROM_MASTER,
         client_creation_timeout: Optional[int] = None,
         response_timeout: Optional[int] = None,
-        connection_backoff: Optional[BackoffStrategy] = None,
     ):
         """
         Represents the configuration settings for a Redis client.
@@ -109,11 +108,6 @@ class ClientConfiguration:
                 default value will be used.
             response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
                 determining that the connection has been severed. If not set, a default value will be used.
-            connection_backoff (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
-                connection failures.
-                If not set, a default backoff strategy will be used.
-                At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used
-                in cluster mode.
         """
         self.addresses = addresses or [AddressInfo()]
         self.use_tls = use_tls
@@ -121,7 +115,6 @@ class ClientConfiguration:
         self.read_from_replica = read_from_replica
         self.client_creation_timeout = client_creation_timeout
         self.response_timeout = response_timeout
-        self.connection_backoff = connection_backoff
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -146,6 +139,73 @@ class ClientConfiguration:
             request.response_timeout = self.response_timeout
         if self.client_creation_timeout:
             request.client_creation_timeout = self.client_creation_timeout
+        request.cluster_mode_enabled = True if cluster_mode else False
+        if self.credentials:
+            if self.credentials.username:
+                request.authentication_info.username = self.credentials.username
+            request.authentication_info.password = self.credentials.password
+
+        return request
+
+
+class StandaloneClientConfiguration(ClientConfiguration):
+    """
+    Represents the configuration settings for a Redis client.
+
+    Args:
+        addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
+                If the server is in cluster mode the list can be partial, as the client will attempt to map out
+                the cluster and find all nodes.
+                If the server is in standalone mode, only nodes whose addresses were provided will be used by the
+                client.
+                For example:
+                [
+                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
+                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
+                ].
+                If none are set, a default address localhost:6379 will be used.
+        use_tls (bool): True if communication with the cluster should use Transport Level Security.
+        credentials (AuthenticationOptions): Credentials for authentication process.
+                If none are set, the client will not authenticate itself with the server.
+        read_from_replica (ReadFromReplicaStrategy): If not set, `ALWAYS_FROM_MASTER` will be used.
+        client_creation_timeout (Optional[int]): Number of milliseconds that the client should wait for the
+            initial connection attempts before determining that the connection has been severed. If not set, a
+            default value will be used.
+        response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
+            determining that the connection has been severed. If not set, a default value will be used.
+        connection_backoff (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
+            connection failures.
+            If not set, a default backoff strategy will be used.
+            At the moment this setting isn't supported in cluster mode, only in standalone mode - a constant value is used
+            in cluster mode.
+        database_id (Optional[Int]): index of the logical database to connect to.
+    """
+
+    def __init__(
+        self,
+        addresses: Optional[List[AddressInfo]] = None,
+        use_tls: bool = False,
+        credentials: Optional[AuthenticationOptions] = None,
+        read_from_replica: ReadFromReplica = ReadFromReplica.ALWAYS_FROM_MASTER,
+        client_creation_timeout: Optional[int] = None,
+        response_timeout: Optional[int] = None,
+        connection_backoff: Optional[BackoffStrategy] = None,
+        database_id: Optional[int] = None,
+    ):
+        super().__init__(
+            self,
+            addresses=addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            read_from_replica=read_from_replica,
+            client_creation_timeout=client_creation_timeout,
+            response_timeout=response_timeout,
+        )
+        self.connection_backoff = connection_backoff
+        self.database_id = database_id
+
+    def _create_a_protobuf_conn_request(self) -> ConnectionRequest:
+        request = super()._create_a_protobuf_conn_request(self, False)
         if self.connection_backoff:
             request.connection_retry_strategy.number_of_retries = (
                 self.connection_backoff.num_of_retries
@@ -154,10 +214,7 @@ class ClientConfiguration:
             request.connection_retry_strategy.exponent_base = (
                 self.connection_backoff.exponent_base
             )
-        request.cluster_mode_enabled = True if cluster_mode else False
-        if self.credentials:
-            if self.credentials.username:
-                request.authentication_info.username = self.credentials.username
-            request.authentication_info.password = self.credentials.password
+        if self.database_id:
+            request.database_id = self.database_id
 
         return request
