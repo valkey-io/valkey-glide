@@ -1,5 +1,0 @@
-rootProject.name = 'babushka'
-
-include 'jabushka'
-include 'integTest'
-include 'benchmarks'

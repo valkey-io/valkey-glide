@@ -1,12 +1,12 @@
 [package]
-name = "jabushka"
+name = "javababushka"
 version = "0.0.0"
 edition = "2021"
 license = "BSD-3-Clause"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "jabushka"
+name = "javababushka"
 crate-type = ["cdylib"]
 
 [dependencies]
