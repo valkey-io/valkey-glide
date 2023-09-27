@@ -14,7 +14,7 @@ type BaseClient = {
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
     configRewrite: () => Promise<"OK">;
-    info(options?: InfoOptions[]): Promise<string | string[][]>;
+    info(options?: InfoOptions[]): Promise<string | Record<string, string>>;
     configResetStat: () => Promise<"OK">;
     mset: (keyValueMap: Record<string, string>) => Promise<"OK">;
     mget: (keys: string[]) => Promise<(string | null)[]>;
