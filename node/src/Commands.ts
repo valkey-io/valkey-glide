@@ -266,6 +266,19 @@ export function createIncrByFloat(
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
+export function createConfigGet(parameters: string[]): redis_request.Command {
+    return createCommand(RequestType.ConfigGet, parameters);
+}
+
+export function createConfigSet(
+    parameters: Record<string, string>
+): redis_request.Command {
+    return createCommand(
+        RequestType.ConfigSet,
+        Object.entries(parameters).flat()
+    );
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
