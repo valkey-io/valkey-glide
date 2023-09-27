@@ -7,6 +7,8 @@ from pybushka.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
 
 class SlotType(Enum):
     PRIMARY = 1
+    # `REPLICA` overrides the `read_from_replica` configuration. If it's used the request
+    # will be routed to a replica, even if the strategy is `ALWAYS_FROM_MASTER`.
     REPLICA = 2
 
 
