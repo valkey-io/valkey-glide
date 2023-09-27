@@ -2,6 +2,7 @@ import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import { InfoOptions, ReturnType, SetOptions, parseInfoResponse } from "../";
+import { ClusterResponse } from "../src/RedisClusterClient";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
 type BaseClient = {
@@ -14,13 +15,15 @@ type BaseClient = {
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
     configRewrite: () => Promise<"OK">;
-    info(options?: InfoOptions[]): Promise<string | Record<string, string>>;
+    info(options?: InfoOptions[]): Promise<ClusterResponse<string>>;
     configResetStat: () => Promise<"OK">;
     mset: (keyValueMap: Record<string, string>) => Promise<"OK">;
     mget: (keys: string[]) => Promise<(string | null)[]>;
     incr: (key: string) => Promise<number>;
     incrBy: (key: string, amount: number) => Promise<number>;
     incrByFloat: (key: string, amount: number) => Promise<string>;
+    configGet: (parameters: string[]) => Promise<ClusterResponse<string[]>>;
+    configSet: (parameters: Record<string, string>) => Promise<"OK">;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -359,6 +362,29 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping("Hello")).toEqual("Hello");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "config get and config set with timeout parameter",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const prevTimeout = (await client.configGet([
+                    "timeout",
+                ])) as string[];
+                expect(await client.configSet({ timeout: "1000" })).toEqual(
+                    "OK"
+                );
+                const currTimeout = (await client.configGet([
+                    "timeout",
+                ])) as string[];
+                expect(currTimeout).toEqual(["timeout", "1000"]);
+                /// Revert to the pervious configuration
+                expect(
+                    await client.configSet({ [prevTimeout[0]]: prevTimeout[1] })
+                ).toEqual("OK");
             });
         },
         config.timeout
