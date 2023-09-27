@@ -151,27 +151,23 @@ describe("RedisClusterClient", () => {
             const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports())
             );
-            const result = await client.info([
+            const result = (await client.info([
                 InfoOptions.Server,
                 InfoOptions.Replication,
-            ]);
+            ])) as Record<string, string>;
             const clusterNodes = await client.customCommand("CLUSTER", [
                 "NODES",
             ]);
             expect(
                 (clusterNodes as string)?.split("master").length - 1
-            ).toEqual(result.length);
-            for (let i = 0; i < result.length; i++) {
-                expect(result?.[i][1]).toEqual(
-                    expect.stringContaining("# Server")
-                );
-                expect(result?.[i][1]).toEqual(
-                    expect.stringContaining("# Replication")
-                );
-                expect(result?.[i][1]).toEqual(
+            ).toEqual(Object.keys(result).length);
+            Object.values(result).every((item) => {
+                expect(item).toEqual(expect.stringContaining("# Server"));
+                expect(item).toEqual(expect.stringContaining("# Replication"));
+                expect(item).toEqual(
                     expect.not.stringContaining("# Errorstats")
                 );
-            }
+            });
             client.dispose();
         },
         TIMEOUT
