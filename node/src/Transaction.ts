@@ -10,6 +10,8 @@ import {
     createDecrBy,
     createDel,
     createGet,
+    createHGet,
+    createHSet,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -213,6 +215,33 @@ export class BaseTransaction {
      */
     public configSet(parameters: Record<string, string>) {
         this.commands.push(createConfigSet(parameters));
+    }
+
+    /** Retrieve the value associated with field in the hash stored at key.
+     * See https://redis.io/commands/hget/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash stored at key to retrieve from the database.
+     *
+     * Command Response - the value associated with field, or null when field is not present in the hash or key does not exist.
+     *
+     */
+    public hget(key: string, field: string) {
+        this.commands.push(createHGet(key, field));
+    }
+
+    /** Sets the specified fields to their respective values in the hash stored at key.
+     * See https://redis.io/commands/hset/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
+     * to be set in the hash stored at the specified key.
+     *
+     * Command Response - The number of fields that were added.
+     *
+     */
+    public hset(key: string, fieldValueMap: Record<string, string>) {
+        this.commands.push(createHSet(key, fieldValueMap));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

@@ -26,6 +26,11 @@ type BaseClient = {
     incrByFloat: (key: string, amount: number) => Promise<string>;
     configGet: (parameters: string[]) => Promise<ClusterResponse<string[]>>;
     configSet: (parameters: Record<string, string>) => Promise<"OK">;
+    hset: (
+        key: string,
+        fieldValueMap: Record<string, string>
+    ) => Promise<number>;
+    hget: (key: string, field: string) => Promise<string | null>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -446,6 +451,28 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.configSet({ [prevTimeout[0]]: prevTimeout[1] })
                 ).toEqual("OK");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "testing hset and hget with multiple existing fields and one non existing field",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const nonExistingField = uuidv4();
+                const value = uuidv4();
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hget(key, field1)).toEqual(value);
+                expect(await client.hget(key, field2)).toEqual(value);
+                expect(await client.hget(key, nonExistingField)).toEqual(null);
             });
         },
         config.timeout
