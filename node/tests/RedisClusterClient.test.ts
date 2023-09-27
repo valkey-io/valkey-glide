@@ -193,6 +193,22 @@ describe("RedisClusterClient", () => {
     );
 
     it(
+        "config get and config set transactions test",
+        async () => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const transaction = new ClusterTransaction();
+            transaction.configSet({ timeout: "1000" });
+            transaction.configGet(["timeout"]);
+            const result = await client.exec(transaction);
+            expect(result).toEqual(["OK", ["timeout", "1000"]]);
+            client.dispose();
+        },
+        TIMEOUT
+    );
+
+    it(
         "can send transactions",
         async () => {
             const client = await RedisClusterClient.createClient(

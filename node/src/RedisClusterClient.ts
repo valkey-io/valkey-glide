@@ -2,8 +2,10 @@ import * as net from "net";
 import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
+    createConfigSet,
     createCustomCommand,
     createInfo,
     createPing,
@@ -15,7 +17,7 @@ import { ClusterTransaction } from "./Transaction";
  * If the command's routing is to one node we will get T as a response type,
  * otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
  */
-type ClusterResponse<T> = T | Record<string, T>;
+export type ClusterResponse<T> = T | Record<string, T>;
 
 export type SlotIdTypes = {
     /**
@@ -257,6 +259,51 @@ export class RedisClusterClient extends BaseClient {
     public configResetStat(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
             createConfigResetStat(),
+            toProtobufRoute(route)
+        );
+    }
+
+    /** Reads the configuration parameters of a running Redis server.
+     *  See https://redis.io/commands/config-get/ for details.
+     *
+     * @param parameters - A list of configuration parameter names to retrieve values for.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *  case the client will initially try to route the command to the nodes defined by `route`.
+     *  If `route` is not provided, the command will be sent to the all nodes.
+     *
+     * @returns A map of values corresponding to the configuration parameters. When specifying a route other than a single node,
+     *  the response will be a dictionary of Address: nodeResponse.
+     */
+    public configGet(
+        parameters: string[],
+        route?: Routes
+    ): Promise<ClusterResponse<string[]>> {
+        return this.createWritePromise(
+            createConfigGet(parameters),
+            toProtobufRoute(route)
+        );
+    }
+
+    /** Set configuration parameters to the specified values.
+     *   See https://redis.io/commands/config-set/ for details.
+     *
+     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     *   If `route` is not provided, the command will be sent to the all nodes.
+     *
+     * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
+     *
+     * @example
+     *   config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
+     *
+     */
+    public configSet(
+        parameters: Record<string, string>,
+        route?: Routes
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createConfigSet(parameters),
             toProtobufRoute(route)
         );
     }
