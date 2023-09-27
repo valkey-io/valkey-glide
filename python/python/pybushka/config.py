@@ -193,7 +193,6 @@ class StandaloneClientConfiguration(ClientConfiguration):
         database_id: Optional[int] = None,
     ):
         super().__init__(
-            self,
             addresses=addresses,
             use_tls=use_tls,
             credentials=credentials,
@@ -204,8 +203,11 @@ class StandaloneClientConfiguration(ClientConfiguration):
         self.connection_backoff = connection_backoff
         self.database_id = database_id
 
-    def _create_a_protobuf_conn_request(self) -> ConnectionRequest:
-        request = super()._create_a_protobuf_conn_request(self, False)
+    def _create_a_protobuf_conn_request(
+        self, cluster_mode: bool = False
+    ) -> ConnectionRequest:
+        assert cluster_mode is False
+        request = super()._create_a_protobuf_conn_request(False)
         if self.connection_backoff:
             request.connection_retry_strategy.number_of_retries = (
                 self.connection_backoff.num_of_retries
