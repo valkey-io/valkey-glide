@@ -555,6 +555,7 @@ pub fn create_connection_request(
     let addresses_info = addresses.iter().map(get_address_info).collect();
     let mut connection_request = connection_request::ConnectionRequest::new();
     connection_request.addresses = addresses_info;
+    connection_request.database_id = configuration.database_id;
     connection_request.tls_mode = if configuration.use_tls {
         connection_request::TlsMode::InsecureTls
     } else {
@@ -591,6 +592,7 @@ pub struct TestConfiguration {
     pub connection_timeout: Option<u32>,
     pub shared_server: bool,
     pub read_from_replica_strategy: Option<connection_request::ReadFromReplicaStrategy>,
+    pub database_id: u32,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {

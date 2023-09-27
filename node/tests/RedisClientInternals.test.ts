@@ -14,6 +14,7 @@ import {
     RequestError,
     TimeoutError,
 } from "../build-ts";
+import { StandaloneConnectionOptions } from "../build-ts/src/RedisClient";
 import {
     connection_request,
     redis_request,
@@ -73,7 +74,7 @@ function sendResponse(
 
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?: ConnectionOptions,
+    connectionOptions?: ConnectionOptions | StandaloneConnectionOptions,
     isCluster?: boolean
 ): Promise<{
     socket: net.Socket;
@@ -421,6 +422,18 @@ describe("SocketConnectionInternals", () => {
             {
                 addresses: [{ host: "foo" }],
                 credentials: { username, password },
+            }
+        );
+        closeTestResources(connection, server, socket);
+    });
+
+    it("should pass database id", async () => {
+        const { connection, server, socket } = await getConnectionAndSocket(
+            (request: connection_request.ConnectionRequest) =>
+                request.databaseId === 42,
+            {
+                addresses: [{ host: "foo" }],
+                databaseId: 42,
             }
         );
         closeTestResources(connection, server, socket);
