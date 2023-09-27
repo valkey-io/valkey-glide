@@ -1,6 +1,7 @@
 from typing import Dict, List, Mapping, Optional, TypeVar, Union, cast
 
-from pybushka.async_commands.core import BaseTransaction, CoreCommands, InfoSection
+from pybushka.async_commands.core import CoreCommands, InfoSection
+from pybushka.async_commands.transaction import BaseTransaction, ClusterTransaction
 from pybushka.constants import TOK, TClusterResponse, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import Route
@@ -11,15 +12,6 @@ T = TypeVar("T")
 # This constant value is used to define the structure of a cluster single response type
 # without the necessity of recreating it for each use, thereby conserving memory
 LIST_STR = [""]
-
-
-class ClusterTransaction(BaseTransaction):
-    """
-    Extends BaseTransaction class for cluster mode commands.
-    """
-
-    # TODO: add all CLUSTER commands
-    pass
 
 
 def is_single_response(response: T, single_res: T) -> bool:
