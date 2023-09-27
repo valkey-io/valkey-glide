@@ -6,11 +6,11 @@ language api to enhance performance and limit cpu cycles at scale.
 
 ## Organization
 
-The Java client (javabushka) contains the following parts:
+The Java client (javababushka) contains the following parts:
 
 1. A Java client (lib folder): wrapper to rust-client
-2. An examples script: to sanity test javabushka and similar java-clients against a redis host
-3. A benchmark app: to performance benchmark test javabushka and similar java-clients against a redis host
+2. An examples script: to sanity test javababushka and similar java-clients against a redis host
+3. A benchmark app: to performance benchmark test javababushka and similar java-clients against a redis host
 
 ## Building
 

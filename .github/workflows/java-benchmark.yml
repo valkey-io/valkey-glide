@@ -33,7 +33,7 @@ jobs:
         run: docker run -p 6379:6379 -p 8001:8001 -d redis/redis-stack
 
       - name: Run benchmarks
-        working-directory: java/jabushka
+        working-directory: java
         run: ./gradlew :benchmark:run
 
       - name: Upload test reports
@@ -43,4 +43,4 @@ jobs:
         with:
           name: test-reports-${{ matrix.java }}
           path: |
-            java/jabushka/benchmarks/build/reports/**
+            java/benchmarks/build/reports/**
