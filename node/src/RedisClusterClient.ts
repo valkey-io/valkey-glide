@@ -15,7 +15,7 @@ import { ClusterTransaction } from "./Transaction";
  * If the command's routing is to one node we will get T as a response type,
  * otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
  */
-type ClusterResponse<T> = T | [string, T][];
+type ClusterResponse<T> = T | Record<string, T>;
 
 export type SlotIdTypes = {
     /**
@@ -114,6 +114,24 @@ function toProtobufRoute(
     }
 }
 
+/** Convert the multi-node response from a list of [address, nodeResponse] pairs to a dictionary of address: nodeResponse.
+ *
+ * @param response - A list of lists, where each inner list contains an address (string)
+ *  and the corresponding node response (of type T). Or a single node response (of type T).
+ * @param isSingleResponse - Predicate that checks if `response` is single node response.
+ * @returns `response` if response is single node response,
+ * otherwise a dictionary where each address is the key and its corresponding node response is the value.
+ */
+export function convertMultiNodeResponseToDict<T>(
+    response: T | [string, T][],
+    isSingleResponse: (res: T | [string, T][]) => boolean
+): T | Record<string, T> {
+    if (isSingleResponse(response)) {
+        return response as T;
+    }
+    return Object.fromEntries(response as [string, T][]);
+}
+
 export class RedisClusterClient extends BaseClient {
     protected createClientRequest(
         options: ConnectionOptions
@@ -201,10 +219,16 @@ export class RedisClusterClient extends BaseClient {
         options?: InfoOptions[],
         route?: Routes
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(
+        const result = this.createWritePromise<string | [string, string][]>(
             createInfo(options),
             toProtobufRoute(route)
         );
+        return result.then((res) => {
+            return convertMultiNodeResponseToDict<string>(
+                res,
+                (response) => typeof response == "string"
+            );
+        });
     }
 
     /** Rewrite the configuration file with the current configuration.
