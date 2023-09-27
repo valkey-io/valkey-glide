@@ -10,7 +10,7 @@ use crate::retry_strategies::get_fixed_interval_backoff;
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use futures::stream::StreamExt;
-use logger_core::{log_debug, log_error, log_info, log_trace};
+use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
 use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -210,6 +210,7 @@ async fn write_result(
                     error_message.into(),
                 ))
             } else {
+                log_warn("received error", error_message.as_str());
                 let mut request_error = response::RequestError::default();
                 if err.is_connection_dropped() {
                     request_error.type_ = response::RequestErrorType::Disconnect.into();
