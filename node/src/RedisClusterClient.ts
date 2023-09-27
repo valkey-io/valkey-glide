@@ -122,7 +122,7 @@ function toProtobufRoute(
  * @returns `response` if response is single node response,
  * otherwise a dictionary where each address is the key and its corresponding node response is the value.
  */
-function convertMultiNodeResponseToDict<T>(
+export function convertMultiNodeResponseToDict<T>(
     response: T | [string, T][],
     isSingleResponse: (res: T | [string, T][]) => boolean
 ): T | Record<string, T> {

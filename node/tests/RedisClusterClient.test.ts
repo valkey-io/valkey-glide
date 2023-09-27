@@ -13,6 +13,7 @@ import {
     InfoOptions,
     RedisClusterClient,
 } from "../build-ts";
+import { convertMultiNodeResponseToDict } from "../src/RedisClusterClient";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";
 
@@ -202,6 +203,51 @@ describe("RedisClusterClient", () => {
             const result = await client.exec(transaction);
             expect(result).toEqual(expectedRes);
             client.dispose();
+        },
+        TIMEOUT
+    );
+
+    it(
+        "convertMultiNodeResponseToDict function test",
+        async () => {
+            const param1 = "This is a string value";
+            const param2 = ["value", "value"];
+            const param3 = [
+                ["value1", ["value"]],
+                ["value2", ["value"]],
+            ] as [string, string[]][];
+            const result = { value1: ["value"], value2: ["value"] };
+
+            const isString = (response: string | [string, string][]) =>
+                typeof response == "string";
+
+            const isNull = (response: null | [string, null][]) =>
+                response == null;
+
+            const isStringArray = (
+                response: (string | [string, string[]])[]
+            ): boolean => {
+                return (
+                    Array.isArray(response) &&
+                    response.every((item) => typeof item === "string")
+                );
+            };
+
+            expect(
+                convertMultiNodeResponseToDict<string>(param1, isString)
+            ).toEqual(param1);
+
+            expect(
+                convertMultiNodeResponseToDict<string[]>(param2, isStringArray)
+            ).toEqual(param2);
+
+            expect(
+                convertMultiNodeResponseToDict<string[]>(param3, isStringArray)
+            ).toEqual(result);
+
+            expect(
+                convertMultiNodeResponseToDict<null>(null, isNull)
+            ).toBeNull();
         },
         TIMEOUT
     );
