@@ -1,8 +1,8 @@
 import {
-    createRedisClient,
-    receivedOptions,
-    generate_value,
     SIZE_SET_KEYSPACE,
+    createRedisClient,
+    generate_value,
+    receivedOptions,
 } from "./utils";
 
 async function fill_database(
