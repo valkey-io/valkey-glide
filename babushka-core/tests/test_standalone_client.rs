@@ -8,58 +8,49 @@ mod standalone_client_tests {
     use babushka::{client::StandaloneClient, connection_request::ReadFromReplicaStrategy};
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
-    use std::time::Duration;
     use utilities::*;
 
+    async fn kill_connection(client: &mut StandaloneClient) {
+        let mut client_kill_cmd = redis::cmd("CLIENT");
+        client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+
+        let _ = client.send_packed_command(&client_kill_cmd).await.unwrap();
+    }
+
     #[rstest]
-    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
         #[values(false, true)] use_tls: bool,
     ) {
-        let server_available_event =
-            std::sync::Arc::new(futures_intrusive::sync::ManualResetEvent::new(false));
-        let server_available_event_clone = server_available_event.clone();
         block_on_all(async move {
-            let test_basics = setup_test_basics(use_tls).await;
-            let server = test_basics.server.unwrap();
+            let test_basics = setup_test_basics_internal(&TestConfiguration {
+                use_tls,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
             let mut client = test_basics.client;
-            let address = server.get_client_addr();
-            drop(server);
 
-            // we use another thread, so that the creation of the server won't block the client work.
-            let thread = std::thread::spawn(move || {
-                block_on_all(async move {
-                    let mut get_command = redis::Cmd::new();
-                    get_command
-                        .arg("GET")
-                        .arg("test_report_disconnect_and_reconnect_after_temporary_disconnect");
-                    let error = client.send_packed_command(&get_command).await;
-                    assert!(error.is_err(), "{error:?}",);
-                    let error = error.unwrap_err();
-                    assert!(
-                        error.is_connection_dropped() || error.is_timeout(),
-                        "{error:?}",
-                    );
+            kill_connection(&mut client).await;
 
-                    server_available_event.wait().await;
-                    let get_result = repeat_try_create(|| async {
-                        let mut client = client.clone();
-                        client.send_packed_command(&get_command).await.ok()
-                    })
-                    .await;
-                    assert_eq!(get_result, Value::Nil);
-                });
-            });
+            let mut get_command = redis::Cmd::new();
+            get_command
+                .arg("GET")
+                .arg("test_report_disconnect_and_reconnect_after_temporary_disconnect");
+            let error = client.send_packed_command(&get_command).await;
+            assert!(error.is_err(), "{error:?}",);
+            let error = error.unwrap_err();
+            assert!(
+                error.is_connection_dropped() || error.is_timeout(),
+                "{error:?}",
+            );
 
-            // If we don't sleep here, TLS connections will start reconnecting too soon, and then will timeout
-            // before the server is ready.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-
-            let _new_server = RedisServer::new_with_addr_and_modules(address.clone(), &[]);
-            wait_for_server_to_become_ready(&address).await;
-            server_available_event_clone.set();
-
-            thread.join().unwrap();
+            let get_result = repeat_try_create(|| async {
+                let mut client = client.clone();
+                client.send_packed_command(&get_command).await.ok()
+            })
+            .await;
+            assert_eq!(get_result, Value::Nil);
         });
     }
 
@@ -275,20 +266,17 @@ mod standalone_client_tests {
     }
 
     #[rstest]
-    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_set_database_id_after_reconnection() {
-        let server_available_event =
-            std::sync::Arc::new(futures_intrusive::sync::ManualResetEvent::new(false));
-        let server_available_event_clone = server_available_event.clone();
         let mut client_info_cmd = redis::Cmd::new();
         client_info_cmd.arg("CLIENT").arg("INFO");
         block_on_all(async move {
             let test_basics = setup_test_basics_internal(&TestConfiguration {
                 database_id: 4,
+                shared_server: true,
                 ..Default::default()
             })
             .await;
-            let server = test_basics.server.unwrap();
             let mut client = test_basics.client;
 
             let client_info = String::from_redis_value(
@@ -297,42 +285,25 @@ mod standalone_client_tests {
             .unwrap();
             assert!(client_info.contains("db=4"));
 
-            let address = server.get_client_addr();
-            drop(server);
+            kill_connection(&mut client).await;
 
-            // we use another thread, so that the creation of the server won't block the client work.
-            let thread = std::thread::spawn(move || {
-                block_on_all(async move {
-                    let error = client.send_packed_command(&client_info_cmd).await;
-                    assert!(error.is_err(), "{error:?}",);
-                    let error = error.unwrap_err();
-                    assert!(
-                        error.is_connection_dropped() || error.is_timeout(),
-                        "{error:?}",
-                    );
+            let error = client.send_packed_command(&client_info_cmd).await;
+            assert!(error.is_err(), "{error:?}",);
+            let error = error.unwrap_err();
+            assert!(
+                error.is_connection_dropped() || error.is_timeout(),
+                "{error:?}",
+            );
 
-                    server_available_event.wait().await;
-                    let client_info = repeat_try_create(|| async {
-                        let mut client = client.clone();
-                        String::from_redis_value(
-                            &client.send_packed_command(&client_info_cmd).await.unwrap(),
-                        )
-                        .ok()
-                    })
-                    .await;
-                    assert!(client_info.contains("db=4"));
-                });
-            });
-
-            // If we don't sleep here, TLS connections will start reconnecting too soon, and then will timeout
-            // before the server is ready.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-
-            let _new_server = RedisServer::new_with_addr_and_modules(address.clone(), &[]);
-            wait_for_server_to_become_ready(&address).await;
-            server_available_event_clone.set();
-
-            thread.join().unwrap();
+            let client_info = repeat_try_create(|| async {
+                let mut client = client.clone();
+                String::from_redis_value(
+                    &client.send_packed_command(&client_info_cmd).await.unwrap(),
+                )
+                .ok()
+            })
+            .await;
+            assert!(client_info.contains("db=4"));
         });
     }
 }
