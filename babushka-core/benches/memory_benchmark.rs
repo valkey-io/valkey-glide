@@ -2,7 +2,7 @@ use babushka::{
     client::Client,
     connection_request::{AddressInfo, ConnectionRequest, TlsMode},
 };
-use iai_callgrind::{black_box, main};
+use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use redis::{cmd, Value};
 use tokio::runtime::Builder;
 
@@ -28,14 +28,12 @@ where
     });
 }
 
-// Don't forget the `#[inline(never)]`
-#[inline(never)]
+#[library_benchmark]
 fn just_setup() {
     runner(|_| async {});
 }
 
-// Don't forget the `#[inline(never)]`
-#[inline(never)]
+#[library_benchmark]
 fn send_message() {
     runner(|mut client| async move {
         client
@@ -45,8 +43,7 @@ fn send_message() {
     });
 }
 
-// Don't forget the `#[inline(never)]`
-#[inline(never)]
+#[library_benchmark]
 fn send_and_receive_messages() {
     runner(|mut client| async move {
         let mut command = cmd("SET");
@@ -77,4 +74,42 @@ fn send_and_receive_messages() {
     });
 }
 
-main!(just_setup, send_message, send_and_receive_messages);
+#[library_benchmark]
+fn lots_of_messages() {
+    runner(|mut client| async move {
+        for _ in 0..1000 {
+            let mut command = cmd("SET");
+            command.arg("foo").arg("bar");
+            client
+                .req_packed_command(&black_box(command), None)
+                .await
+                .unwrap();
+            let mut command = cmd("SET");
+            command.arg("baz").arg("foo");
+            client
+                .req_packed_command(&black_box(command), None)
+                .await
+                .unwrap();
+            let mut command = cmd("MGET");
+            command.arg("baz").arg("foo");
+            let result = client
+                .req_packed_command(&black_box(command), None)
+                .await
+                .unwrap();
+            assert!(
+                result
+                    == Value::Bulk(vec![
+                        Value::Data(b"foo".to_vec()),
+                        Value::Data(b"bar".to_vec())
+                    ])
+            )
+        }
+    });
+}
+
+library_benchmark_group!(
+    name = cluster;
+    benchmarks = just_setup, send_message, send_and_receive_messages, lots_of_messages
+);
+
+main!(library_benchmark_groups = cluster);
