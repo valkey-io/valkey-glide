@@ -15,6 +15,7 @@
         "redis": "^4.6.8"
     },
     "devDependencies": {
-        "@types/command-line-args": "^5.2.1"
+        "@types/command-line-args": "^5.2.1",
+        "@types/node": "^20.6.3"
     }
 }
