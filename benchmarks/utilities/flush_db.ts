@@ -1,5 +1,5 @@
+import { RedisClientType, RedisClusterType } from "redis";
 import { createRedisClient, receivedOptions } from "./utils";
-import { RedisClusterType, RedisClientType } from "redis";
 
 async function flush_database(
     host: string,
