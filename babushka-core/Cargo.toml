@@ -35,7 +35,7 @@ criterion = { version = "^0.5", features = ["html_reports", "async_tokio"] }
 which = "4.4.0"
 ctor = "0.2.2"
 redis = { path = "../submodules/redis-rs/redis", features = ["tls-rustls-insecure"] }
-iai-callgrind = "0.6"
+iai-callgrind = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 once_cell = "1.18.0"
 
