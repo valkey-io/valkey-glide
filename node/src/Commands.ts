@@ -279,6 +279,17 @@ export function createConfigSet(
     );
 }
 
+export function createDecr(key: string): redis_request.Command {
+    return createCommand(RequestType.Decr, [key]);
+}
+
+export function createDecrBy(
+    key: string,
+    amount: number
+): redis_request.Command {
+    return createCommand(RequestType.DecrBy, [key, amount.toString()]);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
