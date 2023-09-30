@@ -11,6 +11,8 @@ import {
     createDecrBy,
     createDel,
     createGet,
+    createHGet,
+    createHSet,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -368,6 +370,32 @@ export class BaseClient {
      */
     public incrByFloat(key: string, amount: number): Promise<string> {
         return this.createWritePromise(createIncrByFloat(key, amount));
+    }
+
+    /** Retrieve the value associated with field in the hash stored at key.
+     * See https://redis.io/commands/hget/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash stored at key to retrieve from the database.
+     * @returns the value associated with field, or null when field is not present in the hash or key does not exist.
+     */
+    public hget(key: string, field: string): Promise<string | null> {
+        return this.createWritePromise(createHGet(key, field));
+    }
+
+    /** Sets the specified fields to their respective values in the hash stored at key.
+     * See https://redis.io/commands/hset/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
+     *  to be set in the hash stored at the specified key.
+     * @returns The number of fields that were added.
+     */
+    public hset(
+        key: string,
+        fieldValueMap: Record<string, string>
+    ): Promise<number> {
+        return this.createWritePromise(createHSet(key, fieldValueMap));
     }
 
     /** Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.

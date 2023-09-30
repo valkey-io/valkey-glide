@@ -279,6 +279,20 @@ export function createConfigSet(
     );
 }
 
+export function createHGet(key: string, field: string): redis_request.Command {
+    return createCommand(RequestType.HashGet, [key, field]);
+}
+
+export function createHSet(
+    key: string,
+    fieldValueMap: Record<string, string>
+): redis_request.Command {
+    return createCommand(
+        RequestType.HashSet,
+        [key].concat(Object.entries(fieldValueMap).flat())
+    );
+}
+
 export function createDecr(key: string): redis_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
