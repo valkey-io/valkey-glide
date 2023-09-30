@@ -21,6 +21,8 @@ type BaseClient = {
     mget: (keys: string[]) => Promise<(string | null)[]>;
     incr: (key: string) => Promise<number>;
     incrBy: (key: string, amount: number) => Promise<number>;
+    decr: (key: string) => Promise<number>;
+    decrBy: (key: string, amount: number) => Promise<number>;
     incrByFloat: (key: string, amount: number) => Promise<string>;
     configGet: (parameters: string[]) => Promise<ClusterResponse<string[]>>;
     configSet: (parameters: Record<string, string>) => Promise<"OK">;
@@ -362,6 +364,65 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping("Hello")).toEqual("Hello");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "decr and decrBy existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "10")).toEqual("OK");
+                expect(await client.decr(key)).toEqual(9);
+                expect(await client.get(key)).toEqual("9");
+                expect(await client.decrBy(key, 4)).toEqual(5);
+                expect(await client.get(key)).toEqual("5");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "decr and decrBy with non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                /// key1 and key2 does not exist, so it set to 0 before performing the operation.
+                expect(await client.get(key1)).toBeNull();
+                expect(await client.decr(key1)).toEqual(-1);
+                expect(await client.get(key1)).toEqual("-1");
+                expect(await client.get(key2)).toBeNull();
+                expect(await client.decrBy(key2, 3)).toEqual(-3);
+                expect(await client.get(key2)).toEqual("-3");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "decr and decrBy with a key that contains a value of string that can not be represented as integer",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                try {
+                    expect(await client.decr(key)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "value is not an integer"
+                    );
+                }
+
+                try {
+                    expect(await client.decrBy(key, 3)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "value is not an integer"
+                    );
+                }
             });
         },
         config.timeout
