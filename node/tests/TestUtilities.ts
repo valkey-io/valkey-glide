@@ -50,6 +50,8 @@ export function transactionTest(
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
     const key3 = "{key}" + uuidv4();
+    const key4 = "{key}" + uuidv4();
+    const field = uuidv4();
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
     baseTransaction.set(key2, "baz", {
@@ -60,5 +62,7 @@ export function transactionTest(
     baseTransaction.mset({ [key3]: value });
     baseTransaction.mget([key1, key2]);
     baseTransaction.del([key1]);
-    return ["OK", null, ["bar", "baz"], "OK", ["bar", "baz"], 1];
+    baseTransaction.hset(key4, { [field]: value });
+    baseTransaction.hget(key4, field);
+    return ["OK", null, ["bar", "baz"], "OK", ["bar", "baz"], 1, 1, value];
 }
