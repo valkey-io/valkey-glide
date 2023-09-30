@@ -7,6 +7,8 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     SetOptions,
+    createDecr,
+    createDecrBy,
     createDel,
     createGet,
     createIncr,
@@ -366,6 +368,29 @@ export class BaseClient {
      */
     public incrByFloat(key: string, amount: number): Promise<string> {
         return this.createWritePromise(createIncrByFloat(key, amount));
+    }
+
+    /** Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/decr/ for details.
+     *
+     * @param key - The key to decrement it's value.
+     * @returns the value of key after the decrement. An error is returned if the key contains a value
+     *  of the wrong type or contains a string that can not be represented as integer.
+     */
+    public decr(key: string): Promise<number> {
+        return this.createWritePromise(createDecr(key));
+    }
+
+    /** Decrements the number stored at key by decrement. If the key does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/decrby/ for details.
+     *
+     * @param key - The key to decrement it's value.
+     * @param amount - The amount to decrement.
+     * @returns the value of key after the decrement. An error is returned if the key contains a value
+     *   of the wrong type or contains a string that can not be represented as integer.
+     */
+    public decrBy(key: string, amount: number): Promise<number> {
+        return this.createWritePromise(createDecrBy(key, amount));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
