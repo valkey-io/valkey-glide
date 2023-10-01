@@ -2,6 +2,7 @@ use crate::connection_request::{
     AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFromReplicaStrategy, TlsMode,
 };
 use futures::FutureExt;
+use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
 use redis::{
@@ -165,7 +166,7 @@ async fn create_cluster_client(
     request: ConnectionRequest,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
-    let tls_mode = request.tls_mode.enum_value_or(TlsMode::NoTls);
+    let tls_mode = request.tls_mode.enum_value_or_default();
     let redis_connection_info = get_redis_connection_info(request.authentication_info.0, 0);
     let initial_nodes = request
         .addresses
@@ -224,10 +225,49 @@ impl std::fmt::Display for ConnectionError {
     }
 }
 
+fn format_non_zero_value(name: &'static str, value: u32) -> String {
+    if value > 0 {
+        format!("\n{name}: {value}")
+    } else {
+        String::new()
+    }
+}
+
+fn sanitized_request_string(request: &ConnectionRequest) -> String {
+    let addresses = request
+        .addresses
+        .iter()
+        .map(|address| format!("{}:{}", address.host, address.port))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let tls_mode = request.tls_mode.enum_value_or_default();
+    let cluster_mode = request.cluster_mode_enabled;
+    let response_timeout = format_non_zero_value("response timeout", request.response_timeout);
+    let client_creation_timeout =
+        format_non_zero_value("client creation timeout", request.client_creation_timeout);
+    let database_id = format_non_zero_value("database ID", request.database_id);
+    let rfr_strategy = request.read_from_replica_strategy.enum_value_or_default();
+    let connection_retry_strategy = match &request.connection_retry_strategy.0 {
+        Some(strategy) => {
+            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}",
+        strategy.number_of_retries, strategy.exponent_base, strategy.factor)
+        }
+        None => String::new(),
+    };
+
+    format!(
+        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{response_timeout}{client_creation_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
+    )
+}
+
 impl Client {
     pub async fn new(request: ConnectionRequest) -> Result<Self, ConnectionError> {
         const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_millis(2500);
 
+        log_info(
+            "Connection configuration",
+            sanitized_request_string(&request),
+        );
         let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
         let total_connection_timeout = to_duration(
             request.client_creation_timeout,

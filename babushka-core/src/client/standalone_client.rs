@@ -75,7 +75,7 @@ impl StandaloneClient {
             connection_request.database_id,
         );
 
-        let tls_mode = connection_request.tls_mode.enum_value_or(TlsMode::NoTls);
+        let tls_mode = connection_request.tls_mode.enum_value_or_default();
         let node_count = connection_request.addresses.len();
         let mut stream = stream::iter(connection_request.addresses.iter())
             .map(|address| async {
@@ -192,6 +192,10 @@ impl StandaloneClient {
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
+                log_warn(
+                    "single request",
+                    format!("received disconnect error `{err}`"),
+                );
                 reconnecting_connection.reconnect();
                 Err(err)
             }
@@ -210,6 +214,10 @@ impl StandaloneClient {
         let result = connection.send_packed_commands(cmd, offset, count).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
+                log_warn(
+                    "pipeline request",
+                    format!("received disconnect error `{err}`"),
+                );
                 reconnecting_connection.reconnect();
                 Err(err)
             }
@@ -292,9 +300,7 @@ async fn get_connection_and_replication_info(
 fn get_read_from_replica_strategy(
     read_from_replica_strategy: &EnumOrUnknown<crate::connection_request::ReadFromReplicaStrategy>,
 ) -> ReadFromReplicaStrategy {
-    match read_from_replica_strategy
-        .enum_value_or(crate::connection_request::ReadFromReplicaStrategy::AlwaysFromPrimary)
-    {
+    match read_from_replica_strategy.enum_value_or_default() {
         crate::connection_request::ReadFromReplicaStrategy::AlwaysFromPrimary => {
             ReadFromReplicaStrategy::AlwaysFromPrimary
         }

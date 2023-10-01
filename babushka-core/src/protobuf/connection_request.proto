@@ -24,6 +24,7 @@ message AuthenticationInfo {
     string username = 2;
 }
 
+// IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.
 message ConnectionRequest {
     repeated AddressInfo addresses = 1;
     TlsMode tls_mode = 2;
