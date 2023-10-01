@@ -25,7 +25,21 @@ import {
 import { redis_request } from "./ProtobufMessage";
 
 /**
- * Base class that includes all the shared commands in Client and ClusterClient.
+ * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
+ * Transactions allow the execution of a group of commands in a single step.
+ *
+ * Command Response:
+ *  An array of command responses is returned by the client exec command, in the order they were given.
+ *  Each element in the array represents a command given to the transaction.
+ *  The response for each command depends on the executed Redis command.
+ *  Specific response types are documented alongside each method.
+ *
+ * @example
+ *       transaction = new BaseTransaction();
+ *       transaction.set("key", "value");
+ *       transaction.get("key");
+ *       await client.exec(transaction);
+ *       [OK , "value"]
  */
 export class BaseTransaction {
     readonly commands: redis_request.Command[] = [];
@@ -34,7 +48,8 @@ export class BaseTransaction {
      *  See https://redis.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @returns If the key exists, returns the value of the key as a string. Otherwise, return null.
+     *
+     * Command Response - If the key exists, returns the value of the key as a string. Otherwise, return null.
      */
     public get(key: string) {
         this.commands.push(createGet(key));
@@ -46,7 +61,8 @@ export class BaseTransaction {
      * @param key - The key to store.
      * @param value - The value to store with the given key.
      * @param options - The set options.
-     * @returns If the value is successfully set, return OK.
+     *
+     * Command Response - If the value is successfully set, return OK.
      *          If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return null.
      *          If return_old_value is set, return the old value as a string.
      */
@@ -58,7 +74,8 @@ export class BaseTransaction {
      * See https://redis.io/commands/ping/ for details.
      *
      * @param str - the ping argument that will be returned.
-     * Returns PONG if no argument is provided, otherwise return a copy of the argument.
+     *
+     * Command Response - PONG if no argument is provided, otherwise return a copy of the argument.
      */
     public ping(str?: string) {
         this.commands.push(createPing(str));
@@ -69,7 +86,8 @@ export class BaseTransaction {
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
-     * @returns a string containing the information for the sections requested.
+     *
+     * Command Response - a string containing the information for the sections requested.
      */
     public info(options?: InfoOptions[]) {
         this.commands.push(createInfo(options));
@@ -79,7 +97,8 @@ export class BaseTransaction {
      *  See https://redis.io/commands/del/ for details.
      *
      * @param keys - A list of keys to be deleted from the database.
-     * @returns the number of keys that were removed.
+     *
+     * Command Response - the number of keys that were removed.
      */
     public del(keys: string[]) {
         this.commands.push(createDel(keys));
@@ -88,7 +107,7 @@ export class BaseTransaction {
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/select/ for details.
      *
-     * Returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     * Command Response - "OK" when the configuration was rewritten properly, Otherwise an error is raised.
      */
     public configRewrite() {
         this.commands.push(createConfigRewrite());
@@ -97,7 +116,7 @@ export class BaseTransaction {
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
      *
-     * Returns always "OK"
+     * Command Response - always "OK"
      */
     public configResetStat() {
         this.commands.push(createConfigResetStat());
@@ -107,7 +126,8 @@ export class BaseTransaction {
      * See https://redis.io/commands/mget/ for details.
      *
      * @param keys - A list of keys to retrieve values for.
-     * Returns A list of values corresponding to the provided keys. If a key is not found,
+     *
+     * Command Response - A list of values corresponding to the provided keys. If a key is not found,
      *  its corresponding value in the list will be null.
      */
     public mget(keys: string[]) {
@@ -118,7 +138,8 @@ export class BaseTransaction {
      * See https://redis.io/commands/mset/ for details.
      *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
-     * Returns always "OK".
+     *
+     * Command Response - always "OK".
      */
     public mset(keyValueMap: Record<string, string>) {
         this.commands.push(createMSet(keyValueMap));
@@ -128,7 +149,8 @@ export class BaseTransaction {
      * See https://redis.io/commands/incr/ for details.
      *
      * @param key - The key to increment it's value.
-     * Returns the value of key after the increment, An error is returned if the key contains a value
+     *
+     * Command Response - the value of key after the increment, An error is returned if the key contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
     public incr(key: string) {
@@ -140,7 +162,8 @@ export class BaseTransaction {
      *
      * @param key - The key to increment it's value.
      * @param amount - The amount to increment.
-     * Returns the value of key after the increment, An error is returned if the key contains a value
+     *
+     * Command Response - the value of key after the increment, An error is returned if the key contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, amount: number) {
@@ -154,7 +177,8 @@ export class BaseTransaction {
      *
      * @param key - The key to increment it's value.
      * @param amount - The amount to increment.
-     * Returns the value of key after the increment as string, An error is returned if the key contains a value of the wrong type.
+     *
+     * Command Response - the value of key after the increment as string, An error is returned if the key contains a value of the wrong type.
      *
      */
     public incrByFloat(key: string, amount: number) {
@@ -260,6 +284,21 @@ export class BaseTransaction {
 
 /**
  * Extends BaseTransaction class for Redis standalone commands.
+ * Transactions allow the execution of a group of commands in a single step.
+ *
+ * Command Response:
+ *  An array of command responses is returned by the RedisClient.exec command, in the order they were given.
+ *  Each element in the array represents a command given to the transaction.
+ *  The response for each command depends on the executed Redis command.
+ *  Specific response types are documented alongside each method.
+ *
+ * @example
+ *       transaction = new Transaction();
+ *       transaction.set("key", "value");
+ *       transaction.select(1);  /// Standalone command
+ *       transaction.get("key");
+ *       await RedisClient.exec(transaction);
+ *       [OK , OK , null]
  */
 export class Transaction extends BaseTransaction {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
@@ -268,7 +307,8 @@ export class Transaction extends BaseTransaction {
      * See https://redis.io/commands/select/ for details.
      *
      * @param index - The index of the database to select.
-     * Returns A simple OK response.
+     *
+     * Command Response - A simple OK response.
      */
     public select(index: number) {
         this.commands.push(createSelect(index));
@@ -277,6 +317,14 @@ export class Transaction extends BaseTransaction {
 
 /**
  * Extends BaseTransaction class for cluster mode commands.
+ * Transactions allow the execution of a group of commands in a single step.
+ *
+ * Command Response:
+ *  An array of command responses is returned by the RedisClusterClient.exec command, in the order they were given.
+ *  Each element in the array represents a command given to the transaction.
+ *  The response for each command depends on the executed Redis command.
+ *  Specific response types are documented alongside each method.
+ *
  */
 export class ClusterTransaction extends BaseTransaction {
     /// TODO: add all CLUSTER commands
