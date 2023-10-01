@@ -7,12 +7,12 @@ import {
     it,
 } from "@jest/globals";
 import { exec } from "child_process";
-import { ClusterTransaction } from "../";
 import {
+    ClusterTransaction,
     ConnectionOptions,
     InfoOptions,
     RedisClusterClient,
-} from "../build-ts";
+} from "../";
 import { convertMultiNodeResponseToDict } from "../src/RedisClusterClient";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";
