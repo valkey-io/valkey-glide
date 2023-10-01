@@ -3,6 +3,7 @@ import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
     createClientGetName,
+    createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -287,6 +288,27 @@ export class RedisClusterClient extends BaseClient {
             createConfigResetStat(),
             toProtobufRoute(route)
         );
+    }
+
+    /** Returns the current connection id.
+     * See https://redis.io/commands/client-id/ for details.
+     *
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     * @returns the id of the client. When specifying a route other than a single node,
+     * the response will be a dictionary of Address: nodeResponse.
+     */
+    public clientId(route?: Routes): Promise<ClusterResponse<number>> {
+        const result = this.createWritePromise<number>(
+            createClientId(),
+            toProtobufRoute(route)
+        );
+        return result.then((res) => {
+            return convertMultiNodeResponseToDict<number>(
+                res,
+                (response) => typeof response == "number"
+            );
+        });
     }
 
     /** Reads the configuration parameters of a running Redis server.
