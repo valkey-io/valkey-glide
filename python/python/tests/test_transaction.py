@@ -28,6 +28,7 @@ def transaction_test(
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key3 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key4 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
 
@@ -53,6 +54,9 @@ def transaction_test(
     transaction.config_set({"timeout": "1000"})
     transaction.config_get(["timeout"])
 
+    transaction.hset(key4, {key: value, key2: value2})
+    transaction.hget(key4, key2)
+
     return [
         OK,
         value,
@@ -68,6 +72,8 @@ def transaction_test(
         "PONG",
         OK,
         ["timeout", "1000"],
+        2,
+        value2,
     ]
 
 
