@@ -24,4 +24,4 @@ jobs:
               run: |
                   npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript
                   npm i
-                  npx eslint .
+                  npx eslint . --max-warnings=0
