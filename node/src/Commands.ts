@@ -304,6 +304,13 @@ export function createDecrBy(
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
 }
 
+export function createHDel(
+    key: string,
+    fields: string[]
+): redis_request.Command {
+    return createCommand(RequestType.HashDel, [key].concat(fields));
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }

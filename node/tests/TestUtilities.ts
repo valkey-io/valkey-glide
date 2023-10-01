@@ -64,5 +64,6 @@ export function transactionTest(
     baseTransaction.del([key1]);
     baseTransaction.hset(key4, { [field]: value });
     baseTransaction.hget(key4, field);
-    return ["OK", null, ["bar", "baz"], "OK", ["bar", "baz"], 1, 1, value];
+    baseTransaction.hdel(key4, [field]);
+    return ["OK", null, ["bar", "baz"], "OK", ["bar", "baz"], 1, 1, value, 1];
 }
