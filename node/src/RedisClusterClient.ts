@@ -15,7 +15,7 @@ import { ClusterTransaction } from "./Transaction";
 
 /**
  * If the command's routing is to one node we will get T as a response type,
- * otherwise, we will get the following response: [[Address, nodeResponse], ...] and the type will be [string, T][]
+ * otherwise, we will get a dictionary of address: nodeResponse, address is of type string and nodeResponse is of type T.
  */
 export type ClusterResponse<T> = T | Record<string, T>;
 
@@ -278,10 +278,18 @@ export class RedisClusterClient extends BaseClient {
         parameters: string[],
         route?: Routes
     ): Promise<ClusterResponse<string[]>> {
-        return this.createWritePromise(
+        const result = this.createWritePromise<string[] | [string, string[]][]>(
             createConfigGet(parameters),
             toProtobufRoute(route)
         );
+        return result.then((res) => {
+            return convertMultiNodeResponseToDict<string[]>(
+                res,
+                (response: (string | [string, string[]])[]) =>
+                    Array.isArray(response) &&
+                    response.every((item) => typeof item === "string")
+            );
+        });
     }
 
     /** Set configuration parameters to the specified values.
