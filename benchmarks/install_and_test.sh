@@ -81,6 +81,7 @@ function runRustBenchmark(){
 function flushDB() {
   cd $utilitiesDir
   npm install
+  npx tsc
   npm run flush -- --host $host $tlsFlag $clusterFlag $portFlag
 }
 
