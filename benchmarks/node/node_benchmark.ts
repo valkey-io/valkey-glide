@@ -4,11 +4,11 @@ import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
 import {
-    receivedOptions,
-    generate_value,
     generate_key_get,
     generate_key_set,
+    generate_value,
     getAddress,
+    receivedOptions,
 } from "../utilities/utils";
 
 export const PROB_GET = 0.8;
