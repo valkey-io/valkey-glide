@@ -1,9 +1,9 @@
 import commandLineArgs from "command-line-args";
 import {
+    RedisClientType,
+    RedisClusterType,
     createClient,
     createCluster,
-    RedisClusterType,
-    RedisClientType,
 } from "redis";
 
 export const PORT = 6379;
