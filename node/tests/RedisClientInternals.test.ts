@@ -50,7 +50,7 @@ function sendResponse(
     const new_response = response.Response.create();
     new_response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
-        const pointer = createLeakedValue(message!);
+        const pointer = createLeakedValue(message ?? "fake value");
         const pointer_number = Number(pointer.toString());
         new_response.respPointer = pointer_number;
     } else if (responseType == ResponseType.ClosingError) {
@@ -86,9 +86,7 @@ function getConnectionAndSocket(
             path.join(os.tmpdir(), `socket_listener`)
         );
         const socketName = path.join(temporaryFolder, "read");
-        let connectionPromise:
-            | Promise<RedisClient | RedisClusterClient>
-            | undefined = undefined;
+        let connectionPromise: Promise<RedisClient | RedisClusterClient>; // eslint-disable-line prefer-const
         const server = net
             .createServer(async (socket) => {
                 socket.once("data", (data) => {
@@ -105,7 +103,11 @@ function getConnectionAndSocket(
                     sendResponse(socket, ResponseType.Null, 0);
                 });
 
-                const connection = await connectionPromise!;
+                if (!connectionPromise) {
+                    throw new Error("connectionPromise wasn't set");
+                }
+
+                const connection = await connectionPromise;
                 resolve({
                     connection,
                     socket,
