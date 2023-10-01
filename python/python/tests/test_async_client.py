@@ -471,6 +471,25 @@ class TestCommands:
 
         assert "value is not an integer" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hset_hget(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hget(key, field) == "value"
+        assert await redis_client.hget(key, field2) == "value2"
+        assert await redis_client.hget(key, "non_existing_field") is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hset_without_data(self, redis_client: TRedisClient):
+        with pytest.raises(Exception) as e:
+            await redis_client.hset("key", {})
+
+        assert "wrong number of arguments" in str(e)
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):

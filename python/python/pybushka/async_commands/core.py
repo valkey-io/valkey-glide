@@ -319,3 +319,50 @@ class CoreCommands(Protocol):
         return cast(
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
+
+    async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
+        """Sets the specified fields to their respective values in the hash stored at `key`.
+        See https://redis.io/commands/hset/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field_value_map (Mapping[str, str]): A field-value map consisting of fields and their corresponding values
+            to be set in the hash stored at the specified key.
+
+        Returns:
+            int: The number of fields that were added or modified in the hash.
+
+        Example:
+            >>> hset("my_hash", {"field": "value", "field2": "value2"})
+                2
+        """
+        field_value_list: List[str] = [key]
+        for pair in field_value_map.items():
+            field_value_list.extend(pair)
+        return cast(
+            int,
+            await self._execute_command(RequestType.HashSet, field_value_list),
+        )
+
+    async def hget(self, key: str, field: str) -> Optional[str]:
+        """Retrieves the value associated with field in the hash stored at `key`.
+        See https://redis.io/commands/hget/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field whose value should be retrieved.
+
+        Returns:
+            Optional[str]: The value associated with the specified field in the hash.
+            Returns None if the field or key does not exist.
+
+        Examples:
+            >>> hget("my_hash", "field")
+                "value"
+            >>> hget("my_hash", "nonexistent_field")
+                None
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.HashGet, [key, field]),
+        )
