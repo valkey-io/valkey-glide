@@ -10,6 +10,7 @@ import {
     createDecrBy,
     createDel,
     createGet,
+    createHDel,
     createHGet,
     createHSet,
     createIncr,
@@ -266,6 +267,19 @@ export class BaseTransaction {
      */
     public hset(key: string, fieldValueMap: Record<string, string>) {
         this.commands.push(createHSet(key, fieldValueMap));
+    }
+
+    /** Removes the specified fields from the hash stored at key.
+     * Specified fields that do not exist within this hash are ignored.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields to remove from the hash stored at key.
+     *
+     * Command Response - the number of fields that were removed from the hash, not including specified but non existing fields.
+     * If key does not exist, it is treated as an empty hash and it returns 0.
+     */
+    public hdel(key: string, fields: string[]) {
+        this.commands.push(createHDel(key, fields));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
