@@ -1,0 +1,23 @@
+name: Lint TypeScript
+
+inputs:
+    package-folder:
+        description: "folder that contains the target Cargo.toml file"
+        required: true
+        type: string
+
+runs:
+    using: "composite"
+
+    steps:
+        - uses: actions/checkout@v4
+
+        - run: cp .eslintrc.cjs ${{ inputs.package-folder }}
+          shell: bash
+
+        - run: |
+              npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier
+              npm i
+              npx eslint . --max-warnings=0
+          working-directory: ${{ inputs.package-folder }}
+          shell: bash

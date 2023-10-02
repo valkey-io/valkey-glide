@@ -20,8 +20,24 @@ jobs:
         timeout-minutes: 10
         steps:
             - uses: actions/checkout@v4
+
+            - uses: ./.github/workflows/lint-ts
+              with:
+                  package-folder: ./node
+              name: lint node
+
+            - uses: ./.github/workflows/lint-ts
+              with:
+                  package-folder: ./benchmarks/node
+              name: lint benchmark
+
+            - uses: ./.github/workflows/lint-ts
+              with:
+                  package-folder: ./benchmarks/utilities
+              name: lint benchmark utilities
+
             - name: lint ts
               run: |
-                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript
+                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier
                   npm i
                   npx eslint .
