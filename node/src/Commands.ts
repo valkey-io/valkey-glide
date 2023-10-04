@@ -230,6 +230,10 @@ export function createSelect(index: number): redis_request.Command {
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
+export function createClientGetName(): redis_request.Command {
+    return createCommand(RequestType.ClientGetName, []);
+}
+
 export function createConfigRewrite(): redis_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }

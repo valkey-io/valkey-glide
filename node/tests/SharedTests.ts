@@ -14,6 +14,7 @@ type BaseClient = {
     ping: (str?: string) => Promise<string>;
     get: (key: string) => Promise<string | null>;
     del: (keys: string[]) => Promise<number>;
+    clientGetName: () => Promise<ClusterResponse<string | null>>;
     configRewrite: () => Promise<"OK">;
     info(options?: InfoOptions[]): Promise<ClusterResponse<string>>;
     configResetStat: () => Promise<"OK">;
@@ -214,6 +215,16 @@ export function runBaseTests<Context>(config: {
                 expect(deletedKeysNum).toEqual(3);
                 deletedKeysNum = await client.del([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "testing clientGetName",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.clientGetName()).toBeNull();
             });
         },
         config.timeout
