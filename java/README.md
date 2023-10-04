@@ -8,11 +8,13 @@ language api to enhance performance and limit cpu cycles at scale.
 
 The Java client (javababushka) contains the following parts:
 
-1. A Java client (lib folder): wrapper to rust-client
-2. An examples script: to sanity test javababushka and similar java-clients against a redis host
-3. A benchmark app: to performance benchmark test javababushka and similar java-clients against a redis host
+1. A Java client (lib folder): wrapper to rust-client.
+2. An examples script: to sanity test javababushka and similar java-clients against a redis host.
+3. A benchmark app: to performance benchmark test javababushka and similar java-clients against a redis host.
 
 ## Building
+
+First time initializing the project, you will need to create the gradle wrapper: `gradle wrapper`.
 
 You can assemble the Java clients benchmarks by compiling using `./gradlew build`. 
 
@@ -33,17 +35,17 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 ```
 
 The following arguments are accepted: 
-* `configuration`: Release or Debug configuration
 * `resultsFile`: the results output file
-* `concurrentTasks`: Number of concurrent tasks 
+* `concurrentTasks`: Number of concurrent tasks
 * `clients`: one of: all|jedis|lettuce|babushka
 * `clientCount`: Client count
-* `host`: redis server host url 
+* `host`: redis server host url
 * `port`: redis server port number
 * `tls`: redis TLS configured
 
 ### Troubleshooting
 
-* If you're unable to connect to redis (such as timeout), check your port or the TLS flag
-* Only server-side certificates are supported by the TLS configured redis
+* Connection Timeout: 
+  * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
+* Only server-side certificates are supported by the TLS configured redis.
 
