@@ -2,6 +2,7 @@ import * as net from "net";
 import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    createClientGetName,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -125,6 +126,16 @@ export class RedisClient extends BaseClient {
      */
     public select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index));
+    }
+
+    /** Get the name of the current connection.
+     *  See https://redis.io/commands/client-getname/ for more details.
+     *
+     * @returns the name of the client connection as a string if a name is set,
+     *       or null if no name is assigned.
+     */
+    public clientGetName(): Promise<string | null> {
+        return this.createWritePromise(createClientGetName());
     }
 
     /** Rewrite the configuration file with the current configuration.
