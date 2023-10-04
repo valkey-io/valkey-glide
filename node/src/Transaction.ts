@@ -1,6 +1,7 @@
 import {
     InfoOptions,
     SetOptions,
+    createClientGetName,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -103,6 +104,15 @@ export class BaseTransaction {
      */
     public del(keys: string[]) {
         this.commands.push(createDel(keys));
+    }
+
+    /** Get the name of the current connection.
+     *  See https://redis.io/commands/client-getname/ for more details.
+     *
+     *  Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
+     */
+    public clientGetName() {
+        this.commands.push(createClientGetName());
     }
 
     /** Rewrite the configuration file with the current configuration.
@@ -215,8 +225,6 @@ export class BaseTransaction {
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *  case the client will initially try to route the command to the nodes defined by `route`.
      *
      * Returns A list of values corresponding to the configuration parameters.
      *
@@ -229,8 +237,6 @@ export class BaseTransaction {
      *   See https://redis.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * Returns "OK" when the configuration was set properly. Otherwise an error is raised.
      *
