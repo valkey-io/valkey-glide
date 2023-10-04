@@ -3,6 +3,7 @@ import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
     createClientGetName,
+    createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -117,7 +118,8 @@ function toProtobufRoute(
     }
 }
 
-/** Convert the multi-node response from a list of [address, nodeResponse] pairs to a dictionary of address: nodeResponse.
+/** Convert the multi-node response from a list of [address, nodeResponse] pairs to
+ * a dictionary where each address is the key and its corresponding node response is the value.
  *
  * @param response - A list of lists, where each inner list contains an address (string)
  *  and the corresponding node response (of type T). Or a single node response (of type T).
@@ -216,7 +218,8 @@ export class RedisClusterClient extends BaseClient {
      *  When no parameter is provided, the default option is assumed.
      * @param route - The command will be routed automatically, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
-     * @returns a string containing the information for the sections requested.
+     * @returns a string containing the information for the sections requested. When specifying a route other than a single node,
+     * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public info(
         options?: InfoOptions[],
@@ -289,6 +292,27 @@ export class RedisClusterClient extends BaseClient {
         );
     }
 
+    /** Returns the current connection id.
+     * See https://redis.io/commands/client-id/ for details.
+     *
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     * @returns the id of the client. When specifying a route other than a single node,
+     * it returns a dictionary where each address is the key and its corresponding node response is the value.
+     */
+    public clientId(route?: Routes): Promise<ClusterResponse<number>> {
+        const result = this.createWritePromise<number>(
+            createClientId(),
+            toProtobufRoute(route)
+        );
+        return result.then((res) => {
+            return convertMultiNodeResponseToDict<number>(
+                res,
+                (response) => typeof response == "number"
+            );
+        });
+    }
+
     /** Reads the configuration parameters of a running Redis server.
      *  See https://redis.io/commands/config-get/ for details.
      *
@@ -298,7 +322,7 @@ export class RedisClusterClient extends BaseClient {
      *  If `route` is not provided, the command will be sent to the all nodes.
      *
      * @returns A map of values corresponding to the configuration parameters. When specifying a route other than a single node,
-     *  the response will be a dictionary of Address: nodeResponse.
+     *  it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public configGet(
         parameters: string[],
