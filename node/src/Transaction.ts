@@ -2,6 +2,7 @@ import {
     InfoOptions,
     SetOptions,
     createClientGetName,
+    createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -194,6 +195,15 @@ export class BaseTransaction {
      */
     public incrByFloat(key: string, amount: number) {
         this.commands.push(createIncrByFloat(key, amount));
+    }
+
+    /** Returns the current connection id.
+     * See https://redis.io/commands/client-id/ for details.
+     *
+     * Command Response - the id of the client.
+     */
+    public clientId() {
+        this.commands.push(createClientId());
     }
 
     /** Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.

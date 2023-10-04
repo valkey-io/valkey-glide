@@ -270,6 +270,10 @@ export function createIncrByFloat(
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
+export function createClientId(): redis_request.Command {
+    return createCommand(RequestType.ClientId, []);
+}
+
 export function createConfigGet(parameters: string[]): redis_request.Command {
     return createCommand(RequestType.ConfigGet, parameters);
 }

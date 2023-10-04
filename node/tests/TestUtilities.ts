@@ -37,11 +37,13 @@ export function flushallOnPort(port: number): Promise<void> {
 }
 
 /// This function takes the first result of the response if it got more than one response (like cluster responses).
-export function getFirstResult(res: string | Record<string, string>): string {
-    if (typeof res == "string") {
+export function getFirstResult(
+    res: string | number | Record<string, string> | Record<string, number>
+): string | number {
+    if (typeof res == "string" || typeof res == "number") {
         return res;
     }
-    return Object.values(res).at(0) as string;
+    return Object.values(res).at(0);
 }
 
 export function transactionTest(

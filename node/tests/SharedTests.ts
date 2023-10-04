@@ -22,6 +22,7 @@ type BaseClient = {
     mget: (keys: string[]) => Promise<(string | null)[]>;
     incr: (key: string) => Promise<number>;
     incrBy: (key: string, amount: number) => Promise<number>;
+    clientId: () => Promise<ClusterResponse<number>>;
     decr: (key: string) => Promise<number>;
     decrBy: (key: string, amount: number) => Promise<number>;
     incrByFloat: (key: string, amount: number) => Promise<string>;
@@ -235,9 +236,9 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const serverInfo = await client.info([InfoOptions.Server]);
-                const conf_file = parseInfoResponse(getFirstResult(serverInfo))[
-                    "config_file"
-                ];
+                const conf_file = parseInfoResponse(
+                    getFirstResult(serverInfo).toString()
+                )["config_file"];
                 if (conf_file.length > 0) {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
@@ -265,7 +266,7 @@ export function runBaseTests<Context>(config: {
                 const OldResult = await client.info([InfoOptions.Stats]);
                 expect(
                     Number(
-                        parseInfoResponse(getFirstResult(OldResult))[
+                        parseInfoResponse(getFirstResult(OldResult).toString())[
                             "total_commands_processed"
                         ]
                     )
@@ -273,7 +274,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.configResetStat()).toEqual("OK");
                 const result = await client.info([InfoOptions.Stats]);
                 expect(
-                    parseInfoResponse(getFirstResult(result))[
+                    parseInfoResponse(getFirstResult(result).toString())[
                         "total_commands_processed"
                     ]
                 ).toEqual("1");
@@ -381,6 +382,18 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping("Hello")).toEqual("Hello");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "clientId test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                expect(getFirstResult(await client.clientId())).toBeGreaterThan(
+                    0
+                );
             });
         },
         config.timeout
