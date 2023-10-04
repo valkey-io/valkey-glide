@@ -2,6 +2,7 @@ import * as net from "net";
 import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    createClientGetName,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -229,6 +230,31 @@ export class RedisClusterClient extends BaseClient {
             return convertMultiNodeResponseToDict<string>(
                 res,
                 (response) => typeof response == "string"
+            );
+        });
+    }
+
+    /** Get the name of the current connection.
+     *  See https://redis.io/commands/client-getname/ for more details.
+     *
+     * @param route - The command will be routed automatically, unless `route` is provided, in which
+     *   case the client will initially try to route the command to the nodes defined by `route`.
+     *
+     * @returns - the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * When specifying a route other than a single node, it returns a dictionary where each address is the key and
+     * its corresponding node response is the value.
+     */
+    public clientGetName(
+        route?: Routes
+    ): Promise<ClusterResponse<string | null>> {
+        const result = this.createWritePromise<string | null>(
+            createClientGetName(),
+            toProtobufRoute(route)
+        );
+        return result.then((res) => {
+            return convertMultiNodeResponseToDict<string | null>(
+                res,
+                (response) => typeof response == "string" || response == null
             );
         });
     }
