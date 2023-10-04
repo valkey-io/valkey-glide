@@ -20,7 +20,7 @@ async function fill_database(
     const sets = Array.from(Array(CONCURRENT_SETS).keys()).map(
         async (index) => {
             for (let i = 0; i < SIZE_SET_KEYSPACE / CONCURRENT_SETS; ++i) {
-                const key = (index * CONCURRENT_SETS + index).toString();
+                const key = (i * CONCURRENT_SETS + index).toString();
                 await client.set(key, data);
             }
         }
