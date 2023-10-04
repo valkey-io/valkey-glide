@@ -308,6 +308,9 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::IncrByFloat => Some(cmd("INCRBYFLOAT")),
         RequestType::Decr => Some(cmd("DECR")),
         RequestType::DecrBy => Some(cmd("DECRBY")),
+        RequestType::HashGetAll => Some(cmd("HGETALL")),
+        RequestType::HashMSet => Some(cmd("HMSET")),
+        RequestType::HashMGet => Some(cmd("HMGET")),
     }
 }
 
