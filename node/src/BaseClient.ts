@@ -12,6 +12,7 @@ import {
     createDel,
     createGet,
     createHDel,
+    createHExists,
     createHGet,
     createHMGet,
     createHSet,
@@ -445,6 +446,16 @@ export class BaseClient {
      */
     public hmget(key: string, fields: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createHMGet(key, fields));
+    }
+
+    /** Returns if field is an existing field in the hash stored at key.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field to check in the hash stored at key.
+     * @returns 1 if the hash contains field. If the hash does not contain the field, or if the key does not exist, it returns 0.
+     */
+    public hexists(key: string, field: string): Promise<number> {
+        return this.createWritePromise(createHExists(key, field));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
