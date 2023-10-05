@@ -14,8 +14,6 @@ The Java client (javababushka) contains the following parts:
 
 ## Building
 
-First time initializing the project, you will need to create the gradle wrapper: `gradle wrapper`.
-
 You can assemble the Java clients benchmarks by compiling using `./gradlew build`. 
 
 ## Code style
