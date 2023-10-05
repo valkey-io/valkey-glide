@@ -76,6 +76,8 @@ enum RequestType {
     HashGetAll=38;
     HashMSet=39;
     HashMGet=40;
+    HashIncrBy = 41;
+    HashIncrByFloat = 42;
 }
 
 message Command {
