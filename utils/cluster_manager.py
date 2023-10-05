@@ -142,7 +142,7 @@ def generate_tls_certs():
         stderr=subprocess.PIPE,
         text=True,
     )
-    redis_key_output, err = p.communicate(timeout=10)
+    _redis_key_output, err = p.communicate(timeout=10)
     if p.returncode != 0:
         raise Exception(f"Failed to read Redis key. Executed: {str(p.args)}:\n{err}")
 

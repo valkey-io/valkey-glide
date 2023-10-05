@@ -68,7 +68,8 @@ class AuthenticationOptions:
 
         Args:
             password (str): The password that will be passed to the cluster's Access Control Layer.
-            username (Optional[str]): The username that will be passed to the cluster's Access Control Layer. If not supplied, "default" will be used.
+            username (Optional[str]): The username that will be passed to the cluster's Access Control Layer.
+                If not supplied, "default" will be used.
         """
         self.password = password
         self.username = username
