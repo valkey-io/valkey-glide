@@ -311,6 +311,8 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::HashGetAll => Some(cmd("HGETALL")),
         RequestType::HashMSet => Some(cmd("HMSET")),
         RequestType::HashMGet => Some(cmd("HMGET")),
+        RequestType::HashIncrBy => Some(cmd("HINCRBY")),
+        RequestType::HashIncrByFloat => Some(cmd("HINCRBYFLOAT")),
     }
 }
 
