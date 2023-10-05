@@ -14,6 +14,7 @@ import {
     createGet,
     createHDel,
     createHGet,
+    createHMGet,
     createHSet,
     createIncr,
     createIncrBy,
@@ -296,6 +297,19 @@ export class BaseTransaction {
      */
     public hdel(key: string, fields: string[]) {
         this.commands.push(createHDel(key, fields));
+    }
+
+    /** Returns the values associated with the specified fields in the hash stored at key.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at key to retrieve from the database.
+     *
+     * Command Response - a list of values associated with the given fields, in the same order as they are requested.
+     * For every field that does not exist in the hash, a null value is returned.
+     * If key does not exist, it is treated as an empty hash and it returns a list of null values.
+     */
+    public hmget(key: string, fields: string[]) {
+        this.commands.push(createHMGet(key, fields));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
