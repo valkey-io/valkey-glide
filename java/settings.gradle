@@ -1,0 +1,5 @@
+rootProject.name = 'javababushka'
+
+include 'client'
+include 'integTest'
+include 'benchmarks'
