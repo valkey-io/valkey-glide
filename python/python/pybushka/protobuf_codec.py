@@ -49,7 +49,7 @@ class ProtobufCodec:
 
         local_int2byte = struct.Struct(">B").pack
 
-        def encode_varint(write, value, unused_deterministic=None):
+        def encode_varint(write, value):
             bits = value & 0x7F
             value >>= 7
             while value:
@@ -62,13 +62,11 @@ class ProtobufCodec:
 
     @classmethod
     def _varint_bytes(cls, value: int) -> bytes:
-        """Encode the given integer as a varint and return the bytes.
-        TODO: Improve performance
-        """
+        """Encode the given integer as a varint and return the bytes."""
 
         pieces: List[bytes] = []
         func = cls._varint_encoder()
-        func(pieces.append, value, True)
+        func(pieces.append, value)
         return b"".join(pieces)
 
     @classmethod
