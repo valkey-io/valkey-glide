@@ -32,7 +32,6 @@ class TestProtobufCodec:
     def test_decode_partial_message_fails(self):
         response = Response()
         response.callback_idx = 1
-        response.constant_response = 0
         b_arr = bytearray()
         ProtobufCodec.encode_delimited(b_arr, response)
         b_arr_view = memoryview(b_arr)

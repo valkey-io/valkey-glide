@@ -51,7 +51,7 @@ jobs:
               working-directory: ./python
               run: |
                   python -m pip install --upgrade pip
-                  pip install flake8 isort black mypy-protobuf
+                  pip install flake8 isort black mypy-protobuf deadcode
 
             - name: Lint with isort
               working-directory: ./python
@@ -70,6 +70,11 @@ jobs:
               working-directory: ./python
               run: |
                   black --target-version py36 --check --diff .
+
+            - name: Lint with deadcode
+              working-directory: .
+              run: |
+                  deadcode . --ignore-definitions=InfoSection,Level,*protobuf*,*pytest*
 
             - name: Start redis server
               working-directory: ./python

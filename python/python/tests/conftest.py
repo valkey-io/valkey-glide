@@ -13,6 +13,8 @@ from pybushka.logger import Logger
 from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.utils.cluster import RedisCluster
 
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 6379
 DEFAULT_TEST_LOG_LEVEL = logLevel.WARN
 
 Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
@@ -21,14 +23,14 @@ Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 def pytest_addoption(parser):
     parser.addoption(
         "--host",
-        default=default_host,
+        default=DEFAULT_HOST,
         action="store",
         help="Redis host endpoint, defaults to `%(default)s`",
     )
 
     parser.addoption(
         "--port",
-        default=default_port,
+        default=DEFAULT_PORT,
         action="store",
         help="Redis port, defaults to `%(default)s`",
     )
@@ -49,7 +51,7 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(autouse=True, scope="session")
-def call_before_all_tests(request):
+def call_before_all_pytests(request):
     """
     Called after the Session object has been created and
     before performing collection and entering the run test loop.

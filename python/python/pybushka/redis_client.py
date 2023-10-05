@@ -26,14 +26,12 @@ class BaseRedisClient(CoreCommands):
         To create a new client, use the `create` classmethod
         """
         self.config: ClientConfiguration = config
-        self._write_buffer: bytearray = bytearray(1024)
         self._available_futures: dict[int, asyncio.Future] = {}
         self._available_callbackIndexes: set[int] = set()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
         self._reader_task: Optional[asyncio.Task] = None
-        self._done_init = None
 
     @classmethod
     async def create(cls, config: Optional[ClientConfiguration] = None) -> Self:
@@ -69,10 +67,6 @@ class BaseRedisClient(CoreCommands):
         # Set the client configurations
         await self._set_connection_configurations()
         return self
-
-    async def _wait_for_init_complete(self) -> None:
-        while not self._done_init:
-            await asyncio.sleep(0.1)
 
     async def _create_uds_connection(self) -> None:
         try:

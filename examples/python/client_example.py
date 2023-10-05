@@ -73,9 +73,9 @@ async def test_cluster_client(host: str = "localhost", port: int = 6379):
 
 async def main():
     set_console_logger(LogLevel.DEBUG)
-    # set_file_logger(LogLevel.DEBUG)
+    set_file_logger(LogLevel.DEBUG)
     await test_standalone_client()
-    # await test_cluster_client()
+    await test_cluster_client()
 
 
 if __name__ == "__main__":
