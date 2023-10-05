@@ -319,6 +319,13 @@ export function createHDel(
     return createCommand(RequestType.HashDel, [key].concat(fields));
 }
 
+export function createHMGet(
+    key: string,
+    fields: string[]
+): redis_request.Command {
+    return createCommand(RequestType.HashMGet, [key].concat(fields));
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
