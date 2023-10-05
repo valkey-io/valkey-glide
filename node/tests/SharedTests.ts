@@ -34,6 +34,7 @@ type BaseClient = {
     ) => Promise<number>;
     hget: (key: string, field: string) => Promise<string | null>;
     hdel: (key: string, fields: string[]) => Promise<number>;
+    hmget: (key: string, fields: string[]) => Promise<(string | null)[]>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -524,6 +525,32 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hdel(key, [field1, field2])).toEqual(2);
                 expect(await client.hdel(key, [nonExistingField])).toEqual(0);
                 expect(await client.hdel(nonExistingKey, [field3])).toEqual(0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "testing hmget with multiple existing fields, an non existing field and an non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const nonExistingField = uuidv4();
+                const value = uuidv4();
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(
+                    await client.hmget(key, [field1, nonExistingField, field2])
+                ).toEqual([value, null, value]);
+                expect(
+                    await client.hmget(nonExistingKey, [field1, field2])
+                ).toEqual([null, null]);
             });
         },
         config.timeout
