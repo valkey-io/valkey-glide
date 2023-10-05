@@ -32,7 +32,7 @@ class BaseTransaction:
         finally:
             self.lock.release()
 
-    def dispose(self):
+    def clear(self):
         with self.lock:
             self.commands.clear()
 
