@@ -1,24 +1,30 @@
 package javababushka.benchmarks.utils;
 
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javababushka.benchmarks.AsyncClient;
 import javababushka.benchmarks.BenchmarkingApp;
 import javababushka.benchmarks.Client;
 import javababushka.benchmarks.SyncClient;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.tuple.Pair;
 
 public class Benchmarking {
   static final double PROB_GET = 0.8;
   static final double PROB_GET_EXISTING_KEY = 0.8;
   static final int SIZE_GET_KEYSPACE = 3750000;
   static final int SIZE_SET_KEYSPACE = 3000000;
+  static final int ASYNC_OPERATION_TIMEOUT_SEC = 1;
 
   private static ChosenAction randomAction() {
     if (Math.random() > PROB_GET) {
@@ -40,31 +46,19 @@ public class Benchmarking {
   }
 
   public interface Operation {
-    void go();
+    void go() throws Exception;
   }
 
-  public static Map<ChosenAction, ArrayList<Long>> getLatencies(
-      int iterations, Map<ChosenAction, Operation> actions) {
-    Map<ChosenAction, ArrayList<Long>> latencies = new HashMap<ChosenAction, ArrayList<Long>>();
-    for (ChosenAction action : actions.keySet()) {
-      latencies.put(action, new ArrayList<Long>());
-    }
-
-    for (int i = 0; i < iterations; i++) {
-      ChosenAction action = randomAction();
-      Operation op = actions.get(action);
-      ArrayList<Long> actionLatencies = latencies.get(action);
-      addLatency(op, actionLatencies);
-    }
-
-    return latencies;
-  }
-
-  private static void addLatency(Operation op, ArrayList<Long> latencies) {
+  private static Pair<ChosenAction, Long> getLatency(Map<ChosenAction, Operation> actions) {
+    var action = randomAction();
     long before = System.nanoTime();
-    op.go();
+    try {
+      actions.get(action).go();
+    } catch (Exception e) {
+      // timed out - exception from Future::get
+    }
     long after = System.nanoTime();
-    latencies.add(after - before);
+    return Pair.of(action, after - before);
   }
 
   // Assumption: latencies is sorted in ascending order
@@ -114,8 +108,7 @@ public class Benchmarking {
   }
 
   public static void printResults(
-      Map<ChosenAction, LatencyResults> calculatedResults, Optional<FileWriter> resultsFile)
-      throws IOException {
+      Map<ChosenAction, LatencyResults> calculatedResults, Optional<FileWriter> resultsFile) {
     if (resultsFile.isPresent()) {
       printResults(calculatedResults, resultsFile.get());
     } else {
@@ -124,16 +117,19 @@ public class Benchmarking {
   }
 
   public static void printResults(
-      Map<ChosenAction, LatencyResults> resultsMap, FileWriter resultsFile) throws IOException {
+      Map<ChosenAction, LatencyResults> resultsMap, FileWriter resultsFile) {
     for (Map.Entry<ChosenAction, LatencyResults> entry : resultsMap.entrySet()) {
       ChosenAction action = entry.getKey();
       LatencyResults results = entry.getValue();
 
-      resultsFile.write("Avg. time in ms per " + action + ": " + results.avgLatency / 1000000.0);
-      resultsFile.write(action + " p50 latency in ms: " + results.p50Latency / 1000000.0);
-      resultsFile.write(action + " p90 latency in ms: " + results.p90Latency / 1000000.0);
-      resultsFile.write(action + " p99 latency in ms: " + results.p99Latency / 1000000.0);
-      resultsFile.write(action + " std dev in ms: " + results.stdDeviation / 1000000.0);
+      try {
+        resultsFile.write("Avg. time in ms per " + action + ": " + results.avgLatency / 1000000.0);
+        resultsFile.write(action + " p50 latency in ms: " + results.p50Latency / 1000000.0);
+        resultsFile.write(action + " p90 latency in ms: " + results.p90Latency / 1000000.0);
+        resultsFile.write(action + " p99 latency in ms: " + results.p99Latency / 1000000.0);
+        resultsFile.write(action + " std dev in ms: " + results.stdDeviation / 1000000.0);
+      } catch (Exception ignored) {
+      }
     }
   }
 
@@ -150,41 +146,107 @@ public class Benchmarking {
     }
   }
 
-  public static Map<ChosenAction, LatencyResults> measurePerformance(
-      Client client, BenchmarkingApp.RunConfiguration config, boolean async) {
-    client.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
+  public static void testClientSetGet(
+      Supplier<Client> clientCreator, BenchmarkingApp.RunConfiguration config, boolean async) {
+    for (int concurrentNum : config.concurrentTasks) {
+      int iterations = Math.min(Math.max(100000, concurrentNum * 10000), 10000000);
+      for (int clientNum : config.clientCount) {
+        System.out.printf(
+            "%n =====> %s <===== %d clients %d concurrent %n%n",
+            clientCreator.get().getName(), clientNum, concurrentNum);
+        AtomicInteger iterationCounter = new AtomicInteger(0);
+        Map<ChosenAction, ArrayList<Long>> actionResults =
+            Map.of(
+                ChosenAction.GET_EXISTING, new ArrayList<>(),
+                ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
+                ChosenAction.SET, new ArrayList<>());
+        List<Runnable> tasks = new ArrayList<>();
 
-    int iterations = 10000;
-    String value = RandomStringUtils.randomAlphanumeric(config.dataSize);
+        for (int i = 0; i < concurrentNum; ) {
+          for (int j = 0; j < clientNum; j++) {
+            i++;
+            int finalI = i;
+            int finalJ = j;
+            var client = clientCreator.get();
+            client.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
+            tasks.add(
+                () -> {
+                  if (config.debugLogging) {
+                    System.out.printf(
+                        "%n concurrent = %d/%d, client# = %d/%d%n",
+                        finalI, concurrentNum, finalJ + 1, clientNum);
+                  }
+                  int iterationIncrement = iterationCounter.getAndIncrement();
+                  while (iterationIncrement < iterations) {
+                    if (config.debugLogging) {
+                      System.out.printf(
+                          "> iteration = %d/%d, client# = %d/%d%n",
+                          iterationIncrement + 1, iterations, finalJ + 1, clientNum);
+                    }
+                    // operate and calculate tik-tok
+                    Pair<ChosenAction, Long> result =
+                        measurePerformance(client, config.dataSize, async);
+                    actionResults.get(result.getLeft()).add(result.getRight());
 
-    if (config.resultsFile.isPresent()) {
-      try {
-        config.resultsFile.get().write(client.getName() + " client Benchmarking: ");
-      } catch (Exception ignored) {
+                    iterationIncrement = iterationCounter.getAndIncrement();
+                  }
+                });
+          }
+        }
+        if (config.debugLogging) {
+          System.out.printf("%s client Benchmarking: %n", clientCreator.get().getName());
+          System.out.printf(
+              "===> concurrentNum = %d, clientNum = %d, tasks = %d%n",
+              concurrentNum, clientNum, tasks.size());
+        }
+        tasks.stream()
+            .map(CompletableFuture::runAsync)
+            .forEach(
+                f -> {
+                  try {
+                    f.get();
+                  } catch (Exception e) {
+                    e.printStackTrace();
+                  }
+                });
+
+        printResults(calculateResults(actionResults), config.resultsFile);
       }
-    } else {
-      System.out.printf("%s client Benchmarking: %n", client.getName());
     }
 
-    Map<ChosenAction, Benchmarking.Operation> actions = new HashMap<>();
+    System.out.println();
+  }
+
+  public static Pair<ChosenAction, Long> measurePerformance(
+      Client client, int dataSize, boolean async) {
+
+    String value = RandomStringUtils.randomAlphanumeric(dataSize);
+    Map<ChosenAction, Operation> actions = new HashMap<>();
     actions.put(
         ChosenAction.GET_EXISTING,
         async
-            ? () -> ((AsyncClient) client).asyncGet(Benchmarking.generateKeySet())
-            : () -> ((SyncClient) client).get(Benchmarking.generateKeySet()));
+            ? () ->
+                ((AsyncClient) client)
+                    .asyncGet(generateKeySet())
+                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            : () -> ((SyncClient) client).get(generateKeySet()));
     actions.put(
         ChosenAction.GET_NON_EXISTING,
         async
-            ? () -> ((AsyncClient) client).asyncGet(Benchmarking.generateKeyGet())
-            : () -> ((SyncClient) client).get(Benchmarking.generateKeyGet()));
+            ? () ->
+                ((AsyncClient) client)
+                    .asyncGet(generateKeyGet())
+                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            : () -> ((SyncClient) client).get(generateKeyGet()));
     actions.put(
         ChosenAction.SET,
         async
-            ? () -> ((AsyncClient) client).asyncSet(Benchmarking.generateKeySet(), value)
-            : () -> ((SyncClient) client).set(Benchmarking.generateKeySet(), value));
+            ? () ->
+                ((AsyncClient) client)
+                    .asyncSet(generateKeySet(), value)
+                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            : () -> ((SyncClient) client).set(generateKeySet(), value));
 
-    var results = Benchmarking.calculateResults(Benchmarking.getLatencies(iterations, actions));
-    client.closeConnection();
-    return results;
+    return getLatency(actions);
   }
 }
