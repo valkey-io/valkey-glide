@@ -54,8 +54,5 @@ public class JedisClientIT {
     actions.put(
         ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
     actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));
-
-    Benchmarking.printResults(
-        Benchmarking.calculateResults(Benchmarking.getLatencies(iterations, actions)));
   }
 }

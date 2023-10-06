@@ -4,6 +4,7 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -150,10 +151,10 @@ public class Benchmarking {
       Supplier<Client> clientCreator, BenchmarkingApp.RunConfiguration config, boolean async) {
     for (int concurrentNum : config.concurrentTasks) {
       int iterations = Math.min(Math.max(100000, concurrentNum * 10000), 10000000);
-      for (int clientNum : config.clientCount) {
+      for (int clientCount : config.clientCount) {
         System.out.printf(
             "%n =====> %s <===== %d clients %d concurrent %n%n",
-            clientCreator.get().getName(), clientNum, concurrentNum);
+            clientCreator.get().getName(), clientCount, concurrentNum);
         AtomicInteger iterationCounter = new AtomicInteger(0);
         Map<ChosenAction, ArrayList<Long>> actionResults =
             Map.of(
@@ -162,42 +163,46 @@ public class Benchmarking {
                 ChosenAction.SET, new ArrayList<>());
         List<Runnable> tasks = new ArrayList<>();
 
-        for (int i = 0; i < concurrentNum; ) {
-          for (int j = 0; j < clientNum; j++) {
-            i++;
-            int finalI = i;
-            int finalJ = j;
-            var client = clientCreator.get();
-            client.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
-            tasks.add(
-                () -> {
+        // create clients
+        List<Client> clients = new LinkedList<>();
+        for (int cc = 0; cc < clientCount; cc++) {
+          Client newClient = clientCreator.get();
+          newClient.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
+          clients.add(newClient);
+        }
+
+        for (int taskNum = 0; taskNum < concurrentNum; taskNum++) {
+          final int taskNumDebugging = taskNum;
+          tasks.add(
+              () -> {
+                int iterationIncrement = iterationCounter.getAndIncrement();
+                int clientIndex = iterationIncrement % clients.size();
+
+                if (config.debugLogging) {
+                  System.out.printf(
+                      "%n concurrent = %d/%d, client# = %d/%d%n",
+                      taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
+                }
+                while (iterationIncrement < iterations) {
                   if (config.debugLogging) {
                     System.out.printf(
-                        "%n concurrent = %d/%d, client# = %d/%d%n",
-                        finalI, concurrentNum, finalJ + 1, clientNum);
+                        "> iteration = %d/%d, client# = %d/%d%n",
+                        iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
                   }
-                  int iterationIncrement = iterationCounter.getAndIncrement();
-                  while (iterationIncrement < iterations) {
-                    if (config.debugLogging) {
-                      System.out.printf(
-                          "> iteration = %d/%d, client# = %d/%d%n",
-                          iterationIncrement + 1, iterations, finalJ + 1, clientNum);
-                    }
-                    // operate and calculate tik-tok
-                    Pair<ChosenAction, Long> result =
-                        measurePerformance(client, config.dataSize, async);
-                    actionResults.get(result.getLeft()).add(result.getRight());
+                  // operate and calculate tik-tok
+                  Pair<ChosenAction, Long> result =
+                      measurePerformance(clients.get(clientIndex), config.dataSize, async);
+                  actionResults.get(result.getLeft()).add(result.getRight());
 
-                    iterationIncrement = iterationCounter.getAndIncrement();
-                  }
-                });
-          }
+                  iterationIncrement = iterationCounter.getAndIncrement();
+                }
+              });
         }
         if (config.debugLogging) {
           System.out.printf("%s client Benchmarking: %n", clientCreator.get().getName());
           System.out.printf(
               "===> concurrentNum = %d, clientNum = %d, tasks = %d%n",
-              concurrentNum, clientNum, tasks.size());
+              concurrentNum, clientCount, tasks.size());
         }
         tasks.stream()
             .map(CompletableFuture::runAsync)
