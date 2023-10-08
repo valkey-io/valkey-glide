@@ -14,6 +14,7 @@ import {
     createHDel,
     createHExists,
     createHGet,
+    createHGetAll,
     createHMGet,
     createHSet,
     createIncr,
@@ -457,6 +458,17 @@ export class BaseClient {
      */
     public hexists(key: string, field: string): Promise<number> {
         return this.createWritePromise(createHExists(key, field));
+    }
+
+    /** Returns all fields and values of the hash stored at `key`.
+     * See https://redis.io/commands/hgetall/ for details.
+     *
+     * @param key - The key of the hash.
+     * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
+     *  If `key` does not exist, it returns an empty list.
+     */
+    public hgetall(key: string): Promise<string[]> {
+        return this.createWritePromise(createHGetAll(key));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
