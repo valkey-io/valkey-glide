@@ -29,7 +29,8 @@ These IDE plugins can auto-format code on file save or by single click:
 You can run benchmarks using `./gradlew run`. You can set arguments using the args flag like:
 
 ```shell
-./gradlew run --args="--resultsFile=output.csv --dataSize \"2 5\" --concurrentTasks \"2 10\" --clients all --host localhost --port 6279 --clientCount \"2 5\" --tls"
+./gradlew run --args="-help"
+./gradlew run --args="-resultsFile=output.csv -dataSize \"2 5\" -concurrentTasks \"2 10\" -clients all -host localhost -port 6279 -clientCount \"2 5\" -tls"
 ```
 
 The following arguments are accepted: 
