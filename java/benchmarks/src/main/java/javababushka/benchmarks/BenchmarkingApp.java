@@ -8,6 +8,8 @@ import java.util.stream.Stream;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
@@ -24,6 +26,14 @@ public class BenchmarkingApp {
     try {
       // parse the command line arguments
       CommandLine line = parser.parse(options, args);
+
+      // generate the help statement
+      if (line.hasOption("help")) {
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.printHelp("javababushka", options);
+        return;
+      }
+
       runConfiguration = verifyOptions(line);
     } catch (ParseException exp) {
       // oops, something went wrong
@@ -67,22 +77,52 @@ public class BenchmarkingApp {
     // create the Options
     Options options = new Options();
 
-    options.addOption("c", "configuration", true, "Configuration flag [Release]");
-    options.addOption("f", "resultsFile", true, "Result filepath []");
-    options.addOption("d", "dataSize", true, "Data block size [20]");
-    options.addOption("C", "concurrentTasks", true, "Number of concurrent tasks [1 10 100]");
+    options.addOption(Option.builder("help").desc("print this message").build());
     options.addOption(
-        "l", "clients", true, "one of: all|jedis|jedis_async|lettuce|lettuce_async|babushka [all]");
-    options.addOption("h", "host", true, "host url [localhost]");
-    options.addOption("p", "port", true, "port number [6379]");
-    options.addOption("n", "clientCount", true, "Client count [1]");
-    options.addOption("t", "tls", false, "TLS [true]");
+        Option.builder("configuration")
+            .hasArg(true)
+            .desc("Configuration flag [Release]")
+            .build());
+    options.addOption(
+        Option.builder("resultsFile")
+            .hasArg(true)
+            .desc("Result filepath []")
+            .build());
+    options.addOption(
+        Option.builder("dataSize")
+            .hasArg(true)
+            .desc("Data block size [20]")
+            .build());
+    options.addOption(
+        Option.builder("concurrentTasks")
+            .hasArg(true)
+            .desc("Number of concurrent tasks [1 10 100]")
+            .build());
+    options.addOption(
+        Option.builder("clients")
+            .hasArg(true)
+            .desc("one of: all|jedis|jedis_async|lettuce|lettuce_async|babushka [all]")
+            .build());
+    options.addOption(Option.builder("host").hasArg(true).desc("").build());
+    options.addOption(
+        Option.builder("port")
+            .hasArg(true)
+            .desc("one of: port number [6379]")
+            .build());
+    options.addOption(
+        Option.builder("clientCount")
+            .hasArg(true)
+            .desc("Number of cliens to run [1]")
+            .build());
+    options.addOption(
+        Option.builder("tls").hasArg(true).desc("TLS [false]").build());
 
     return options;
   }
 
   private static RunConfiguration verifyOptions(CommandLine line) throws ParseException {
     RunConfiguration runConfiguration = new RunConfiguration();
+
     if (line.hasOption("configuration")) {
       String configuration = line.getOptionValue("configuration");
       if (configuration.equalsIgnoreCase("Release") || configuration.equalsIgnoreCase("Debug")) {
