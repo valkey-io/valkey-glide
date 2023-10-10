@@ -3,9 +3,7 @@ package javababushka.benchmarks;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -103,26 +101,8 @@ public class BenchmarkingApp {
       }
     }
 
-    if (line.hasOption("dataSize")) {
-      runConfiguration.dataSize = Integer.parseInt(line.getOptionValue("dataSize"));
-    }
-
     if (line.hasOption("concurrentTasks")) {
-      String concurrentTasks = line.getOptionValue("concurrentTasks");
-
-      // remove optional square brackets
-      if (concurrentTasks.startsWith("[") && concurrentTasks.endsWith("]")) {
-        concurrentTasks = concurrentTasks.substring(1, concurrentTasks.length() - 1);
-      }
-      // check if it's the correct format
-      if (!concurrentTasks.matches("\\d+(\\s+\\d+)?")) {
-        throw new ParseException("Invalid concurrentTasks");
-      }
-      // split the string into a list of integers
-      runConfiguration.concurrentTasks =
-          Arrays.stream(concurrentTasks.split("\\s+"))
-              .map(Integer::parseInt)
-              .collect(Collectors.toList());
+      runConfiguration.concurrentTasks = parseIntListOption(line.getOptionValue("concurrentTasks"));
     }
 
     if (line.hasOption("clients")) {
@@ -162,15 +142,11 @@ public class BenchmarkingApp {
     }
 
     if (line.hasOption("clientCount")) {
-      String clientCount = line.getOptionValue("clientCount");
+      runConfiguration.clientCount = parseIntListOption(line.getOptionValue("clientCount"));
+    }
 
-      // check if it's the correct format
-      if (!clientCount.matches("\\d+(\\s+\\d+)?")) {
-        throw new ParseException("Invalid concurrentTasks");
-      }
-      // split the string into a list of integers
-      runConfiguration.clientCount =
-          Arrays.stream(clientCount.split("\\s+")).mapToInt(Integer::parseInt).toArray();
+    if (line.hasOption("dataSize")) {
+      runConfiguration.dataSize = parseIntListOption(line.getOptionValue("dataSize"));
     }
 
     if (line.hasOption("tls")) {
@@ -178,6 +154,21 @@ public class BenchmarkingApp {
     }
 
     return runConfiguration;
+  }
+
+  private static int[] parseIntListOption(String line) throws ParseException {
+    String lineValue = line;
+
+    // remove optional square brackets
+    if (lineValue.startsWith("[") && lineValue.endsWith("]")) {
+      lineValue = lineValue.substring(1, lineValue.length() - 1);
+    }
+    // check if it's the correct format
+    if (!lineValue.matches("\\d+(\\s+\\d+)?")) {
+      throw new ParseException("Invalid option: " + line);
+    }
+    // split the string into a list of integers
+    return Arrays.stream(lineValue.split("\\s+")).mapToInt(Integer::parseInt).toArray();
   }
 
   public enum ClientName {
@@ -209,8 +200,8 @@ public class BenchmarkingApp {
   public static class RunConfiguration {
     public String configuration;
     public Optional<FileWriter> resultsFile;
-    public int dataSize;
-    public List<Integer> concurrentTasks;
+    public int[] dataSize;
+    public int[] concurrentTasks;
     public ClientName[] clients;
     public String host;
     public int port;
@@ -221,12 +212,12 @@ public class BenchmarkingApp {
     public RunConfiguration() {
       configuration = "Release";
       resultsFile = Optional.empty();
-      dataSize = 20;
-      concurrentTasks = List.of(10, 100);
+      dataSize = new int[] {20};
+      concurrentTasks = new int[] {10, 100};
       clients =
           new ClientName[] {
-              // ClientName.BABUSHKA,
-              ClientName.JEDIS, ClientName.JEDIS_ASYNC, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
+            // ClientName.BABUSHKA,
+            ClientName.JEDIS, ClientName.JEDIS_ASYNC, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
           };
       host = "localhost";
       port = 6379;
