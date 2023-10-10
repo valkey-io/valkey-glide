@@ -313,6 +313,14 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::HashMGet => Some(cmd("HMGET")),
         RequestType::HashIncrBy => Some(cmd("HINCRBY")),
         RequestType::HashIncrByFloat => Some(cmd("HINCRBYFLOAT")),
+        RequestType::LPush => Some(cmd("LPUSH")),
+        RequestType::LPop => Some(cmd("LPOP")),
+        RequestType::RPush => Some(cmd("RPUSH")),
+        RequestType::RPop => Some(cmd("RPOP")),
+        RequestType::LLen => Some(cmd("LLEN")),
+        RequestType::LRem => Some(cmd("LREM")),
+        RequestType::LRange => Some(cmd("LRANGE")),
+        RequestType::LTrim => Some(cmd("LTRIM")),
     }
 }
 

@@ -78,6 +78,14 @@ enum RequestType {
     HashMGet=40;
     HashIncrBy = 41;
     HashIncrByFloat = 42;
+    LPush = 43;
+    LPop = 44;
+    RPush = 45;
+    RPop = 46;
+    LLen = 47;
+    LRem = 48;
+    LRange = 49;
+    LTrim = 50;
 }
 
 message Command {
