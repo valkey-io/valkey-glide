@@ -79,20 +79,10 @@ public class BenchmarkingApp {
 
     options.addOption(Option.builder("help").desc("print this message").build());
     options.addOption(
-        Option.builder("configuration")
-            .hasArg(true)
-            .desc("Configuration flag [Release]")
-            .build());
+        Option.builder("configuration").hasArg(true).desc("Configuration flag [Release]").build());
     options.addOption(
-        Option.builder("resultsFile")
-            .hasArg(true)
-            .desc("Result filepath []")
-            .build());
-    options.addOption(
-        Option.builder("dataSize")
-            .hasArg(true)
-            .desc("Data block size [20]")
-            .build());
+        Option.builder("resultsFile").hasArg(true).desc("Result filepath []").build());
+    options.addOption(Option.builder("dataSize").hasArg(true).desc("Data block size [20]").build());
     options.addOption(
         Option.builder("concurrentTasks")
             .hasArg(true)
@@ -105,17 +95,10 @@ public class BenchmarkingApp {
             .build());
     options.addOption(Option.builder("host").hasArg(true).desc("").build());
     options.addOption(
-        Option.builder("port")
-            .hasArg(true)
-            .desc("one of: port number [6379]")
-            .build());
+        Option.builder("port").hasArg(true).desc("one of: port number [6379]").build());
     options.addOption(
-        Option.builder("clientCount")
-            .hasArg(true)
-            .desc("Number of cliens to run [1]")
-            .build());
-    options.addOption(
-        Option.builder("tls").hasArg(true).desc("TLS [false]").build());
+        Option.builder("clientCount").hasArg(true).desc("Number of cliens to run [1]").build());
+    options.addOption(Option.builder("tls").hasArg(true).desc("TLS [false]").build());
 
     return options;
   }
