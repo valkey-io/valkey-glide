@@ -15,6 +15,7 @@ import {
     createHDel,
     createHExists,
     createHGet,
+    createHGetAll,
     createHMGet,
     createHSet,
     createIncr,
@@ -324,6 +325,18 @@ export class BaseTransaction {
      */
     public hexists(key: string, field: string) {
         this.commands.push(createHExists(key, field));
+    }
+
+    /** Returns all fields and values of the hash stored at `key`.
+     * See https://redis.io/commands/hgetall/ for details.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
+     *  If `key` does not exist, it returns an empty list.
+     */
+    public hgetall(key: string) {
+        this.commands.push(createHGetAll(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
