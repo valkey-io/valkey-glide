@@ -104,7 +104,7 @@ public class BenchmarkingApp {
     options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
     options.addOption(
         Option.builder("clientCount").hasArg(true).desc("Number of clients to run [1]").build());
-    options.addOption(Option.builder("tls").hasArg(true).desc("TLS [false]").build());
+    options.addOption(Option.builder("tls").hasArg(false).desc("TLS [false]").build());
 
     return options;
   }
