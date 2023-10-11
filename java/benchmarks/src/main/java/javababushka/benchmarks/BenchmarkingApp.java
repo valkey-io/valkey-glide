@@ -13,7 +13,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
-/** Benchmarking app for reporting performance of various redis-rs Java-clients */
+/** Benchmarking app for reporting performance of various Redis Java-clients */
 public class BenchmarkingApp {
 
   // main application entrypoint
@@ -43,12 +43,12 @@ public class BenchmarkingApp {
     for (ClientName client : runConfiguration.clients) {
       switch (client) {
         case JEDIS:
-          // run testClientSetGet on JEDI sync client
-          System.out.println("Run JEDI sync client");
+          // run testClientSetGet on JEDIS sync client
+          System.out.println("Run JEDIS sync client");
           break;
         case JEDIS_ASYNC:
-          // run testClientSetGet on JEDI pseudo-async client
-          System.out.println("Run JEDI pseudo-async client");
+          // run testClientSetGet on JEDIS pseudo-async client
+          System.out.println("Run JEDIS pseudo-async client");
           break;
         case LETTUCE:
           // run testClientSetGet on LETTUCE sync client
@@ -58,8 +58,8 @@ public class BenchmarkingApp {
           // run testClientSetGet on LETTUCE async client
           System.out.println("Run LETTUCE async client");
           break;
-        case BABUSHKA:
-          System.out.println("Babushka not yet configured");
+        case BABUSHKA_ASYNC:
+          System.out.println("Babushka async not yet configured");
           break;
       }
     }
@@ -68,7 +68,7 @@ public class BenchmarkingApp {
       try {
         runConfiguration.resultsFile.get().close();
       } catch (IOException ioException) {
-        System.out.println("Error closing results file");
+        System.out.println("Error closing results file: " + ioException.getLocalizedMessage());
       }
     }
   }
@@ -81,23 +81,29 @@ public class BenchmarkingApp {
     options.addOption(
         Option.builder("configuration").hasArg(true).desc("Configuration flag [Release]").build());
     options.addOption(
-        Option.builder("resultsFile").hasArg(true).desc("Result filepath []").build());
-    options.addOption(Option.builder("dataSize").hasArg(true).desc("Data block size [20]").build());
+        Option.builder("resultsFile")
+            .hasArg(true)
+            .desc("Result filepath (stdout if empty) []")
+            .build());
+    options.addOption(
+        Option.builder("dataSize").hasArg(true).desc("Data block size [100 4000]").build());
     options.addOption(
         Option.builder("concurrentTasks")
             .hasArg(true)
-            .desc("Number of concurrent tasks [1 10 100]")
+            .desc("Number of concurrent tasks [100, 1000]")
             .build());
     options.addOption(
         Option.builder("clients")
             .hasArg(true)
-            .desc("one of: all|jedis|jedis_async|lettuce|lettuce_async|babushka [all]")
+            .desc(
+                "one of:"
+                    + " all|jedis|jedis_async|lettuce|lettuce_async|babushka_async|all_async|all_sync"
+                    + " [all]")
             .build());
-    options.addOption(Option.builder("host").hasArg(true).desc("").build());
+    options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
+    options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
     options.addOption(
-        Option.builder("port").hasArg(true).desc("one of: port number [6379]").build());
-    options.addOption(
-        Option.builder("clientCount").hasArg(true).desc("Number of cliens to run [1]").build());
+        Option.builder("clientCount").hasArg(true).desc("Number of clients to run [1]").build());
     options.addOption(Option.builder("tls").hasArg(true).desc("TLS [false]").build());
 
     return options;
@@ -111,16 +117,21 @@ public class BenchmarkingApp {
       if (configuration.equalsIgnoreCase("Release") || configuration.equalsIgnoreCase("Debug")) {
         runConfiguration.configuration = configuration;
       } else {
-        throw new ParseException("Invalid run configuration (Release|Debug)");
+        throw new ParseException(
+            "Invalid run configuration (" + configuration + "), must be (Release|Debug)");
       }
     }
 
     if (line.hasOption("resultsFile")) {
+      String resultsFileName = line.getOptionValue("resultsFile");
       try {
-        runConfiguration.resultsFile =
-            Optional.of(new FileWriter(line.getOptionValue("resultsFile")));
-      } catch (IOException e) {
-        throw new ParseException("Unable to write to resultsFile.");
+        runConfiguration.resultsFile = Optional.of(new FileWriter(resultsFileName));
+      } catch (IOException ioException) {
+        throw new ParseException(
+            "Unable to write to resultsFile ("
+                + resultsFileName
+                + "): "
+                + ioException.getMessage());
       }
     }
 
@@ -140,18 +151,18 @@ public class BenchmarkingApp {
                         return Stream.of(
                             ClientName.JEDIS,
                             ClientName.JEDIS_ASYNC,
-                            ClientName.BABUSHKA,
+                            //                            ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_ASYNC:
                         return Stream.of(
                             ClientName.JEDIS_ASYNC,
-                            // ClientName.BABUSHKA,
+                            // ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_SYNC:
                         return Stream.of(
                             ClientName.JEDIS,
-                            // ClientName.BABUSHKA,
+                            // ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE);
                       default:
                         return Stream.of(e);
@@ -199,7 +210,7 @@ public class BenchmarkingApp {
     JEDIS_ASYNC("Jedis async"),
     LETTUCE("Lettuce"),
     LETTUCE_ASYNC("Lettuce async"),
-    BABUSHKA("Babushka"),
+    BABUSHKA_ASYNC("Babushka async"),
     ALL("All"),
     ALL_SYNC("All sync"),
     ALL_ASYNC("All async");
@@ -235,16 +246,16 @@ public class BenchmarkingApp {
     public RunConfiguration() {
       configuration = "Release";
       resultsFile = Optional.empty();
-      dataSize = new int[] {20};
-      concurrentTasks = new int[] {10, 100};
+      dataSize = new int[] {100, 4000};
+      concurrentTasks = new int[] {100, 1000};
       clients =
           new ClientName[] {
-            // ClientName.BABUSHKA,
+            // ClientName.BABUSHKA_ASYNC,
             ClientName.JEDIS, ClientName.JEDIS_ASYNC, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
           };
       host = "localhost";
       port = 6379;
-      clientCount = new int[] {1, 2};
+      clientCount = new int[] {1};
       tls = false;
     }
   }
