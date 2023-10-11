@@ -37,6 +37,12 @@ type BaseClient = {
     hmget: (key: string, fields: string[]) => Promise<(string | null)[]>;
     hexists: (key: string, field: string) => Promise<number>;
     hgetall: (key: string) => Promise<string[]>;
+    hincrBy: (key: string, field: string, amount: number) => Promise<number>;
+    hincrByFloat: (
+        key: string,
+        field: string,
+        amount: number
+    ) => Promise<string>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -602,6 +608,84 @@ export function runBaseTests<Context>(config: {
                     value,
                 ]);
                 expect(await client.hgetall("nonExistingKey")).toEqual([]);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "hincrBy and hincrByFloat with existing key and field",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const field = uuidv4();
+                const fieldValueMap = {
+                    [field]: "10",
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(1);
+                expect(await client.hincrBy(key, field, 1)).toEqual(11);
+                expect(await client.hincrBy(key, field, 4)).toEqual(15);
+                expect(await client.hincrByFloat(key, field, 1.5)).toEqual(
+                    "16.5"
+                );
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "hincrBy and hincrByFloat with non existing key and non existing field",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const field = uuidv4();
+                const fieldValueMap = {
+                    [field]: "10",
+                };
+                expect(
+                    await client.hincrBy("nonExistingKey", field, 1)
+                ).toEqual(1);
+                expect(await client.hset(key1, fieldValueMap)).toEqual(1);
+                expect(
+                    await client.hincrBy(key1, "nonExistingField", 2)
+                ).toEqual(2);
+                expect(await client.hset(key2, fieldValueMap)).toEqual(1);
+                expect(
+                    await client.hincrByFloat(key2, "nonExistingField", -0.5)
+                ).toEqual("-0.5");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "hincrBy and hincrByFloat with a field that contains a value of string that can not be represented as as integer or float",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const field = uuidv4();
+                const fieldValueMap = {
+                    [field]: "foo",
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(1);
+                try {
+                    expect(await client.hincrBy(key, field, 2)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "hash value is not an integer"
+                    );
+                }
+
+                try {
+                    expect(
+                        await client.hincrByFloat(key, field, 1.5)
+                    ).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "hash value is not a float"
+                    );
+                }
             });
         },
         config.timeout

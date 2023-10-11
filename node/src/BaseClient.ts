@@ -15,6 +15,8 @@ import {
     createHExists,
     createHGet,
     createHGetAll,
+    createHIncrBy,
+    createHIncrByFloat,
     createHMGet,
     createHSet,
     createIncr,
@@ -469,6 +471,47 @@ export class BaseClient {
      */
     public hgetall(key: string): Promise<string[]> {
         return this.createWritePromise(createHGetAll(key));
+    }
+
+    /** Increments the number stored at `field` in the hash stored at `key` by increment.
+     * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+     * If `field` or `key` does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/hincrby/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param amount - The amount to increment.
+     * @param field - The field in the hash stored at `key` to increment its value.
+     * @returns the value of `field` in the hash stored at `key` after the increment.
+     *  An error will be returned if `key` holds a value of an incorrect type (not a string)
+     *  or if it contains a string that cannot be represented as an integer.
+     */
+    public hincrBy(
+        key: string,
+        field: string,
+        amount: number
+    ): Promise<number> {
+        return this.createWritePromise(createHIncrBy(key, field, amount));
+    }
+
+    /** Increment the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
+     * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+     * If `field` or `key` does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/hincrbyfloat/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param amount - The amount to increment.
+     * @param field - The field in the hash stored at `key` to increment its value.
+     * @returns the value of `field` in the hash stored at `key` after the increment as string.
+     *  An error is returned if `key` contains a value of the wrong type
+     *  or the current field content is not parsable as a double precision floating point number.
+     *
+     */
+    public hincrByFloat(
+        key: string,
+        field: string,
+        amount: number
+    ): Promise<string> {
+        return this.createWritePromise(createHIncrByFloat(key, field, amount));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
