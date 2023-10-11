@@ -51,7 +51,7 @@ export class BaseTransaction {
     readonly commands: redis_request.Command[] = [];
 
     /** Get the value associated with the given key, or null if no such value exists.
-     *  See https://redis.io/commands/get/ for details.
+     * See https://redis.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
      *
@@ -62,15 +62,15 @@ export class BaseTransaction {
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
-     *  See https://redis.io/commands/set/ for details.
+     * See https://redis.io/commands/set/ for details.
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
      * @param options - The set options.
      *
      * Command Response - If the value is successfully set, return OK.
-     *   If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
-     *   If `returnOldValue` is set, return the old value as a string.
+     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
+     * If `returnOldValue` is set, return the old value as a string.
      */
     public set(key: string, value: string, options?: SetOptions) {
         this.commands.push(createSet(key, value, options));
@@ -88,10 +88,10 @@ export class BaseTransaction {
     }
 
     /** Get information and statistics about the Redis server.
-     *  See https://redis.io/commands/info/ for details.
+     * See https://redis.io/commands/info/ for details.
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
-     *  When no parameter is provided, the default option is assumed.
+     * When no parameter is provided, the default option is assumed.
      *
      * Command Response - a string containing the information for the sections requested.
      */
@@ -100,7 +100,7 @@ export class BaseTransaction {
     }
 
     /** Remove the specified keys. A key is ignored if it does not exist.
-     *  See https://redis.io/commands/del/ for details.
+     * See https://redis.io/commands/del/ for details.
      *
      * @param keys - A list of keys to be deleted from the database.
      *
@@ -111,9 +111,9 @@ export class BaseTransaction {
     }
 
     /** Get the name of the current connection.
-     *  See https://redis.io/commands/client-getname/ for more details.
+     * See https://redis.io/commands/client-getname/ for more details.
      *
-     *  Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
      */
     public clientGetName() {
         this.commands.push(createClientGetName());
@@ -143,7 +143,7 @@ export class BaseTransaction {
      * @param keys - A list of keys to retrieve values for.
      *
      * Command Response - A list of values corresponding to the provided keys. If a key is not found,
-     *  its corresponding value in the list will be null.
+     * its corresponding value in the list will be null.
      */
     public mget(keys: string[]) {
         this.commands.push(createMGet(keys));
@@ -166,27 +166,27 @@ export class BaseTransaction {
      * @param key - The key to increment its value.
      *
      * Command Response - the value of `key` after the increment, An error is returned if `key` contains a value
-     *  of the wrong type or contains a string that can not be represented as integer.
+     * of the wrong type or contains a string that can not be represented as integer.
      */
     public incr(key: string) {
         this.commands.push(createIncr(key));
     }
 
-    /** Increments the number stored at `key` by `increment`. If `key` does not exist, it is set to 0 before performing the operation.
+    /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/incrby/ for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      *
      * Command Response - the value of `key` after the increment, An error is returned if `key` contains a value
-     *  of the wrong type or contains a string that can not be represented as integer.
+     * of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, amount: number) {
         this.commands.push(createIncrBy(key, amount));
     }
 
-    /** Increment the string representing a floating point number stored at `key` by `increment`.
-     * By using a negative increment value, the result is that the value stored at `key` is decremented.
+    /** Increment the string representing a floating point number stored at `key` by `amount`.
+     * By using a negative amount value, the result is that the value stored at `key` is decremented.
      * If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/incrbyfloat/ for details.
      *
@@ -194,8 +194,8 @@ export class BaseTransaction {
      * @param amount - The amount to increment.
      *
      * Command Response - the value of `key` after the increment as string.
-     *  An error is returned if `key` contains a value of the wrong type,
-     *  or the current key content is not parsable as a double precision floating point number.
+     * An error is returned if `key` contains a value of the wrong type,
+     * or the current key content is not parsable as a double precision floating point number.
      *
      */
     public incrByFloat(key: string, amount: number) {
@@ -217,27 +217,27 @@ export class BaseTransaction {
      * @param key - The key to decrement its value.
      *
      * Command Response - the value of `key` after the decrement. An error is returned if `key` contains a value
-     *  of the wrong type or contains a string that can not be represented as integer.
+     * of the wrong type or contains a string that can not be represented as integer.
      */
     public decr(key: string) {
         this.commands.push(createDecr(key));
     }
 
-    /** Decrements the number stored at `key` by `decrement`. If `key` does not exist, it is set to 0 before performing the operation.
+    /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/decrby/ for details.
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
      *
      * Command Response - the value of `key` after the decrement. An error is returned if `key` contains a value
-     *   of the wrong type or contains a string that can not be represented as integer.
+     * of the wrong type or contains a string that can not be represented as integer.
      */
     public decrBy(key: string, amount: number) {
         this.commands.push(createDecrBy(key, amount));
     }
 
     /** Reads the configuration parameters of a running Redis server.
-     *  See https://redis.io/commands/config-get/ for details.
+     * See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
@@ -249,14 +249,14 @@ export class BaseTransaction {
     }
 
     /** Set configuration parameters to the specified values.
-     *   See https://redis.io/commands/config-set/ for details.
+     * See https://redis.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise an error is raised.
      *
      * @example
-     *   config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
+     * config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
      *
      */
     public configSet(parameters: Record<string, string>) {
@@ -280,7 +280,7 @@ export class BaseTransaction {
      *
      * @param key - The key of the hash.
      * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
-     *  to be set in the hash stored at the specified key.
+     * to be set in the hash stored at the specified key.
      *
      * Command Response - The number of fields that were added.
      */
@@ -323,7 +323,7 @@ export class BaseTransaction {
      * @param field - The field to check in the hash stored at `key`.
      *
      * Command Response - 1 if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
-     *  the command response will be 0.
+     * the command response will be 0.
      */
     public hexists(key: string, field: string) {
         this.commands.push(createHExists(key, field));
@@ -335,7 +335,7 @@ export class BaseTransaction {
      * @param key - The key of the hash.
      *
      * Command Response - a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
-     *  If `key` does not exist, it returns an empty list.
+     * If `key` does not exist, it returns an empty list.
      */
     public hgetall(key: string) {
         this.commands.push(createHGetAll(key));
