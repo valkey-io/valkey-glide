@@ -13,6 +13,7 @@ import {
     createDel,
     createGet,
     createHDel,
+    createHExists,
     createHGet,
     createHMGet,
     createHSet,
@@ -310,6 +311,19 @@ export class BaseTransaction {
      */
     public hmget(key: string, fields: string[]) {
         this.commands.push(createHMGet(key, fields));
+    }
+
+    /** Returns if `field` is an existing field in the hash stored at `key`.
+     * See https://redis.io/commands/hexists/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field to check in the hash stored at `key`.
+     *
+     * Command Response - 1 if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
+     *  the command response will be 0.
+     */
+    public hexists(key: string, field: string) {
+        this.commands.push(createHExists(key, field));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

@@ -326,6 +326,13 @@ export function createHMGet(
     return createCommand(RequestType.HashMGet, [key].concat(fields));
 }
 
+export function createHExists(
+    key: string,
+    field: string
+): redis_request.Command {
+    return createCommand(RequestType.HashExists, [key, field]);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
