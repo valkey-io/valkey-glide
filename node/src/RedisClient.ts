@@ -170,8 +170,6 @@ export class RedisClient extends BaseClient {
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *  case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns A list of values corresponding to the configuration parameters.
      *
@@ -184,8 +182,6 @@ export class RedisClient extends BaseClient {
      *   See https://redis.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
      *
