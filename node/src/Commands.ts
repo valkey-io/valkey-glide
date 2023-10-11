@@ -333,6 +333,10 @@ export function createHExists(
     return createCommand(RequestType.HashExists, [key, field]);
 }
 
+export function createHGetAll(key: string): redis_request.Command {
+    return createCommand(RequestType.HashGetAll, [key]);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
