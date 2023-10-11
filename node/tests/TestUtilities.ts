@@ -68,6 +68,7 @@ export function transactionTest(
     baseTransaction.hget(key4, field);
     baseTransaction.hdel(key4, [field]);
     baseTransaction.hmget(key4, [field]);
+    baseTransaction.hexists(key4, field);
     return [
         "OK",
         null,
@@ -79,5 +80,6 @@ export function transactionTest(
         value,
         1,
         [null],
+        0,
     ];
 }
