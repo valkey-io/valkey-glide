@@ -293,7 +293,6 @@ export function runBaseTests<Context>(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const key3 = uuidv4();
-                const nonExistingKey = uuidv4();
                 const value = uuidv4();
                 const keyValueList = {
                     [key1]: value,
@@ -302,7 +301,7 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
-                    await client.mget([key1, key2, nonExistingKey, key3])
+                    await client.mget([key1, key2, "nonExistingKey", key3])
                 ).toEqual([value, value, null, value]);
             });
         },
@@ -491,7 +490,6 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const nonExistingField = uuidv4();
                 const value = uuidv4();
                 const fieldValueMap = {
                     [field1]: value,
@@ -500,7 +498,9 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hget(key, field1)).toEqual(value);
                 expect(await client.hget(key, field2)).toEqual(value);
-                expect(await client.hget(key, nonExistingField)).toEqual(null);
+                expect(await client.hget(key, "nonExistingField")).toEqual(
+                    null
+                );
             });
         },
         config.timeout
@@ -511,11 +511,9 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const nonExistingKey = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const field3 = uuidv4();
-                const nonExistingField = uuidv4();
                 const value = uuidv4();
                 const fieldValueMap = {
                     [field1]: value,
@@ -525,8 +523,10 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.hset(key, fieldValueMap)).toEqual(3);
                 expect(await client.hdel(key, [field1, field2])).toEqual(2);
-                expect(await client.hdel(key, [nonExistingField])).toEqual(0);
-                expect(await client.hdel(nonExistingKey, [field3])).toEqual(0);
+                expect(await client.hdel(key, ["nonExistingField"])).toEqual(0);
+                expect(await client.hdel("nonExistingKey", [field3])).toEqual(
+                    0
+                );
             });
         },
         config.timeout
@@ -537,10 +537,8 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const nonExistingKey = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const nonExistingField = uuidv4();
                 const value = uuidv4();
                 const fieldValueMap = {
                     [field1]: value,
@@ -548,10 +546,14 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(
-                    await client.hmget(key, [field1, nonExistingField, field2])
+                    await client.hmget(key, [
+                        field1,
+                        "nonExistingField",
+                        field2,
+                    ])
                 ).toEqual([value, null, value]);
                 expect(
-                    await client.hmget(nonExistingKey, [field1, field2])
+                    await client.hmget("nonExistingKey", [field1, field2])
                 ).toEqual([null, null]);
             });
         },
