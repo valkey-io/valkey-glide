@@ -1,11 +1,18 @@
 name: Java CI
 
 on:
-  pull_request:
   push:
     paths:
+      - babushka-core/**
+      - submodules/**
       - "java/**"
       - ".github/workflows/java.yml"
+  pull_request:
+    paths:
+      - babushka-core/**
+      - submodules/**
+      - "java/**"
+      - ".github/workflows/java.yml"  
 
 # Run only most latest job on a branch and cancel previous ones
 concurrency:
