@@ -562,20 +562,20 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const nonExistingKey = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const nonExistingField = uuidv4();
-                const value = uuidv4();
                 const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
+                    [field1]: "value1",
+                    [field2]: "value2",
                 };
-
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hexists(key, field1)).toEqual(1);
-                expect(await client.hexists(key, nonExistingField)).toEqual(0);
-                expect(await client.hexists(nonExistingKey, field2)).toEqual(0);
+                expect(await client.hexists(key, "nonExistingField")).toEqual(
+                    0
+                );
+                expect(await client.hexists("nonExistingKey", field2)).toEqual(
+                    0
+                );
             });
         },
         config.timeout
