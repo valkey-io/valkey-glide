@@ -22,6 +22,9 @@ import {
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLPop,
+    createLPush,
+    createLRange,
     createMGet,
     createMSet,
     createSet,
@@ -516,6 +519,59 @@ export class BaseClient {
         amount: number
     ): Promise<string> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
+    }
+
+    /** Inserts all the specified values at the head of the list stored at `key`.
+     * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
+     * If `key` does not exist, it is created as empty list before performing the push operations.
+     * See https://redis.io/commands/lpush/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     * @returns the length of the list after the push operations.
+     * If `key` holds a value that is not a list, an error is returned.
+     */
+    public lpush(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createLPush(key, elements));
+    }
+
+    /** Removes and returns the first elements of the list stored at `key`.
+     * By default, the command pops a single element from the beginning of the list.
+     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * See https://redis.io/commands/lpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     * @returns the value of the first element.
+     * If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is returned.
+     */
+    public lpop(
+        key: string,
+        count?: number
+    ): Promise<string | string[] | null> {
+        return this.createWritePromise(createLPop(key, count));
+    }
+
+    /**Returns the specified elements of the list stored at `key`.
+     * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     * See https://redis.io/commands/lrange/ for details.
+     *
+     * @param key - The key of the list.
+     * @param start - The starting point of the range
+     * @param end - The end of the range.
+     * @returns list of elements in the specified range.
+     * If `start` exceeds the end of the list, an empty list will be returned.
+     * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
+     * If `start` is greater than `end` an empty list will be returned.
+     * If `key` holds a value that is not a list, an error is returned.
+     * If `key` does not exist an empty list will be returned.
+     */
+    public lrange(key: string, start: number, end: number): Promise<string[]> {
+        return this.createWritePromise(createLRange(key, start, end));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
