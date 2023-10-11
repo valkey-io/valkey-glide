@@ -31,9 +31,9 @@ def is_single_response(response: T, single_res: T) -> bool:
         >>> is_single_response([["value"]], LIST_STR)
         False
     """
-    if type(single_res) == type(response) == list:
+    if isinstance(single_res, list) and isinstance(response, list):
         return is_single_response(response[0], single_res[0])
-    elif type(response) == type(single_res):
+    elif isinstance(response, type(single_res)):
         return True
     return False
 
@@ -59,7 +59,7 @@ def convert_multi_node_res_to_dict(
     dict_res: Dict[str, T] = {}
     while len(response) > 0:
         cur_res = response.pop()
-        if cur_res is not None and type(cur_res[0]) == str:
+        if cur_res is not None and isinstance(cur_res[0], str):
             dict_res[cur_res[0]] = cast(T, cur_res[1])
 
     return dict_res
