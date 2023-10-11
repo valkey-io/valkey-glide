@@ -36,6 +36,7 @@ type BaseClient = {
     hdel: (key: string, fields: string[]) => Promise<number>;
     hmget: (key: string, fields: string[]) => Promise<(string | null)[]>;
     hexists: (key: string, field: string) => Promise<number>;
+    hgetall: (key: string) => Promise<string[]>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -576,6 +577,31 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hexists("nonExistingKey", field2)).toEqual(
                     0
                 );
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "hgetall with multiple fields in an existing key and one non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const value = uuidv4();
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hgetall(key)).toEqual([
+                    field1,
+                    value,
+                    field2,
+                    value,
+                ]);
+                expect(await client.hgetall("nonExistingKey")).toEqual([]);
             });
         },
         config.timeout

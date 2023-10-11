@@ -66,6 +66,7 @@ export function transactionTest(
     baseTransaction.del([key1]);
     baseTransaction.hset(key4, { [field]: value });
     baseTransaction.hget(key4, field);
+    baseTransaction.hgetall(key4);
     baseTransaction.hdel(key4, [field]);
     baseTransaction.hmget(key4, [field]);
     baseTransaction.hexists(key4, field);
@@ -78,6 +79,7 @@ export function transactionTest(
         1,
         1,
         value,
+        [field, value],
         1,
         [null],
         0,
