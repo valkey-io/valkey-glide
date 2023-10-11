@@ -284,7 +284,7 @@ export class BaseClient {
      *  See https://redis.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @returns If the key exists, returns the value of the key as a string. Otherwise, return null.
+     * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
      */
     public get(key: string): Promise<string | null> {
         return this.createWritePromise(createGet(key));
@@ -297,8 +297,8 @@ export class BaseClient {
      * @param value - The value to store with the given key.
      * @param options - The set options.
      * @returns - If the value is successfully set, return OK.
-     *          If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return null.
-     *          If return_old_value is set, return the old value as a string.
+     *    If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
+     *    If `returnOldValue` is set, return the old value as a string.
      */
     public set(
         key: string,
@@ -339,55 +339,80 @@ export class BaseClient {
         return this.createWritePromise(createMSet(keyValueMap));
     }
 
-    /** Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+    /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/incr/ for details.
      *
-     * @param key - The key to increment it's value.
-     * @returns the value of key after the increment, An error is returned if the key contains a value
+     * @param key - The key to increment its value.
+     * @returns the value of `key` after the increment, An error is returned if `key` contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
     public incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
-    /** Increments the number stored at key by increment. If the key does not exist, it is set to 0 before performing the operation.
+    /** Increments the number stored at `key` by `increment`. If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/incrby/ for details.
      *
-     * @param key - The key to increment it's value.
+     * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of key after the increment, An error is returned if the key contains a value
+     * @returns the value of `key` after the increment, An error is returned if `key` contains a value
      *  of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
-    /** Increment the string representing a floating point number stored at key by the specified increment.
-     * By using a negative increment value, the result is that the value stored at the key is decremented.
-     * If the key does not exist, it is set to 0 before performing the operation.
+    /** Increment the string representing a floating point number stored at `key` by `increment`.
+     * By using a negative increment value, the result is that the value stored at `key` is decremented.
+     * If `key` does not exist, it is set to 0 before performing the operation.
      * See https://redis.io/commands/incrbyfloat/ for details.
      *
-     * @param key - The key to increment it's value.
+     * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of key after the increment as string, An error is returned if the key contains a value of the wrong type.
+     * @returns the value of `key` after the increment as string.
+     *  An error is returned if `key` contains a value of the wrong type,
+     *  or the current key content is not parsable as a double precision floating point number.
      *
      */
     public incrByFloat(key: string, amount: number): Promise<string> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
-    /** Retrieve the value associated with field in the hash stored at key.
+    /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/decr/ for details.
+     *
+     * @param key - The key to decrement its value.
+     * @returns the value of `key` after the decrement. An error is returned if `key` contains a value
+     *  of the wrong type or contains a string that can not be represented as integer.
+     */
+    public decr(key: string): Promise<number> {
+        return this.createWritePromise(createDecr(key));
+    }
+
+    /** Decrements the number stored at `key` by `decrement`. If `key` does not exist, it is set to 0 before performing the operation.
+     * See https://redis.io/commands/decrby/ for details.
+     *
+     * @param key - The key to decrement its value.
+     * @param amount - The amount to decrement.
+     * @returns the value of `key` after the decrement. An error is returned if `key` contains a value
+     *   of the wrong type or contains a string that can not be represented as integer.
+     */
+    public decrBy(key: string, amount: number): Promise<number> {
+        return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /** Retrieve the value associated with `field` in the hash stored at `key`.
      * See https://redis.io/commands/hget/ for details.
      *
      * @param key - The key of the hash.
-     * @param field - The field in the hash stored at key to retrieve from the database.
-     * @returns the value associated with field, or null when field is not present in the hash or key does not exist.
+     * @param field - The field in the hash stored at `key` to retrieve from the database.
+     * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      */
     public hget(key: string, field: string): Promise<string | null> {
         return this.createWritePromise(createHGet(key, field));
     }
 
-    /** Sets the specified fields to their respective values in the hash stored at key.
+    /** Sets the specified fields to their respective values in the hash stored at `key`.
      * See https://redis.io/commands/hset/ for details.
      *
      * @param key - The key of the hash.
@@ -402,48 +427,27 @@ export class BaseClient {
         return this.createWritePromise(createHSet(key, fieldValueMap));
     }
 
-    /** Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decr/ for details.
-     *
-     * @param key - The key to decrement it's value.
-     * @returns the value of key after the decrement. An error is returned if the key contains a value
-     *  of the wrong type or contains a string that can not be represented as integer.
-     */
-    public decr(key: string): Promise<number> {
-        return this.createWritePromise(createDecr(key));
-    }
-
-    /** Decrements the number stored at key by decrement. If the key does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decrby/ for details.
-     *
-     * @param key - The key to decrement it's value.
-     * @param amount - The amount to decrement.
-     * @returns the value of key after the decrement. An error is returned if the key contains a value
-     *   of the wrong type or contains a string that can not be represented as integer.
-     */
-    public decrBy(key: string, amount: number): Promise<number> {
-        return this.createWritePromise(createDecrBy(key, amount));
-    }
-
-    /** Removes the specified fields from the hash stored at key.
+    /** Removes the specified fields from the hash stored at `key`.
      * Specified fields that do not exist within this hash are ignored.
+     * See https://redis.io/commands/hdel/ for details.
      *
      * @param key - The key of the hash.
-     * @param fields - The fields to remove from the hash stored at key.
+     * @param fields - The fields to remove from the hash stored at `key`.
      * @returns the number of fields that were removed from the hash, not including specified but non existing fields.
-     * If key does not exist, it is treated as an empty hash and it returns 0.
+     * If `key` does not exist, it is treated as an empty hash and it returns 0.
      */
     public hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
-    /** Returns the values associated with the specified fields in the hash stored at key.
+    /** Returns the values associated with the specified fields in the hash stored at `key`.
+     * See https://redis.io/commands/hmget/ for details.
      *
      * @param key - The key of the hash.
-     * @param fields - The fields in the hash stored at key to retrieve from the database.
+     * @param fields - The fields in the hash stored at `key` to retrieve from the database.
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
-     * If key does not exist, it is treated as an empty hash and it returns a list of null values.
+     * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
      */
     public hmget(key: string, fields: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createHMGet(key, fields));
