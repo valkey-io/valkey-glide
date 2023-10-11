@@ -183,9 +183,7 @@ public class BenchmarkingApp {
       runConfiguration.dataSize = parseIntListOption(line.getOptionValue("dataSize"));
     }
 
-    if (line.hasOption("tls")) {
-      runConfiguration.tls = Boolean.parseBoolean(line.getOptionValue("tls"));
-    }
+    runConfiguration.tls = line.hasOption("tls");
 
     return runConfiguration;
   }
