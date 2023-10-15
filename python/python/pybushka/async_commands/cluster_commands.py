@@ -283,3 +283,38 @@ class ClusterCommands(CoreCommands):
             TOK,
             await self._execute_command(RequestType.ConfigSet, parameters, route),
         )
+
+    async def client_getname(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[Optional[str]]:
+        """
+        Get the name of the connection to which the request is routed.
+        See https://redis.io/commands/client-getname/ for more details.
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless route is provided,
+            in which case the client will route the command to the nodes defined by route.
+
+        Returns:
+            TClusterResponse[Optional[str]]: The name of the client connection as a string if a name is set,
+            or None if no name is assigned.
+            When specifying a route other than a single node, response will be:
+            {Address (str) : response (Optional[str]) , ... } with type of Dict[str, Optional[str]].
+
+        Examples:
+            >>> client_getname()
+            'Connection Name'
+            >>> client_getname(AllNodes())
+            {'addr': 'Connection Name'', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
+        """
+
+        client_get_name = await self._execute_command(
+            RequestType.ClientGetName, [], route
+        )
+
+        return (
+            cast(Optional[str], client_get_name)
+            if isinstance(client_get_name, str) or client_get_name is None
+            else convert_multi_node_res_to_dict(
+                cast(List[List[Union[str, Optional[str]]]], client_get_name)
+            )
+        )

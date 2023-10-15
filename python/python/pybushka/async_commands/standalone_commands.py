@@ -156,3 +156,20 @@ class StandaloneCommands(CoreCommands):
         for pair in parameters_map.items():
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.ConfigSet, parameters))
+
+    async def client_getname(self) -> Optional[str]:
+        """
+        Get the name of the primary's connection.
+        See https://redis.io/commands/client-getname/ for more details.
+
+        Returns:
+            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            or None if no name is assigned.
+
+        Examples:
+            >>> client_getname()
+            'Connection Name'
+        """
+        return cast(
+            Optional[str], await self._execute_command(RequestType.ClientGetName, [])
+        )
