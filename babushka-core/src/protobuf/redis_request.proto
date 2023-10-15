@@ -86,6 +86,10 @@ enum RequestType {
     LRem = 48;
     LRange = 49;
     LTrim = 50;
+    SAdd = 51;
+    SRem = 52;
+    SMembers = 53;
+    SCard = 54;
 }
 
 message Command {

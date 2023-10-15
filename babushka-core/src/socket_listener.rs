@@ -321,6 +321,10 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::LRem => Some(cmd("LREM")),
         RequestType::LRange => Some(cmd("LRANGE")),
         RequestType::LTrim => Some(cmd("LTRIM")),
+        RequestType::SAdd => Some(cmd("SADD")),
+        RequestType::SRem => Some(cmd("SREM")),
+        RequestType::SMembers => Some(cmd("SMEMBERS")),
+        RequestType::SCard => Some(cmd("SCARD")),
     }
 }
 
