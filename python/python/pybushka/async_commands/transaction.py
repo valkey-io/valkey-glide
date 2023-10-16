@@ -311,6 +311,20 @@ class BaseTransaction:
         """
         self.append_command(RequestType.ClientGetName, [])
 
+    def hgetall(self, key: str):
+        """Returns all fields and values of the hash stored at `key`.
+        See https://redis.io/commands/hgetall/ for details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty list.
+            If `key` holds a value that is not a hash , the transaction fails.
+        """
+        self.append_command(RequestType.HashGetAll, [key]),
+
 
 class Transaction(BaseTransaction):
     """
