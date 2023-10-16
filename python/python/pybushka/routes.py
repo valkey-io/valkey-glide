@@ -57,16 +57,16 @@ def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
 def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
     if route is None:
         return
-    elif type(route) == AllNodes:
+    elif isinstance(route, AllNodes):
         request.route.simple_routes = SimpleRoutes.AllNodes
-    elif type(route) == AllPrimaries:
+    elif isinstance(route, AllPrimaries):
         request.route.simple_routes = SimpleRoutes.AllPrimaries
-    elif type(route) == RandomNode:
+    elif isinstance(route, RandomNode):
         request.route.simple_routes = SimpleRoutes.Random
-    elif type(route) == SlotKeyRoute:
+    elif isinstance(route, SlotKeyRoute):
         request.route.slot_key_route.slot_type = to_protobuf_slot_type(route.slot_type)
         request.route.slot_key_route.slot_key = route.slot_key
-    elif type(route) == SlotIdRoute:
+    elif isinstance(route, SlotIdRoute):
         request.route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
         request.route.slot_id_route.slot_id = route.slot_id
     else:

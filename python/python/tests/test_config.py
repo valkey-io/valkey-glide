@@ -21,7 +21,7 @@ def test_convert_to_protobuf():
         read_from_replica=ReadFromReplica.ROUND_ROBIN,
     )
     request = config._create_a_protobuf_conn_request()
-    assert type(request) == ConnectionRequest
+    assert isinstance(request, ConnectionRequest)
     assert request.addresses[0].host == "127.0.0.1"
     assert request.addresses[0].port == 6379
     assert request.tls_mode is TlsMode.SecureTls

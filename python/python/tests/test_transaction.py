@@ -72,7 +72,9 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
         transaction = (
-            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+            Transaction()
+            if isinstance(redis_client, RedisClient)
+            else ClusterTransaction()
         )
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
@@ -84,7 +86,9 @@ class TestTransaction:
     async def test_transaction_custom_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = (
-            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+            Transaction()
+            if isinstance(redis_client, RedisClient)
+            else ClusterTransaction()
         )
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
@@ -97,7 +101,9 @@ class TestTransaction:
     ):
         key = get_random_string(10)
         transaction = (
-            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+            Transaction()
+            if isinstance(redis_client, RedisClient)
+            else ClusterTransaction()
         )
         transaction.custom_command(["WATCH", key])
         with pytest.raises(Exception) as e:
@@ -111,7 +117,9 @@ class TestTransaction:
         key = get_random_string(10)
         await redis_client.set(key, "1")
         transaction = (
-            Transaction() if type(redis_client) == RedisClient else ClusterTransaction()
+            Transaction()
+            if isinstance(redis_client, RedisClient)
+            else ClusterTransaction()
         )
 
         transaction.custom_command(["INCR", key])
@@ -140,7 +148,7 @@ class TestTransaction:
         transaction.info()
         expected = transaction_test(transaction, keyslot)
         result = await redis_client.exec(transaction)
-        assert type(result[0]) == str
+        assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:] == expected
 
@@ -158,7 +166,7 @@ class TestTransaction:
         transaction.get(key)
         expected = transaction_test(transaction, keyslot)
         result = await redis_client.exec(transaction)
-        assert type(result[0]) == str
+        assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:6] == [OK, OK, value, OK, None]
         assert result[6:] == expected
