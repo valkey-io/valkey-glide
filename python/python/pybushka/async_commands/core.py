@@ -387,6 +387,29 @@ class CoreCommands(Protocol):
             List[str], await self._execute_command(RequestType.HashGetAll, [key])
         )
 
+    async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
+        """Retrieve the values associated with specified fields in the hash stored at `key`.
+        See https://redis.io/commands/hmget/ for details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields in the hash stored at `key` to retrieve from the database.
+
+        Returns:
+            List[Optional[str]]: A list of values associated with the given fields, in the same order as they are requested.
+            For every field that does not exist in the hash, a null value is returned.
+            If the key does not exist, it is treated as an empty hash, and the function returns a list of null values.
+            If `key` holds a value that is not a hash, an error is returned.
+
+        Examples:
+            >>> await client.hmget("my_hash", ["field1", "field2"])
+                ["value1", "value2"]  # A list of values associated with the specified fields.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.HashMGet, [key] + fields),
+        )
+
     async def hdel(self, key: str, fields: List[str]) -> int:
         """Remove specified fields from the hash stored at `key`.
         See https://redis.io/commands/hdel/ for more details.
