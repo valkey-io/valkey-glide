@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import List, Mapping, Optional, cast
 
 from pybushka.async_commands.core import CoreCommands, InfoSection
