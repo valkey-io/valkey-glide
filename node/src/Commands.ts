@@ -340,3 +340,27 @@ export function createHGetAll(key: string): redis_request.Command {
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
+
+export function createHIncrBy(
+    key: string,
+    field: string,
+    amount: number
+): redis_request.Command {
+    return createCommand(RequestType.HashIncrBy, [
+        key,
+        field,
+        amount.toString(),
+    ]);
+}
+
+export function createHIncrByFloat(
+    key: string,
+    field: string,
+    amount: number
+): redis_request.Command {
+    return createCommand(RequestType.HashIncrByFloat, [
+        key,
+        field,
+        amount.toString(),
+    ]);
+}
