@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 from pybushka.async_commands.core import CoreCommands, InfoSection
