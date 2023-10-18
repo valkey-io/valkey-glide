@@ -90,6 +90,11 @@ enum RequestType {
     SRem = 52;
     SMembers = 53;
     SCard = 54;
+    PExpireAt = 55;
+    PExpire = 56;
+    ExpireAt = 57;
+    Exists = 58;
+    Unlink = 59;
 }
 
 message Command {
