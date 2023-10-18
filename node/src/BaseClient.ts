@@ -10,6 +10,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createExists,
     createGet,
     createHDel,
     createHExists,
@@ -679,6 +680,17 @@ export class BaseClient {
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
+    }
+
+    /** Returns if the keys in `keys` exist.
+     * See https://redis.io/commands/exists/ for details.
+     *
+     * @param keys - The keys list to check.
+     * @returns the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+     * it will be counted multiple times.
+     */
+    public exists(keys: string[]): Promise<number> {
+        return this.createWritePromise(createExists(keys));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
