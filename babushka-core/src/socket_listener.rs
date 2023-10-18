@@ -325,6 +325,11 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::SRem => Some(cmd("SREM")),
         RequestType::SMembers => Some(cmd("SMEMBERS")),
         RequestType::SCard => Some(cmd("SCARD")),
+        RequestType::PExpireAt => Some(cmd("PEXPIREAT")),
+        RequestType::PExpire => Some(cmd("PEXPIRE")),
+        RequestType::ExpireAt => Some(cmd("EXPIREAT")),
+        RequestType::Exists => Some(cmd("EXISTS")),
+        RequestType::Unlink => Some(cmd("UNLINK")),
     }
 }
 
