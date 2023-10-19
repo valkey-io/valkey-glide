@@ -434,6 +434,65 @@ class BaseTransaction:
         args: List[str] = [key] if count is None else [key, str(count)]
         self.append_command(RequestType.RPop, args)
 
+    def sadd(self, key: str, members: List[str]):
+        """Add specified members to the set stored at `key`.
+        Specified members that are already a member of this set are ignored.
+        If `key` does not exist, a new set is created before adding `members`.
+        See https://redis.io/commands/sadd/ for more details.
+
+        Args:
+            key (str): The key where members will be added to its set.
+            members (List[str]): A list of members to add to the set stored at key.
+
+        Command response:
+            int: The number of members that were added to the set, excluding members already present.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SAdd, [key] + members)
+
+    def srem(self, key: str, members: List[str]):
+        """Remove specified members from the set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+        See https://redis.io/commands/srem/ for details.
+
+        Args:
+            key (str): The key from which members will be removed.
+            members (List[str]): A list of members to remove from the set stored at key.
+
+        Commands response:
+            int: The number of members that were removed from the set, excluding non-existing members.
+                If `key` does not exist, it is treated as an empty set and this command returns 0.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SRem, [key] + members)
+
+    def smembers(self, key: str):
+        """Retrieve all the members of the set value stored at `key`.
+        See https://redis.io/commands/smembers/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the set members.
+
+        Commands response:
+            List[str]: A list of all members of the set.
+                If `key` does not exist an empty list will be returned.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SMembers, [key])
+
+    def scard(self, key: str):
+        """Retrieve the set cardinality (number of elements) of the set stored at `key`.
+        See https://redis.io/commands/scard/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the number of set members.
+
+        Commands response:
+            int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SCard, [key])
+
 
 class Transaction(BaseTransaction):
     """
