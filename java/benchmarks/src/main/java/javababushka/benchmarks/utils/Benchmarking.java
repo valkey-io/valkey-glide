@@ -1,18 +1,15 @@
 package javababushka.benchmarks.utils;
 
-import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import javababushka.benchmarks.AsyncClient;
 import javababushka.benchmarks.BenchmarkingApp;
 import javababushka.benchmarks.Client;
@@ -26,6 +23,8 @@ public class Benchmarking {
   static final int SIZE_GET_KEYSPACE = 3750000;
   static final int SIZE_SET_KEYSPACE = 3000000;
   static final int ASYNC_OPERATION_TIMEOUT_SEC = 1;
+  // measurements are done in nano-seconds, but it should be converted to seconds later
+  static final double SECONDS_IN_NANO = 1e-9;
 
   private static ChosenAction randomAction() {
     if (Math.random() > PROB_GET) {
@@ -50,7 +49,7 @@ public class Benchmarking {
     void go() throws Exception;
   }
 
-  private static Pair<ChosenAction, Long> getLatency(Map<ChosenAction, Operation> actions) {
+  public static Pair<ChosenAction, Long> measurePerformance(Map<ChosenAction, Operation> actions) {
     var action = randomAction();
     long before = System.nanoTime();
     try {
@@ -84,54 +83,27 @@ public class Benchmarking {
   // This has the side-effect of sorting each latencies ArrayList
   public static Map<ChosenAction, LatencyResults> calculateResults(
       Map<ChosenAction, ArrayList<Long>> actionLatencies) {
-    Map<ChosenAction, LatencyResults> results = new HashMap<ChosenAction, LatencyResults>();
+    Map<ChosenAction, LatencyResults> results = new HashMap<>();
 
     for (Map.Entry<ChosenAction, ArrayList<Long>> entry : actionLatencies.entrySet()) {
       ChosenAction action = entry.getKey();
       ArrayList<Long> latencies = entry.getValue();
 
-      Double avgLatency =
-          latencies.stream().collect(Collectors.summingLong(Long::longValue))
-              / Double.valueOf(latencies.size());
+      double avgLatency =
+          SECONDS_IN_NANO * latencies.stream().mapToLong(Long::longValue).sum() / latencies.size();
 
       Collections.sort(latencies);
       results.put(
           action,
           new LatencyResults(
               avgLatency,
-              percentile(latencies, 50),
-              percentile(latencies, 90),
-              percentile(latencies, 99),
-              stdDeviation(latencies, avgLatency)));
+              SECONDS_IN_NANO * percentile(latencies, 50),
+              SECONDS_IN_NANO * percentile(latencies, 90),
+              SECONDS_IN_NANO * percentile(latencies, 99),
+              SECONDS_IN_NANO * stdDeviation(latencies, avgLatency)));
     }
 
     return results;
-  }
-
-  public static void printResults(
-      Map<ChosenAction, LatencyResults> calculatedResults, Optional<FileWriter> resultsFile) {
-    if (resultsFile.isPresent()) {
-      printResults(calculatedResults, resultsFile.get());
-    } else {
-      printResults(calculatedResults);
-    }
-  }
-
-  public static void printResults(
-      Map<ChosenAction, LatencyResults> resultsMap, FileWriter resultsFile) {
-    for (Map.Entry<ChosenAction, LatencyResults> entry : resultsMap.entrySet()) {
-      ChosenAction action = entry.getKey();
-      LatencyResults results = entry.getValue();
-
-      try {
-        resultsFile.write("Avg. time in ms per " + action + ": " + results.avgLatency / 1000000.0);
-        resultsFile.write(action + " p50 latency in ms: " + results.p50Latency / 1000000.0);
-        resultsFile.write(action + " p90 latency in ms: " + results.p90Latency / 1000000.0);
-        resultsFile.write(action + " p99 latency in ms: " + results.p99Latency / 1000000.0);
-        resultsFile.write(action + " std dev in ms: " + results.stdDeviation / 1000000.0);
-      } catch (Exception ignored) {
-      }
-    }
   }
 
   public static void printResults(Map<ChosenAction, LatencyResults> resultsMap) {
@@ -189,9 +161,10 @@ public class Benchmarking {
                         "> iteration = %d/%d, client# = %d/%d%n",
                         iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
                   }
+
+                  var actions = getActionMap(clients.get(clientIndex), config.dataSize, async);
                   // operate and calculate tik-tok
-                  Pair<ChosenAction, Long> result =
-                      measurePerformance(clients.get(clientIndex), config.dataSize, async);
+                  Pair<ChosenAction, Long> result = measurePerformance(actions);
                   actionResults.get(result.getLeft()).add(result.getRight());
 
                   iterationIncrement = iterationCounter.getAndIncrement();
@@ -204,6 +177,7 @@ public class Benchmarking {
               "===> concurrentNum = %d, clientNum = %d, tasks = %d%n",
               concurrentNum, clientCount, tasks.size());
         }
+        long started = System.nanoTime();
         tasks.stream()
             .map(CompletableFuture::runAsync)
             .forEach(
@@ -215,14 +189,25 @@ public class Benchmarking {
                   }
                 });
 
-        printResults(calculateResults(actionResults), config.resultsFile);
+        var calculatedResults = calculateResults(actionResults);
+        if (config.resultsFile.isPresent()) {
+          JsonWriter.Write(
+              calculatedResults,
+              config.resultsFile.get(),
+              config.dataSize,
+              clientCreator.get().getName(),
+              clientCount,
+              concurrentNum,
+              iterationCounter.get() * 1e9 / (System.nanoTime() - started));
+        }
+        printResults(calculatedResults);
       }
     }
 
     System.out.println();
   }
 
-  public static Pair<ChosenAction, Long> measurePerformance(
+  public static Map<ChosenAction, Operation> getActionMap(
       Client client, int dataSize, boolean async) {
 
     String value = RandomStringUtils.randomAlphanumeric(dataSize);
@@ -251,7 +236,6 @@ public class Benchmarking {
                     .asyncSet(generateKeySet(), value)
                     .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
             : () -> ((SyncClient) client).set(generateKeySet(), value));
-
-    return getLatency(actions);
+    return actions;
   }
 }

@@ -2,8 +2,6 @@ package javababushka.benchmarks;
 
 import static javababushka.benchmarks.utils.Benchmarking.testClientSetGet;
 
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -57,14 +55,6 @@ public class BenchmarkingApp {
           break;
       }
     }
-
-    if (runConfiguration.resultsFile.isPresent()) {
-      try {
-        runConfiguration.resultsFile.get().close();
-      } catch (IOException ioException) {
-        System.out.println("Error closing results file");
-      }
-    }
   }
 
   private static Options getOptions() {
@@ -97,12 +87,7 @@ public class BenchmarkingApp {
     }
 
     if (line.hasOption("resultsFile")) {
-      try {
-        runConfiguration.resultsFile =
-            Optional.of(new FileWriter(line.getOptionValue("resultsFile")));
-      } catch (IOException e) {
-        throw new ParseException("Unable to write to resultsFile.");
-      }
+      runConfiguration.resultsFile = Optional.ofNullable(line.getOptionValue("resultsFile"));
     }
 
     if (line.hasOption("dataSize")) {
@@ -210,8 +195,8 @@ public class BenchmarkingApp {
 
   public static class RunConfiguration {
     public String configuration;
-    public Optional<FileWriter> resultsFile;
     public int dataSize;
+    public Optional<String> resultsFile;
     public List<Integer> concurrentTasks;
     public ClientName[] clients;
     public String host;

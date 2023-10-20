@@ -5,6 +5,7 @@ package javababushka.benchmarks.jedis;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import javababushka.benchmarks.utils.Benchmarking;
@@ -54,5 +55,17 @@ public class JedisClientIT {
     actions.put(
         ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
     actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));
+
+    Map<ChosenAction, ArrayList<Long>> latencies =
+        Map.of(
+            ChosenAction.GET_EXISTING, new ArrayList<>(),
+            ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
+            ChosenAction.SET, new ArrayList<>());
+    for (int i = 0; i < iterations; i++) {
+      var latency = Benchmarking.measurePerformance(actions);
+      latencies.get(latency.getKey()).add(latency.getValue());
+    }
+
+    Benchmarking.printResults(Benchmarking.calculateResults(latencies));
   }
 }
