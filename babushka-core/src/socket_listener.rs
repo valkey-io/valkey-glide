@@ -330,6 +330,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::ExpireAt => Some(cmd("EXPIREAT")),
         RequestType::Exists => Some(cmd("EXISTS")),
         RequestType::Unlink => Some(cmd("UNLINK")),
+        RequestType::TTL => Some(cmd("TTL")),
     }
 }
 

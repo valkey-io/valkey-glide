@@ -95,6 +95,7 @@ enum RequestType {
     ExpireAt = 57;
     Exists = 58;
     Unlink = 59;
+    TTL = 60;
 }
 
 message Command {
