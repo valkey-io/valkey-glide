@@ -47,6 +47,7 @@ import {
     createSRem,
     createSelect,
     createSet,
+    createTTL,
     createUnlink,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
@@ -612,6 +613,7 @@ export class BaseTransaction {
     /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
+     * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
      * See https://redis.io/commands/expire/ for details.
      *
      * @param key - The key to set timeout on it.
@@ -628,6 +630,7 @@ export class BaseTransaction {
     /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
      * See https://redis.io/commands/expireat/ for details.
      *
      * @param key - The key to set timeout on it.
@@ -644,6 +647,7 @@ export class BaseTransaction {
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
+     * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
      * See https://redis.io/commands/pexpire/ for details.
      *
      * @param key - The key to set timeout on it.
@@ -660,6 +664,7 @@ export class BaseTransaction {
     /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
      * See https://redis.io/commands/pexpireat/ for details.
      *
      * @param key - The key to set timeout on it.
@@ -675,6 +680,17 @@ export class BaseTransaction {
         option?: ExpireOptions
     ) {
         this.commands.push(createPExpireAt(key, unixMilliseconds, option));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout.
+     * See https://redis.io/commands/ttl/ for details.
+     *
+     * @param key - The key to return its timeout.
+     *
+     * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     */
+    public ttl(key: string) {
+        this.commands.push(createTTL(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

@@ -83,6 +83,7 @@ type BaseClient = {
         unixMilliseconds: number,
         option?: ExpireOptions
     ) => Promise<number>;
+    ttl: (key: string) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -1035,6 +1036,128 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.unlink([key1, key2, "nonExistingKey", key3])
                 ).toEqual(3);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "expire, pexpire and ttl with positive timeout",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.expire(key, 10)).toEqual(1);
+                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
+                /// set command clears the timeout.
+                expect(await client.set(key, "bar")).toEqual("OK");
+                expect(
+                    await client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
+                ).toEqual(1);
+                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
+                /// TTL will be updated to the new value = 15
+                expect(
+                    await client.expire(
+                        key,
+                        15,
+                        ExpireOptions.HasExistingExpiry
+                    )
+                ).toEqual(1);
+                expect(await client.ttl(key)).toBeLessThanOrEqual(15);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "expireAt, pexpireAt and ttl with positive timeout",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(
+                    await client.expireAt(
+                        key,
+                        Math.floor(Date.now() / 1000) + 10
+                    )
+                ).toEqual(1);
+                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
+                expect(
+                    await client.expireAt(
+                        key,
+                        Math.floor(Date.now() / 1000) + 50,
+                        ExpireOptions.NewExpiryGreaterThanCurrent
+                    )
+                ).toEqual(1);
+                expect(await client.ttl(key)).toBeLessThanOrEqual(50);
+
+                /// set command clears the timeout.
+                expect(await client.set(key, "bar")).toEqual("OK");
+                expect(
+                    await client.pexpireAt(
+                        key,
+                        Date.now() + 50000,
+                        ExpireOptions.HasExistingExpiry
+                    )
+                ).toEqual(0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.ttl(key)).toEqual(-1);
+                expect(await client.expire(key, -10)).toEqual(1);
+                expect(await client.ttl(key)).toEqual(-2);
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.pexpire(key, -10000)).toEqual(1);
+                expect(await client.ttl(key)).toEqual(-2);
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(
+                    await client.expireAt(
+                        key,
+                        Math.floor(Date.now() / 1000) - 50 /// timeout in the past
+                    )
+                ).toEqual(1);
+                expect(await client.ttl(key)).toEqual(-2);
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(
+                    await client.pexpireAt(
+                        key,
+                        Date.now() - 50000 /// timeout in the past
+                    )
+                ).toEqual(1);
+                expect(await client.ttl(key)).toEqual(-2);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "expire, pexpire, expireAt, pexpireAt and ttl with non-existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.expire(key, 10)).toEqual(0);
+                expect(await client.pexpire(key, 10000)).toEqual(0);
+                expect(
+                    await client.expireAt(
+                        key,
+                        Math.floor(Date.now() / 1000) + 50 /// timeout in the past
+                    )
+                ).toEqual(0);
+                expect(
+                    await client.pexpireAt(
+                        key,
+                        Date.now() + 50000 /// timeout in the past
+                    )
+                ).toEqual(0);
+                expect(await client.ttl(key)).toEqual(-2);
             });
         },
         config.timeout

@@ -521,3 +521,7 @@ export function createPExpireAt(
             : [key, unixMilliseconds.toString(), option];
     return createCommand(RequestType.PExpireAt, args);
 }
+
+export function createTTL(key: string): redis_request.Command {
+    return createCommand(RequestType.TTL, [key]);
+}
