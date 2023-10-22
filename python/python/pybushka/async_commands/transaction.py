@@ -300,6 +300,17 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashGet, [key, field])
 
+    def client_getname(self):
+        """
+        Get the name of the connection on which the transaction is being executed.
+        See https://redis.io/commands/client-getname/ for more details.
+
+        Command response:
+            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            or None if no name is assigned.
+        """
+        self.append_command(RequestType.ClientGetName, [])
+
 
 class Transaction(BaseTransaction):
     """
