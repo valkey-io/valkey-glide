@@ -1,7 +1,13 @@
 import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import { InfoOptions, ReturnType, SetOptions, parseInfoResponse } from "../";
+import {
+    ExpireOptions,
+    InfoOptions,
+    ReturnType,
+    SetOptions,
+    parseInfoResponse,
+} from "../";
 import { ClusterResponse } from "../src/RedisClusterClient";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
@@ -57,6 +63,26 @@ type BaseClient = {
     scard: (key: string) => Promise<number>;
     exists: (keys: string[]) => Promise<number>;
     unlink: (keys: string[]) => Promise<number>;
+    expire: (
+        key: string,
+        seconds: number,
+        option?: ExpireOptions
+    ) => Promise<number>;
+    expireAt: (
+        key: string,
+        unixSeconds: number,
+        option?: ExpireOptions
+    ) => Promise<number>;
+    pexpire: (
+        key: string,
+        milliseconds: number,
+        option?: ExpireOptions
+    ) => Promise<number>;
+    pexpireAt: (
+        key: string,
+        unixMilliseconds: number,
+        option?: ExpireOptions
+    ) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 

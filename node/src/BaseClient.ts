@@ -6,11 +6,14 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
+    ExpireOptions,
     SetOptions,
     createDecr,
     createDecrBy,
     createDel,
     createExists,
+    createExpire,
+    createExpireAt,
     createGet,
     createHDel,
     createHExists,
@@ -31,6 +34,8 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createPExpire,
+    createPExpireAt,
     createRPop,
     createRPush,
     createSAdd,
@@ -734,6 +739,88 @@ export class BaseClient {
      */
     public unlink(keys: string[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
+    }
+
+    /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+     * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * If `seconds` is non-positive number, the key will be deleted rather than expired.
+     * See https://redis.io/commands/expire/ for details.
+     *
+     * @param key - The key to set timeout on it.
+     * @param seconds - The timeout in seconds.
+     * @param option - The expire option.
+     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * or operation skipped due to the provided arguments.
+     */
+    public expire(
+        key: string,
+        seconds: number,
+        option?: ExpireOptions
+    ): Promise<number> {
+        return this.createWritePromise(createExpire(key, seconds, option));
+    }
+
+    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+     * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+     * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * See https://redis.io/commands/expireat/ for details.
+     *
+     * @param key - The key to set timeout on it.
+     * @param unixSeconds - The timeout in an absolute Unix timestamp.
+     * @param option - The expire option.
+     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * or operation skipped due to the provided arguments.
+     */
+    public expireAt(
+        key: string,
+        unixSeconds: number,
+        option?: ExpireOptions
+    ): Promise<number> {
+        return this.createWritePromise(
+            createExpireAt(key, unixSeconds, option)
+        );
+    }
+
+    /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+     * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
+     * See https://redis.io/commands/pexpire/ for details.
+     *
+     * @param key - The key to set timeout on it.
+     * @param milliseconds - The timeout in milliseconds.
+     * @param option - The expire option.
+     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * or operation skipped due to the provided arguments.
+     */
+    public pexpire(
+        key: string,
+        milliseconds: number,
+        option?: ExpireOptions
+    ): Promise<number> {
+        return this.createWritePromise(
+            createPExpire(key, milliseconds, option)
+        );
+    }
+
+    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
+     * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+     * If `key` already has an existing expire set, the time to live is updated to the new value.
+     * See https://redis.io/commands/pexpireat/ for details.
+     *
+     * @param key - The key to set timeout on it.
+     * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
+     * @param option - The expire option.
+     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * or operation skipped due to the provided arguments.
+     */
+    public pexpireAt(
+        key: string,
+        unixMilliseconds: number,
+        option?: ExpireOptions
+    ): Promise<number> {
+        return this.createWritePromise(
+            createPExpireAt(key, unixMilliseconds, option)
+        );
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<

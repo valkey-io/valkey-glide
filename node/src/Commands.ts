@@ -454,3 +454,70 @@ export function createExists(keys: string[]): redis_request.Command {
 export function createUnlink(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Unlink, keys);
 }
+
+export enum ExpireOptions {
+    /**
+     * `HasNoExpiry` - Sets expiry only when the key has no expiry.
+     */
+    HasNoExpiry = "NX",
+    /**
+     * `HasExistingExpiry` - Sets expiry only when the key has an existing expiry.
+     */
+    HasExistingExpiry = "XX",
+    /**
+     * `NewExpiryGreaterThanCurrent` - Sets expiry only when the new expiry is greater than current one.
+     */
+    NewExpiryGreaterThanCurrent = "GT",
+    /**
+     * `NewExpiryLessThanCurrent` - Sets expiry only when the new expiry is less than current one.
+     */
+    NewExpiryLessThanCurrent = "LT",
+}
+
+export function createExpire(
+    key: string,
+    seconds: number,
+    option?: ExpireOptions
+): redis_request.Command {
+    const args: string[] =
+        option == undefined
+            ? [key, seconds.toString()]
+            : [key, seconds.toString(), option];
+    return createCommand(RequestType.Expire, args);
+}
+
+export function createExpireAt(
+    key: string,
+    unixSeconds: number,
+    option?: ExpireOptions
+): redis_request.Command {
+    const args: string[] =
+        option == undefined
+            ? [key, unixSeconds.toString()]
+            : [key, unixSeconds.toString(), option];
+    return createCommand(RequestType.ExpireAt, args);
+}
+
+export function createPExpire(
+    key: string,
+    milliseconds: number,
+    option?: ExpireOptions
+): redis_request.Command {
+    const args: string[] =
+        option == undefined
+            ? [key, milliseconds.toString()]
+            : [key, milliseconds.toString(), option];
+    return createCommand(RequestType.PExpire, args);
+}
+
+export function createPExpireAt(
+    key: string,
+    unixMilliseconds: number,
+    option?: ExpireOptions
+): redis_request.Command {
+    const args: string[] =
+        option == undefined
+            ? [key, unixMilliseconds.toString()]
+            : [key, unixMilliseconds.toString(), option];
+    return createCommand(RequestType.PExpireAt, args);
+}
