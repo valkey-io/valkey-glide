@@ -403,8 +403,18 @@ class TestCommands:
 
         with pytest.raises(Exception) as e:
             await redis_client.incrbyfloat(key, 3.5)
-
         assert "value is not a valid float" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_client_getname(self, redis_client: TRedisClient):
+        assert await redis_client.client_getname() is None
+        assert (
+            await redis_client.custom_command(
+                ["CLIENT", "SETNAME", "BabushkaConnection"]
+            )
+            == OK
+        )
+        assert await redis_client.client_getname() == "BabushkaConnection"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mset_mget(self, redis_client: TRedisClient):
