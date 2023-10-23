@@ -384,6 +384,27 @@ class CoreCommands(Protocol):
                 ["field1", "value1", "field2", "value2"]
         """
         return cast(
-            List[str],
-            await self._execute_command(RequestType.HashGetAll, [key]),
+            List[str], await self._execute_command(RequestType.HashGetAll, [key])
+        )
+
+    async def hdel(self, key: str, fields: List[str]) -> int:
+        """Remove specified fields from the hash stored at `key`.
+        See https://redis.io/commands/hdel/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields to remove from the hash stored at `key`.
+
+        Returns:
+            int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
+            If the key does not exist, it is treated as an empty hash, and the function returns 0.
+            If `key` holds a value that is not a hash, an error is returned.
+
+
+        Examples:
+            >>> await client.hdel("my_hash", ["field1", "field2"])
+                2  # Indicates that two fields were successfully removed from the hash.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.HashDel, [key] + fields)
         )
