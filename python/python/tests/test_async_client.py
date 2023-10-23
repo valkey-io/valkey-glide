@@ -482,7 +482,7 @@ class TestCommands:
         assert "value is not an integer" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_hset_hget(self, redis_client: TRedisClient):
+    async def test_hset_hget_hgetall(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
@@ -492,6 +492,9 @@ class TestCommands:
         assert await redis_client.hget(key, field) == "value"
         assert await redis_client.hget(key, field2) == "value2"
         assert await redis_client.hget(key, "non_existing_field") is None
+
+        assert await redis_client.hgetall(key) == [field, "value", field2, "value2"]
+        assert await redis_client.hgetall("non_existing_field") == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hset_without_data(self, redis_client: TRedisClient):
@@ -648,4 +651,5 @@ class TestClusterRoutes:
     async def test_info_random_route(self, redis_client: RedisClusterClient):
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
         assert isinstance(info, str)
+        assert "# Server" in info
         assert "# Server" in info

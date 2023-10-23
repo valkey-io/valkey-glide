@@ -366,3 +366,24 @@ class CoreCommands(Protocol):
             Optional[str],
             await self._execute_command(RequestType.HashGet, [key, field]),
         )
+
+    async def hgetall(self, key: str) -> List[str]:
+        """Returns all fields and values of the hash stored at `key`.
+        See https://redis.io/commands/hgetall/ for details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Returns:
+            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty list.
+            If `key` holds a value that is not a hash, an error is returned.
+
+        Examples:
+            >>> await client.hgetall("my_hash")
+                ["field1", "value1", "field2", "value2"]
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.HashGetAll, [key]),
+        )
