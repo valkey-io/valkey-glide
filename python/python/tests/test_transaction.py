@@ -47,6 +47,7 @@ def transaction_test(
     transaction.hset(key4, {key: value, key2: value2})
     transaction.hget(key4, key2)
     transaction.hgetall(key4)
+    transaction.hdel(key4, [key, key2])
 
     transaction.client_getname()
 
@@ -68,6 +69,7 @@ def transaction_test(
         2,
         value2,
         [key, value, key2, value2],
+        2,
         None,
     ]
 
