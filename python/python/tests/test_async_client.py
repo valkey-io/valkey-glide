@@ -497,6 +497,19 @@ class TestCommands:
         assert await redis_client.hgetall("non_existing_field") == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hdel(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2", field3: "value3"}
+
+        assert await redis_client.hset(key, field_value_map) == 3
+        assert await redis_client.hdel(key, [field, field2]) == 2
+        assert await redis_client.hdel(key, ["nonExistingField"]) == 0
+        assert await redis_client.hdel("nonExistingKey", [field3]) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hset_without_data(self, redis_client: TRedisClient):
         with pytest.raises(Exception) as e:
             await redis_client.hset("key", {})

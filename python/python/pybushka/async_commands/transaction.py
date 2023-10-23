@@ -325,6 +325,21 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashGetAll, [key]),
 
+    def hdel(self, key: str, fields: List[str]):
+        """Remove specified fields from the hash stored at `key`.
+        See https://redis.io/commands/hdel/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields to remove from the hash stored at `key`.
+
+        Command response:
+            int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
+            If the key does not exist, it is treated as an empty hash, returns 0.
+            If `key` holds a value that is not a hash , the transaction fails.
+        """
+        self.append_command(RequestType.HashDel, [key] + fields)
+
 
 class Transaction(BaseTransaction):
     """
