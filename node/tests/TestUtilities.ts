@@ -55,6 +55,7 @@ export function transactionTest(
     const key4 = "{key}" + uuidv4();
     const key5 = "{key}" + uuidv4();
     const key6 = "{key}" + uuidv4();
+    const key7 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
@@ -76,6 +77,10 @@ export function transactionTest(
     baseTransaction.lpop(key5);
     baseTransaction.rpush(key6, [field + "1", field + "2"]);
     baseTransaction.rpop(key6);
+    baseTransaction.sadd(key7, ["bar", "foo"]);
+    baseTransaction.srem(key7, ["foo"]);
+    baseTransaction.scard(key7);
+    baseTransaction.smembers(key7);
     return [
         "OK",
         null,
@@ -93,5 +98,9 @@ export function transactionTest(
         field + "2",
         2,
         field + "2",
+        2,
+        1,
+        1,
+        ["bar"],
     ];
 }

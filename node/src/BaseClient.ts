@@ -29,6 +29,10 @@ import {
     createMSet,
     createRPop,
     createRPush,
+    createSAdd,
+    createSCard,
+    createSMembers,
+    createSRem,
     createSet,
 } from "./Commands";
 import {
@@ -604,6 +608,55 @@ export class BaseClient {
         count?: number
     ): Promise<string | string[] | null> {
         return this.createWritePromise(createRPop(key, count));
+    }
+
+    /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
+     * If `key` does not exist, a new set is created before adding `members`.
+     * See https://redis.io/commands/sadd/ for details.
+     *
+     * @param key - The key to store the members to its set.
+     * @param members - A list of members to add to the set stored at `key`.
+     * @returns the number of members that were added to the set, not including all the members already present in the set.
+     * If `key` holds a value that is not a set, an error is raised.
+     */
+    public sadd(key: string, members: string[]): Promise<number> {
+        return this.createWritePromise(createSAdd(key, members));
+    }
+
+    /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
+     * See https://redis.io/commands/srem/ for details.
+     *
+     * @param key - The key to remove the members from its set.
+     * @param members - A list of members to remove from the set stored at `key`.
+     * @returns the number of members that were removed from the set, not including non existing members.
+     * If `key` does not exist, it is treated as an empty set and this command returns 0.
+     * If `key` holds a value that is not a set, an error is raised.
+     */
+    public srem(key: string, members: string[]): Promise<number> {
+        return this.createWritePromise(createSRem(key, members));
+    }
+
+    /** Returns all the members of the set value stored at `key`.
+     * See https://redis.io/commands/smembers/ for details.
+     *
+     * @param key - The key to return its members.
+     * @returns all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     * If `key` holds a value that is not a set, an error is raised.
+     */
+    public smembers(key: string): Promise<string[]> {
+        return this.createWritePromise(createSMembers(key));
+    }
+
+    /** Returns the set cardinality (number of elements) of the set stored at `key`.
+     * See https://redis.io/commands/scard/ for details.
+     *
+     * @param key - The key to return the number of its members.
+     * @returns the cardinality (number of elements) of the set, or 0 if key does not exist.
+     * If `key` holds a value that is not a set, an error is raised.
+     */
+    public scard(key: string): Promise<number> {
+        return this.createWritePromise(createSCard(key));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<

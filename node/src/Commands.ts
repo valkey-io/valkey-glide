@@ -373,6 +373,28 @@ export function createRPop(key: string, count?: number): redis_request.Command {
     return createCommand(RequestType.RPop, args);
 }
 
+export function createSAdd(
+    key: string,
+    members: string[]
+): redis_request.Command {
+    return createCommand(RequestType.SAdd, [key].concat(members));
+}
+
+export function createSRem(
+    key: string,
+    members: string[]
+): redis_request.Command {
+    return createCommand(RequestType.SRem, [key].concat(members));
+}
+
+export function createSMembers(key: string): redis_request.Command {
+    return createCommand(RequestType.SMembers, [key]);
+}
+
+export function createSCard(key: string): redis_request.Command {
+    return createCommand(RequestType.SCard, [key]);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
