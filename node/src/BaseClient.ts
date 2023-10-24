@@ -23,6 +23,7 @@ import {
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLLen,
     createLPop,
     createLPush,
     createLRange,
@@ -580,6 +581,18 @@ export class BaseClient {
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
+    }
+
+    /** Returns the length of the list stored at `key`.
+     * See https://redis.io/commands/llen/ for details.
+     *
+     * @param key - The key of the list.
+     * @returns the length of the list at `key`.
+     * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public llen(key: string): Promise<number> {
+        return this.createWritePromise(createLLen(key));
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.

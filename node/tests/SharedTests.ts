@@ -46,6 +46,7 @@ type BaseClient = {
     lpush: (key: string, elements: string[]) => Promise<number>;
     lpop: (key: string, count?: number) => Promise<string | string[] | null>;
     lrange: (key: string, start: number, end: number) => Promise<string[]>;
+    llen: (key: string) => Promise<number>;
     ltrim: (key: string, start: number, end: number) => Promise<"OK">;
     rpush: (key: string, elements: string[]) => Promise<number>;
     rpop: (key: string, count?: number) => Promise<string | string[] | null>;
@@ -752,6 +753,31 @@ export function runBaseTests<Context>(config: {
 
                 try {
                     expect(await client.lrange(key, 0, -1)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "llen with existing, non-existing key and key that holds a value that is not a list",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const valueList = ["value4", "value3", "value2", "value1"];
+                expect(await client.lpush(key1, valueList)).toEqual(4);
+                expect(await client.llen(key1)).toEqual(4);
+
+                expect(await client.llen("nonExistingKey")).toEqual(0);
+
+                expect(await client.set(key2, "foo")).toEqual("OK");
+                try {
+                    expect(await client.llen(key2)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "Operation against a key holding the wrong kind of value"
