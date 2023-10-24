@@ -27,6 +27,7 @@ import {
     createLPop,
     createLPush,
     createLRange,
+    createLRem,
     createLTrim,
     createMGet,
     createMSet,
@@ -612,6 +613,22 @@ export class BaseClient {
      */
     public ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
+    }
+
+    /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
+     * If `count` > 0: Removes elements equal to `element` moving from head to tail.
+     * If `count` < 0: Removes elements equal to `element` moving from tail to head.
+     * If `count` = 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the occurrences of elements equal to `element` to remove.
+     * @param element - The element to remove from the list.
+     * @returns the number of the removed elements.
+     * If `key` does not exist, 0 is returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public lrem(key: string, count: number, element: string): Promise<number> {
+        return this.createWritePromise(createLRem(key, count, element));
     }
 
     /** Inserts all the specified values at the tail of the list stored at `key`.
