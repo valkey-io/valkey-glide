@@ -43,6 +43,9 @@ type BaseClient = {
         field: string,
         amount: number
     ) => Promise<string>;
+    lpush: (key: string, elements: string[]) => Promise<number>;
+    lpop: (key: string, count?: number) => Promise<string | string[] | null>;
+    lrange: (key: string, start: number, end: number) => Promise<string[]>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -686,6 +689,64 @@ export function runBaseTests<Context>(config: {
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "hash value is not a float"
+                    );
+                }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "lpush, lpop and lrange with existing and non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const valueList = ["value4", "value3", "value2", "value1"];
+                expect(await client.lpush(key, valueList)).toEqual(4);
+                expect(await client.lpop(key)).toEqual("value1");
+                expect(await client.lrange(key, 0, -1)).toEqual([
+                    "value2",
+                    "value3",
+                    "value4",
+                ]);
+                expect(await client.lpop(key, 2)).toEqual(["value2", "value3"]);
+                expect(await client.lrange("nonExistingKey", 0, -1)).toEqual(
+                    []
+                );
+                expect(await client.lpop("nonExistingKey")).toEqual(null);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "lpush, lpop and lrange with key that holds a value that is not a list",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+
+                try {
+                    expect(await client.lpush(key, ["bar"])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.lpop(key)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.lrange(key, 0, -1)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
                     );
                 }
             });
