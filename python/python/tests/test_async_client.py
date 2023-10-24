@@ -571,6 +571,51 @@ class TestCommands:
             await redis_client.rpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_sadd_srem_smembers_scard(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value_list = ["member1", "member2", "member3", "member4"]
+
+        assert await redis_client.sadd(key, value_list) == 4
+        assert await redis_client.srem(key, ["member4", "nonExistingMember"]) == 1
+
+        assert set(await redis_client.smembers(key)) == set(value_list[:3])
+
+        assert await redis_client.srem(key, ["member1"]) == 1
+        assert await redis_client.scard(key) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_sadd_srem_smembers_scard_non_existing_key(
+        self, redis_client: TRedisClient
+    ):
+        non_existing_key = get_random_string(10)
+        assert await redis_client.srem(non_existing_key, ["member"]) == 0
+        assert await redis_client.scard(non_existing_key) == 0
+        assert await redis_client.smembers(non_existing_key) == []
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_sadd_srem_smembers_scard_wrong_type_raise_error(
+        self, redis_client: TRedisClient
+    ):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+
+        with pytest.raises(Exception) as e:
+            await redis_client.sadd(key, ["bar"])
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.srem(key, ["bar"])
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.scard(key)
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.smembers(key)
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
