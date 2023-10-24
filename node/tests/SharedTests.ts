@@ -46,6 +46,8 @@ type BaseClient = {
     lpush: (key: string, elements: string[]) => Promise<number>;
     lpop: (key: string, count?: number) => Promise<string | string[] | null>;
     lrange: (key: string, start: number, end: number) => Promise<string[]>;
+    rpush: (key: string, elements: string[]) => Promise<number>;
+    rpop: (key: string, count?: number) => Promise<string | string[] | null>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -744,6 +746,48 @@ export function runBaseTests<Context>(config: {
 
                 try {
                     expect(await client.lrange(key, 0, -1)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "rpush and rpop with existing and non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const valueList = ["value1", "value2", "value3", "value4"];
+                expect(await client.rpush(key, valueList)).toEqual(4);
+                expect(await client.rpop(key)).toEqual("value4");
+                expect(await client.rpop(key, 2)).toEqual(["value3", "value2"]);
+                expect(await client.rpop("nonExistingKey")).toEqual(null);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "rpush and rpop with key that holds a value that is not a list",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+
+                try {
+                    expect(await client.rpush(key, ["bar"])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.rpop(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "Operation against a key holding the wrong kind of value"

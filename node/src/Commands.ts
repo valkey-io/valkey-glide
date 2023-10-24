@@ -361,6 +361,18 @@ export function createLRange(
     ]);
 }
 
+export function createRPush(
+    key: string,
+    elements: string[]
+): redis_request.Command {
+    return createCommand(RequestType.RPush, [key].concat(elements));
+}
+
+export function createRPop(key: string, count?: number): redis_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.RPop, args);
+}
+
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
