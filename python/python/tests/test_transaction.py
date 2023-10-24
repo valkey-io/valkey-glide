@@ -19,6 +19,8 @@ def transaction_test(
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key3 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key4 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key5 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+
     value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
 
@@ -51,6 +53,9 @@ def transaction_test(
 
     transaction.client_getname()
 
+    transaction.lpush(key5, [value, value2])
+    transaction.lpop(key5)
+
     return [
         OK,
         value,
@@ -71,6 +76,8 @@ def transaction_test(
         [key, value, key2, value2],
         2,
         None,
+        2,
+        value2,
     ]
 
 
