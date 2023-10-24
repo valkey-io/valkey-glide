@@ -48,6 +48,10 @@ type BaseClient = {
     lrange: (key: string, start: number, end: number) => Promise<string[]>;
     rpush: (key: string, elements: string[]) => Promise<number>;
     rpop: (key: string, count?: number) => Promise<string | string[] | null>;
+    sadd: (key: string, members: string[]) => Promise<number>;
+    srem: (key: string, members: string[]) => Promise<number>;
+    smembers: (key: string) => Promise<string[]>;
+    scard: (key: string) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -788,6 +792,86 @@ export function runBaseTests<Context>(config: {
 
                 try {
                     expect(await client.rpop(key)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "sadd, srem, scard and smembers with existing set",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const valueList = ["member1", "member2", "member3", "member4"];
+                expect(await client.sadd(key, valueList)).toEqual(4);
+                expect(
+                    await client.srem(key, ["member3", "nonExistingMember"])
+                ).toEqual(1);
+                /// compare the 2 sets.
+                expect((await client.smembers(key)).sort()).toEqual([
+                    "member1",
+                    "member2",
+                    "member4",
+                ]);
+                expect(await client.srem(key, ["member1"])).toEqual(1);
+                expect(await client.scard(key)).toEqual(2);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "srem, scard and smembers with non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.srem("nonExistingKey", ["member"])).toEqual(
+                    0
+                );
+                expect(await client.scard("nonExistingKey")).toEqual(0);
+                expect(await client.smembers("nonExistingKey")).toEqual([]);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "sadd, srem, scard and smembers with with key that holds a value that is not a set",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+
+                try {
+                    expect(await client.sadd(key, ["bar"])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.srem(key, ["bar"])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.scard(key)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+
+                try {
+                    expect(await client.smembers(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "Operation against a key holding the wrong kind of value"
