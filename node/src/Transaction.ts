@@ -30,6 +30,8 @@ import {
     createMGet,
     createMSet,
     createPing,
+    createRPop,
+    createRPush,
     createSelect,
     createSet,
 } from "./Commands";
@@ -430,6 +432,37 @@ export class BaseTransaction {
      */
     public lrange(key: string, start: number, end: number) {
         this.commands.push(createLRange(key, start, end));
+    }
+
+    /** Inserts all the specified values at the tail of the list stored at `key`.
+     * `elements` are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
+     * If `key` does not exist, it is created as empty list before performing the push operations.
+     * See https://redis.io/commands/rpush/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     *
+     * Command Response - the length of the list after the push operations.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public rpush(key: string, elements: string[]) {
+        this.commands.push(createRPush(key, elements));
+    }
+
+    /** Removes and returns the last elements of the list stored at `key`.
+     * By default, the command pops a single element from the end of the list.
+     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * See https://redis.io/commands/rpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     *
+     * Command Response - The value of the last element if `count` is not provided. If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public rpop(key: string, count?: number) {
+        this.commands.push(createRPop(key, count));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
