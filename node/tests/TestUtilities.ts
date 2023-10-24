@@ -54,6 +54,7 @@ export function transactionTest(
     const key3 = "{key}" + uuidv4();
     const key4 = "{key}" + uuidv4();
     const key5 = "{key}" + uuidv4();
+    const key6 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
@@ -73,6 +74,8 @@ export function transactionTest(
     baseTransaction.hexists(key4, field);
     baseTransaction.lpush(key5, [field + "1", field + "2"]);
     baseTransaction.lpop(key5);
+    baseTransaction.rpush(key6, [field + "1", field + "2"]);
+    baseTransaction.rpop(key6);
     return [
         "OK",
         null,
@@ -86,6 +89,8 @@ export function transactionTest(
         1,
         [null],
         0,
+        2,
+        field + "2",
         2,
         field + "2",
     ];
