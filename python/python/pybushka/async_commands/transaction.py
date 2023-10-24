@@ -340,6 +340,64 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashDel, [key] + fields)
 
+    def lpush(self, key: str, elements: List[str]):
+        """Insert all the specified values at the head of the list stored at `key`.
+        `elements` are inserted one after the other to the head of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/lpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, the transaction fails.
+        """
+        self.append_command(RequestType.LPush, [key] + elements)
+
+    def lpop(self, key: str, count: Optional[int] = None):
+        """Remove and return the first elements of the list stored at `key`.
+        By default, the command pops a single element from the beginning of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/lpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Command response:
+            Optional[Union[str, List[str]]]: The value of the first element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, the transaction fails.
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        self.append_command(RequestType.LPop, args)
+
+    def lrange(self, key: str, start: int, end: int):
+        """Retrieve the specified elements of the list stored at `key` within the given range.
+        The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
+        element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
+        with -1 being the last element of the list, -2 being the penultimate, and so on.
+        See https://redis.io/commands/lrange/ for details.
+
+        Args:
+            key (str): The key of the list.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Command response:
+            List[str]: A list of elements within the specified range.
+            If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
+            If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
+            If `key` does not exist an empty list will be returned.
+            If `key` holds a value that is not a list, the transaction fails.
+        """
+
+        self.append_command(RequestType.LRange, [key, str(start), str(end)])
+
 
 class Transaction(BaseTransaction):
     """
