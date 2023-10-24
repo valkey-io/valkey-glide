@@ -348,7 +348,7 @@ export class BaseClient {
      * See https://redis.io/commands/incr/ for details.
      *
      * @param key - The key to increment its value.
-     * @returns the value of `key` after the increment, An error is returned if `key` contains a value
+     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public incr(key: string): Promise<number> {
@@ -360,7 +360,7 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of `key` after the increment, An error is returned if `key` contains a value
+     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, amount: number): Promise<number> {
@@ -375,7 +375,7 @@ export class BaseClient {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment as string.
-     * An error is returned if `key` contains a value of the wrong type,
+     * An error is raised if `key` contains a value of the wrong type,
      * or the current key content is not parsable as a double precision floating point number.
      *
      */
@@ -387,7 +387,7 @@ export class BaseClient {
      * See https://redis.io/commands/decr/ for details.
      *
      * @param key - The key to decrement its value.
-     * @returns the value of `key` after the decrement. An error is returned if `key` contains a value
+     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public decr(key: string): Promise<number> {
@@ -399,7 +399,7 @@ export class BaseClient {
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
-     * @returns the value of `key` after the decrement. An error is returned if `key` contains a value
+     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public decrBy(key: string, amount: number): Promise<number> {
@@ -489,7 +489,7 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
-     *  An error will be returned if `key` holds a value of an incorrect type (not a string)
+     *  An error will be raised if `key` holds a value of an incorrect type (not a string)
      *  or if it contains a string that cannot be represented as an integer.
      */
     public hincrBy(
@@ -509,7 +509,7 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment as string.
-     *  An error is returned if `key` contains a value of the wrong type
+     *  An error is raised if `key` contains a value of the wrong type
      *  or the current field content is not parsable as a double precision floating point number.
      *
      */
@@ -529,7 +529,7 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
      * @returns the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
@@ -542,10 +542,9 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * @returns the value of the first element.
-     * If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * @returns The value of the first element if `count` is not provided. If `count` is provided, a list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(
         key: string,
@@ -564,11 +563,10 @@ export class BaseClient {
      * @param start - The starting point of the range
      * @param end - The end of the range.
      * @returns list of elements in the specified range.
-     * If `start` exceeds the end of the list, an empty list will be returned.
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
-     * If `start` is greater than `end` an empty list will be returned.
-     * If `key` holds a value that is not a list, an error is returned.
      * If `key` does not exist an empty list will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));

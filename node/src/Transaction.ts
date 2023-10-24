@@ -170,7 +170,7 @@ export class BaseTransaction {
      *
      * @param key - The key to increment its value.
      *
-     * Command Response - the value of `key` after the increment, An error is returned if `key` contains a value
+     * Command Response - the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public incr(key: string) {
@@ -183,7 +183,7 @@ export class BaseTransaction {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      *
-     * Command Response - the value of `key` after the increment, An error is returned if `key` contains a value
+     * Command Response - the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public incrBy(key: string, amount: number) {
@@ -199,7 +199,7 @@ export class BaseTransaction {
      * @param amount - The amount to increment.
      *
      * Command Response - the value of `key` after the increment as string.
-     * An error is returned if `key` contains a value of the wrong type,
+     * An error is raised if `key` contains a value of the wrong type,
      * or the current key content is not parsable as a double precision floating point number.
      *
      */
@@ -221,7 +221,7 @@ export class BaseTransaction {
      *
      * @param key - The key to decrement its value.
      *
-     * Command Response - the value of `key` after the decrement. An error is returned if `key` contains a value
+     * Command Response - the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public decr(key: string) {
@@ -234,7 +234,7 @@ export class BaseTransaction {
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
      *
-     * Command Response - the value of `key` after the decrement. An error is returned if `key` contains a value
+     * Command Response - the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
     public decrBy(key: string, amount: number) {
@@ -356,7 +356,7 @@ export class BaseTransaction {
      * @param field - The field in the hash stored at `key` to increment its value.
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
-     *  An error will be returned if `key` holds a value of an incorrect type (not a string)
+     *  An error will be raised if `key` holds a value of an incorrect type (not a string)
      *  or if it contains a string that cannot be represented as an integer.
      */
     public hincrBy(key: string, field: string, amount: number) {
@@ -373,7 +373,7 @@ export class BaseTransaction {
      * @param field - The field in the hash stored at `key` to increment its value.
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment as string.
-     *  An error is returned if `key` contains a value of the wrong type
+     *  An error is raised if `key` contains a value of the wrong type
      *  or the current field content is not parsable as a double precision floating point number.
      *
      */
@@ -390,7 +390,7 @@ export class BaseTransaction {
      * @param elements - The elements to insert at the head of the list stored at `key`.
      *
      * Command Response - the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpush(key: string, elements: string[]) {
         this.commands.push(createLPush(key, elements));
@@ -404,10 +404,9 @@ export class BaseTransaction {
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
      *
-     * Command Response - the value of the first element.
-     * If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * Command Response - The value of the first element if `count` is not provided. If `count` is provided, a list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(key: string, count?: number) {
         this.commands.push(createLPop(key, count));
@@ -424,11 +423,10 @@ export class BaseTransaction {
      * @param end - The end of the range.
      *
      * Command Response - list of elements in the specified range.
-     * If `start` exceeds the end of the list, an empty list will be returned.
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
-     * If `start` is greater than `end` an empty list will be returned.
-     * If `key` holds a value that is not a list, an error is returned.
      * If `key` does not exist an empty list will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrange(key: string, start: number, end: number) {
         this.commands.push(createLRange(key, start, end));
