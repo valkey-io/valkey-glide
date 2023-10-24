@@ -21,6 +21,7 @@ def transaction_test(
     key4 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key5 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
     value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -60,6 +61,11 @@ def transaction_test(
     transaction.rpush(key6, [value, value2])
     transaction.rpop(key6)
 
+    transaction.sadd(key7, ["foo", "bar"])
+    transaction.srem(key7, ["foo"])
+    transaction.smembers(key7)
+    transaction.scard(key7)
+
     return [
         OK,
         value,
@@ -84,6 +90,10 @@ def transaction_test(
         value2,
         2,
         value2,
+        2,
+        1,
+        ["bar"],
+        1,
     ]
 
 

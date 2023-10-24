@@ -557,3 +557,78 @@ class CoreCommands(Protocol):
             Optional[Union[str, List[str]]],
             await self._execute_command(RequestType.RPop, args),
         )
+
+    async def sadd(self, key: str, members: List[str]) -> int:
+        """Add specified members to the set stored at `key`.
+        Specified members that are already a member of this set are ignored.
+        If `key` does not exist, a new set is created before adding `members`.
+        See https://redis.io/commands/sadd/ for more details.
+
+        Args:
+            key (str): The key where members will be added to its set.
+            members (List[str]): A list of members to add to the set stored at `key`.
+
+        Returns:
+            int: The number of members that were added to the set, excluding members already present.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.sadd("my_set", ["member1", "member2"])
+                2
+        """
+        return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
+
+    async def srem(self, key: str, members: List[str]) -> int:
+        """Remove specified members from the set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+        See https://redis.io/commands/srem/ for details.
+
+        Args:
+            key (str): The key from which members will be removed.
+            members (List[str]): A list of members to remove from the set stored at `key`.
+
+        Returns:
+            int: The number of members that were removed from the set, excluding non-existing members.
+                If `key` does not exist, it is treated as an empty set and this command returns 0.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.srem("my_set", ["member1", "member2"])
+                2
+        """
+        return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
+
+    async def smembers(self, key: str) -> List[str]:
+        """Retrieve all the members of the set value stored at `key`.
+        See https://redis.io/commands/smembers/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the set members.
+
+        Returns:
+            List[str]: A list of all members of the set.
+                If `key` does not exist an empty list will be returned.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.smembers("my_set")
+                ["member1", "member2", "member3"]
+        """
+        return cast(List[str], await self._execute_command(RequestType.SMembers, [key]))
+
+    async def scard(self, key: str) -> int:
+        """Retrieve the set cardinality (number of elements) of the set stored at `key`.
+        See https://redis.io/commands/scard/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the number of set members.
+
+        Returns:
+            int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.scard("my_set")
+                3
+        """
+        return cast(int, await self._execute_command(RequestType.SCard, [key]))
