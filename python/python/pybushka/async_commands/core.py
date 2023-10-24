@@ -424,9 +424,9 @@ class CoreCommands(Protocol):
                 If `key` holds a value that is not a list, an error is returned.
 
         Examples:
-            >>> lpush("my_list", ["value1", "value2"])
+            >>> await client.lpush("my_list", ["value1", "value2"])
                 2
-            >>> lpush("nonexistent_list", ["new_value"])
+            >>> await client.lpush("nonexistent_list", ["new_value"])
                 1
         """
         return cast(
@@ -456,7 +456,7 @@ class CoreCommands(Protocol):
                 "value1"
             >>> await client.lpop("my_list", 2)
                 ["value2", "value3"]
-            >>> await client.lpop("nonexistent_list")
+            >>> await client.lpop("non_exiting_key")
                 None
         """
 
@@ -499,4 +499,61 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.LRange, [key, str(start), str(end)]
             ),
+        )
+
+    async def rpush(self, key: str, elements: List[str]) -> int:
+        """Inserts all the specified values at the tail of the list stored at `key`.
+        `elements` are inserted one after the other to the tail of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/rpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.rpush("my_list", ["value1", "value2"])
+                2
+            >>> await client.rpush("nonexistent_list", ["new_value"])
+                1
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPush, [key] + elements)
+        )
+
+    async def rpop(
+        self, key: str, count: Optional[int] = None
+    ) -> Optional[Union[str, List[str]]]:
+        """Removes and returns the last elements of the list stored at `key`.
+        By default, the command pops a single element from the end of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/rpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Returns:
+            Optional[Union[str, List[str]]: The value of the last element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.rpop("my_list")
+                "value1"
+            >>> await client.rpop("my_list", 2)
+                ["value2", "value3"]
+            >>> await client.rpop("non_exiting_key")
+                None
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        return cast(
+            Optional[Union[str, List[str]]],
+            await self._execute_command(RequestType.RPop, args),
         )
