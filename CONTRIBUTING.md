@@ -16,9 +16,12 @@ reported the issue. Please try to include as much information as you can. Detail
 
 * A reproducible test case or series of steps
 * The version of our code being used
+* Operating system
+* Redis version
+* Redis cluster information, cluster topology, number of shards, number of replicas, used data types 
 * Any modifications you've made relevant to the bug
 * Anything unusual about your environment or deployment
-
+* logs
 
 ## Contributing via Pull Requests
 Contributions via pull requests are much appreciated. Before sending us a pull request, please ensure that:
