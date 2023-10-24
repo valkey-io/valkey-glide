@@ -547,6 +547,30 @@ class TestCommands:
             await redis_client.lrange(key, 0, -1)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_rpush_rpop(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value_list = ["value4", "value3", "value2", "value1"]
+
+        assert await redis_client.rpush(key, value_list) == 4
+        assert await redis_client.rpop(key) == value_list[-1]
+
+        assert await redis_client.rpop(key, 2) == value_list[-2:0:-1]
+        assert await redis_client.rpop("non_existing_key") is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_rpush_rpop_wrong_type_raise_error(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+
+        with pytest.raises(Exception) as e:
+            await redis_client.rpush(key, ["bar"])
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.rpop(key)
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
