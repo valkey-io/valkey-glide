@@ -73,8 +73,10 @@ export function transactionTest(
     baseTransaction.hdel(key4, [field]);
     baseTransaction.hmget(key4, [field]);
     baseTransaction.hexists(key4, field);
-    baseTransaction.lpush(key5, [field + "1", field + "2"]);
+    baseTransaction.lpush(key5, [field + "1", field + "2", field + "3"]);
     baseTransaction.lpop(key5);
+    baseTransaction.ltrim(key5, 1, 1);
+    baseTransaction.lrange(key5, 0, -1);
     baseTransaction.rpush(key6, [field + "1", field + "2"]);
     baseTransaction.rpop(key6);
     baseTransaction.sadd(key7, ["bar", "foo"]);
@@ -94,8 +96,10 @@ export function transactionTest(
         1,
         [null],
         0,
-        2,
-        field + "2",
+        3,
+        field + "3",
+        "OK",
+        [field + "1"],
         2,
         field + "2",
         2,
