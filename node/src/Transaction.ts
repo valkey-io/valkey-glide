@@ -478,9 +478,9 @@ export class BaseTransaction {
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-     * If `count` > 0: Removes elements equal to `element` moving from head to tail.
-     * If `count` < 0: Removes elements equal to `element` moving from tail to head.
-     * If `count` = 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
+     * If `count` is positive : Removes elements equal to `element` moving from head to tail.
+     * If `count` is negative : Removes elements equal to `element` moving from tail to head.
+     * If `count` is 0 or `count` is greater than the occurrences of elements equal to `element`: Removes all elements equal to `element`.
      *
      * @param key - The key of the list.
      * @param count - The count of the occurrences of elements equal to `element` to remove.
