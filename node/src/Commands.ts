@@ -361,6 +361,18 @@ export function createLRange(
     ]);
 }
 
+export function createLTrim(
+    key: string,
+    start: number,
+    end: number
+): redis_request.Command {
+    return createCommand(RequestType.LTrim, [
+        key,
+        start.toString(),
+        end.toString(),
+    ]);
+}
+
 export function createRPush(
     key: string,
     elements: string[]
