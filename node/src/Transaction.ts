@@ -309,6 +309,7 @@ export class BaseTransaction {
      *
      * Command Response - the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
+     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hdel(key: string, fields: string[]) {
         this.commands.push(createHDel(key, fields));
@@ -348,6 +349,7 @@ export class BaseTransaction {
      *
      * Command Response - a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
      * If `key` does not exist, it returns an empty list.
+     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hgetall(key: string) {
         this.commands.push(createHGetAll(key));
