@@ -325,6 +325,22 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashGetAll, [key]),
 
+    def hmget(self, key: str, fields: List[str]):
+        """Retrieve the values associated with specified fields in the hash stored at `key`.
+        See https://redis.io/commands/hmget/ for details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields in the hash stored at `key` to retrieve from the database.
+
+        Command response:
+            List[Optional[str]]: A list of values associated with the given fields, in the same order as they are requested.
+            For every field that does not exist in the hash, a null value is returned.
+            If the key does not exist, it is treated as an empty hash, and the function returns a list of null values.
+            If `key` holds a value that is not a hash, the transaction fails.
+        """
+        self.append_command(RequestType.HashMGet, [key] + fields)
+
     def hdel(self, key: str, fields: List[str]):
         """Remove specified fields from the hash stored at `key`.
         See https://redis.io/commands/hdel/ for more details.
