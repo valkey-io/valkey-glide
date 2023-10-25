@@ -682,7 +682,7 @@ export class BaseClient {
         return this.createWritePromise(createSCard(key));
     }
 
-    /** Returns if the keys in `keys` exist.
+    /** Returns the number of keys in `keys` that exist in the database.
      * See https://redis.io/commands/exists/ for details.
      *
      * @param keys - The keys list to check.
