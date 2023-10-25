@@ -447,6 +447,7 @@ export class BaseClient {
      * @param fields - The fields to remove from the hash stored at `key`.
      * @returns the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
+     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
@@ -482,6 +483,7 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
      * If `key` does not exist, it returns an empty list.
+     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hgetall(key: string): Promise<string[]> {
         return this.createWritePromise(createHGetAll(key));
