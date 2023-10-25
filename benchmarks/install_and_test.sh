@@ -213,7 +213,7 @@ do
             runJava=1
             chosenClients="Lettuce"
             ;;
-        -lettuce)
+        -jedis)
             runAllBenchmarks=0
             runJava=1
             chosenClients="Jedis"
