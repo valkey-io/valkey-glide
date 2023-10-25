@@ -53,6 +53,7 @@ type BaseClient = {
     srem: (key: string, members: string[]) => Promise<number>;
     smembers: (key: string) => Promise<string[]>;
     scard: (key: string) => Promise<number>;
+    exists: (keys: string[]) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -908,6 +909,25 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "exists with existing keys, an non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const value = uuidv4();
+                expect(await client.set(key1, value)).toEqual("OK");
+                expect(await client.exists([key1])).toEqual(1);
+                expect(await client.set(key2, value)).toEqual("OK");
+                expect(
+                    await client.exists([key1, "nonExistingKey", key2])
+                ).toEqual(2);
+                expect(await client.exists([key1, key1])).toEqual(2);
             });
         },
         config.timeout
