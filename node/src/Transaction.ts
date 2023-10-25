@@ -25,6 +25,7 @@ import {
     createIncrBy,
     createIncrByFloat,
     createInfo,
+    createLLen,
     createLPop,
     createLPush,
     createLRange,
@@ -440,6 +441,19 @@ export class BaseTransaction {
      */
     public lrange(key: string, start: number, end: number) {
         this.commands.push(createLRange(key, start, end));
+    }
+
+    /** Returns the length of the list stored at `key`.
+     * See https://redis.io/commands/llen/ for details.
+     *
+     * @param key - The key of the list.
+     *
+     * Command Response - the length of the list at `key`.
+     * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public llen(key: string) {
+        this.commands.push(createLLen(key));
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.

@@ -361,6 +361,10 @@ export function createLRange(
     ]);
 }
 
+export function createLLen(key: string): redis_request.Command {
+    return createCommand(RequestType.LLen, [key]);
+}
+
 export function createLTrim(
     key: string,
     start: number,
