@@ -1,9 +1,16 @@
-name: SQL Java CI
+name: Java CI
 
 on:
-  pull_request:
   push:
     paths:
+      - babushka-core/**
+      - submodules/**
+      - "java/**"
+      - ".github/workflows/java.yml"
+  pull_request:
+    paths:
+      - babushka-core/**
+      - submodules/**
       - "java/**"
       - ".github/workflows/java.yml"
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 from pybushka.async_commands.core import CoreCommands, InfoSection
@@ -31,9 +33,9 @@ def is_single_response(response: T, single_res: T) -> bool:
         >>> is_single_response([["value"]], LIST_STR)
         False
     """
-    if type(single_res) == type(response) == list:
+    if isinstance(single_res, list) and isinstance(response, list):
         return is_single_response(response[0], single_res[0])
-    elif type(response) == type(single_res):
+    elif isinstance(response, type(single_res)):
         return True
     return False
 
@@ -59,7 +61,7 @@ def convert_multi_node_res_to_dict(
     dict_res: Dict[str, T] = {}
     while len(response) > 0:
         cur_res = response.pop()
-        if cur_res is not None and type(cur_res[0]) == str:
+        if cur_res is not None and isinstance(cur_res[0], str):
             dict_res[cur_res[0]] = cast(T, cur_res[1])
 
     return dict_res
@@ -282,4 +284,39 @@ class ClusterCommands(CoreCommands):
         return cast(
             TOK,
             await self._execute_command(RequestType.ConfigSet, parameters, route),
+        )
+
+    async def client_getname(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[Optional[str]]:
+        """
+        Get the name of the connection to which the request is routed.
+        See https://redis.io/commands/client-getname/ for more details.
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless route is provided,
+            in which case the client will route the command to the nodes defined by route.
+
+        Returns:
+            TClusterResponse[Optional[str]]: The name of the client connection as a string if a name is set,
+            or None if no name is assigned.
+            When specifying a route other than a single node, response will be:
+            {Address (str) : response (Optional[str]) , ... } with type of Dict[str, Optional[str]].
+
+        Examples:
+            >>> client_getname()
+            'Connection Name'
+            >>> client_getname(AllNodes())
+            {'addr': 'Connection Name'', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
+        """
+
+        client_get_name = await self._execute_command(
+            RequestType.ClientGetName, [], route
+        )
+
+        return (
+            cast(Optional[str], client_get_name)
+            if isinstance(client_get_name, str) or client_get_name is None
+            else convert_multi_node_res_to_dict(
+                cast(List[List[Union[str, Optional[str]]]], client_get_name)
+            )
         )
