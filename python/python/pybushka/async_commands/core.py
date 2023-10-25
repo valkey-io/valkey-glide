@@ -366,3 +366,269 @@ class CoreCommands(Protocol):
             Optional[str],
             await self._execute_command(RequestType.HashGet, [key, field]),
         )
+
+    async def hgetall(self, key: str) -> List[str]:
+        """Returns all fields and values of the hash stored at `key`.
+        See https://redis.io/commands/hgetall/ for details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Returns:
+            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty list.
+            If `key` holds a value that is not a hash, an error is returned.
+
+        Examples:
+            >>> await client.hgetall("my_hash")
+                ["field1", "value1", "field2", "value2"]
+        """
+        return cast(
+            List[str], await self._execute_command(RequestType.HashGetAll, [key])
+        )
+
+    async def hdel(self, key: str, fields: List[str]) -> int:
+        """Remove specified fields from the hash stored at `key`.
+        See https://redis.io/commands/hdel/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields to remove from the hash stored at `key`.
+
+        Returns:
+            int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
+            If the key does not exist, it is treated as an empty hash, and the function returns 0.
+            If `key` holds a value that is not a hash, an error is returned.
+
+
+        Examples:
+            >>> await client.hdel("my_hash", ["field1", "field2"])
+                2  # Indicates that two fields were successfully removed from the hash.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.HashDel, [key] + fields)
+        )
+
+    async def lpush(self, key: str, elements: List[str]) -> int:
+        """Insert all the specified values at the head of the list stored at `key`.
+        `elements` are inserted one after the other to the head of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/lpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.lpush("my_list", ["value1", "value2"])
+                2
+            >>> await client.lpush("nonexistent_list", ["new_value"])
+                1
+        """
+        return cast(
+            int, await self._execute_command(RequestType.LPush, [key] + elements)
+        )
+
+    async def lpop(
+        self, key: str, count: Optional[int] = None
+    ) -> Optional[Union[str, List[str]]]:
+        """Remove and return the first elements of the list stored at `key`.
+        By default, the command pops a single element from the beginning of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/lpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Returns:
+            Optional[Union[str, List[str]]: The value of the first element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.lpop("my_list")
+                "value1"
+            >>> await client.lpop("my_list", 2)
+                ["value2", "value3"]
+            >>> await client.lpop("non_exiting_key")
+                None
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        return cast(
+            Optional[Union[str, List[str]]],
+            await self._execute_command(RequestType.LPop, args),
+        )
+
+    async def lrange(self, key: str, start: int, end: int) -> List[str]:
+        """Retrieve the specified elements of the list stored at `key` within the given range.
+        The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
+        element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
+        with -1 being the last element of the list, -2 being the penultimate, and so on.
+        See https://redis.io/commands/lrange/ for details.
+
+        Args:
+            key (str): The key of the list.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Returns:
+            List[str]: A list of elements within the specified range.
+            If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
+            If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
+            If `key` does not exist an empty list will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.lrange("my_list", 0, 2)
+                ["value1", "value2", "value3"]
+            >>> await client.lrange("my_list", -2, -1)
+                ["value2", "value3"]
+            >>> await client.lrange("non_exiting_key", 0, 2)
+                []
+        """
+
+        return cast(
+            List[str],
+            await self._execute_command(
+                RequestType.LRange, [key, str(start), str(end)]
+            ),
+        )
+
+    async def rpush(self, key: str, elements: List[str]) -> int:
+        """Inserts all the specified values at the tail of the list stored at `key`.
+        `elements` are inserted one after the other to the tail of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/rpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.rpush("my_list", ["value1", "value2"])
+                2
+            >>> await client.rpush("nonexistent_list", ["new_value"])
+                1
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPush, [key] + elements)
+        )
+
+    async def rpop(
+        self, key: str, count: Optional[int] = None
+    ) -> Optional[Union[str, List[str]]]:
+        """Removes and returns the last elements of the list stored at `key`.
+        By default, the command pops a single element from the end of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/rpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Returns:
+            Optional[Union[str, List[str]]: The value of the last element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.rpop("my_list")
+                "value1"
+            >>> await client.rpop("my_list", 2)
+                ["value2", "value3"]
+            >>> await client.rpop("non_exiting_key")
+                None
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        return cast(
+            Optional[Union[str, List[str]]],
+            await self._execute_command(RequestType.RPop, args),
+        )
+
+    async def sadd(self, key: str, members: List[str]) -> int:
+        """Add specified members to the set stored at `key`.
+        Specified members that are already a member of this set are ignored.
+        If `key` does not exist, a new set is created before adding `members`.
+        See https://redis.io/commands/sadd/ for more details.
+
+        Args:
+            key (str): The key where members will be added to its set.
+            members (List[str]): A list of members to add to the set stored at `key`.
+
+        Returns:
+            int: The number of members that were added to the set, excluding members already present.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.sadd("my_set", ["member1", "member2"])
+                2
+        """
+        return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
+
+    async def srem(self, key: str, members: List[str]) -> int:
+        """Remove specified members from the set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+        See https://redis.io/commands/srem/ for details.
+
+        Args:
+            key (str): The key from which members will be removed.
+            members (List[str]): A list of members to remove from the set stored at `key`.
+
+        Returns:
+            int: The number of members that were removed from the set, excluding non-existing members.
+                If `key` does not exist, it is treated as an empty set and this command returns 0.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.srem("my_set", ["member1", "member2"])
+                2
+        """
+        return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
+
+    async def smembers(self, key: str) -> List[str]:
+        """Retrieve all the members of the set value stored at `key`.
+        See https://redis.io/commands/smembers/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the set members.
+
+        Returns:
+            List[str]: A list of all members of the set.
+                If `key` does not exist an empty list will be returned.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.smembers("my_set")
+                ["member1", "member2", "member3"]
+        """
+        return cast(List[str], await self._execute_command(RequestType.SMembers, [key]))
+
+    async def scard(self, key: str) -> int:
+        """Retrieve the set cardinality (number of elements) of the set stored at `key`.
+        See https://redis.io/commands/scard/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the number of set members.
+
+        Returns:
+            int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
+                If `key` holds a value that is not a set, an error is returned.
+
+        Examples:
+            >>> await client.scard("my_set")
+                3
+        """
+        return cast(int, await self._execute_command(RequestType.SCard, [key]))

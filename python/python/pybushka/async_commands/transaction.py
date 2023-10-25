@@ -32,7 +32,7 @@ class BaseTransaction:
         finally:
             self.lock.release()
 
-    def dispose(self):
+    def clear(self):
         with self.lock:
             self.commands.clear()
 
@@ -299,6 +299,199 @@ class BaseTransaction:
             Returns None if the field or key does not exist.
         """
         self.append_command(RequestType.HashGet, [key, field])
+
+    def client_getname(self):
+        """
+        Get the name of the connection on which the transaction is being executed.
+        See https://redis.io/commands/client-getname/ for more details.
+
+        Command response:
+            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            or None if no name is assigned.
+        """
+        self.append_command(RequestType.ClientGetName, [])
+
+    def hgetall(self, key: str):
+        """Returns all fields and values of the hash stored at `key`.
+        See https://redis.io/commands/hgetall/ for details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty list.
+            If `key` holds a value that is not a hash , the transaction fails.
+        """
+        self.append_command(RequestType.HashGetAll, [key]),
+
+    def hdel(self, key: str, fields: List[str]):
+        """Remove specified fields from the hash stored at `key`.
+        See https://redis.io/commands/hdel/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            fields (List[str]): The list of fields to remove from the hash stored at `key`.
+
+        Command response:
+            int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
+            If the key does not exist, it is treated as an empty hash, returns 0.
+            If `key` holds a value that is not a hash , the transaction fails.
+        """
+        self.append_command(RequestType.HashDel, [key] + fields)
+
+    def lpush(self, key: str, elements: List[str]):
+        """Insert all the specified values at the head of the list stored at `key`.
+        `elements` are inserted one after the other to the head of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/lpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, the transaction fails.
+        """
+        self.append_command(RequestType.LPush, [key] + elements)
+
+    def lpop(self, key: str, count: Optional[int] = None):
+        """Remove and return the first elements of the list stored at `key`.
+        By default, the command pops a single element from the beginning of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/lpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Command response:
+            Optional[Union[str, List[str]]]: The value of the first element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, the transaction fails.
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        self.append_command(RequestType.LPop, args)
+
+    def lrange(self, key: str, start: int, end: int):
+        """Retrieve the specified elements of the list stored at `key` within the given range.
+        The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
+        element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
+        with -1 being the last element of the list, -2 being the penultimate, and so on.
+        See https://redis.io/commands/lrange/ for details.
+
+        Args:
+            key (str): The key of the list.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Command response:
+            List[str]: A list of elements within the specified range.
+            If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
+            If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
+            If `key` does not exist an empty list will be returned.
+            If `key` holds a value that is not a list, the transaction fails.
+        """
+
+        self.append_command(RequestType.LRange, [key, str(start), str(end)])
+
+    def rpush(self, key: str, elements: List[str]):
+        """Inserts all the specified values at the tail of the list stored at `key`.
+        `elements` are inserted one after the other to the tail of the list, from the leftmost element
+        to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
+        See https://redis.io/commands/rpush/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operations.
+                If `key` holds a value that is not a list, the transaction fails.
+        """
+        self.append_command(RequestType.RPush, [key] + elements)
+
+    def rpop(self, key: str, count: Optional[int] = None):
+        """Removes and returns the last elements of the list stored at `key`.
+        By default, the command pops a single element from the end of the list.
+        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        See https://redis.io/commands/rpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
+
+        Command response:
+            Optional[Union[str, List[str]]: The value of the last element if `count` is not provided.
+            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, the transaction fails.
+        """
+
+        args: List[str] = [key] if count is None else [key, str(count)]
+        self.append_command(RequestType.RPop, args)
+
+    def sadd(self, key: str, members: List[str]):
+        """Add specified members to the set stored at `key`.
+        Specified members that are already a member of this set are ignored.
+        If `key` does not exist, a new set is created before adding `members`.
+        See https://redis.io/commands/sadd/ for more details.
+
+        Args:
+            key (str): The key where members will be added to its set.
+            members (List[str]): A list of members to add to the set stored at key.
+
+        Command response:
+            int: The number of members that were added to the set, excluding members already present.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SAdd, [key] + members)
+
+    def srem(self, key: str, members: List[str]):
+        """Remove specified members from the set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+        See https://redis.io/commands/srem/ for details.
+
+        Args:
+            key (str): The key from which members will be removed.
+            members (List[str]): A list of members to remove from the set stored at key.
+
+        Commands response:
+            int: The number of members that were removed from the set, excluding non-existing members.
+                If `key` does not exist, it is treated as an empty set and this command returns 0.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SRem, [key] + members)
+
+    def smembers(self, key: str):
+        """Retrieve all the members of the set value stored at `key`.
+        See https://redis.io/commands/smembers/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the set members.
+
+        Commands response:
+            List[str]: A list of all members of the set.
+                If `key` does not exist an empty list will be returned.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SMembers, [key])
+
+    def scard(self, key: str):
+        """Retrieve the set cardinality (number of elements) of the set stored at `key`.
+        See https://redis.io/commands/scard/ for details.
+
+        Args:
+            key (str): The key from which to retrieve the number of set members.
+
+        Commands response:
+            int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
+                If `key` holds a value that is not a set, the transaction fails.
+        """
+        self.append_command(RequestType.SCard, [key])
 
 
 class Transaction(BaseTransaction):

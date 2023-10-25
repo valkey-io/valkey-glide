@@ -2,6 +2,8 @@ import * as net from "net";
 import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    createClientGetName,
+    createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -127,6 +129,16 @@ export class RedisClient extends BaseClient {
         return this.createWritePromise(createSelect(index));
     }
 
+    /** Get the name of the current connection.
+     *  See https://redis.io/commands/client-getname/ for more details.
+     *
+     * @returns the name of the client connection as a string if a name is set,
+     *       or null if no name is assigned.
+     */
+    public clientGetName(): Promise<string | null> {
+        return this.createWritePromise(createClientGetName());
+    }
+
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/config-rewrite/ for details.
      *
@@ -145,12 +157,19 @@ export class RedisClient extends BaseClient {
         return this.createWritePromise(createConfigResetStat());
     }
 
+    /** Returns the current connection id.
+     * See https://redis.io/commands/client-id/ for details.
+     *
+     * @returns the id of the client.
+     */
+    public clientId(): Promise<number> {
+        return this.createWritePromise(createClientId());
+    }
+
     /** Reads the configuration parameters of a running Redis server.
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *  case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns A list of values corresponding to the configuration parameters.
      *
@@ -163,8 +182,6 @@ export class RedisClient extends BaseClient {
      *   See https://redis.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-     * @param route - The command will be routed automatically, unless `route` is provided, in which
-     *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
      *

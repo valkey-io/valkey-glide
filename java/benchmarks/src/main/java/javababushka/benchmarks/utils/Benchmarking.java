@@ -124,83 +124,85 @@ public class Benchmarking {
     for (int concurrentNum : config.concurrentTasks) {
       int iterations = Math.min(Math.max(100000, concurrentNum * 10000), 10000000);
       for (int clientCount : config.clientCount) {
-        System.out.printf(
-            "%n =====> %s <===== %d clients %d concurrent %n%n",
-            clientCreator.get().getName(), clientCount, concurrentNum);
-        AtomicInteger iterationCounter = new AtomicInteger(0);
-        Map<ChosenAction, ArrayList<Long>> actionResults =
-            Map.of(
-                ChosenAction.GET_EXISTING, new ArrayList<>(),
-                ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
-                ChosenAction.SET, new ArrayList<>());
-        List<Runnable> tasks = new ArrayList<>();
+        for (int dataSize : config.dataSize) {
+          System.out.printf(
+              "%n =====> %s <===== %d clients %d concurrent %n%n",
+              clientCreator.get().getName(), clientCount, concurrentNum);
+          AtomicInteger iterationCounter = new AtomicInteger(0);
+          Map<ChosenAction, ArrayList<Long>> actionResults =
+              Map.of(
+                  ChosenAction.GET_EXISTING, new ArrayList<>(),
+                  ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
+                  ChosenAction.SET, new ArrayList<>());
+          List<Runnable> tasks = new ArrayList<>();
 
-        // create clients
-        List<Client> clients = new LinkedList<>();
-        for (int cc = 0; cc < clientCount; cc++) {
-          Client newClient = clientCreator.get();
-          newClient.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
-          clients.add(newClient);
-        }
+          // create clients
+          List<Client> clients = new LinkedList<>();
+          for (int cc = 0; cc < clientCount; cc++) {
+            Client newClient = clientCreator.get();
+            newClient.connectToRedis(new ConnectionSettings(config.host, config.port, config.tls));
+            clients.add(newClient);
+          }
 
-        for (int taskNum = 0; taskNum < concurrentNum; taskNum++) {
-          final int taskNumDebugging = taskNum;
-          tasks.add(
-              () -> {
-                int iterationIncrement = iterationCounter.getAndIncrement();
-                int clientIndex = iterationIncrement % clients.size();
+          for (int taskNum = 0; taskNum < concurrentNum; taskNum++) {
+            final int taskNumDebugging = taskNum;
+            tasks.add(
+                () -> {
+                  int iterationIncrement = iterationCounter.getAndIncrement();
+                  int clientIndex = iterationIncrement % clients.size();
 
-                if (config.debugLogging) {
-                  System.out.printf(
-                      "%n concurrent = %d/%d, client# = %d/%d%n",
-                      taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
-                }
-                while (iterationIncrement < iterations) {
                   if (config.debugLogging) {
                     System.out.printf(
-                        "> iteration = %d/%d, client# = %d/%d%n",
-                        iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
+                        "%n concurrent = %d/%d, client# = %d/%d%n",
+                        taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
                   }
+                  while (iterationIncrement < iterations) {
+                    if (config.debugLogging) {
+                      System.out.printf(
+                          "> iteration = %d/%d, client# = %d/%d%n",
+                          iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
+                    }
 
-                  var actions = getActionMap(clients.get(clientIndex), config.dataSize, async);
-                  // operate and calculate tik-tok
-                  Pair<ChosenAction, Long> result = measurePerformance(actions);
-                  actionResults.get(result.getLeft()).add(result.getRight());
+                    var actions = getActionMap(clients.get(clientIndex), dataSize, async);
+                    // operate and calculate tik-tok
+                    Pair<ChosenAction, Long> result = measurePerformance(actions);
+                    actionResults.get(result.getLeft()).add(result.getRight());
 
-                  iterationIncrement = iterationCounter.getAndIncrement();
-                }
-              });
-        }
-        if (config.debugLogging) {
-          System.out.printf("%s client Benchmarking: %n", clientCreator.get().getName());
-          System.out.printf(
-              "===> concurrentNum = %d, clientNum = %d, tasks = %d%n",
-              concurrentNum, clientCount, tasks.size());
-        }
-        long started = System.nanoTime();
-        tasks.stream()
-            .map(CompletableFuture::runAsync)
-            .forEach(
-                f -> {
-                  try {
-                    f.get();
-                  } catch (Exception e) {
-                    e.printStackTrace();
+                    iterationIncrement = iterationCounter.getAndIncrement();
                   }
                 });
+          }
+          if (config.debugLogging) {
+            System.out.printf("%s client Benchmarking: %n", clientCreator.get().getName());
+            System.out.printf(
+                "===> concurrentNum = %d, clientNum = %d, tasks = %d%n",
+                concurrentNum, clientCount, tasks.size());
+          }
+          long started = System.nanoTime();
+          tasks.stream()
+              .map(CompletableFuture::runAsync)
+              .forEach(
+                  f -> {
+                    try {
+                      f.get();
+                    } catch (Exception e) {
+                      e.printStackTrace();
+                    }
+                  });
 
-        var calculatedResults = calculateResults(actionResults);
-        if (config.resultsFile.isPresent()) {
-          JsonWriter.Write(
-              calculatedResults,
-              config.resultsFile.get(),
-              config.dataSize,
-              clientCreator.get().getName(),
-              clientCount,
-              concurrentNum,
-              iterationCounter.get() * 1e9 / (System.nanoTime() - started));
+          var calculatedResults = calculateResults(actionResults);
+          if (config.resultsFile.isPresent()) {
+            JsonWriter.Write(
+                calculatedResults,
+                config.resultsFile.get(),
+                dataSize,
+                clientCreator.get().getName(),
+                clientCount,
+                concurrentNum,
+                iterationCounter.get() * 1e9 / (System.nanoTime() - started));
+          }
+          printResults(calculatedResults);
         }
-        printResults(calculatedResults);
       }
     }
 
