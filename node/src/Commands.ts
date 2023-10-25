@@ -434,3 +434,7 @@ export function createHIncrByFloat(
         amount.toString(),
     ]);
 }
+
+export function createExists(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.Exists, keys);
+}

@@ -11,6 +11,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createExists,
     createGet,
     createHDel,
     createHExists,
@@ -543,6 +544,18 @@ export class BaseTransaction {
      */
     public scard(key: string) {
         this.commands.push(createSCard(key));
+    }
+
+    /** Returns the number of keys in `keys` that exist in the database.
+     * See https://redis.io/commands/exists/ for details.
+     *
+     * @param keys - The keys list to check.
+     *
+     * Command Response - the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+     * it will be counted multiple times.
+     */
+    public exists(keys: string[]) {
+        this.commands.push(createExists(keys));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
