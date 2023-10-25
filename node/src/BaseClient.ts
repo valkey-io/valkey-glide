@@ -25,6 +25,7 @@ import {
     createLPop,
     createLPush,
     createLRange,
+    createLTrim,
     createMGet,
     createMSet,
     createRPop,
@@ -559,14 +560,14 @@ export class BaseClient {
         return this.createWritePromise(createLPop(key, count));
     }
 
-    /**Returns the specified elements of the list stored at `key`.
+    /** Returns the specified elements of the list stored at `key`.
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
      * See https://redis.io/commands/lrange/ for details.
      *
      * @param key - The key of the list.
-     * @param start - The starting point of the range
+     * @param start - The starting point of the range.
      * @param end - The end of the range.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
@@ -576,6 +577,25 @@ export class BaseClient {
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
+    }
+
+    /** Trim an existing list so that it will contain only the specified range of elements specified.
+     * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     * See https://redis.io/commands/ltrim/ for details.
+     *
+     * @param key - The key of the list.
+     * @param start - The starting point of the range.
+     * @param end - The end of the range.
+     * @returns always "OK".
+     * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
+     * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
+     * If `key` does not exist the command will be ignored.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public ltrim(key: string, start: number, end: number): Promise<"OK"> {
+        return this.createWritePromise(createLTrim(key, start, end));
     }
 
     /** Inserts all the specified values at the tail of the list stored at `key`.

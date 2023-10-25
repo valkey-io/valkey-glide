@@ -46,6 +46,7 @@ type BaseClient = {
     lpush: (key: string, elements: string[]) => Promise<number>;
     lpop: (key: string, count?: number) => Promise<string | string[] | null>;
     lrange: (key: string, start: number, end: number) => Promise<string[]>;
+    ltrim: (key: string, start: number, end: number) => Promise<"OK">;
     rpush: (key: string, elements: string[]) => Promise<number>;
     rpop: (key: string, count?: number) => Promise<string | string[] | null>;
     sadd: (key: string, members: string[]) => Promise<number>;
@@ -750,6 +751,36 @@ export function runBaseTests<Context>(config: {
 
                 try {
                     expect(await client.lrange(key, 0, -1)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value"
+                    );
+                }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "ltrim with existing key and key that holds a value that is not a list",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const valueList = ["value4", "value3", "value2", "value1"];
+                expect(await client.lpush(key, valueList)).toEqual(4);
+                expect(await client.ltrim(key, 0, 1)).toEqual("OK");
+                expect(await client.lrange(key, 0, -1)).toEqual([
+                    "value1",
+                    "value2",
+                ]);
+
+                /// `start` is greater than `end` so the key will be removed.
+                expect(await client.ltrim(key, 4, 2)).toEqual("OK");
+                expect(await client.lrange(key, 0, -1)).toEqual([]);
+
+                expect(await client.set(key, "foo")).toEqual("OK");
+                try {
+                    expect(await client.ltrim(key, 0, 1)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "Operation against a key holding the wrong kind of value"
