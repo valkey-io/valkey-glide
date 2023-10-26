@@ -69,6 +69,7 @@ def transaction_test(
     transaction.llen(key5)
     transaction.lpop(key5)
     transaction.lrem(key5, 1, value)
+    transaction.ltrim(key5, 0, 1)
     transaction.lrange(key5, 0, -1)
 
     transaction.rpush(key6, [value, value2])
@@ -109,6 +110,7 @@ def transaction_test(
         4,
         value2,
         1,
+        OK,
         [value2, value],
         2,
         value2,
