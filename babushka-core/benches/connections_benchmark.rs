@@ -85,7 +85,7 @@ fn connection_manager_benchmark(c: &mut Criterion, address: ConnectionAddr, grou
         group,
         |address, runtime| {
             let client = redis::Client::open(get_connection_info(address)).unwrap();
-            runtime.block_on(async { client.get_tokio_connection_manager().await.unwrap() })
+            runtime.block_on(async { client.get_connection_manager().await.unwrap() })
         },
     );
 }

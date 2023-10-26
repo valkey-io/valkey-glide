@@ -114,8 +114,10 @@ impl Client {
                 ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
 
                 ClientWrapper::Cluster { ref mut client } => {
-                    let routing = routing.or_else(|| RoutingInfo::for_routable(cmd));
-                    client.send_packed_command(cmd, routing).await
+                    let routing = routing
+                        .or_else(|| RoutingInfo::for_routable(cmd))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    client.route_command(cmd, routing).await
                 }
             }
         })
@@ -137,14 +139,12 @@ impl Client {
 
                 ClientWrapper::Cluster { ref mut client } => {
                     let route = match routing {
-                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                            route,
-                        ))) => Some(route),
-                        _ => None,
+                        Some(RoutingInfo::SingleNode(route)) => route,
+                        _ => SingleNodeRoutingInfo::Random,
                     };
                     run_with_timeout(
                         self.response_timeout,
-                        client.send_packed_commands(cmd, offset, count, route),
+                        client.route_pipeline(cmd, offset, count, route),
                     )
                     .await
                 }
