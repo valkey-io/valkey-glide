@@ -56,6 +56,7 @@ type BaseClient = {
     smembers: (key: string) => Promise<string[]>;
     scard: (key: string) => Promise<number>;
     exists: (keys: string[]) => Promise<number>;
+    unlink: (keys: string[]) => Promise<number>;
     customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
 };
 
@@ -989,6 +990,25 @@ export function runBaseTests<Context>(config: {
                     await client.exists([key1, "nonExistingKey", key2])
                 ).toEqual(2);
                 expect(await client.exists([key1, key1])).toEqual(2);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "unlink multiple existing keys and an non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const key3 = "{key}" + uuidv4();
+                const value = uuidv4();
+                expect(await client.set(key1, value)).toEqual("OK");
+                expect(await client.set(key2, value)).toEqual("OK");
+                expect(await client.set(key3, value)).toEqual("OK");
+                expect(
+                    await client.unlink([key1, key2, "nonExistingKey", key3])
+                ).toEqual(3);
             });
         },
         config.timeout

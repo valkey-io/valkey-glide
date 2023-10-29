@@ -42,6 +42,7 @@ import {
     createSRem,
     createSelect,
     createSet,
+    createUnlink,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -588,6 +589,19 @@ export class BaseTransaction {
      */
     public exists(keys: string[]) {
         this.commands.push(createExists(keys));
+    }
+
+    /** Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
+     * See https://redis.io/commands/unlink/ for details.
+     *
+     * @param keys - The keys we wanted to unlink.
+     *
+     * Command Response - the number of keys that were unlinked.
+     */
+    public unlink(keys: string[]) {
+        this.commands.push(createUnlink(keys));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

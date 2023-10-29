@@ -38,6 +38,7 @@ import {
     createSMembers,
     createSRem,
     createSet,
+    createUnlink,
 } from "./Commands";
 import {
     BaseRedisError,
@@ -721,6 +722,18 @@ export class BaseClient {
      */
     public exists(keys: string[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
+    }
+
+    /** Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
+     * See https://redis.io/commands/unlink/ for details.
+     *
+     * @param keys - The keys we wanted to unlink.
+     * @returns the number of keys that were unlinked.
+     */
+    public unlink(keys: string[]): Promise<number> {
+        return this.createWritePromise(createUnlink(keys));
     }
 
     private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
