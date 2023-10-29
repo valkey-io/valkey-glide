@@ -450,3 +450,7 @@ export function createHIncrByFloat(
 export function createExists(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
+
+export function createUnlink(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.Unlink, keys);
+}
