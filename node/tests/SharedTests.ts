@@ -48,6 +48,7 @@ type BaseClient = {
     lrange: (key: string, start: number, end: number) => Promise<string[]>;
     llen: (key: string) => Promise<number>;
     ltrim: (key: string, start: number, end: number) => Promise<"OK">;
+    lrem: (key: string, count: number, element: string) => Promise<number>;
     rpush: (key: string, elements: string[]) => Promise<number>;
     rpop: (key: string, count?: number) => Promise<string | string[] | null>;
     sadd: (key: string, members: string[]) => Promise<number>;
@@ -813,6 +814,40 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "lrem with existing key and non existing key",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const valueList = [
+                    "value1",
+                    "value2",
+                    "value1",
+                    "value1",
+                    "value2",
+                ];
+                expect(await client.lpush(key, valueList)).toEqual(5);
+                expect(await client.lrem(key, 2, "value1")).toEqual(2);
+                expect(await client.lrange(key, 0, -1)).toEqual([
+                    "value2",
+                    "value2",
+                    "value1",
+                ]);
+                expect(await client.lrem(key, -1, "value2")).toEqual(1);
+                expect(await client.lrange(key, 0, -1)).toEqual([
+                    "value2",
+                    "value1",
+                ]);
+                expect(await client.lrem(key, 0, "value2")).toEqual(1);
+                expect(await client.lrange(key, 0, -1)).toEqual(["value1"]);
+                expect(await client.lrem("nonExistingKey", 2, "value")).toEqual(
+                    0
+                );
             });
         },
         config.timeout

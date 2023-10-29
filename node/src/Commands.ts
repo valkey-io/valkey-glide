@@ -377,6 +377,14 @@ export function createLTrim(
     ]);
 }
 
+export function createLRem(
+    key: string,
+    count: number,
+    element: string
+): redis_request.Command {
+    return createCommand(RequestType.LRem, [key, count.toString(), element]);
+}
+
 export function createRPush(
     key: string,
     elements: string[]
