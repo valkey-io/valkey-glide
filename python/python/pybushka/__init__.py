@@ -19,6 +19,7 @@ __all__ = [
     "AuthenticationOptions",
     "ClientConfiguration",
     "ConditionalSet",
+    "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
     "Logger",

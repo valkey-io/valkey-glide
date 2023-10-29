@@ -78,6 +78,23 @@ class InfoSection(Enum):
     EVERYTHING = "everything"
 
 
+class ExpireOptions(Enum):
+    """
+    EXPIRE option: options for setting key expiry.
+
+    - HasNoExpiry: Set expiry only when the key has no expiry (Equivalent to "NX" in Redis).
+    - HasExistingExpiry: Set expiry only when the key has an existing expiry (Equivalent to "XX" in Redis).
+    - NewExpiryGreaterThanCurrent: Set expiry only when the new expiry is greater than the current one (Equivalent
+        to "GT" in Redis).
+    - NewExpiryLessThanCurrent: Set expiry only when the new expiry is less than the current one (Equivalent to "LT" in Redis).
+    """
+
+    HasNoExpiry = "NX"
+    HasExistingExpiry = "XX"
+    NewExpiryGreaterThanCurrent = "GT"
+    NewExpiryLessThanCurrent = "LT"
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -817,3 +834,144 @@ class CoreCommands(Protocol):
                 3  # Indicates that all three keys were unlinked from the database.
         """
         return cast(int, await self._execute_command(RequestType.Unlink, keys))
+
+    async def expire(
+        self, key: str, seconds: int, option: Optional[ExpireOptions] = None
+    ) -> int:
+        """
+        Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        If `seconds` is a non-positive number, the key will be deleted rather than expired.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/expire/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            seconds (int): The timeout in seconds.
+            option (ExpireOptions, optional): The expire option.
+
+        Returns:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        Examples:
+            >>> await client.expire("my_key", 60)
+                1  # Indicates that a timeout of 60 seconds has been set for "my_key."
+        """
+        args: List[str] = (
+            [key, str(seconds)] if option is None else [key, str(seconds), option.value]
+        )
+        return cast(int, await self._execute_command(RequestType.Expire, args))
+
+    async def expireat(
+        self, key: str, unix_seconds: int, option: Optional[ExpireOptions] = None
+    ) -> int:
+        """
+        Sets a timeout on `key` using an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the
+        number of seconds.
+        A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
+        deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/expireat/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            unix_seconds (int): The timeout in an absolute Unix timestamp.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Returns:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        Examples:
+            >>> await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry)
+                1
+        """
+        args = (
+            [key, str(unix_seconds)]
+            if option is None
+            else [key, str(unix_seconds), option.value]
+        )
+        return cast(int, await self._execute_command(RequestType.ExpireAt, args))
+
+    async def pexpire(
+        self, key: str, milliseconds: int, option: Optional[ExpireOptions] = None
+    ) -> int:
+        """
+        Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        If `milliseconds` is a non-positive number, the key will be deleted rather than expired.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/pexpire/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            milliseconds (int): The timeout in milliseconds.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Returns:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        Examples:
+            >>> await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry)
+                1  # Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
+        """
+        args = (
+            [key, str(milliseconds)]
+            if option is None
+            else [key, str(milliseconds), option.value]
+        )
+        return cast(int, await self._execute_command(RequestType.PExpire, args))
+
+    async def pexpireat(
+        self, key: str, unix_milliseconds: int, option: Optional[ExpireOptions] = None
+    ) -> int:
+        """
+        Sets a timeout on `key` using an absolute Unix timestamp in milliseconds (milliseconds since January 1, 1970) instead
+        of specifying the number of milliseconds.
+        A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
+        deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/pexpireat/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            unix_milliseconds (int): The timeout in an absolute Unix timestamp in milliseconds.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Returns:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        Examples:
+            >>> await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry)
+                1
+        """
+        args = (
+            [key, str(unix_milliseconds)]
+            if option is None
+            else [key, str(unix_milliseconds), option.value]
+        )
+        return cast(int, await self._execute_command(RequestType.PExpireAt, args))
+
+    async def ttl(self, key: str) -> int:
+        """
+        Returns the remaining time to live of `key` that has a timeout.
+        See https://redis.io/commands/ttl/ for more details.
+
+        Args:
+            key (str): The key to return its timeout.
+
+        Returns:
+            int: TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+
+        Examples:
+            >>> await client.ttl("my_key")
+                3600  # Indicates that "my_key" has a remaining time to live of 3600 seconds.
+            >>> await client.ttl("nonexistent_key")
+                -2  # Returns -2 for a non-existing key.
+        """
+        return cast(int, await self._execute_command(RequestType.TTL, [key]))
