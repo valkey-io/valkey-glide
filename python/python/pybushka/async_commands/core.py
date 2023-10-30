@@ -678,3 +678,21 @@ class CoreCommands(Protocol):
                 3
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
+
+    async def llen(self, key: str) -> int:
+        """Get the length of the list stored at `key`.
+        See https://redis.io/commands/llen/ for details.
+
+        Args:
+            key (str): The key of the list.
+
+        Returns:
+            int: The length of the list at the specified key.
+                If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+                If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.llen("my_list")
+                3  # Indicates that there are 3 elements in the list.
+        """
+        return cast(int, await self._execute_command(RequestType.LLen, [key]))

@@ -524,6 +524,20 @@ class BaseTransaction:
         """
         self.append_command(RequestType.SCard, [key])
 
+    def llen(self, key: str):
+        """Get the length of the list stored at `key`.
+        See https://redis.io/commands/llen/ for details.
+
+        Args:
+            key (str): The key of the list.
+
+        Commands response:
+            int: The length of the list at the specified key.
+                If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+                If `key` holds a value that is not a list, the transaction fails with an error.
+        """
+        self.append_command(RequestType.LLen, [key])
+
 
 class Transaction(BaseTransaction):
     """
