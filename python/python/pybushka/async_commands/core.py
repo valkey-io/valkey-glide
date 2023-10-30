@@ -367,6 +367,64 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HashGet, [key, field]),
         )
 
+    async def hincrby(self, key: str, field: str, amount: int) -> int:
+        """Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
+        By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+        If `field` or `key` does not exist, it is set to 0 before performing the operation.
+        See https://redis.io/commands/hincrby/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            amount (int): The amount by which to increment or decrement the field's value.
+                Use a negative value to decrement.
+
+        Returns:
+            int: The value of the specified field in the hash stored at `key` after the increment or decrement.
+                An error will be returned if `key` holds a value of an incorrect type (not a string) or if it contains a string
+                that cannot be represented as an integer.
+
+        Examples:
+            >>> await client.hincrby("my_hash", "field1", 5)
+                5
+
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.HashIncrBy, [key, field, str(amount)]
+            ),
+        )
+
+    async def hincrbyfloat(self, key: str, field: str, amount: float) -> str:
+        """Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
+        amount.
+        By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+        If `field` or `key` does not exist, it is set to 0 before performing the operation.
+        See https://redis.io/commands/hincrbyfloat/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            amount (float): The amount by which to increment or decrement the field's value.
+                Use a negative value to decrement.
+
+        Returns:
+            str: The value of the specified field in the hash stored at `key` after the increment as a string.
+                An error is returned if `key` contains a value of the wrong type or the current field content is not
+                parsable as a double precision floating point number.
+
+        Examples:
+            >>> await client.hincrbyfloat("my_hash", "field1", 2.5)
+                "2.5"
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.HashIncrByFloat, [key, field, str(amount)]
+            ),
+        )
+
     async def hexists(self, key: str, field: str) -> int:
         """Check if a field exists in the hash stored at `key`.
         See https://redis.io/commands/hexists/ for more details.

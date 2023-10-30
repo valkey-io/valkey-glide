@@ -300,6 +300,46 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashGet, [key, field])
 
+    def hincrby(self, key: str, field: str, amount: int):
+        """Increment or decrement the value of a `field` in the hash stored at `key` by `amount`.
+        By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+        If `field` or `key` does not exist, it is set to 0 before performing the operation.
+        See https://redis.io/commands/hincrby/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            amount (int): The amount by which to increment or decrement the field's value.
+                Use a negative value to decrement.
+
+        Command response:
+            int: The value of the specified field in the hash stored at `key` after the increment or decrement.
+                The transaction fails if `key` holds a value of an incorrect type (not a string) or if it contains a string
+                that cannot be represented as an integer.
+
+        """
+        self.append_command(RequestType.HashIncrBy, [key, field, str(amount)])
+
+    def hincrbyfloat(self, key: str, field: str, amount: float):
+        """Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
+        amount.
+        By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+        If `field` or `key` does not exist, it is set to 0 before performing the operation.
+        See https://redis.io/commands/hincrbyfloat/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            amount (float): The amount by which to increment or decrement the field's value.
+                Use a negative value to decrement.
+
+        Returns:
+            str: The value of the specified field in the hash stored at `key` after the increment as a string.
+                The transaction fails if `key` contains a value of the wrong type or the current field content is not
+                parsable as a double precision floating point number.
+        """
+        self.append_command(RequestType.HashIncrByFloat, [key, field, str(amount)])
+
     def hexists(self, key: str, field: str):
         """Check if a field exists in the hash stored at `key`.
         See https://redis.io/commands/hexists/ for more details.
