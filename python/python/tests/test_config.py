@@ -1,4 +1,4 @@
-from pybushka.config import AddressInfo, ClientConfiguration, ReadFromReplica
+from pybushka.config import AddressInfo, BaseClientConfiguration, ReadFromReplica
 from pybushka.protobuf.connection_request_pb2 import (
     ConnectionRequest,
     ReadFromReplicaStrategy,
@@ -7,7 +7,7 @@ from pybushka.protobuf.connection_request_pb2 import (
 
 
 def test_default_client_config():
-    config = ClientConfiguration()
+    config = BaseClientConfiguration()
     assert config.addresses[0].host == "localhost"
     assert config.addresses[0].port == 6379
     assert config.read_from_replica.value == ReadFromReplicaStrategy.AlwaysFromPrimary
@@ -15,7 +15,7 @@ def test_default_client_config():
 
 
 def test_convert_to_protobuf():
-    config = ClientConfiguration(
+    config = BaseClientConfiguration(
         [AddressInfo("127.0.0.1")],
         use_tls=True,
         read_from_replica=ReadFromReplica.ROUND_ROBIN,
