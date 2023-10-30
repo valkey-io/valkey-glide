@@ -29,6 +29,8 @@ def transaction_test(
     transaction.set(key, value)
     transaction.get(key)
 
+    transaction.exists([key])
+
     transaction.delete([key])
     transaction.get(key)
 
@@ -76,6 +78,7 @@ def transaction_test(
     return [
         OK,
         value,
+        1,
         1,
         None,
         OK,

@@ -578,6 +578,19 @@ class BaseTransaction:
         """
         self.append_command(RequestType.LLen, [key])
 
+    def exists(self, keys: List[str]):
+        """Returns the number of keys in `keys` that exist in the database.
+        See https://redis.io/commands/exists/ for more details.
+
+        Args:
+            keys (List[str]): The list of keys to check.
+
+        Commands response:
+            int: The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+                it will be counted multiple times.
+        """
+        self.append_command(RequestType.Exists, keys)
+
 
 class Transaction(BaseTransaction):
     """

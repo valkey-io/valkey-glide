@@ -754,3 +754,20 @@ class CoreCommands(Protocol):
                 3  # Indicates that there are 3 elements in the list.
         """
         return cast(int, await self._execute_command(RequestType.LLen, [key]))
+
+    async def exists(self, keys: List[str]) -> int:
+        """Returns the number of keys in `keys` that exist in the database.
+        See https://redis.io/commands/exists/ for more details.
+
+        Args:
+            keys (List[str]): The list of keys to check.
+
+        Returns:
+            int: The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+                it will be counted multiple times.
+
+        Examples:
+            >>> await client.exists(["key1", "key2", "key3"])
+                3  # Indicates that all three keys exist in the database.
+        """
+        return cast(int, await self._execute_command(RequestType.Exists, keys))
