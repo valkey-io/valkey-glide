@@ -81,7 +81,7 @@ type ReadFromReplicaStrategy =
     /** Spread the requests between all replicas evenly.*/
     | "roundRobin";
 
-export type ConnectionOptions = {
+export type BaseClientConfiguration = {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
@@ -216,7 +216,7 @@ export class BaseClient {
         this.remainingReadData = undefined;
     }
 
-    protected constructor(socket: net.Socket, options?: ConnectionOptions) {
+    protected constructor(socket: net.Socket, options?: BaseClientConfiguration) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
         this.responseTimeout =
@@ -848,7 +848,7 @@ export class BaseClient {
     };
 
     protected createClientRequest(
-        options: ConnectionOptions
+        options: BaseClientConfiguration
     ): connection_request.IConnectionRequest {
         const readFromReplicaStrategy = options.readFromReplicaStrategy
             ? this.MAP_READ_FROM_REPLICA_STRATEGY[
@@ -876,7 +876,7 @@ export class BaseClient {
         };
     }
 
-    protected connectToServer(options: ConnectionOptions): Promise<void> {
+    protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
             this.promiseCallbackFunctions[0] = [resolve, reject];
 
@@ -910,11 +910,11 @@ export class BaseClient {
     protected static async __createClientInternal<
         TConnection extends BaseClient
     >(
-        options: ConnectionOptions,
+        options: BaseClientConfiguration,
         connectedSocket: net.Socket,
         constructor: (
             socket: net.Socket,
-            options?: ConnectionOptions
+            options?: BaseClientConfiguration
         ) => TConnection
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
@@ -934,10 +934,10 @@ export class BaseClient {
     }
 
     protected static async createClientInternal<TConnection extends BaseClient>(
-        options: ConnectionOptions,
+        options: BaseClientConfiguration,
         constructor: (
             socket: net.Socket,
-            options?: ConnectionOptions
+            options?: BaseClientConfiguration
         ) => TConnection
     ): Promise<TConnection> {
         const path = await StartSocketConnection();

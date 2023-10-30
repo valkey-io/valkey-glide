@@ -9,7 +9,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
 import { v4 as uuidv4 } from "uuid";
-import { ConnectionOptions, RedisClient, Transaction } from "../build-ts";
+import { BaseClientConfiguration, RedisClient, Transaction } from "../build-ts";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";
@@ -53,7 +53,7 @@ describe("RedisClient", () => {
         return [{ host: "localhost", port }];
     };
 
-    const getOptions = (port: number): ConnectionOptions => {
+    const getOptions = (port: number): BaseClientConfiguration => {
         return {
             addresses: getAddress(port),
         };

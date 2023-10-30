@@ -8,10 +8,10 @@ import {
 } from "@jest/globals";
 import { exec } from "child_process";
 import {
+    BaseClientConfiguration,
     ClusterTransaction,
-    ConnectionOptions,
     InfoOptions,
-    RedisClusterClient,
+    RedisClusterClient
 } from "../";
 import { convertMultiNodeResponseToDict } from "../src/RedisClusterClient";
 import { runBaseTests } from "./SharedTests";
@@ -115,7 +115,7 @@ describe("RedisClusterClient", () => {
         }
     });
 
-    const getOptions = (ports: number[]): ConnectionOptions => {
+    const getOptions = (ports: number[]): BaseClientConfiguration => {
         return {
             addresses: ports.map((port) => ({
                 host: "localhost",

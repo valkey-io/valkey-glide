@@ -6,20 +6,21 @@ import os from "os";
 import path from "path";
 import { Reader } from "protobufjs";
 import {
+    BaseClientConfiguration,
     ClosingError,
-    ConnectionOptions,
     Logger,
     RedisClient,
     RedisClusterClient,
     RequestError,
     TimeoutError,
 } from "../build-ts";
-import { StandaloneConnectionOptions } from "../build-ts/src/RedisClient";
+import { StandaloneClientConfiguration } from "../build-ts/src/RedisClient";
 import {
     connection_request,
     redis_request,
     response,
 } from "../src/ProtobufMessage";
+import { ClusterClientConfiguration } from "../src/RedisClusterClient";
 
 const { RequestType, RedisRequest } = redis_request;
 
@@ -74,7 +75,7 @@ function sendResponse(
 
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?: ConnectionOptions | StandaloneConnectionOptions,
+    connectionOptions?: ClusterClientConfiguration | StandaloneClientConfiguration,
     isCluster?: boolean
 ): Promise<{
     socket: net.Socket;
@@ -146,7 +147,7 @@ async function testWithResources(
         connection: RedisClient | RedisClusterClient,
         socket: net.Socket
     ) => Promise<void>,
-    connectionOptions?: ConnectionOptions
+    connectionOptions?: BaseClientConfiguration
 ) {
     const { connection, server, socket } = await getConnectionAndSocket(
         undefined,
@@ -163,7 +164,7 @@ async function testWithClusterResources(
         connection: RedisClusterClient,
         socket: net.Socket
     ) => Promise<void>,
-    connectionOptions?: ConnectionOptions
+    connectionOptions?: BaseClientConfiguration
 ) {
     const { connection, server, socket } = await getConnectionAndSocket(
         undefined,

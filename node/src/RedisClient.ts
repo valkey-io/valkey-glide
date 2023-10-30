@@ -1,5 +1,5 @@
 import * as net from "net";
-import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
+import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
     createClientGetName,
@@ -16,7 +16,7 @@ import {
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
-export type StandaloneConnectionOptions = ConnectionOptions & {
+export type StandaloneClientConfiguration = BaseClientConfiguration & {
     /**
      * index of the logical database to connect to.
      */
@@ -50,7 +50,7 @@ export type StandaloneConnectionOptions = ConnectionOptions & {
 
 export class RedisClient extends BaseClient {
     protected createClientRequest(
-        options: StandaloneConnectionOptions
+        options: StandaloneClientConfiguration
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.databaseId = options.databaseId;
@@ -59,7 +59,7 @@ export class RedisClient extends BaseClient {
     }
 
     public static createClient(
-        options: StandaloneConnectionOptions
+        options: StandaloneClientConfiguration
     ): Promise<RedisClient> {
         return super.createClientInternal<RedisClient>(
             options,
@@ -68,7 +68,7 @@ export class RedisClient extends BaseClient {
     }
 
     static async __createClient(
-        options: ConnectionOptions,
+        options: BaseClientConfiguration,
         connectedSocket: net.Socket
     ): Promise<RedisClient> {
         return this.__createClientInternal(
