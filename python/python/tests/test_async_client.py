@@ -535,6 +535,46 @@ class TestCommands:
         assert "wrong number of arguments" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hincrby_hincrbyfloat(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        field_value_map = {field: "10"}
+
+        assert await redis_client.hset(key, field_value_map) == 1
+        assert await redis_client.hincrby(key, field, 1) == 11
+        assert await redis_client.hincrby(key, field, 4) == 15
+        assert await redis_client.hincrbyfloat(key, field, 1.5) == "16.5"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hincrby_non_existing_key_field(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(10)
+        field = get_random_string(5)
+        field_value_map = {field: "10"}
+
+        assert await redis_client.hincrby("nonExistingKey", field, 1) == 1
+        assert await redis_client.hset(key, field_value_map) == 1
+        assert await redis_client.hincrby(key, "nonExistingField", 2) == 2
+        assert await redis_client.hset(key2, field_value_map) == 1
+        assert await redis_client.hincrbyfloat(key2, "nonExistingField", -0.5) == "-0.5"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hincrby_invalid_value(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        field_value_map = {field: "value"}
+
+        assert await redis_client.hset(key, field_value_map) == 1
+
+        with pytest.raises(Exception) as e:
+            await redis_client.hincrby(key, field, 2)
+        assert "hash value is not an integer" in str(e)
+
+        with pytest.raises(Exception) as e:
+            await redis_client.hincrbyfloat(key, field, 1.5)
+        assert "hash value is not a float" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hexist(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)
