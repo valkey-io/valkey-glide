@@ -367,6 +367,29 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HashGet, [key, field]),
         )
 
+    async def hexists(self, key: str, field: str) -> int:
+        """Check if a field exists in the hash stored at `key`.
+        See https://redis.io/commands/hexists/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field to check in the hash stored at `key`.
+
+        Returns:
+            int: Returns 1 if the hash contains the specified field. If the hash does not contain the field,
+                or if the key does not exist, it returns 0.
+                If `key` holds a value that is not a hash, an error is returned.
+
+        Examples:
+            >>> await client.hexists("my_hash", "field1")
+                1
+            >>> await client.hexists("my_hash", "nonexistent_field")
+                0
+        """
+        return cast(
+            int, await self._execute_command(RequestType.HashExists, [key, field])
+        )
+
     async def hgetall(self, key: str) -> List[str]:
         """Returns all fields and values of the hash stored at `key`.
         See https://redis.io/commands/hgetall/ for details.

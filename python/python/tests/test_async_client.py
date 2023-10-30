@@ -535,6 +535,18 @@ class TestCommands:
         assert "wrong number of arguments" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_hexist(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hexists(key, field) == 1
+        assert await redis_client.hexists(key, "nonExistingField") == 0
+        assert await redis_client.hexists("nonExistingKey", field2) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
