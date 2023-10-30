@@ -50,6 +50,10 @@ def transaction_test(
 
     transaction.hset(key4, {key: value, key2: value2})
     transaction.hget(key4, key2)
+
+    transaction.hincrby(key4, key3, 5)
+    transaction.hincrbyfloat(key4, key3, 5.5)
+
     transaction.hexists(key4, key)
     transaction.hmget(key4, [key, "nonExistingField", key2])
     transaction.hgetall(key4)
@@ -86,9 +90,11 @@ def transaction_test(
         ["timeout", "1000"],
         2,
         value2,
+        5,
+        "10.5",
         1,
         [value, None, value2],
-        [key, value, key2, value2],
+        [key, value, key2, value2, key3, "10.5"],
         2,
         None,
         2,
