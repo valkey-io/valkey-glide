@@ -702,6 +702,18 @@ class TestCommands:
             await redis_client.llen(key2)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_exists(self, redis_client: TRedisClient):
+        keys = [get_random_string(10), get_random_string(10)]
+
+        assert await redis_client.set(keys[0], "value") == OK
+        assert await redis_client.exists(keys) == 1
+
+        assert await redis_client.set(keys[1], "value") == OK
+        assert await redis_client.exists(keys) == 2
+        keys.append("non_existing_key")
+        assert await redis_client.exists(keys) == 2
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
