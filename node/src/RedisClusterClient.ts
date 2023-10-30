@@ -1,5 +1,5 @@
 import * as net from "net";
-import { BaseClient, ConnectionOptions, ReturnType } from "./BaseClient";
+import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
     createClientGetName,
@@ -14,6 +14,8 @@ import {
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
+
+export type ClusterClientConfiguration = BaseClientConfiguration;
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -139,7 +141,7 @@ export function convertMultiNodeResponseToDict<T>(
 
 export class RedisClusterClient extends BaseClient {
     protected createClientRequest(
-        options: ConnectionOptions
+        options: ClusterClientConfiguration
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
@@ -147,17 +149,17 @@ export class RedisClusterClient extends BaseClient {
     }
 
     public static async createClient(
-        options: ConnectionOptions
+        options: ClusterClientConfiguration
     ): Promise<RedisClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: ConnectionOptions) =>
+            (socket: net.Socket, options?: ClusterClientConfiguration) =>
                 new RedisClusterClient(socket, options)
         );
     }
 
     static async __createClient(
-        options: ConnectionOptions,
+        options: BaseClientConfiguration,
         connectedSocket: net.Socket
     ): Promise<RedisClusterClient> {
         return super.__createClientInternal(
