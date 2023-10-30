@@ -45,6 +45,8 @@ def transaction_test(
 
     transaction.incrbyfloat(key3, 0.5)
 
+    transaction.unlink([key3])
+
     transaction.ping()
 
     transaction.config_set({"timeout": "1000"})
@@ -88,6 +90,7 @@ def transaction_test(
         2,
         0,
         "0.5",
+        1,
         "PONG",
         OK,
         ["timeout", "1000"],

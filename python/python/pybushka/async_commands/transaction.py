@@ -591,6 +591,21 @@ class BaseTransaction:
         """
         self.append_command(RequestType.Exists, keys)
 
+    def unlink(self, keys: List[str]):
+        """Unlink (delete) multiple keys from the database.
+        A key is ignored if it does not exist.
+        This command, similar to DEL, removes specified keys and ignores non-existent ones.
+        However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
+        See https://redis.io/commands/unlink/ for more details.
+
+        Args:
+            keys (List[str]): The list of keys to unlink.
+
+        Commands response:
+            int: The number of keys that were unlinked.
+        """
+        self.append_command(RequestType.Unlink, keys)
+
 
 class Transaction(BaseTransaction):
     """

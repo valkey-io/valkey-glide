@@ -771,3 +771,22 @@ class CoreCommands(Protocol):
                 3  # Indicates that all three keys exist in the database.
         """
         return cast(int, await self._execute_command(RequestType.Exists, keys))
+
+    async def unlink(self, keys: List[str]) -> int:
+        """Unlink (delete) multiple keys from the database.
+        A key is ignored if it does not exist.
+        This command, similar to DEL, removes specified keys and ignores non-existent ones.
+        However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
+        See https://redis.io/commands/unlink/ for more details.
+
+        Args:
+            keys (List[str]): The list of keys to unlink.
+
+        Returns:
+            int: The number of keys that were unlinked.
+
+        Examples:
+            >>> await client.unlink(["key1", "key2", "key3"])
+                3  # Indicates that all three keys were unlinked from the database.
+        """
+        return cast(int, await self._execute_command(RequestType.Unlink, keys))
