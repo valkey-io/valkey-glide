@@ -1,16 +1,16 @@
-export { ConnectionOptions, ReturnType } from "./src/BaseClient";
+export { BaseClientConfiguration, ReturnType } from "./src/BaseClient";
 export {
     ExpireOptions,
     InfoOptions,
     SetOptions,
-    parseInfoResponse,
+    parseInfoResponse
 } from "./src/Commands";
 export {
     ClosingError,
     ExecAbortError,
     BaseRedisError as RedisError,
     RedisError as RequestError,
-    TimeoutError,
+    TimeoutError
 } from "./src/Errors";
 export { Logger } from "./src/Logger";
 export { RedisClient } from "./src/RedisClient";
