@@ -65,9 +65,11 @@ def transaction_test(
 
     transaction.client_getname()
 
-    transaction.lpush(key5, [value, value2])
+    transaction.lpush(key5, [value, value, value2, value2])
     transaction.llen(key5)
     transaction.lpop(key5)
+    transaction.lrem(key5, 1, value)
+    transaction.lrange(key5, 0, -1)
 
     transaction.rpush(key6, [value, value2])
     transaction.rpop(key6)
@@ -103,9 +105,11 @@ def transaction_test(
         [key, value, key2, value2, key3, "10.5"],
         2,
         None,
-        2,
-        2,
+        4,
+        4,
         value2,
+        1,
+        [value2, value],
         2,
         value2,
         2,
