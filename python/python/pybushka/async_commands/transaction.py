@@ -300,6 +300,21 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashGet, [key, field])
 
+    def hexists(self, key: str, field: str):
+        """Check if a field exists in the hash stored at `key`.
+        See https://redis.io/commands/hexists/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field to check in the hash stored at `key`.
+
+        Command response:
+            int: Returns 1 if the hash contains the specified field. If the hash does not contain the field,
+                or if the key does not exist, it returns 0.
+                If `key` holds a value that is not a hash, the transaction fails with an error.
+        """
+        self.append_command(RequestType.HashExists, [key, field])
+
     def client_getname(self):
         """
         Get the name of the connection on which the transaction is being executed.
