@@ -687,6 +687,24 @@ class TestCommands:
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_lrem(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value_list = ["value1", "value2", "value1", "value1", "value2"]
+
+        assert await redis_client.lpush(key, value_list) == 5
+
+        assert await redis_client.lrem(key, 2, "value1") == 2
+        assert await redis_client.lrange(key, 0, -1) == ["value2", "value2", "value1"]
+
+        assert await redis_client.lrem(key, -1, "value2") == 1
+        assert await redis_client.lrange(key, 0, -1) == ["value2", "value1"]
+
+        assert await redis_client.lrem(key, 0, "value2") == 1
+        assert await redis_client.lrange(key, 0, -1) == ["value1"]
+
+        assert await redis_client.lrem("non_existing_key", 2, "value") == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_llen(self, redis_client: TRedisClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)

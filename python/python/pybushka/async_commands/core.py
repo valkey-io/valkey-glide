@@ -737,6 +737,33 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
+    async def lrem(self, key: str, count: int, element: str) -> int:
+        """Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
+        If `count` is positive, it removes elements equal to `element` moving from head to tail.
+        If `count` is negative, it removes elements equal to `element` moving from tail to head.
+        If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
+        equal to `element`.
+        See https://redis.io/commands/lrem/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            count (int): The count of occurrences of elements equal to `element` to remove.
+            element (str): The element to remove from the list.
+
+        Returns:
+            int: The number of removed elements.
+                If `key` does not exist, 0 is returned.
+                If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.lrem("my_list", 2, "value")
+                2  # Removes the first 2 occurrences of "value" in the list.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.LRem, [key, str(count), element]),
+        )
+
     async def llen(self, key: str) -> int:
         """Get the length of the list stored at `key`.
         See https://redis.io/commands/llen/ for details.
