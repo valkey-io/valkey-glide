@@ -75,7 +75,7 @@ class AuthenticationOptions:
         self.username = username
 
 
-class ClientConfiguration:
+class BaseClientConfiguration:
     def __init__(
         self,
         addresses: Optional[List[AddressInfo]] = None,
@@ -149,16 +149,13 @@ class ClientConfiguration:
         return request
 
 
-class StandaloneClientConfiguration(ClientConfiguration):
+class StandaloneClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Redis client.
 
     Args:
         addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
-                If the server is in cluster mode the list can be partial, as the client will attempt to map out
-                the cluster and find all nodes.
-                If the server is in standalone mode, only nodes whose addresses were provided will be used by the
-                client.
+                Only nodes whose addresses were provided will be used by the client.
                 For example:
                 [
                     {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
@@ -221,3 +218,45 @@ class StandaloneClientConfiguration(ClientConfiguration):
             request.database_id = self.database_id
 
         return request
+
+
+class ClusterClientConfiguration(BaseClientConfiguration):
+    """
+    Represents the configuration settings for a Redis client.
+
+    Args:
+        addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
+                The list can be partial, as the client will attempt to map out the cluster and find all nodes.
+                For example:
+                [
+                    {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
+                ].
+                If none are set, a default address localhost:6379 will be used.
+        use_tls (bool): True if communication with the cluster should use Transport Level Security.
+        credentials (AuthenticationOptions): Credentials for authentication process.
+                If none are set, the client will not authenticate itself with the server.
+        read_from_replica (ReadFromReplicaStrategy): If not set, `ALWAYS_FROM_MASTER` will be used.
+        client_creation_timeout (Optional[int]): Number of milliseconds that the client should wait for the
+            initial connection attempts before determining that the connection has been severed. If not set, a
+            default value will be used.
+        response_timeout (Optional[int]): Number of milliseconds that the client should wait for response before
+            determining that the connection has been severed. If not set, a default value will be used.
+    """
+
+    def __init__(
+        self,
+        addresses: Optional[List[AddressInfo]] = None,
+        use_tls: bool = False,
+        credentials: Optional[AuthenticationOptions] = None,
+        read_from_replica: ReadFromReplica = ReadFromReplica.ALWAYS_FROM_MASTER,
+        client_creation_timeout: Optional[int] = None,
+        response_timeout: Optional[int] = None,
+    ):
+        super().__init__(
+            addresses=addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            read_from_replica=read_from_replica,
+            client_creation_timeout=client_creation_timeout,
+            response_timeout=response_timeout,
+        )

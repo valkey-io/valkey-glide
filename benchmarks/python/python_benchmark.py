@@ -13,7 +13,7 @@ import numpy as np
 import redis.asyncio as redispy  # type: ignore
 from pybushka import (
     AddressInfo,
-    ClientConfiguration,
+    BaseClientConfiguration,
     Logger,
     LogLevel,
     RedisClient,
@@ -278,7 +278,7 @@ async def main(
     ):
         # Babushka Socket
         client_class = RedisClusterClient if is_cluster else RedisClient
-        config = ClientConfiguration(
+        config = BaseClientConfiguration(
             [AddressInfo(host=host, port=port)], use_tls=use_tls
         )
         clients = await create_clients(

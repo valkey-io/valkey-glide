@@ -6,7 +6,7 @@ import async_timeout
 from pybushka.async_commands.cluster_commands import ClusterCommands
 from pybushka.async_commands.core import CoreCommands
 from pybushka.async_commands.standalone_commands import StandaloneCommands
-from pybushka.config import ClientConfiguration
+from pybushka.config import BaseClientConfiguration
 from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
 from pybushka.logger import Level as LogLevel
 from pybushka.logger import Logger as ClientLogger
@@ -21,11 +21,11 @@ from .pybushka import start_socket_listener_external, value_from_pointer
 
 
 class BaseRedisClient(CoreCommands):
-    def __init__(self, config: ClientConfiguration):
+    def __init__(self, config: BaseClientConfiguration):
         """
         To create a new client, use the `create` classmethod
         """
-        self.config: ClientConfiguration = config
+        self.config: BaseClientConfiguration = config
         self._available_futures: dict[int, asyncio.Future] = {}
         self._available_callbackIndexes: set[int] = set()
         self._buffered_requests: List[TRequest] = list()
@@ -34,8 +34,8 @@ class BaseRedisClient(CoreCommands):
         self._reader_task: Optional[asyncio.Task] = None
 
     @classmethod
-    async def create(cls, config: Optional[ClientConfiguration] = None) -> Self:
-        config = config or ClientConfiguration()
+    async def create(cls, config: Optional[BaseClientConfiguration] = None) -> Self:
+        config = config or BaseClientConfiguration()
         self = cls(config)
         init_future: asyncio.Future = asyncio.Future()
         loop = asyncio.get_event_loop()
