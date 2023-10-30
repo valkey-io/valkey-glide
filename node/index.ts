@@ -1,5 +1,10 @@
 export { ConnectionOptions, ReturnType } from "./src/BaseClient";
-export { InfoOptions, SetOptions, parseInfoResponse } from "./src/Commands";
+export {
+    ExpireOptions,
+    InfoOptions,
+    SetOptions,
+    parseInfoResponse,
+} from "./src/Commands";
 export {
     ClosingError,
     ExecAbortError,
