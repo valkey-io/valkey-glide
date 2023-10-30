@@ -5,7 +5,7 @@ import pytest
 from pybushka.config import (
     AddressInfo,
     AuthenticationOptions,
-    ClientConfiguration,
+    ClusterClientConfiguration,
     StandaloneClientConfiguration,
 )
 from pybushka.logger import Level as logLevel
@@ -97,10 +97,10 @@ async def create_client(
         assert type(pytest.redis_cluster) is RedisCluster
         assert database_id == 0
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
-        config = ClientConfiguration(
+        cluster_config = ClusterClientConfiguration(
             addresses=seed_nodes, use_tls=use_tls, credentials=credentials
         )
-        return await RedisClusterClient.create(config)
+        return await RedisClusterClient.create(cluster_config)
     else:
         config = StandaloneClientConfiguration(
             addresses=[AddressInfo(host=host, port=port)],
