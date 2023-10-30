@@ -534,7 +534,7 @@ class BaseTransaction:
         Commands response:
             int: The length of the list at the specified key.
                 If `key` does not exist, it is interpreted as an empty list and 0 is returned.
-                If `key` holds a value that is not a list, the transaction fails.
+                If `key` holds a value that is not a list, the transaction fails with an error.
         """
         self.append_command(RequestType.LLen, [key])
 
