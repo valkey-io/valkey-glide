@@ -758,8 +758,6 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.lrem("my_list", 2, "value")
                 2  # Removes the first 2 occurrences of "value" in the list.
-            >>> await client.lrem("my_list", -1, "value")
-                1  # Removes the last occurrence of "value" in the list.
         """
         return cast(
             int,

@@ -580,7 +580,7 @@ class BaseTransaction:
         Commands response:
             int: The number of removed elements.
                 If `key` does not exist, 0 is returned.
-                If `key` holds a value that is not a list, the transaction fails.
+                If `key` holds a value that is not a list, the transaction fails with an error.
         """
         self.append_command(RequestType.LRem, [key, str(count), element])
 
