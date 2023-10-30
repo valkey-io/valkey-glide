@@ -714,6 +714,17 @@ class TestCommands:
         keys.append("non_existing_key")
         assert await redis_client.exists(keys) == 2
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_unlink(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        key3 = get_random_string(10)
+
+        assert await redis_client.set(key1, "value") == OK
+        assert await redis_client.set(key2, "value") == OK
+        assert await redis_client.set(key3, "value") == OK
+        assert await redis_client.unlink([key1, key2, "non_existing_key", key3]) == 3
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
