@@ -582,7 +582,7 @@ class BaseTransaction:
                 If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
                 (which causes `key` to be removed).
                 If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
-                If `key` does not exist, the command will be ignored and an "OK" response will be returned.
+                f `key` does not exist, the response will be "OK" without changes to the database.
                 If `key` holds a value that is not a list, the transaction fails.
         """
         self.append_command(RequestType.LTrim, [key, str(start), str(end)])
