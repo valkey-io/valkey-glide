@@ -564,6 +564,29 @@ class BaseTransaction:
         """
         self.append_command(RequestType.SCard, [key])
 
+    def ltrim(self, key: str, start: int, end: int):
+        """Trim an existing list so that it will contain only the specified range of elements specified.
+        The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
+        element and so on.
+        These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last
+        element of the list, -2 being the penultimate, and so on.
+        See https://redis.io/commands/ltrim/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Commands response:
+            TOK: A simple "OK" response.
+                If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
+                (which causes `key` to be removed).
+                If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
+                f `key` does not exist, the response will be "OK" without changes to the database.
+                If `key` holds a value that is not a list, the transaction fails.
+        """
+        self.append_command(RequestType.LTrim, [key, str(start), str(end)])
+
     def lrem(self, key: str, count: int, element: str):
         """Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
         If `count` is positive, it removes elements equal to `element` moving from head to tail.
