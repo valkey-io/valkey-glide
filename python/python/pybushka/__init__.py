@@ -4,7 +4,7 @@ from pybushka.config import (
     AddressInfo,
     BaseClientConfiguration,
     ClusterClientConfiguration,
-    ReadFromReplica,
+    ReadFrom,
     StandaloneClientConfiguration,
 )
 from pybushka.constants import OK
@@ -22,7 +22,6 @@ from pybushka.routes import (
 
 __all__ = [
     "AddressInfo",
-    "AuthenticationOptions",
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
     "StandaloneClientConfiguration",
@@ -32,7 +31,7 @@ __all__ = [
     "Logger",
     "LogLevel",
     "OK",
-    "ReadFromReplica",
+    "ReadFrom",
     "RedisClient",
     "RedisClusterClient",
     "Transaction",
