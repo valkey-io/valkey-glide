@@ -119,30 +119,6 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
     });
 }
 
-/// Receives a callback function which should be called with a single allocated pointer and a single null pointer.
-/// The first pointer is to a socket name address if startup was successful, second pointer is to an error message if the process fails.
-#[no_mangle]
-pub extern "C" fn start_socket_listener_wrapper(
-    init_callback: unsafe extern "C" fn(*const c_char, *const c_char) -> (),
-) {
-    start_legacy_socket_listener(move |result| {
-        match result {
-            Ok(socket_name) => {
-                let c_str = CString::new(socket_name).unwrap();
-                unsafe {
-                    init_callback(c_str.as_ptr(), std::ptr::null());
-                }
-            }
-            Err(error_message) => {
-                let c_str = CString::new(error_message).unwrap();
-                unsafe {
-                    init_callback(std::ptr::null(), c_str.as_ptr());
-                }
-            }
-        };
-    });
-}
-
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
         match level {

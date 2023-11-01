@@ -298,30 +298,6 @@ public static class MainClass
             );
         }
 
-
-        if (clientsToRun == "all" || clientsToRun == "socket" || clientsToRun == "babushka")
-        {
-            var clients = await createClients(clientCount, async () =>
-                {
-                    var babushka_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host, useTLS));
-                    return (async (key) => await babushka_client.GetAsync(key),
-                            async (key, value) => await babushka_client.SetAsync(key, value),
-                            () => babushka_client.Dispose());
-                });
-            await run_clients(
-                clients,
-                "babushka socket",
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
-            );
-
-            foreach (var client in clients)
-            {
-                client.Dispose();
-            }
-        }
-
         if (clientsToRun == "all")
         {
             var clients = await createClients(clientCount, () =>
