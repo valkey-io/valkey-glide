@@ -1,5 +1,5 @@
 use crate::connection_request::{
-    AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFromReplicaStrategy, TlsMode,
+    AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFrom, TlsMode,
 };
 use futures::FutureExt;
 use logger_core::log_info;
@@ -90,7 +90,7 @@ pub enum ClientWrapper {
 #[derive(Clone)]
 pub struct Client {
     internal_client: ClientWrapper,
-    response_timeout: Duration,
+    request_timeout: Duration,
 }
 
 async fn run_with_timeout<T>(
@@ -109,7 +109,7 @@ impl Client {
         cmd: &'a redis::Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
-        run_with_timeout(self.response_timeout, async {
+        run_with_timeout(self.request_timeout, async {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
 
@@ -143,7 +143,7 @@ impl Client {
                         _ => SingleNodeRoutingInfo::Random,
                     };
                     run_with_timeout(
-                        self.response_timeout,
+                        self.request_timeout,
                         client.route_pipeline(cmd, offset, count, route),
                     )
                     .await
@@ -173,14 +173,8 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
-    let read_from_replica_strategy = request
-        .read_from_replica_strategy
-        .enum_value()
-        .unwrap_or(ReadFromReplicaStrategy::AlwaysFromPrimary);
-    let read_from_replicas = !matches!(
-        read_from_replica_strategy,
-        ReadFromReplicaStrategy::AlwaysFromPrimary,
-    ); // TODO - implement different read from replica strategies.
+    let read_from = request.read_from.enum_value().unwrap_or(ReadFrom::Primary);
+    let read_from_replicas = !matches!(read_from, ReadFrom::Primary,); // TODO - implement different read from replica strategies.
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(INTERNAL_CONNECTION_TIMEOUT);
     if read_from_replicas {
@@ -242,11 +236,11 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .join(", ");
     let tls_mode = request.tls_mode.enum_value_or_default();
     let cluster_mode = request.cluster_mode_enabled;
-    let response_timeout = format_non_zero_value("response timeout", request.response_timeout);
+    let request_timeout = format_non_zero_value("response timeout", request.request_timeout);
     let client_creation_timeout =
         format_non_zero_value("client creation timeout", request.client_creation_timeout);
     let database_id = format_non_zero_value("database ID", request.database_id);
-    let rfr_strategy = request.read_from_replica_strategy.enum_value_or_default();
+    let rfr_strategy = request.read_from.enum_value_or_default();
     let connection_retry_strategy = match &request.connection_retry_strategy.0 {
         Some(strategy) => {
             format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}",
@@ -256,7 +250,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     };
 
     format!(
-        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{response_timeout}{client_creation_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
+        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{request_timeout}{client_creation_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
     )
 }
 
@@ -268,7 +262,7 @@ impl Client {
             "Connection configuration",
             sanitized_request_string(&request),
         );
-        let response_timeout = to_duration(request.response_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
         let total_connection_timeout = to_duration(
             request.client_creation_timeout,
             DEFAULT_CLIENT_CREATION_TIMEOUT,
@@ -289,7 +283,7 @@ impl Client {
 
             Ok(Self {
                 internal_client,
-                response_timeout,
+                request_timeout,
             })
         })
         .await
