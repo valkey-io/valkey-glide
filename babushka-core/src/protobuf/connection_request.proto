@@ -6,9 +6,9 @@ message AddressInfo {
     uint32 port = 2;
 }
 
-enum ReadFromReplicaStrategy {
-    AlwaysFromPrimary = 0;
-    RoundRobin = 1;
+enum ReadFrom {
+    Primary = 0;
+    PreferReplica = 1;
     LowestLatency = 2;
     AZAffinity = 3;
 }
@@ -29,9 +29,9 @@ message ConnectionRequest {
     repeated AddressInfo addresses = 1;
     TlsMode tls_mode = 2;
     bool cluster_mode_enabled = 3;
-    uint32 response_timeout = 4;
+    uint32 request_timeout = 4;
     uint32 client_creation_timeout = 5;
-    ReadFromReplicaStrategy read_from_replica_strategy = 6;
+    ReadFrom read_from = 6;
     ConnectionRetryStrategy connection_retry_strategy = 7;
     AuthenticationInfo authentication_info = 8;
     uint32 database_id = 9;
