@@ -13,7 +13,7 @@ from pybushka.async_commands.core import (
     ExpiryType,
     InfoSection,
 )
-from pybushka.config import AuthenticationOptions
+from pybushka.config import RedisCredentials
 from pybushka.constants import OK
 from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from pybushka.routes import (
@@ -125,7 +125,7 @@ class TestRedisClients:
     ):
         is_cluster = isinstance(redis_client, RedisClusterClient)
         password = "TEST_AUTH"
-        credentials = AuthenticationOptions(password)
+        credentials = RedisCredentials(password)
         try:
             await redis_client.custom_command(
                 ["CONFIG", "SET", "requirepass", password]
@@ -172,7 +172,7 @@ class TestRedisClients:
             )
             key = get_random_string(10)
             assert await redis_client.set(key, key) == OK
-            credentials = AuthenticationOptions(password, username)
+            credentials = RedisCredentials(password, username)
             testuser_client = await create_client(request, is_cluster, credentials)
             assert await testuser_client.get(key) == key
             with pytest.raises(Exception) as e:

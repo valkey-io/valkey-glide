@@ -4,8 +4,8 @@ from typing import AsyncGenerator, Optional, Union
 import pytest
 from pybushka.config import (
     AddressInfo,
-    AuthenticationOptions,
     ClusterClientConfiguration,
+    RedisCredentials,
     StandaloneClientConfiguration,
 )
 from pybushka.logger import Level as logLevel
@@ -86,7 +86,7 @@ async def redis_client(
 async def create_client(
     request,
     cluster_mode: bool,
-    credentials: Optional[AuthenticationOptions] = None,
+    credentials: Optional[RedisCredentials] = None,
     database_id: int = 0,
 ) -> Union[RedisClient, RedisClusterClient]:
     # Create async socket client
