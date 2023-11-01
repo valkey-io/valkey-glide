@@ -282,7 +282,7 @@ public static class MainClass
         {
             var clients = await createClients(clientCount, () =>
             {
-                var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host, useTLS));
+                var babushka_client = new AsyncClient(host, PORT, useTLS);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await babushka_client.GetAsync(key),
                      async (key, value) => await babushka_client.SetAsync(key, value),
@@ -332,7 +332,7 @@ public static class MainClass
     public static async Task Main(string[] args)
     {
         // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
-        Logger.SetLoggerConfig(Level.Info, "first.log");
+        Logger.SetLoggerConfig(Level.Info, null);
         CommandLineOptions options = new CommandLineOptions();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });

@@ -8,7 +8,7 @@ public class AsyncClientTests
     [OneTimeSetUp]
     public void Setup()
     {
-        babushka.Logger.SetConfig(babushka.Level.Info);
+        babushka.Logger.SetLoggerConfig(babushka.Level.Info);
     }
 
     private async Task GetAndSetRandomValues(AsyncClient client)
@@ -23,7 +23,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsLastSet()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             await GetAndSetRandomValues(client);
         }
@@ -32,7 +32,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
@@ -45,7 +45,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsNull()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             var result = await client.GetAsync(Guid.NewGuid().ToString());
             Assert.That(result, Is.EqualTo(null));
@@ -55,7 +55,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsEmptyString()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "";
@@ -68,7 +68,7 @@ public class AsyncClientTests
     [Test]
     public async Task HandleVeryLargeInput()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             var key = Guid.NewGuid().ToString();
             var value = Guid.NewGuid().ToString();
@@ -88,7 +88,7 @@ public class AsyncClientTests
     [Test]
     public void ConcurrentOperationsWork()
     {
-        using (var client = new AsyncClient("redis://localhost:6379"))
+        using (var client = new AsyncClient("localhost", 6379, false))
         {
             var operations = new List<Task>();
 

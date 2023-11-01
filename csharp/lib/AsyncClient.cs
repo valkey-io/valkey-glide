@@ -5,13 +5,13 @@ namespace babushka
     public class AsyncClient : IDisposable
     {
         #region public methods
-        public AsyncClient(string address)
+        public AsyncClient(string host, UInt32 port, bool useTLS)
         {
             successCallbackDelegate = SuccessCallback;
             var successCallbackPointer = Marshal.GetFunctionPointerForDelegate(successCallbackDelegate);
             failureCallbackDelegate = FailureCallback;
             var failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(failureCallbackDelegate);
-            connectionPointer = CreateConnectionFfi(address, successCallbackPointer, failureCallbackPointer);
+            connectionPointer = CreateConnectionFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
             if (connectionPointer == IntPtr.Zero)
             {
                 throw new Exception("Failed creating a connection");
@@ -103,7 +103,7 @@ namespace babushka
 
         private delegate void IntAction(IntPtr arg);
         [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_connection")]
-        private static extern IntPtr CreateConnectionFfi(String address, IntPtr successCallback, IntPtr failureCallback);
+        private static extern IntPtr CreateConnectionFfi(String host, UInt32 port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
 
         [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_connection")]
         private static extern void CloseConnectionFfi(IntPtr connection);
