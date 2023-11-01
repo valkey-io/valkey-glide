@@ -463,7 +463,7 @@ describe("SocketConnectionInternals", () => {
             },
             {
                 addresses: [{ host: "foo" }],
-                responseTimeout: 1,
+                requestTimeout: 1,
             }
         );
     });

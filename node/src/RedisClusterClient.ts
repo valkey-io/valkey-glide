@@ -25,7 +25,7 @@ export type ClusterResponse<T> = T | Record<string, T>;
 
 export type SlotIdTypes = {
     /**
-     * `replicaSlotId` overrides the `readFromReplicaStrategy` configuration. If it's used the request
+     * `replicaSlotId` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
      */
     type: "primarySlotId" | "replicaSlotId";
@@ -38,7 +38,7 @@ export type SlotIdTypes = {
 
 export type SlotKeyTypes = {
     /**
-     * `replicaSlotKey` overrides the `readFromReplicaStrategy` configuration. If it's used the request
+     * `replicaSlotKey` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
      */
     type: "primarySlotKey" | "replicaSlotKey";
