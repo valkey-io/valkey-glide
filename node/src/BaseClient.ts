@@ -63,23 +63,24 @@ type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: BaseRedisError) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
-type AuthenticationOptions = {
+type RedisCredentials = {
     /**
-     * The username that will be passed to the cluster's Access Control Layer.
+     * The username that will be used for authenticating connections to the Redis servers.
      * If not supplied, "default" will be used.
      */
     username?: string;
     /**
-     * The password that will be passed to the cluster's Access Control Layer.
+     * The password that will be used for authenticating connections to the Redis servers.
      */
     password: string;
 };
 
-type ReadFromReplicaStrategy =
+type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
-    | "alwaysFromPrimary"
-    /** Spread the requests between all replicas evenly.*/
-    | "roundRobin";
+    | "primary"
+    /** Spread the requests between all replicas in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "preferReplica";
 
 export type BaseClientConfiguration = {
     /**
@@ -110,23 +111,28 @@ export type BaseClientConfiguration = {
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.
      */
-    credentials?: AuthenticationOptions;
+    credentials?: RedisCredentials;
     /**
-     * Number of milliseconds that the client should wait for response before determining that the connection has been severed.
+     * The duration in milliseconds that the client should wait for a request to complete.
+     * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
+     * If the specified timeout is exceeded for a pending request, it will result in a timeout error.
      * If not set, a default value will be used.
      * Value must be an integer.
      */
-    responseTimeout?: number;
+    requestTimeout?: number;
     /**
-     * Number of milliseconds that the client should wait for the initial connection attempts before failing to create a client.
+     * The duration in milliseconds that the client should wait its initialization,
+     * encompassing tasks such as connection establishment and topology mapping.
+     * If the client fails to complete its initialization within this specified time, an error will be returned.
      * If not set, a default value will be used.
      * Value must be an integer.
      */
     clientCreationTimeout?: number;
     /**
-     * If not set, `alwaysFromPrimary` will be used.
+     * Represents the client's read from strategy.
+     * If not set, `Primary` will be used.
      */
-    readFromReplicaStrategy?: ReadFromReplicaStrategy;
+    readFrom?: ReadFrom;
 };
 
 function getRequestErrorClass(
@@ -158,7 +164,7 @@ export class BaseClient {
     private requestWriter = new BufferWriter();
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
-    private readonly responseTimeout: number; // Timeout in milliseconds
+    private readonly requestTimeout: number; // Timeout in milliseconds
 
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
@@ -219,8 +225,8 @@ export class BaseClient {
     protected constructor(socket: net.Socket, options?: BaseClientConfiguration) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
-        this.responseTimeout =
-            options?.responseTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
+        this.requestTimeout =
+            options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -258,7 +264,7 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
                 reject(TIMEOUT_ERROR);
-            }, this.responseTimeout);
+            }, this.requestTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
             this.writeOrBufferRedisRequest(callbackIndex, command, route);
@@ -838,21 +844,21 @@ export class BaseClient {
         return this.createWritePromise(createTTL(key));
     }
 
-    private readonly MAP_READ_FROM_REPLICA_STRATEGY: Record<
-        ReadFromReplicaStrategy,
-        connection_request.ReadFromReplicaStrategy
+    private readonly MAP_READ_FROM_STRATEGY: Record<
+        ReadFrom,
+        connection_request.ReadFrom
     > = {
-        alwaysFromPrimary:
-            connection_request.ReadFromReplicaStrategy.AlwaysFromPrimary,
-        roundRobin: connection_request.ReadFromReplicaStrategy.RoundRobin,
+        primary:
+            connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
     };
 
     protected createClientRequest(
         options: BaseClientConfiguration
     ): connection_request.IConnectionRequest {
-        const readFromReplicaStrategy = options.readFromReplicaStrategy
-            ? this.MAP_READ_FROM_REPLICA_STRATEGY[
-                  options.readFromReplicaStrategy
+        const readFrom = options.readFrom
+            ? this.MAP_READ_FROM_STRATEGY[
+                  options.readFrom
               ]
             : undefined;
         const authenticationInfo =
@@ -868,10 +874,10 @@ export class BaseClient {
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls
                 : connection_request.TlsMode.NoTls,
-            responseTimeout: options.responseTimeout,
+            requestTimeout: options.requestTimeout,
             clusterModeEnabled: false,
             clientCreationTimeout: options.clientCreationTimeout,
-            readFromReplicaStrategy,
+            readFrom,
             authenticationInfo,
         };
     }
