@@ -248,7 +248,7 @@ pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) ->
         setup_acl_for_cluster(&addresses, redis_connection_info).await;
     }
     configuration.cluster_mode = ClusterMode::Enabled;
-    configuration.response_timeout = configuration.response_timeout.or(Some(10000));
+    configuration.request_timeout = configuration.request_timeout.or(Some(10000));
     configuration.connection_timeout = configuration.connection_timeout.or(Some(10000));
     let connection_request = create_connection_request(&addresses, &configuration);
 

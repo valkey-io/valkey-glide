@@ -281,7 +281,7 @@ mod socket_listener {
             &TestConfiguration {
                 use_tls,
                 cluster_mode,
-                response_timeout: Some(10000),
+                request_timeout: Some(10000),
                 ..Default::default()
             },
         );
