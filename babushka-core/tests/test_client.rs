@@ -110,7 +110,7 @@ mod shared_client_tests {
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    response_timeout: Some(10000000),
+                    request_timeout: Some(10000000),
                     ..Default::default()
                 },
             )
@@ -170,12 +170,12 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_response_timeout(#[values(false, true)] use_cluster: bool) {
+    fn test_request_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    response_timeout: Some(1),
+                    request_timeout: Some(1),
                     shared_server: true,
                     ..Default::default()
                 },

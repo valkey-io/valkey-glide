@@ -3,7 +3,7 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use super::*;
-    use babushka::connection_request::ReadFromReplicaStrategy;
+    use babushka::connection_request::ReadFrom;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
@@ -149,7 +149,7 @@ mod cluster_client_tests {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
-                read_from_replica_strategy: Some(ReadFromReplicaStrategy::RoundRobin),
+                read_from: Some(ReadFrom::PreferReplica),
                 ..Default::default()
             })
             .await;
@@ -183,7 +183,7 @@ mod cluster_client_tests {
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
-                read_from_replica_strategy: Some(ReadFromReplicaStrategy::AlwaysFromPrimary),
+                read_from: Some(ReadFrom::Primary),
                 ..Default::default()
             })
             .await;
