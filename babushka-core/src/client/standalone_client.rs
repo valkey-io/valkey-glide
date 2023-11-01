@@ -13,9 +13,9 @@ use std::sync::Arc;
 #[cfg(standalone_heartbeat)]
 use tokio::task;
 
-enum ReadFromReplicaStrategy {
-    AlwaysFromPrimary,
-    RoundRobin {
+enum ReadFrom {
+    Primary,
+    PreferReplica {
         latest_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
     },
 }
@@ -24,7 +24,7 @@ struct DropWrapper {
     /// Connection to the primary node in the client.
     primary_index: usize,
     nodes: Vec<ReconnectingConnection>,
-    read_from_replica_strategy: ReadFromReplicaStrategy,
+    read_from: ReadFrom,
 }
 
 impl Drop for DropWrapper {
@@ -124,8 +124,7 @@ impl StandaloneClient {
                 ),
             );
         }
-        let read_from_replica_strategy =
-            get_read_from_replica_strategy(&connection_request.read_from_replica_strategy);
+        let read_from = get_read_from(&connection_request.read_from);
 
         #[cfg(standalone_heartbeat)]
         for node in nodes.iter() {
@@ -136,7 +135,7 @@ impl StandaloneClient {
             inner: Arc::new(DropWrapper {
                 primary_index,
                 nodes,
-                read_from_replica_strategy,
+                read_from,
             }),
         })
     }
@@ -149,9 +148,9 @@ impl StandaloneClient {
         if !is_readonly(cmd) || self.inner.nodes.len() == 1 {
             return self.get_primary_connection();
         }
-        match &self.inner.read_from_replica_strategy {
-            ReadFromReplicaStrategy::AlwaysFromPrimary => self.get_primary_connection(),
-            ReadFromReplicaStrategy::RoundRobin {
+        match &self.inner.read_from {
+            ReadFrom::Primary => self.get_primary_connection(),
+            ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => {
                 let initial_index =
@@ -297,19 +296,13 @@ async fn get_connection_and_replication_info(
     }
 }
 
-fn get_read_from_replica_strategy(
-    read_from_replica_strategy: &EnumOrUnknown<crate::connection_request::ReadFromReplicaStrategy>,
-) -> ReadFromReplicaStrategy {
-    match read_from_replica_strategy.enum_value_or_default() {
-        crate::connection_request::ReadFromReplicaStrategy::AlwaysFromPrimary => {
-            ReadFromReplicaStrategy::AlwaysFromPrimary
-        }
-        crate::connection_request::ReadFromReplicaStrategy::RoundRobin => {
-            ReadFromReplicaStrategy::RoundRobin {
-                latest_read_replica_index: Default::default(),
-            }
-        }
-        crate::connection_request::ReadFromReplicaStrategy::LowestLatency => todo!(),
-        crate::connection_request::ReadFromReplicaStrategy::AZAffinity => todo!(),
+fn get_read_from(read_from: &EnumOrUnknown<crate::connection_request::ReadFrom>) -> ReadFrom {
+    match read_from.enum_value_or_default() {
+        crate::connection_request::ReadFrom::Primary => ReadFrom::Primary,
+        crate::connection_request::ReadFrom::PreferReplica => ReadFrom::PreferReplica {
+            latest_read_replica_index: Default::default(),
+        },
+        crate::connection_request::ReadFrom::LowestLatency => todo!(),
+        crate::connection_request::ReadFrom::AZAffinity => todo!(),
     }
 }

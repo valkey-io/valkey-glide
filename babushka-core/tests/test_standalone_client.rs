@@ -5,7 +5,7 @@ mod standalone_client_tests {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use babushka::{client::StandaloneClient, connection_request::ReadFromReplicaStrategy};
+    use babushka::{client::StandaloneClient, connection_request::ReadFrom};
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
     use utilities::*;
@@ -124,7 +124,7 @@ mod standalone_client_tests {
     }
 
     struct ReadFromReplicaTestConfig {
-        read_from_replica_strategy: ReadFromReplicaStrategy,
+        read_from: ReadFrom,
         expected_primary_reads: u16,
         expected_replica_reads: Vec<u16>,
         number_of_initial_replicas: usize,
@@ -136,7 +136,7 @@ mod standalone_client_tests {
     impl Default for ReadFromReplicaTestConfig {
         fn default() -> Self {
             Self {
-                read_from_replica_strategy: ReadFromReplicaStrategy::AlwaysFromPrimary,
+                read_from: ReadFrom::Primary,
                 expected_primary_reads: 3,
                 expected_replica_reads: vec![0, 0, 0],
                 number_of_initial_replicas: 3,
@@ -171,7 +171,7 @@ mod standalone_client_tests {
         }
         let mut connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
-        connection_request.read_from_replica_strategy = config.read_from_replica_strategy.into();
+        connection_request.read_from = config.read_from.into();
 
         block_on_all(async {
             let mut client = StandaloneClient::create_client(connection_request)
@@ -208,7 +208,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 0,
             expected_replica_reads: vec![1, 1, 1],
             ..Default::default()
@@ -219,7 +219,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_skip_disconnected_replicas() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 0,
             expected_replica_reads: vec![1, 2],
             number_of_missing_replicas: 1,
@@ -231,7 +231,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_read_from_primary_if_no_replica_is_connected() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 3,
             expected_replica_reads: vec![],
             number_of_missing_replicas: 3,
@@ -243,7 +243,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_do_not_read_from_disconnected_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 0,
             expected_replica_reads: vec![2, 3],
             number_of_replicas_dropped_after_connection: 1,
@@ -256,7 +256,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_with_single_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
-            read_from_replica_strategy: ReadFromReplicaStrategy::RoundRobin,
+            read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 0,
             expected_replica_reads: vec![3],
             number_of_initial_replicas: 1,
