@@ -35,6 +35,15 @@ class BaseRedisClient(CoreCommands):
 
     @classmethod
     async def create(cls, config: Optional[BaseClientConfiguration] = None) -> Self:
+        """Creates a Redis client.
+
+        Args:
+            config (Optional[ClientConfiguration]): The client configurations.
+                If no configuration is provided, a default client to "localhost":6379 will be created.
+
+        Returns:
+            Self: a Redis Client instance.
+        """
         config = config or BaseClientConfiguration()
         self = cls(config)
         init_future: asyncio.Future = asyncio.Future()
