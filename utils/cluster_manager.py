@@ -696,11 +696,9 @@ def stop_cluster(
 ):
     logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
     print(f"LOG_FILE={logfile}")
-    logging.basicConfig(
-        filename=logfile,
-        force=True,
-        encoding="utf-8",
-    )
+    root_logger = logging.getLogger()
+    handler = logging.FileHandler(logfile, "w", "utf-8")
+    root_logger.addHandler(handler)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
@@ -861,11 +859,9 @@ def main():
             else args.logfile
         )
         print(f"LOG_FILE={logfile}")
-        logging.basicConfig(
-            filename=logfile,
-            force=True,
-            encoding="utf-8",
-        )
+        root_logger = logging.getLogger()
+        handler = logging.FileHandler(logfile, "w", "utf-8")
+        root_logger.addHandler(handler)
         servers = create_servers(
             args.host,
             args.shard_count,
