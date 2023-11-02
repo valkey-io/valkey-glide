@@ -1,7 +1,12 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, Union
 
-from pybushka.async_commands.core import ConditionalSet, ExpirySet, InfoSection
+from pybushka.async_commands.core import (
+    ConditionalSet,
+    ExpireOptions,
+    ExpirySet,
+    InfoSection,
+)
 from pybushka.protobuf.redis_request_pb2 import RequestType
 
 
@@ -648,6 +653,125 @@ class BaseTransaction:
             int: The number of keys that were unlinked.
         """
         self.append_command(RequestType.Unlink, keys)
+
+    def expire(self, key: str, seconds: int, option: Optional[ExpireOptions] = None):
+        """
+        Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        If `seconds` is a non-positive number, the key will be deleted rather than expired.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/expire/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            seconds (int): The timeout in seconds.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Commands response:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        """
+        args: List[str] = (
+            [key, str(seconds)] if option is None else [key, str(seconds), option.value]
+        )
+        self.append_command(RequestType.Expire, args)
+
+    def expireat(
+        self, key: str, unix_seconds: int, option: Optional[ExpireOptions] = None
+    ):
+        """
+        Sets a timeout on `key` using an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the
+        number of seconds.
+        A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
+        deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/expireat/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            unix_seconds (int): The timeout in an absolute Unix timestamp.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Commands response:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+        """
+        args = (
+            [key, str(unix_seconds)]
+            if option is None
+            else [key, str(unix_seconds), option.value]
+        )
+        self.append_command(RequestType.ExpireAt, args)
+
+    def pexpire(
+        self, key: str, milliseconds: int, option: Optional[ExpireOptions] = None
+    ):
+        """
+        Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        If `milliseconds` is a non-positive number, the key will be deleted rather than expired.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/pexpire/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            milliseconds (int): The timeout in milliseconds.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Commands response:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+
+        """
+        args = (
+            [key, str(milliseconds)]
+            if option is None
+            else [key, str(milliseconds), option.value]
+        )
+        self.append_command(RequestType.PExpire, args)
+
+    def pexpireat(
+        self, key: str, unix_milliseconds: int, option: Optional[ExpireOptions] = None
+    ):
+        """
+        Sets a timeout on `key` using an absolute Unix timestamp in milliseconds (milliseconds since January 1, 1970) instead
+        of specifying the number of milliseconds.
+        A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be
+        deleted.
+        If `key` already has an existing expire set, the time to live is updated to the new value.
+        The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+        See https://redis.io/commands/pexpireat/ for more details.
+
+        Args:
+            key (str): The key to set a timeout on.
+            unix_milliseconds (int): The timeout in an absolute Unix timestamp in milliseconds.
+            option (Optional[ExpireOptions]): The expire option.
+
+        Commands response:
+            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+                skipped due to the provided arguments).
+        """
+        args = (
+            [key, str(unix_milliseconds)]
+            if option is None
+            else [key, str(unix_milliseconds), option.value]
+        )
+        self.append_command(RequestType.PExpireAt, args)
+
+    def ttl(self, key: str):
+        """
+        Returns the remaining time to live of `key` that has a timeout.
+        See https://redis.io/commands/ttl/ for more details.
+
+        Args:
+            key (str): The key to return its timeout.
+
+        Commands response:
+            int: TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+        """
+        self.append_command(RequestType.TTL, [key])
 
 
 class Transaction(BaseTransaction):

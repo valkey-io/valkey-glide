@@ -1,4 +1,9 @@
-from pybushka.async_commands.core import ConditionalSet, ExpirySet, ExpiryType
+from pybushka.async_commands.core import (
+    ConditionalSet,
+    ExpireOptions,
+    ExpirySet,
+    ExpiryType,
+)
 from pybushka.async_commands.transaction import ClusterTransaction, Transaction
 from pybushka.config import (
     AddressInfo,
@@ -26,6 +31,7 @@ __all__ = [
     "ClusterClientConfiguration",
     "StandaloneClientConfiguration",
     "ConditionalSet",
+    "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
     "Logger",
