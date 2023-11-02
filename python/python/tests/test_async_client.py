@@ -169,6 +169,7 @@ class TestRedisClients:
                         "+cluster",
                         "+ping",
                         "+info",
+                        "+client",
                         f">{password}",
                     ]
                 )
