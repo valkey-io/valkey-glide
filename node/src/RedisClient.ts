@@ -16,7 +16,7 @@ import {
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
-export type StandaloneClientConfiguration = BaseClientConfiguration & {
+export type RedisClientConfiguration = BaseClientConfiguration & {
     /**
      * index of the logical database to connect to.
      */
@@ -50,7 +50,7 @@ export type StandaloneClientConfiguration = BaseClientConfiguration & {
 
 export class RedisClient extends BaseClient {
     protected createClientRequest(
-        options: StandaloneClientConfiguration
+        options: RedisClientConfiguration
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.databaseId = options.databaseId;
@@ -59,7 +59,7 @@ export class RedisClient extends BaseClient {
     }
 
     public static createClient(
-        options: StandaloneClientConfiguration
+        options: RedisClientConfiguration
     ): Promise<RedisClient> {
         return super.createClientInternal<RedisClient>(
             options,

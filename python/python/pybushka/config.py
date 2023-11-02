@@ -150,7 +150,7 @@ class BaseClientConfiguration:
         return request
 
 
-class StandaloneClientConfiguration(BaseClientConfiguration):
+class RedisClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Standalone Redis client.
 

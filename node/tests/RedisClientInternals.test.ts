@@ -14,7 +14,7 @@ import {
     RequestError,
     TimeoutError,
 } from "../build-ts";
-import { StandaloneClientConfiguration } from "../build-ts/src/RedisClient";
+import { RedisClientConfiguration } from "../build-ts/src/RedisClient";
 import {
     connection_request,
     redis_request,
@@ -75,7 +75,7 @@ function sendResponse(
 
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?: ClusterClientConfiguration | StandaloneClientConfiguration,
+    connectionOptions?: ClusterClientConfiguration | RedisClientConfiguration,
     isCluster?: boolean
 ): Promise<{
     socket: net.Socket;
