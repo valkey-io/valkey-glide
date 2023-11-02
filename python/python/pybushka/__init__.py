@@ -10,7 +10,7 @@ from pybushka.config import (
     BaseClientConfiguration,
     ClusterClientConfiguration,
     ReadFrom,
-    StandaloneClientConfiguration,
+    RedisClientConfiguration,
 )
 from pybushka.constants import OK
 from pybushka.logger import Level as LogLevel
@@ -29,7 +29,7 @@ __all__ = [
     "AddressInfo",
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
-    "StandaloneClientConfiguration",
+    "RedisClientConfiguration",
     "ConditionalSet",
     "ExpireOptions",
     "ExpirySet",
