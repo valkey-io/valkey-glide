@@ -74,7 +74,7 @@ jobs:
             - name: Lint with deadcode
               working-directory: .
               run: |
-                  deadcode . --ignore-definitions=InfoSection,Level,*protobuf*,*pytest*
+                  deadcode . --ignore-definitions=InfoSection,Level,ExpireOptions,*protobuf*,*pytest*
 
             - name: Start redis server
               working-directory: ./python
