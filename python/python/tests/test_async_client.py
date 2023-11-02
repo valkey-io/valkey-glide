@@ -1,6 +1,7 @@
 import asyncio
 import random
 import string
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Union
 
@@ -9,6 +10,7 @@ from packaging import version
 from pybushka.async_commands.cluster_commands import is_single_response
 from pybushka.async_commands.core import (
     ConditionalSet,
+    ExpireOptions,
     ExpirySet,
     ExpiryType,
     InfoSection,
@@ -761,6 +763,88 @@ class TestCommands:
         assert await redis_client.set(key2, "value") == OK
         assert await redis_client.set(key3, "value") == OK
         assert await redis_client.unlink([key1, key2, "non_existing_key", key3]) == 3
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_expire_pexpire_ttl_with_positive_timeout(
+        self, redis_client: TRedisClient
+    ):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+
+        assert await redis_client.expire(key, 10) == 1
+        assert await redis_client.ttl(key) in range(11)
+
+        # set command clears the timeout.
+        assert await redis_client.set(key, "bar") == OK
+        assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry) == 1
+        assert await redis_client.ttl(key) in range(11)
+
+        assert await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry) == 1
+        assert await redis_client.ttl(key) in range(16)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_expireat_pexpireat_ttl_with_positive_timeout(
+        self, redis_client: TRedisClient
+    ):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+        current_time = int(time.time())
+
+        assert await redis_client.expireat(key, current_time + 10) == 1
+        assert await redis_client.ttl(key) in range(11)
+
+        assert (
+            await redis_client.expireat(
+                key, current_time + 50, ExpireOptions.NewExpiryGreaterThanCurrent
+            )
+            == 1
+        )
+        assert await redis_client.ttl(key) in range(51)
+
+        # set command clears the timeout.
+        assert await redis_client.set(key, "bar") == OK
+        current_time_ms = int(time.time() * 1000)
+        assert (
+            await redis_client.pexpireat(
+                key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
+            )
+            == 0
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_expire_pexpire_expireat_pexpireat_past_or_negative_timeout(
+        self, redis_client: TRedisClient
+    ):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "foo") == OK
+        assert await redis_client.ttl(key) == -1
+
+        assert await redis_client.expire(key, -10) == 1
+        assert await redis_client.ttl(key) == -2
+
+        assert await redis_client.set(key, "foo") == OK
+        assert await redis_client.pexpire(key, -10000) == 1
+        assert await redis_client.ttl(key) == -2
+
+        assert await redis_client.set(key, "foo") == OK
+        assert await redis_client.expireat(key, int(time.time()) - 50) == 1
+        assert await redis_client.ttl(key) == -2
+
+        assert await redis_client.set(key, "foo") == OK
+        assert await redis_client.pexpireat(key, int(time.time() * 1000) - 50000) == 1
+        assert await redis_client.ttl(key) == -2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_expire_pexpire_expireAt_pexpireAt_ttl_non_existing_key(
+        self, redis_client: TRedisClient
+    ):
+        key = get_random_string(10)
+
+        assert await redis_client.expire(key, 10) == 0
+        assert await redis_client.pexpire(key, 10000) == 0
+        assert await redis_client.expireat(key, int(time.time()) + 50) == 0
+        assert await redis_client.pexpireat(key, int(time.time() * 1000) + 50000) == 0
+        assert await redis_client.ttl(key) == -2
 
 
 class TestCommandsUnitTests:
