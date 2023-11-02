@@ -29,6 +29,13 @@ REDIS_CRT = f"{TLS_FOLDER}/redis.crt"
 REDIS_KEY = f"{TLS_FOLDER}/redis.key"
 
 
+def init_logger(logfile: str):
+    print(f"LOG_FILE={logfile}")
+    root_logger = logging.getLogger()
+    handler = logging.FileHandler(logfile, "w", "utf-8")
+    root_logger.addHandler(handler)
+
+
 def check_if_tls_cert_exist(tls_file: str, timeout: int = 15):
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
@@ -695,10 +702,7 @@ def stop_cluster(
     keep_folder: bool,
 ):
     logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
-    print(f"LOG_FILE={logfile}")
-    root_logger = logging.getLogger()
-    handler = logging.FileHandler(logfile, "w", "utf-8")
-    root_logger.addHandler(handler)
+    init_logger(logfile)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
@@ -858,10 +862,7 @@ def main():
             if not args.logfile
             else args.logfile
         )
-        print(f"LOG_FILE={logfile}")
-        root_logger = logging.getLogger()
-        handler = logging.FileHandler(logfile, "w", "utf-8")
-        root_logger.addHandler(handler)
+        init_logger(logfile)
         servers = create_servers(
             args.host,
             args.shard_count,
