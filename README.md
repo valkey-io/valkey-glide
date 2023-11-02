@@ -29,7 +29,6 @@ Babushka is currently a beta release and should not be used in production. We're
 * Pub/Sub
 * Streams
 * Support majority of the commands
-* Support synchronous APIs 
 
 ## Contributing
 
