@@ -5,8 +5,8 @@ import pytest
 from pybushka.config import (
     AddressInfo,
     ClusterClientConfiguration,
+    RedisClientConfiguration,
     RedisCredentials,
-    StandaloneClientConfiguration,
 )
 from pybushka.logger import Level as logLevel
 from pybushka.logger import Logger
@@ -102,7 +102,7 @@ async def create_client(
         )
         return await RedisClusterClient.create(cluster_config)
     else:
-        config = StandaloneClientConfiguration(
+        config = RedisClientConfiguration(
             addresses=[AddressInfo(host=host, port=port)],
             use_tls=use_tls,
             credentials=credentials,

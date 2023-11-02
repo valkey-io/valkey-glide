@@ -8,7 +8,7 @@ async function sendPingToNode() {
             port: 6379,
         },
     ];
-    // Check `StandaloneClientConfiguration/ClusterClientConfiguration` for additional options.
+    // Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     const client = await RedisClient.createClient({
         addresses: addresses,
         // useTLS: true,
@@ -35,7 +35,7 @@ async function sendPingToRandomNodeInCluster() {
             port: 6380,
         },
     ];
-    // Check `StandaloneClientConfiguration/ClusterClientConfiguration` for additional options.
+    // Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     const client = await RedisClusterClient.createClient({
         addresses: addresses,
         useTLS: true,
