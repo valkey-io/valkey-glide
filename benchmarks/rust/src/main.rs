@@ -59,7 +59,7 @@ enum ChosenAction {
 }
 
 fn main() {
-    logger_core::init(Some(logger_core::Level::Debug), None);
+    logger_core::init(Some(logger_core::Level::Warn), None);
 
     let args = Args::parse();
 
