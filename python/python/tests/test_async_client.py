@@ -4,7 +4,7 @@ import asyncio
 import random
 import string
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Union
 
 import pytest
@@ -871,7 +871,7 @@ class TestCommandsUnitTests:
         assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
 
         exp_unix_sec_datetime = ExpirySet(
-            ExpiryType.UNIX_SEC, datetime(2023, 4, 27, 23, 55, 59, 342380)
+            ExpiryType.UNIX_SEC, datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc)
         )
         assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
 
