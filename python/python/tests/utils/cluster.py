@@ -8,11 +8,13 @@ SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.
 
 
 class RedisCluster:
-    def __init__(self, tls) -> None:
+    def __init__(self, tls, cluster_mode) -> None:
         self.tls = tls
         args_list = [sys.executable, SCRIPT_FILE]
         if tls:
             args_list.append("--tls")
+        if cluster_mode:
+            args_list.append("--cluster-mode")
         args_list.append("start")
         p = subprocess.Popen(
             args_list,
@@ -21,6 +23,7 @@ class RedisCluster:
             text=True,
         )
         output, err = p.communicate(timeout=40)
+        """ print("opuput: ", output)"""
         if p.returncode != 0:
             raise Exception(f"Failed to create a cluster. Executed: {p}:\n{err}")
         self.parse_cluster_script_start_output(output)

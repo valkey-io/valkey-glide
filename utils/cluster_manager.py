@@ -266,7 +266,12 @@ def create_cluster_folder(path: str, prefix: str) -> str:
 
 
 def start_redis_server(
-    host: str, port: Optional[int], cluster_folder: str, tls: bool, tls_args: List[str]
+    host: str,
+    port: Optional[int],
+    cluster_folder: str,
+    tls: bool,
+    tls_args: List[str],
+    cluster_mode: bool,
 ) -> Tuple[RedisServer, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
@@ -278,7 +283,7 @@ def start_redis_server(
         f"{'--tls-port' if tls else '--port'}",
         str(port),
         "--cluster-enabled",
-        "yes",
+        f"{'yes' if cluster_mode else 'no'}",
         "--dir",
         node_folder,
         "--daemonize",
@@ -309,6 +314,7 @@ def create_servers(
     ports: Optional[List[int]],
     cluster_folder: str,
     tls: bool,
+    cluster_mode: bool,
 ) -> List[RedisServer]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -342,7 +348,7 @@ def create_servers(
     for i in range(nodes_count):
         port = ports[i] if ports else None
         servers_to_check.add(
-            start_redis_server(host, port, cluster_folder, tls, tls_args)
+            start_redis_server(host, port, cluster_folder, tls, tls_args, cluster_mode)
         )
     # Check all servers
     while len(servers_to_check) > 0:
@@ -357,7 +363,9 @@ def create_servers(
                 )
             # The port was already taken, try to find a new free one
             servers_to_check.add(
-                start_redis_server(server.host, None, cluster_folder, tls, tls_args)
+                start_redis_server(
+                    server.host, None, cluster_folder, tls, tls_args, cluster_mode
+                )
             )
             continue
         if not wait_for_server(server, cluster_folder, tls):
@@ -751,6 +759,13 @@ def main():
         help="Provide path to log file. (defaults to the cluster folder)",
     )
 
+    parser.add_argument(
+        "--cluster-mode",
+        action="store_true",
+        help="Enable cluster mode (default: standalone)",
+        required=False,
+    )
+
     subparsers = parser.add_subparsers(
         help="Tool actions",
         dest="action",
@@ -844,6 +859,10 @@ def main():
     logging.root.setLevel(level=level)
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
+    if not args.cluster_mode:
+        args.shard_count = 1
+        args.replica_count = 0
+
     if args.action == "start":
         if args.ports and len(args.ports) != args.shard_count * (
             1 + args.replica_count
@@ -870,10 +889,16 @@ def main():
             args.ports,
             cluster_folder,
             args.tls,
+            args.cluster_mode,
         )
-        create_cluster(
-            servers, args.shard_count, args.replica_count, cluster_folder, args.tls
-        )
+        if args.cluster_mode:
+            create_cluster(
+                servers,
+                args.shard_count,
+                args.replica_count,
+                cluster_folder,
+                args.tls,
+            )
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
         logging.info(f"Created cluster in {toc - tic:0.4f} seconds")
