@@ -55,7 +55,6 @@ def call_before_all_pytests(request):
     Called after the Session object has been created and
     before performing collection and entering the run test loop.
     """
-
     tls = request.config.getoption("--tls")
     pytest.redis_cluster = RedisCluster(tls, True)
     pytest.standalone_cluster = RedisCluster(tls, False)
