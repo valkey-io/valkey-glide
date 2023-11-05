@@ -3,4 +3,3 @@ flake8 == 5.0
 isort == 5.10
 mypy == 1.2
 mypy-protobuf == 3.5
-deadcode == 2.1
