@@ -99,7 +99,7 @@ class ClusterCommands(CoreCommands):
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
             information to retrieve. When no parameter is provided, the default option is assumed.
-            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to all shards, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -147,7 +147,7 @@ class ClusterCommands(CoreCommands):
         """Reset the statistics reported by Redis.
         See https://redis.io/commands/config-resetstat/ for details.
         Args:
-            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
@@ -163,7 +163,7 @@ class ClusterCommands(CoreCommands):
         """Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
         Args:
-            route (Optional[TRoute]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
@@ -207,7 +207,7 @@ class ClusterCommands(CoreCommands):
            message (Optional[str]): An optional message to include in the PING command. If not provided,
             the server will respond with "PONG". If provided, the server will respond with a copy of the message.
 
-            route (Optional[Route]): : The command will be sent to all primaries, unless `route` is provided, in which
+            route (Optional[Route]): The command will be sent to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`
 
         Returns:
