@@ -205,7 +205,7 @@ export class RedisClusterClient extends BaseClient {
      * See https://redis.io/commands/ping/ for details.
      *
      * @param str - the ping argument that will be returned.
-   * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * @returns PONG if no argument is provided, otherwise return a copy of the argument.
      */
@@ -242,7 +242,7 @@ export class RedisClusterClient extends BaseClient {
     /** Get the name of the current connection.
      *  See https://redis.io/commands/client-getname/ for more details.
      *
-   * @param route - The command will be routed a random node, unless `route` is provided, in which
+     * @param route - The command will be routed a random node, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns - the name of the client connection as a string if a name is set, or null if no name is assigned.
@@ -267,7 +267,7 @@ export class RedisClusterClient extends BaseClient {
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/config-rewrite/ for details.
      *
-   * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
@@ -282,7 +282,7 @@ export class RedisClusterClient extends BaseClient {
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
      *
-   * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      *
      * @returns always "OK"
@@ -319,7 +319,7 @@ export class RedisClusterClient extends BaseClient {
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-   * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *  case the client will initially try to route the command to the nodes defined by `route`.
      *  If `route` is not provided, the command will be sent to the all nodes.
      *
@@ -348,7 +348,7 @@ export class RedisClusterClient extends BaseClient {
      *   See https://redis.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-   * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      *   If `route` is not provided, the command will be sent to the all nodes.
      *
