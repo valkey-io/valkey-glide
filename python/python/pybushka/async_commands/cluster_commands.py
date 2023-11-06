@@ -78,7 +78,7 @@ class ClusterCommands(CoreCommands):
         Args:
             command_args (List[str]): List of strings of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
-            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:

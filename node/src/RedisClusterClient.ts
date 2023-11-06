@@ -171,7 +171,7 @@ export class RedisClusterClient extends BaseClient {
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
-     *  The command will be routed automatically, unless `route` was provided, in which case the client will
+   *  The command will be routed automatically based on the passed command's default request policy, unless `route` was provided, in which case the client will
      *  initially try to route the command to the nodes defined by `route`.
      *
      * @example
