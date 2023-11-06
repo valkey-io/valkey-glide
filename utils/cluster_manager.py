@@ -762,7 +762,7 @@ def main():
     parser.add_argument(
         "--cluster-mode",
         action="store_true",
-        help="Enable cluster mode (default: standalone)",
+        help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
         required=False,
     )
 
@@ -789,11 +789,12 @@ def main():
         "The number of ports must be equal to the total number of nodes in the cluster",
         required=False,
     )
+
     parser_start.add_argument(
         "-n",
         "--shard-count",
         type=int,
-        help="Number of cluster shards (default: %(default)s)",
+        help="This option is only supported when used together with the --cluster-mode option. It sets the number of cluster shards (default: %(default)s).",
         default=3,
         required=False,
     )
@@ -860,6 +861,7 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if not args.cluster_mode:
+        # TODO: fix replica support in standalone mode
         args.shard_count = 1
         args.replica_count = 0
 
@@ -901,7 +903,9 @@ def main():
             )
         servers_str = ",".join(str(server) for server in servers)
         toc = time.perf_counter()
-        logging.info(f"Created cluster in {toc - tic:0.4f} seconds")
+        logging.info(
+            f"Created {'Cluster Redis' if args.cluster_mode else 'Standalone Redis'} in {toc - tic:0.4f} seconds"
+        )
         print(f"CLUSTER_FOLDER={cluster_folder}")
         print(f"CLUSTER_NODES={servers_str}")
 

@@ -67,6 +67,11 @@ def pytest_sessionfinish(session, exitstatus):
     """
     try:
         del pytest.redis_cluster
+    except AttributeError:
+        # redis_cluster was not set, skip deletion
+        pass
+
+    try:
         del pytest.standalone_cluster
     except AttributeError:
         # redis_cluster was not set, skip deletion
@@ -102,9 +107,8 @@ async def create_client(
         return await RedisClusterClient.create(cluster_config)
     else:
         assert type(pytest.standalone_cluster) is RedisCluster
-        seed_nodes = random.sample(pytest.standalone_cluster.nodes_addr, k=1)
         config = RedisClientConfiguration(
-            addresses=seed_nodes,
+            addresses=pytest.standalone_cluster.nodes_addr,
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
