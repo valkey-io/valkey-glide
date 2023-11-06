@@ -11,6 +11,7 @@ from pybushka.config import (
     ClusterClientConfiguration,
     ReadFrom,
     RedisClientConfiguration,
+    RedisCredentials,
 )
 from pybushka.constants import OK
 from pybushka.logger import Level as LogLevel
@@ -40,6 +41,7 @@ __all__ = [
     "ReadFrom",
     "RedisClient",
     "RedisClusterClient",
+    "RedisCredentials",
     "Transaction",
     "ClusterTransaction",
     # Routes
