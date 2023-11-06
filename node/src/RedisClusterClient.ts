@@ -171,7 +171,7 @@ export class RedisClusterClient extends BaseClient {
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
-   *  The command will be routed automatically based on the passed command's default request policy, unless `route` was provided, in which case the client will
+     *  The command will be routed automatically based on the passed command's default request policy, unless `route` was provided, in which case the client will
      *  initially try to route the command to the nodes defined by `route`.
      *
      * @example
@@ -297,7 +297,7 @@ export class RedisClusterClient extends BaseClient {
     /** Returns the current connection id.
      * See https://redis.io/commands/client-id/ for details.
      *
-   * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * @returns the id of the client. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
