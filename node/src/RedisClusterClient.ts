@@ -218,7 +218,7 @@ export class RedisClusterClient extends BaseClient {
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
-   * @param route - The command will be routed to all shards, unless `route` is provided, in which
+     * @param route - The command will be routed to all shards, unless `route` is provided, in which
      *   case the client will initially try to route the command to the nodes defined by `route`.
      * @returns a string containing the information for the sections requested. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
