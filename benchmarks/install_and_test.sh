@@ -72,9 +72,8 @@ function runCSharpBenchmark(){
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  echo "./gradlew run --args=\"--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port\""
-#  ./gradlew run --args="--resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --port $port --clientCount $clientCount $tlsFlag"
-  ./gradlew run --args="--resultsFile=${BENCH_FOLDER}/$1 --clients $chosenClients --host $host --port $port"
+  echo "./gradlew run --args=\"-resultsFile ${BENCH_FOLDER}/$1 -dataSize $2 -concurrentTasks $concurrentTasks -clientCount $clientCount -clients $chosenClients -host $host $portFlag $tlsFlag $clusterFlag\""
+  ./gradlew run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize $2 -concurrentTasks $concurrentTasks -clients $chosenClients -host $host -clientCount $clientCount $tlsFlag $clusterFlag $portFlag"
   cd ${BENCH_FOLDER}/java
 }
 
@@ -119,7 +118,7 @@ function resultFileName() {
 
 function Help() {
     echo Running the script without any arguments runs all benchmarks.
-    echo Pass -node, -csharp, -python as arguments in order to run the node, csharp, or python benchmarks accordingly.
+    echo Pass -node, -csharp, -python, -java as arguments in order to run the node, csharp, python, or java benchmarks accordingly.
     echo Multiple such flags can be passed.
     echo Pass -no-csv to skip analysis of the results.
     echo
@@ -203,7 +202,7 @@ do
         -lettuce)
             runAllBenchmarks=0
             runJava=1
-            chosenClients="Lettuce"
+            chosenClients="lettuce_async"
             ;;
         -jedis)
             runAllBenchmarks=0
