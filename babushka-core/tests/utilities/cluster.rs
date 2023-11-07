@@ -101,7 +101,7 @@ impl RedisCluster {
         shards: Option<u16>,
         replicas: Option<u16>,
     ) -> RedisCluster {
-        let mut script_args = vec!["start"];
+        let mut script_args = vec!["start", "--cluster-mode"];
         let shards_num: String;
         let replicas_num: String;
         if let Some(shards) = shards {
