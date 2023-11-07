@@ -99,7 +99,7 @@ class ClusterCommands(CoreCommands):
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
             information to retrieve. When no parameter is provided, the default option is assumed.
-            route (Optional[Route]): The command will be routed to all shards, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to all primeries, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
