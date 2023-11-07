@@ -7,11 +7,13 @@ on:
             - logger_core/**
             - babushka-core/**
             - submodules/**
+            - utils/cluster_manager.py
     pull_request:
         paths:
             - logger_core/**
             - babushka-core/**
             - submodules/**
+            - utils/cluster_manager.py
 
 env:
     CARGO_TERM_COLOR: always
