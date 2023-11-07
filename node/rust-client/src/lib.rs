@@ -1,8 +1,7 @@
 use babushka::start_socket_listener;
 use babushka::MAX_REQUEST_ARGS_LENGTH;
 use byteorder::{LittleEndian, WriteBytesExt};
-use napi::bindgen_prelude::FromNapiValue;
-use napi::bindgen_prelude::{BigInt, ToNapiValue};
+use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
