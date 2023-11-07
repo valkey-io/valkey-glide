@@ -13,9 +13,9 @@ class RedisCluster:
         args_list = [sys.executable, SCRIPT_FILE]
         if tls:
             args_list.append("--tls")
+        args_list.append("start")
         if cluster_mode:
             args_list.append("--cluster-mode")
-        args_list.append("start")
         p = subprocess.Popen(
             args_list,
             stdout=subprocess.PIPE,

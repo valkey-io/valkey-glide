@@ -759,13 +759,6 @@ def main():
         help="Provide path to log file. (defaults to the cluster folder)",
     )
 
-    parser.add_argument(
-        "--cluster-mode",
-        action="store_true",
-        help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
-        required=False,
-    )
-
     subparsers = parser.add_subparsers(
         help="Tool actions",
         dest="action",
@@ -773,6 +766,12 @@ def main():
 
     # Start parser
     parser_start = subparsers.add_parser("start", help="Start a new cluster")
+    parser_start.add_argument(
+        "--cluster-mode",
+        action="store_true",
+        help="Create a Redis Cluster with cluster mode enabled. If not specified, a Standalone Redis cluster will be created.",
+        required=False,
+    )
     parser_start.add_argument(
         "--folder-path",
         type=dir_path,
@@ -861,12 +860,12 @@ def main():
     logging.root.setLevel(level=level)
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
-    if not args.cluster_mode:
-        args.shard_count = 1
-        # TODO: remove setting the replica count to zero after replica support in standalone mode is added to the script
-        args.replica_count = 0
-
     if args.action == "start":
+        if not args.cluster_mode:
+            args.shard_count = 1
+            # TODO: remove setting the replica count to zero after replica support in standalone mode is added to the script
+            args.replica_count = 0
+
         if args.ports and len(args.ports) != args.shard_count * (
             1 + args.replica_count
         ):
