@@ -794,7 +794,8 @@ def main():
         "-n",
         "--shard-count",
         type=int,
-        help="This option is only supported when used together with the --cluster-mode option. It sets the number of cluster shards (default: %(default)s).",
+        help="This option is only supported when used together with the --cluster-mode option."
+        "It sets the number of cluster shards (default: %(default)s).",
         default=3,
         required=False,
     )
@@ -861,8 +862,8 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if not args.cluster_mode:
-        # TODO: fix replica support in standalone mode
         args.shard_count = 1
+        # TODO: remove setting the replica count to zero after replica support in standalone mode is added to the script
         args.replica_count = 0
 
     if args.action == "start":
