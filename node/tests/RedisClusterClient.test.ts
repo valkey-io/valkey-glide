@@ -62,7 +62,7 @@ class RedisCluster {
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
             exec(
-                `python3 ../utils/cluster_manager.py start -r  ${replicaCount} -n ${shardCount}`,
+                `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`,
                 (error, stdout, stderr) => {
                     if (error) {
                         console.error(stderr);
