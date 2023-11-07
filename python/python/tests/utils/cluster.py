@@ -8,11 +8,13 @@ SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.
 
 
 class RedisCluster:
-    def __init__(self, tls) -> None:
+    def __init__(self, tls, cluster_mode) -> None:
         self.tls = tls
         args_list = [sys.executable, SCRIPT_FILE]
         if tls:
             args_list.append("--tls")
+        if cluster_mode:
+            args_list.append("--cluster-mode")
         args_list.append("start")
         p = subprocess.Popen(
             args_list,
