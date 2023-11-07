@@ -1,4 +1,4 @@
-use crate::connection_request::{AddressInfo, TlsMode};
+use crate::connection_request::{NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_trace, log_warn};
@@ -101,7 +101,7 @@ async fn create_connection(
 }
 
 fn get_client(
-    address: &AddressInfo,
+    address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
 ) -> redis::Client {
@@ -127,7 +127,7 @@ fn internal_retry_iterator() -> impl Iterator<Item = Duration> {
 
 impl ReconnectingConnection {
     pub(super) async fn new(
-        address: &AddressInfo,
+        address: &NodeAddress,
         connection_retry_strategy: RetryStrategy,
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
