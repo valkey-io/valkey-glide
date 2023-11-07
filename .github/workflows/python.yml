@@ -7,11 +7,13 @@ on:
             - python/**
             - babushka-core/src/**
             - submodules/**
+            - utils/cluster_manager.py
     pull_request:
         paths:
             - python/**
             - babushka-core/src/**
             - submodules/**
+            - utils/cluster_manager.py
 
 permissions:
     contents: read
