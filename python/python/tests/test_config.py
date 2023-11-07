@@ -1,4 +1,4 @@
-from pybushka.config import AddressInfo, BaseClientConfiguration, ReadFrom
+from pybushka.config import BaseClientConfiguration, NodeAddress, ReadFrom
 from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
 from pybushka.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from pybushka.protobuf.connection_request_pb2 import TlsMode
@@ -14,7 +14,7 @@ def test_default_client_config():
 
 def test_convert_to_protobuf():
     config = BaseClientConfiguration(
-        [AddressInfo("127.0.0.1")],
+        [NodeAddress("127.0.0.1")],
         use_tls=True,
         read_from=ReadFrom.PREFER_REPLICA,
     )

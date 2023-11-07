@@ -6,7 +6,7 @@ from pybushka.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFro
 from pybushka.protobuf.connection_request_pb2 import TlsMode
 
 
-class AddressInfo:
+class NodeAddress:
     def __init__(self, host: str = "localhost", port: int = 6379):
         """
         Represents the address and port of a node in the cluster.
@@ -77,7 +77,7 @@ class RedisCredentials:
 class BaseClientConfiguration:
     def __init__(
         self,
-        addresses: Optional[List[AddressInfo]] = None,
+        addresses: Optional[List[NodeAddress]] = None,
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
@@ -88,7 +88,7 @@ class BaseClientConfiguration:
         Represents the configuration settings for a Redis client.
 
         Args:
-            addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
+            addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
                     If the server is in cluster mode the list can be partial, as the client will attempt to map out
                     the cluster and find all nodes.
                     If the server is in standalone mode, only nodes whose addresses were provided will be used by the
@@ -111,7 +111,7 @@ class BaseClientConfiguration:
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
         """
-        self.addresses = addresses or [AddressInfo()]
+        self.addresses = addresses or [NodeAddress()]
         self.use_tls = use_tls
         self.credentials = credentials
         self.read_from = read_from
@@ -155,7 +155,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
     Represents the configuration settings for a Standalone Redis client.
 
     Args:
-        addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
+        addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
                 Only nodes whose addresses were provided will be used by the client.
                 For example:
                 [
@@ -183,7 +183,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
 
     def __init__(
         self,
-        addresses: Optional[List[AddressInfo]] = None,
+        addresses: Optional[List[NodeAddress]] = None,
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
@@ -227,7 +227,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
     Represents the configuration settings for a Cluster Redis client.
 
     Args:
-        addresses (Optional[List[AddressInfo]]): DNS Addresses and ports of known nodes in the cluster.
+        addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
                 The list can be partial, as the client will attempt to map out the cluster and find all nodes.
                 For example:
                 [
@@ -253,7 +253,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
 
     def __init__(
         self,
-        addresses: Optional[List[AddressInfo]] = None,
+        addresses: Optional[List[NodeAddress]] = None,
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
