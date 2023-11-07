@@ -1,6 +1,6 @@
 use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
-use crate::connection_request::{AddressInfo, ConnectionRequest, TlsMode};
+use crate::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::{stream, StreamExt};
 #[cfg(standalone_heartbeat)]
@@ -262,7 +262,7 @@ impl StandaloneClient {
 }
 
 async fn get_connection_and_replication_info(
-    address: &AddressInfo,
+    address: &NodeAddress,
     retry_strategy: &RetryStrategy,
     connection_info: &redis::RedisConnectionInfo,
     tls_mode: TlsMode,

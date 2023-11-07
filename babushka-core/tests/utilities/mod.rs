@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use babushka::{
     client::{Client, StandaloneClient},
-    connection_request::{self, AddressInfo, AuthenticationInfo},
+    connection_request::{self, AuthenticationInfo, NodeAddress},
 };
 use futures::Future;
 use once_cell::sync::Lazy;
@@ -436,8 +436,8 @@ where
     current_thread_runtime().block_on(f)
 }
 
-pub fn get_address_info(address: &ConnectionAddr) -> AddressInfo {
-    let mut address_info = AddressInfo::new();
+pub fn get_address_info(address: &ConnectionAddr) -> NodeAddress {
+    let mut address_info = NodeAddress::new();
     match address {
         ConnectionAddr::Tcp(host, port) => {
             address_info.host = host.to_string().into();

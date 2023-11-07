@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 
-from pybushka.config import AddressInfo
+from pybushka.config import NodeAddress
 
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.py")
 
@@ -43,7 +43,7 @@ class RedisCluster:
                 assert len(nodes_addresses) > 0
                 for addr in nodes_addresses:
                     host, port = addr.split(":")
-                    nodes_list.append(AddressInfo(host, int(port)))
+                    nodes_list.append(NodeAddress(host, int(port)))
                 self.nodes_addr = nodes_list
 
     def __del__(self):

@@ -1,6 +1,6 @@
 use babushka::{
     client::Client,
-    connection_request::{AddressInfo, ConnectionRequest, TlsMode},
+    connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use redis::{cmd, Value};
@@ -10,7 +10,7 @@ fn create_connection_request() -> ConnectionRequest {
     let host = "localhost";
     let mut request = ConnectionRequest::new();
     request.tls_mode = TlsMode::NoTls.into();
-    let mut address_info = AddressInfo::new();
+    let mut address_info = NodeAddress::new();
     address_info.host = host.into();
     address_info.port = 6379;
     request.addresses.push(address_info);

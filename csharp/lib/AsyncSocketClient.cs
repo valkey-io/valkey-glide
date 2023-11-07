@@ -60,7 +60,7 @@ namespace babushka
         private enum RequestType
         {
             /// Type of a set server address request. This request should happen once, when the socket connection is initialized.
-            SetServerAddress = 1,
+            SetNodeAddress = 1,
             /// Type of a get string request.
             GetString = 2,
             /// Type of a set string request.
@@ -138,7 +138,7 @@ namespace babushka
         private static async Task<Socket> GetSocketAsync(string socketName, string address)
         {
             var socket = CreateSocket(socketName);
-            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetServerAddress, callbackIndex = 0 } }, new());
+            await WriteToSocket(socket, new[] { new WriteRequest { args = new() { address }, type = RequestType.SetNodeAddress, callbackIndex = 0 } }, new());
             var buffer = new byte[HEADER_LENGTH_IN_BYTES];
             await socket.ReceiveAsync(buffer, SocketFlags.None);
             var header = GetHeader(buffer, 0);

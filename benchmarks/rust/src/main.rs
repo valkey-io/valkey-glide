@@ -1,6 +1,6 @@
 use babushka::{
     client::Client,
-    connection_request::{AddressInfo, ConnectionRequest, TlsMode},
+    connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
 use clap::Parser;
 use futures::{self, future::join_all, stream, StreamExt};
@@ -204,7 +204,7 @@ async fn get_connection(args: &Args) -> Client {
         TlsMode::NoTls
     }
     .into();
-    let mut address_info: AddressInfo = AddressInfo::new();
+    let mut address_info: NodeAddress = NodeAddress::new();
     address_info.host = args.host.clone().into();
     address_info.port = args.port;
     connection_request.addresses.push(address_info);
