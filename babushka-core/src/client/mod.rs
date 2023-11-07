@@ -1,5 +1,5 @@
 use crate::connection_request::{
-    AddressInfo, AuthenticationInfo, ConnectionRequest, ReadFrom, TlsMode,
+    AuthenticationInfo, ConnectionRequest, NodeAddress, ReadFrom, TlsMode,
 };
 use futures::FutureExt;
 use logger_core::log_info;
@@ -27,7 +27,7 @@ pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 
-pub(super) fn get_port(address: &AddressInfo) -> u16 {
+pub(super) fn get_port(address: &NodeAddress) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
     if address.port == 0 {
         DEFAULT_PORT
@@ -62,7 +62,7 @@ pub(super) fn get_redis_connection_info(
 }
 
 pub(super) fn get_connection_info(
-    address: &AddressInfo,
+    address: &NodeAddress,
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
 ) -> redis::ConnectionInfo {

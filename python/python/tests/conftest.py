@@ -4,6 +4,7 @@ from typing import AsyncGenerator, Optional, Union
 import pytest
 from pybushka.config import (
     ClusterClientConfiguration,
+    NodeAddress,
     RedisClientConfiguration,
     RedisCredentials,
 )

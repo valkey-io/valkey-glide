@@ -6,9 +6,9 @@ from pybushka.async_commands.core import (
 )
 from pybushka.async_commands.transaction import ClusterTransaction, Transaction
 from pybushka.config import (
-    AddressInfo,
     BaseClientConfiguration,
     ClusterClientConfiguration,
+    NodeAddress,
     ReadFrom,
     RedisClientConfiguration,
     RedisCredentials,
@@ -27,7 +27,6 @@ from pybushka.routes import (
 )
 
 __all__ = [
-    "AddressInfo",
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
     "RedisClientConfiguration",
@@ -42,6 +41,7 @@ __all__ = [
     "RedisClient",
     "RedisClusterClient",
     "RedisCredentials",
+    "NodeAddress",
     "Transaction",
     "ClusterTransaction",
     # Routes
