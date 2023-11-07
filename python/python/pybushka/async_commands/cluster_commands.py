@@ -129,8 +129,12 @@ class ClusterCommands(CoreCommands):
 
         Args:
             transaction (ClusterTransaction): A ClusterTransaction object containing a list of commands to be executed.
-            route (Optional[Route]): The command will be routed automatically, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to the slot owner of the first key in the transaction.
+            If no key is found, the command will be sent to a random node, unless `route` is provided, in which
             case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
+            Note that only a single node routing type, like SlotKeyRoute or SlotIdRoute, is allowed.
+            If a routing type is specified and a command contains a key from a different slot, the transaction will fail.
+            When multi-node routing is specified, a random node is selected.
 
         Returns:
             List[TResult]: A list of results corresponding to the execution of each command
