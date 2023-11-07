@@ -140,12 +140,18 @@ export function convertMultiNodeResponseToDict<T>(
 }
 
 export class RedisClusterClient extends BaseClient {
+     * @param route - The command will attempt to route the command to the slot owner of the first key in the transaction.
+     *      If no key is found, the command will be sent to a random node, unless `route` is provided, in which
+     *      case the client will initially try to route the command to the nodes defined by `route`. Defaults to None.
+     *      When multi-node routing is specified, a random node is selected.
+     *      Note that only a single node routing type, like SlotKeyRoute or SlotIdRoute, is allowed.
+     *      If a routing type is specified and a command contains a key from a different slot, the transaction will fail.
     protected createClientRequest(
         options: ClusterClientConfiguration
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
-        configuration.clusterModeEnabled = true;
-        return configuration;
+    public exec(transaction: ClusterTransaction | BaseTransaction ,route?: Routes): Promise<ReturnType[]> {
+        return this.createWritePromise(transaction.commands , toProtobufRoute(route));
     }
 
     public static async createClient(
