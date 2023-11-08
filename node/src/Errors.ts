@@ -1,5 +1,5 @@
 /// Base class for errors.
-export abstract class BaseRedisError extends Error {
+export abstract class RedisError extends Error {
     public message: string;
 
     constructor(message?: string) {
@@ -13,18 +13,18 @@ export abstract class BaseRedisError extends Error {
 }
 
 /// Errors that report that the client has closed and is no longer usable.
-export class ClosingError extends BaseRedisError {}
+export class ClosingError extends RedisError {}
 
 /// Errors that were reported during a request.
-export class RedisError extends BaseRedisError {}
+export class RequestError extends RedisError {}
 
 /// Errors that are thrown when a request times out.
-export class TimeoutError extends RedisError {}
+export class TimeoutError extends RequestError {}
 
 export const TIMEOUT_ERROR = new TimeoutError("Operation timed out");
 
 /// Errors that are thrown when a transaction is aborted.
-export class ExecAbortError extends RedisError {}
+export class ExecAbortError extends RequestError {}
 
 /// Errors that are thrown when a connection disconnects. These errors can be temporary, as the client will attempt to reconnect.
-export class ConnectionError extends RedisError {}
+export class ConnectionError extends RequestError {}

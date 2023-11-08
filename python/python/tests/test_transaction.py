@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Union
 
 import pytest
+from pybushka import RequestError
 from pybushka.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -132,7 +133,7 @@ class TestTransaction:
         )
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.exec(transaction)
         assert "Moved" in str(e)
 
@@ -160,7 +161,7 @@ class TestTransaction:
             else ClusterTransaction()
         )
         transaction.custom_command(["WATCH", key])
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.exec(transaction)
         assert "WATCH inside MULTI is not allowed" in str(
             e
@@ -178,7 +179,7 @@ class TestTransaction:
 
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.exec(transaction)
         assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
         value = await redis_client.get(key)
@@ -189,7 +190,7 @@ class TestTransaction:
         key = get_random_string(10)
         transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.exec(transaction)
         assert "wrong number of arguments" in str(
             e

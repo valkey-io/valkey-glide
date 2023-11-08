@@ -47,11 +47,11 @@ import {
     createUnlink,
 } from "./Commands";
 import {
-    BaseRedisError,
     ClosingError,
     ConnectionError,
     ExecAbortError,
     RedisError,
+    RequestError,
     TIMEOUT_ERROR,
     TimeoutError,
 } from "./Errors";
@@ -60,7 +60,7 @@ import { connection_request, redis_request, response } from "./ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
-type ErrorFunction = (error: BaseRedisError) => void;
+type ErrorFunction = (error: RedisError) => void;
 export type ReturnType = "OK" | string | ReturnType[] | number | null;
 
 type RedisCredentials = {
@@ -137,7 +137,7 @@ export type BaseClientConfiguration = {
 
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined
-): typeof RedisError {
+): typeof RequestError {
     if (type === response.RequestErrorType.Disconnect) {
         return ConnectionError;
     }
@@ -148,10 +148,10 @@ function getRequestErrorClass(
         return TimeoutError;
     }
     if (type === response.RequestErrorType.Unspecified) {
-        return RedisError;
+        return RequestError;
     }
 
-    return RedisError;
+    return RequestError;
 }
 
 export class BaseClient {
@@ -222,7 +222,10 @@ export class BaseClient {
         this.remainingReadData = undefined;
     }
 
-    protected constructor(socket: net.Socket, options?: BaseClientConfiguration) {
+    protected constructor(
+        socket: net.Socket,
+        options?: BaseClientConfiguration
+    ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
         this.requestTimeout =
@@ -848,8 +851,7 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary:
-            connection_request.ReadFrom.Primary,
+        primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
 
@@ -857,9 +859,7 @@ export class BaseClient {
         options: BaseClientConfiguration
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
-            ? this.MAP_READ_FROM_STRATEGY[
-                  options.readFrom
-              ]
+            ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : undefined;
         const authenticationInfo =
             options.credentials !== undefined &&
