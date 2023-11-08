@@ -9,6 +9,7 @@ from typing import Dict, List, Union
 
 import pytest
 from packaging import version
+from pybushka import ClosingError, RequestError, TimeoutError
 from pybushka.async_commands.cluster_commands import is_single_response
 from pybushka.async_commands.core import (
     ConditionalSet,
@@ -135,7 +136,7 @@ class TestRedisClients:
                 ["CONFIG", "SET", "requirepass", password]
             )
 
-            with pytest.raises(Exception) as e:
+            with pytest.raises(ClosingError) as e:
                 # Creation of a new client without password should fail
                 await create_client(request, is_cluster)
             assert "NOAUTH" in str(e)
@@ -180,7 +181,7 @@ class TestRedisClients:
             credentials = RedisCredentials(password, username)
             testuser_client = await create_client(request, is_cluster, credentials)
             assert await testuser_client.get(key) == key
-            with pytest.raises(Exception) as e:
+            with pytest.raises(RequestError) as e:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
             assert "NOPERM" in str(e)
@@ -275,7 +276,7 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
         await redis_client.set(key, value)
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.custom_command(["HSET", key, "1", "bar"])
         assert "WRONGTYPE" in str(e)
 
@@ -353,7 +354,7 @@ class TestCommands:
             assert await redis_client.config_rewrite() == OK
         else:
             # We expect Redis to return an error since the test cluster doesn't use redis.conf file
-            with pytest.raises(Exception) as e:
+            with pytest.raises(RequestError) as e:
                 await redis_client.config_rewrite()
             assert "The server is running without a config file" in str(e)
 
@@ -396,17 +397,17 @@ class TestCommands:
     async def test_incr_commands_with_str_value(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.incr(key)
 
         assert "value is not an integer" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.incrby(key, 3)
 
         assert "value is not an integer" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.incrbyfloat(key, 3.5)
         assert "value is not a valid float" in str(e)
 
@@ -476,12 +477,12 @@ class TestCommands:
     async def test_decr_with_str_value(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.decr(key)
 
         assert "value is not an integer" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.decrby(key, 3)
 
         assert "value is not an integer" in str(e)
@@ -534,7 +535,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hset_without_data(self, redis_client: TRedisClient):
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.hset("key", {})
 
         assert "wrong number of arguments" in str(e)
@@ -571,11 +572,11 @@ class TestCommands:
 
         assert await redis_client.hset(key, field_value_map) == 1
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.hincrby(key, field, 2)
         assert "hash value is not an integer" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.hincrbyfloat(key, field, 1.5)
         assert "hash value is not a float" in str(e)
 
@@ -610,15 +611,15 @@ class TestCommands:
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.lpush(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.lpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.lrange(key, 0, -1)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
@@ -638,11 +639,11 @@ class TestCommands:
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.rpush(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.rpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
@@ -675,19 +676,19 @@ class TestCommands:
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.sadd(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.srem(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.scard(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.smembers(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
@@ -706,7 +707,7 @@ class TestCommands:
         assert await redis_client.ltrim("non_existing_key", 0, 1) == OK
 
         assert await redis_client.set(key, "foo") == OK
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.ltrim(key, 0, 1)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
@@ -740,7 +741,7 @@ class TestCommands:
         assert await redis_client.llen("non_existing_key") == 0
 
         assert await redis_client.set(key2, "foo") == OK
-        with pytest.raises(Exception) as e:
+        with pytest.raises(RequestError) as e:
             await redis_client.llen(key2)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
@@ -999,3 +1000,12 @@ class TestClusterRoutes:
         assert isinstance(info, str)
         assert "# Server" in info
         assert "# Server" in info
+
+
+@pytest.mark.asyncio
+class TestExceptions:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_timeout_exception_with_blpop(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        with pytest.raises(TimeoutError) as e:
+            await redis_client.custom_command(["BLPOP", key, "1"])
