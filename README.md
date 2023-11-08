@@ -5,7 +5,7 @@ Babushka is a Redis client. It’s free, open-sourced under a permissive license
 Redis 6 and above
 
 ## Current Status
-Babushka is **currently a beta release and should not be used in production**. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/165/).
+Babushka is currently a **beta release** and is recommended for testing purposes only. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/165/).
 
 
 ## Getting Started
