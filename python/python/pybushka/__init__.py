@@ -14,6 +14,13 @@ from pybushka.config import (
     RedisCredentials,
 )
 from pybushka.constants import OK
+from pybushka.exceptions import (
+    ClosingError,
+    ExecAbortError,
+    RedisError,
+    RequestError,
+    TimeoutError,
+)
 from pybushka.logger import Level as LogLevel
 from pybushka.logger import Logger
 from pybushka.redis_client import RedisClient, RedisClusterClient
@@ -51,4 +58,10 @@ __all__ = [
     "RandomNode",
     "SlotKeyRoute",
     "SlotIdRoute",
+    # Exceptions
+    "ClosingError",
+    "ExecAbortError",
+    "RedisError",
+    "RequestError",
+    "TimeoutError",
 ]

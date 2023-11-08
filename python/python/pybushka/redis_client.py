@@ -8,16 +8,37 @@ from pybushka.async_commands.core import CoreCommands
 from pybushka.async_commands.standalone_commands import StandaloneCommands
 from pybushka.config import BaseClientConfiguration
 from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
+from pybushka.exceptions import (
+    ClosingError,
+    ConnectionError,
+    ExecAbortError,
+    RequestError,
+    TimeoutError,
+)
 from pybushka.logger import Level as LogLevel
 from pybushka.logger import Logger as ClientLogger
 from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
 from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
-from pybushka.protobuf.response_pb2 import Response
+from pybushka.protobuf.response_pb2 import RequestErrorType, Response
 from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
 from pybushka.routes import Route, set_protobuf_route
 from typing_extensions import Self
 
 from .pybushka import start_socket_listener_external, value_from_pointer
+
+
+def get_request_error_class(
+    error_type: Optional[RequestErrorType.ValueType],
+) -> type[RequestError]:
+    if error_type == RequestErrorType.Disconnect:
+        return ConnectionError
+    if error_type == RequestErrorType.ExecAbort:
+        return ExecAbortError
+    if error_type == RequestErrorType.Timeout:
+        return TimeoutError
+    if error_type == RequestErrorType.Unspecified:
+        return RequestError
+    return RequestError
 
 
 class BaseRedisClient(CoreCommands):
@@ -51,12 +72,11 @@ class BaseRedisClient(CoreCommands):
 
         def init_callback(socket_path: Optional[str], err: Optional[str]):
             if err is not None:
-                raise Exception(
-                    f"Failed to initialize the socket \
-                    connection: {str(err)}"
-                )
+                raise ClosingError(err)
             elif socket_path is None:
-                raise Exception("Received None as the socket_path")
+                raise ClosingError(
+                    "Socket initialization error: Missing valid socket path."
+                )
             else:
                 # Received socket path
                 self.socket_path = socket_path
@@ -102,7 +122,7 @@ class BaseRedisClient(CoreCommands):
     def close(self, err: str = "") -> None:
         for response_future in self._available_futures.values():
             if not response_future.done():
-                response_future.set_exception(Exception(err))
+                response_future.set_exception(ClosingError(err))
         self.__del__()
 
     def _get_future(self, callback_idx: int) -> asyncio.Future:
@@ -119,7 +139,7 @@ class BaseRedisClient(CoreCommands):
         await self._write_or_buffer_request(conn_request)
         await response_future
         if response_future.result() is not None:
-            raise Exception(f"Failed to set configurations={response_future.result()}")
+            raise ClosingError(response_future.result())
 
     async def _write_or_buffer_request(self, request: TRequest):
         self._buffered_requests.append(request)
@@ -193,8 +213,9 @@ class BaseRedisClient(CoreCommands):
         while True:
             read_bytes = await self._reader.read(DEFAULT_READ_BYTES_SIZE)
             if len(read_bytes) == 0:
-                self.close("The server closed the connection")
-                raise Exception("read 0 bytes")
+                err_msg = "The communication layer was unexpectedly closed."
+                self.close(err_msg)
+                raise ClosingError(err_msg)
             read_bytes = remaining_read_bytes + bytearray(read_bytes)
             read_bytes_view = memoryview(read_bytes)
             offset = 0
@@ -219,7 +240,12 @@ class BaseRedisClient(CoreCommands):
 
                 else:
                     if response.HasField("request_error"):
-                        res_future.set_exception(Exception(response.request_error))
+                        error_type = get_request_error_class(
+                            response.request_error.type
+                        )
+                        res_future.set_exception(
+                            error_type(response.request_error.message)
+                        )
                     elif response.HasField("resp_pointer"):
                         res_future.set_result(value_from_pointer(response.resp_pointer))
                     elif response.HasField("constant_response"):
