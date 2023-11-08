@@ -1,66 +1,134 @@
-# Python Wrapper
+# Getting Started - Python Wrapper
 
-Using [Pyo3](https://github.com/PyO3/pyo3) and [Maturin](https://github.com/PyO3/maturin).
+## System Requirements
 
-### Create venv
+The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, CentOS x.x.x, and macOS y.y.y.
 
-Install python-venv: run `sudo apt install python3.10-venv` (with the relevant python version), in order to be able to create a virtual environment.
+## Python supported version
+Python 3.8 or higher.
 
-`cd python` cd into babushka/python folder
-`python -m venv .env` in order to create a new virtual env.
+## Installation and Setup
 
-### Source venv
+### Install from package manager
+The beta release of Babushka is only available by building from source.
 
-`source .env/bin/activate` in order to enter virtual env.
+### Build from source
 
-### Install requirements
+#### Pre-requirements
 
-`pip install -r requirements.txt` install the library requriements (run in babushka/python folder)
+Software Dependencies
 
-### Build
+-   python3 virtualenv
+-   git
+-   GCC
+-   pkg-config
+-   protoc (protobuf compiler)
+-   openssl
+-   openssl-dev
+-   rustup
 
-`maturin develop` to build rust code and create python wrapper.
-
-### [Optional] Build for release
-
-`maturin develop --release` to build rust code optimized for release and create python wrapper.
-`maturin develop --release --strip` to build optimized code without symbols, ready for release.
-
-### [Optional] Autogenerate protobuf files
-
-Autogenerate python's protobuf files with:
-
-`BABUSHKA_PATH=.` // e.g. /home/ubuntu/babushka
-`protoc -Iprotobuf=${BABUSHKA_PATH}/babushka-core/src/protobuf/ --python_out=${BABUSHKA_PATH}/python/python/pybushka ${BABUSHKA_PATH}/babushka-core/src/protobuf/*.proto`
-
-### [Optional] Install development requirements
-
-`pip install -r dev_requirements.txt` install the library's development requriements (run in babushka/python folder)
-
-### Running tests
-
-Run `pytest --asyncio-mode=auto` from this folder, or from the `tests` folder. Make sure your shell uses your virtual environment.
-
-#### Running linters
-
-Using VS code, install the following extensions:
-
--   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
--   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
--   [Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
--   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
-
-Or, run in a terminal:
-
+**Dependencies installation for Ubuntu**
 ```
-cd babushka/python
-isort . --profile black --skip-glob python/pybushka/protobuf
-black --target-version py36 . --exclude python/pybushka/protobuf
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
-flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
-# generate protobuf type files
-MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=../babushka-core/src/protobuf/ --python_out=$./python/pybushka --mypy_out=./python/pybushka ../babushka-core/src/protobuf/*.proto
-# run type check
-mypy .
+sudo apt update -y
+sudo apt install -y python3 python3-venv git gcc pkg-config protobuf-compiler openssl libssl-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies installation for CentOS**
+``` 
+sudo yum update -y
+sudo yum install -y python3 git gcc pkgconfig protobuf-compiler openssl openssl-devel
+pip3 install virtualenv
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies installation for MacOS**
+```
+brew update -y 
+brew install python3 git gcc pkgconfig protobuf openssl 
+pip3 install virtualenv
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+#### Building and installation steps
+Before starting this step, make sure you've installed all software requirments. 
+1. Clone the repository:
+    ```
+    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+    git clone --branch ${VERSION} https://github.com/aws/babushka.git
+    cd babushka
+    ```
+2. Initialize git submodule:
+    ```
+    git submodule update --init --recursive
+    ```
+3. Generate protobuf files:
+    ```
+    BABUSHKA_ROOT_FOLDER_PATH=.
+    protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out=${BABUSHKA_ROOT_FOLDER_PATH}/python/python/pybushka ${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
+    ```
+4. Create a virtual environment:
+    ```
+    cd python
+    python3 -m venv .env
+    ```
+5. Activate the virtual environment:
+    ```
+    source .env/bin/activate
+    ```
+6. Install requirements:
+    ```
+    pip install -r requirements.txt
+    ```
+7. Build the Python wrapper in release mode:
+    ```
+    maturin develop --release
+    ```
+8. Run tests:
+    1.  First, ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    2. Ensure that you have activated the virtual environment created in step 4, and then execute the following command from the python folder:
+        ```
+        pytest --asyncio-mode=auto
+        ```
+
+## Basic Examples
+
+#### Cluster Redis:
+```python:
+>>> from pybushka import (
+...     NodeAddress,
+...     ClusterClientConfiguration,
+...     RedisClusterClient,
+... )
+>>> addresses = [NodeAddress("redis.example.com", 6379)]
+>>> config = ClusterClientConfiguration(
+...     addresses=addresses
+... )
+>>> client = await RedisClusterClient.create(config)
+>>> await client.set("foo", "bar")
+'OK'
+>>> await client.get("foo")
+'bar'
+```
+
+#### Standalone Redis:
+
+```python:
+>>> from pybushka import (
+...     NodeAddress,
+...     RedisClientConfiguration,
+...     RedisClient,
+... )
+>>> addresses = [NodeAddress("redis_primary.example.com", 6379), NodeAddress("redis_replica.example.com", 6379)]
+>>> config = RedisClientConfiguration(
+...     addresses=addresses
+... )
+>>> client = await RedisClient.create(config)
+>>> await client.set("foo", "bar")
+'OK'
+>>> await client.get("foo")
+'bar'
 ```
