@@ -2,7 +2,7 @@
 
 ## System Requirements
 
-The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, CentOS x.x.x, and macOS y.y.y.
+The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## Python supported version
 Python 3.8 or higher.
@@ -46,7 +46,7 @@ source "$HOME/.cargo/env"
 
 **Dependencies installation for MacOS**
 ```
-brew update -y 
+brew update
 brew install python3 git gcc pkgconfig protobuf openssl 
 pip3 install virtualenv
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -98,6 +98,7 @@ Before starting this step, make sure you've installed all software requirments.
 ## Basic Examples
 
 #### Cluster Redis:
+
 ```python:
 >>> from pybushka import (
 ...     NodeAddress,
