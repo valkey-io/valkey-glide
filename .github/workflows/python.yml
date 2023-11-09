@@ -8,18 +8,20 @@ on:
             - babushka-core/src/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/python.yml
     pull_request:
         paths:
             - python/**
             - babushka-core/src/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/python.yml
 
 permissions:
     contents: read
 
 jobs:
-    build:
+    test-ubuntu-latest:
         runs-on: ubuntu-latest
         timeout-minutes: 15
         strategy:
@@ -38,11 +40,6 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
-
-            - name: Install protoc
-              run: |
-                  sudo apt update
-                  sudo apt install protobuf-compiler
 
             - name: Set up Python 3.10
               uses: actions/setup-python@v3
@@ -73,23 +70,11 @@ jobs:
               run: |
                   black --target-version py36 --check --diff .
 
-            - name: Start redis server
-              working-directory: ./python
-              run: redis-server &
-
-            - name: Generate protobuf files
-              working-directory: .
-              run: |
-                  MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-                  protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=./babushka-core/src/protobuf/ --python_out=./python/python/pybushka --mypy_out=./python/python/pybushka ./babushka-core/src/protobuf/*.proto
-
-            - name: Build Pybushka
-              working-directory: ./python
-              run: |
-                  python -m venv .env
-                  source .env/bin/activate
-                  pip install -r requirements.txt
-                  maturin develop --release
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: 'ubuntu'
+                  release_mode: 'true'
 
             - name: Type check with mypy
               working-directory: ./python
@@ -101,7 +86,7 @@ jobs:
                   # Install the benchmark requirements 
                   pip install -r ../benchmarks/python/requirements.txt
                   python -m mypy ..
-              
+
             - name: Test with pytest
               working-directory: ./python
               run: |
@@ -120,3 +105,60 @@ jobs:
               with:
                   cargo-toml-folder: ./python                  
               name: lint python-rust
+    
+    build-macos-latest:
+        runs-on: macos-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: 'macOS'              
+            - name: Test compatibility with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  pytest --asyncio-mode=auto -m smoke_test
+    
+    build-amazonlinux-latest:
+      runs-on: ubuntu-latest
+      container: amazonlinux:latest
+      timeout-minutes: 15
+      steps:
+          - name: Install git
+            run: |
+              yum -y remove git
+              yum -y remove git-*
+              yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+              yum install -y git 
+              git --version
+
+          - uses: actions/checkout@v3
+
+          - name: Checkout submodules
+            run: |
+              git config --global --add safe.directory "$GITHUB_WORKSPACE"
+              git submodule update --init --recursive
+
+          - name: Build Python wrapper
+            uses: ./.github/workflows/build-python-wrapper
+            with:
+                os: 'amazon-linux'
+
+          - name: Create a symbolic Link for redis6 binaries
+            working-directory: ./python
+            run: |
+                ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+            
+          - name: Test compatibility with pytest
+            working-directory: ./python
+            run: |
+                source .env/bin/activate
+                pytest --asyncio-mode=auto -m smoke_test

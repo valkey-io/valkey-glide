@@ -197,6 +197,7 @@ class TestRedisClients:
 
 @pytest.mark.asyncio
 class TestCommands:
+    @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_socket_set_get(self, redis_client: TRedisClient):
         key = get_random_string(10)
