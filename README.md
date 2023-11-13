@@ -15,23 +15,23 @@ Babushka is currently a **beta release** and is recommended for testing purposes
 -   [Python](./python/README.md)
 
 ## Getting Help
-If you have questions, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the existing issues to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including: 
+If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/aws/babushka/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including: 
 
 1. A clear and concise title
 2. Detailed description of the problem or question
 3. A reproducible test case or series of steps
-4. The version of our code being used
+4. The Babushka version in use
 5. Operating system
 6. Redis version
 7. Redis cluster information, cluster topology, number of shards, number of replicas, used data types
-8. Any modifications you've made relevant to the bug
+8. Any modifications you've made that are relevant to the issue
 9. Anything unusual about your environment or deployment
 10. Log files
 
 
 ## Contributing
 
-GitHub is a platform for collaborative coding. If you're interested in writing code, we encourage you to contribute by submitting pull requests from forked copies of this repository. Additionally, please consider creating GitHub issues for reporting bugs and suggesting new features.  Feel free to comment on issues that interest. For more info see [Contributing](./CONTRIBUTING.md).
+GitHub is a platform for collaborative coding. If you're interested in writing code, we encourage you to contribute by submitting pull requests from forked copies of this repository. Additionally, please consider creating GitHub issues for reporting bugs and suggesting new features. Feel free to comment on issues that interest. For more info see [Contributing](./CONTRIBUTING.md).
 
 ## License
 * [Apache License 2.0](./LICENSE)

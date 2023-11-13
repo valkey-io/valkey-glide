@@ -14,7 +14,7 @@ The beta release of Babushka is only available by building from source.
 
 ### Build from source
 
-#### Pre-requirements
+#### Prerequisites
 
 Software Dependencies
 
@@ -88,8 +88,9 @@ Before starting this step, make sure you've installed all software requirments.
     maturin develop --release
     ```
 8. Run tests:
-    1.  First, ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
-    2. Ensure that you have activated the virtual environment created in step 4, and then execute the following command from the python folder:
+    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    2. Validate the activation of the virtual environment from step 4 by ensuring its name (`.env`) is displayed next to your command prompt. 
+    3. Execute the following command from the python folder:
         ```
         pytest --asyncio-mode=auto
         ```
