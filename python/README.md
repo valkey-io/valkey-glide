@@ -85,8 +85,9 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 7. Build the Python wrapper in release mode:
     ```
-    maturin develop --release
+    maturin develop --release --strip
     ```
+     > **Note:** To build the wrapper binary with debug symbols remove the --strip flag.
 8. Run tests:
     1.  First, ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
     2. Ensure that you have activated the virtual environment created in step 4, and then execute the following command from the python folder:
