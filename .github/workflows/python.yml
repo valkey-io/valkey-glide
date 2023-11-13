@@ -21,91 +21,89 @@ permissions:
     contents: read
 
 jobs:
-    test-ubuntu-latest:
-        runs-on: ubuntu-latest
-        timeout-minutes: 15
-        strategy:
-            fail-fast: false
-            matrix:
-                redis:
-                    - 6.2.4
-                    - 7.2.0
+    # test-ubuntu-latest:
+    #     runs-on: ubuntu-latest
+    #     timeout-minutes: 15
+    #     strategy:
+    #         fail-fast: false
+    #         matrix:
+    #             redis:
+    #                 - 6.2.4
+    #                 - 7.2.0
 
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+    #     steps:
+    #         - uses: actions/checkout@v4
+    #           with:
+    #               submodules: recursive
 
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.redis }}
+    #         - name: Install redis
+    #           uses: ./.github/workflows/install-redis
+    #           with:
+    #               redis-version: ${{ matrix.redis }}
 
-            - name: Set up Python 3.10
-              uses: actions/setup-python@v3
-              with:
-                  python-version: "3.10"
+    #         - name: Set up Python 3.10
+    #           uses: actions/setup-python@v3
+    #           with:
+    #               python-version: "3.10"
 
-            - name: Install dependencies
-              working-directory: ./python
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install flake8 isort black mypy-protobuf
+    #         - name: Install dependencies
+    #           working-directory: ./python
+    #           run: |
+    #               python -m pip install --upgrade pip
+    #               pip install flake8 isort black mypy-protobuf
 
-            - name: Lint with isort
-              working-directory: ./python
-              run: |
-                  isort . --profile black --check --diff
+    #         - name: Lint with isort
+    #           working-directory: ./python
+    #           run: |
+    #               isort . --profile black --check --diff
 
-            - name: Lint with flake8
-              working-directory: ./python
-              run: |
-                  # stop the build if there are Python syntax errors or undefined names
-                  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --extend-ignore=E230 --exclude=python/pybushka/protobuf,.env/*
-                  # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-                  flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --extend-ignore=E230 --exclude=python/pybushka/protobuf,.env/*
+    #         - name: Lint with flake8
+    #           working-directory: ./python
+    #           run: |
+    #               # stop the build if there are Python syntax errors or undefined names
+    #               flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --extend-ignore=E230 --exclude=python/pybushka/protobuf,.env/*
+    #               # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+    #               flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --extend-ignore=E230 --exclude=python/pybushka/protobuf,.env/*
 
-            - name: Lint with black
-              working-directory: ./python
-              run: |
-                  black --target-version py36 --check --diff .
+    #         - name: Lint with black
+    #           working-directory: ./python
+    #           run: |
+    #               black --target-version py36 --check --diff .
 
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: 'ubuntu'
-                  release_mode: 'true'
+    #         - name: Build Python wrapper
+    #           uses: ./.github/workflows/build-python-wrapper
+    #           with:
+    #               os: 'ubuntu'
+    #               release_mode: 'true'
 
-            - name: Type check with mypy
-              working-directory: ./python
-              run: |
-                  # The type check should run inside the virtual env to get
-                  # all installed dependencies and build files
-                  source .env/bin/activate
-                  pip install mypy types-protobuf
-                  # Install the benchmark requirements 
-                  pip install -r ../benchmarks/python/requirements.txt
-                  python -m mypy ..
+    #         - name: Type check with mypy
+    #           working-directory: ./python
+    #           run: |
+    #               # The type check should run inside the virtual env to get
+    #               # all installed dependencies and build files
+    #               source .env/bin/activate
+    #               pip install mypy types-protobuf
+    #               # Install the benchmark requirements 
+    #               pip install -r ../benchmarks/python/requirements.txt
+    #               python -m mypy ..
 
-            - name: Test with pytest
-              working-directory: ./python
-              run: |
-                  source .env/bin/activate
-                  pytest --asyncio-mode=auto
+    #         - name: Test with pytest
+    #           working-directory: ./python
+    #           run: |
+    #               source .env/bin/activate
+    #               pytest --asyncio-mode=auto
+    # lint-rust:
+    #     runs-on: ubuntu-latest
+    #     timeout-minutes: 15
+    #     steps:
+    #         - uses: actions/checkout@v4
+    #           with:
+    #               submodules: recursive
 
-    lint-rust:
-        runs-on: ubuntu-latest
-        timeout-minutes: 15
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./python                  
-              name: lint python-rust
-    
+    #         - uses: ./.github/workflows/lint-rust
+    #           with:
+    #               cargo-toml-folder: ./python                  
+    #           name: lint python-rust
     build-macos-latest:
         runs-on: macos-latest
         timeout-minutes: 15

@@ -25,7 +25,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'macOS' }}"
           run: |
-              brew install git gcc pkgconfig protobuf openssl redis
+              brew install git gcc pkgconfig protobuf redis
         
         - name: Install software dependencies for Ubuntu
           shell: bash
@@ -38,7 +38,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y python3 gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 --allowerasing
+              yum install -y python3 gcc pkgconfig protobuf-compiler which curl redis6 --allowerasing
 
         - name: Install Python software dependencies
           shell: bash
