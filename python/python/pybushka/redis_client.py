@@ -24,7 +24,11 @@ from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
 from pybushka.routes import Route, set_protobuf_route
 from typing_extensions import Self
 
-from .pybushka import start_socket_listener_external, value_from_pointer
+from .pybushka import (
+    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    start_socket_listener_external,
+    value_from_pointer,
+)
 
 
 def get_request_error_class(
@@ -39,6 +43,15 @@ def get_request_error_class(
     if error_type == RequestErrorType.Unspecified:
         return RequestError
     return RequestError
+
+
+async def wait_with_timeout(future: asyncio.Future, timeout: Optional[int]):
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT_IN_MILLISECONDS
+    try:
+        await asyncio.wait_for(future, timeout=timeout)
+    except asyncio.TimeoutError:
+        raise TimeoutError("Operation timed out")
 
 
 class BaseRedisClient(CoreCommands):
@@ -176,7 +189,7 @@ class BaseRedisClient(CoreCommands):
         # futures map
         response_future = self._get_future(request.callback_idx)
         await self._write_or_buffer_request(request)
-        await response_future
+        await wait_with_timeout(response_future, self.config.request_timeout)
         return response_future.result()
 
     async def execute_transaction(
@@ -198,7 +211,7 @@ class BaseRedisClient(CoreCommands):
         # futures map
         response_future = self._get_future(request.callback_idx)
         await self._write_or_buffer_request(request)
-        await response_future
+        await wait_with_timeout(response_future, self.config.request_timeout)
         return response_future.result()
 
     def _get_callback_index(self) -> int:
