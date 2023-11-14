@@ -4,7 +4,7 @@ import java.util.concurrent.Future;
 
 public interface AsyncClient extends Client {
 
-  long DEFAULT_TIMEOUT = 1000;
+  long DEFAULT_TIMEOUT = 1000; // Milliseconds
 
   Future<?> asyncSet(String key, String value);
 

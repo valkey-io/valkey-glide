@@ -17,6 +17,7 @@ public class JsonWriter {
   public static void Write(
       Map<ChosenAction, LatencyResults> calculatedResults,
       String resultsFile,
+      boolean isCluster,
       int dataSize,
       String client,
       int clientCount,
@@ -35,7 +36,7 @@ public class JsonWriter {
       }
       var data =
           new Measurements.MeasurementsBuilder()
-              // TODO:  is_cluster
+              .is_cluster(isCluster)
               .data_size(dataSize)
               .client(client)
               .client_count(clientCount)

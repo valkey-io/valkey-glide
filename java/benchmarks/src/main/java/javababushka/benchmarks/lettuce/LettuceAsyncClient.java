@@ -14,9 +14,9 @@ import javababushka.benchmarks.utils.ConnectionSettings;
 
 public class LettuceAsyncClient implements AsyncClient {
 
-  RedisClient client;
-  RedisAsyncCommands asyncCommands;
-  StatefulRedisConnection<String, String> connection;
+  private RedisClient client;
+  private RedisAsyncCommands asyncCommands;
+  private StatefulRedisConnection<String, String> connection;
 
   @Override
   public void connectToRedis() {

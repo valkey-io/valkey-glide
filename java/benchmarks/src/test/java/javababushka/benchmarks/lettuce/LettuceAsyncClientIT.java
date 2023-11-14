@@ -18,7 +18,7 @@ public class LettuceAsyncClientIT {
   private static LettuceAsyncClient otherLettuceClient;
 
   @BeforeAll
-  static void initializeJedisClient() {
+  static void initializeLettuceClient() {
     lettuceClient = new LettuceAsyncClient();
     lettuceClient.connectToRedis();
 
@@ -47,12 +47,12 @@ public class LettuceAsyncClientIT {
     try {
       lettuceClient.waitForResult(setResult);
     } catch (Exception e) {
-      fail("Can SET redis result without Exception");
+      fail("SET result failed with exception " + e);
     }
     try {
       otherLettuceClient.waitForResult(otherSetResult);
     } catch (Exception e) {
-      fail("Can SET other redis result without Exception");
+      fail("SET result on other client failed with exception " + e);
     }
 
     RedisFuture getResult = lettuceClient.asyncGet(key);
@@ -62,13 +62,13 @@ public class LettuceAsyncClientIT {
     try {
       result = (String) lettuceClient.waitForResult(getResult);
     } catch (Exception e) {
-      fail("Can GET redis result without Exception");
+      fail("GET result failed with exception " + e);
     }
 
     try {
       otherResult = (String) otherLettuceClient.waitForResult(otherGetResult);
     } catch (Exception e) {
-      fail("Can GET other redis result without Exception");
+      fail("GET result on other client failed with exception " + e);
     }
 
     assertEquals(value, result);

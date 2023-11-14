@@ -8,6 +8,7 @@ import java.util.stream.Stream;
 import javababushka.benchmarks.jedis.JedisClient;
 import javababushka.benchmarks.jedis.JedisPseudoAsyncClient;
 import javababushka.benchmarks.lettuce.LettuceAsyncClient;
+import javababushka.benchmarks.lettuce.LettuceAsyncClusterClient;
 import javababushka.benchmarks.lettuce.LettuceClient;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -17,7 +18,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
-/** Benchmarking app for reporting performance of various redis-rs Java-clients */
+/** Benchmarking app for reporting performance of various Redis Java-clients */
 public class BenchmarkingApp {
 
   // main application entrypoint
@@ -56,10 +57,14 @@ public class BenchmarkingApp {
           testClientSetGet(LettuceClient::new, runConfiguration, false);
           break;
         case LETTUCE_ASYNC:
-          testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
+          if (runConfiguration.clusterModeEnabled) {
+            testClientSetGet(LettuceAsyncClusterClient::new, runConfiguration, true);
+          } else {
+            testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
+          }
           break;
-        case BABUSHKA:
-          System.out.println("Babushka not yet configured");
+        case BABUSHKA_ASYNC:
+          System.out.println("Babushka async not yet configured");
           break;
       }
     }
@@ -96,6 +101,13 @@ public class BenchmarkingApp {
     options.addOption(
         Option.builder("clientCount").hasArg(true).desc("Number of clients to run [1]").build());
     options.addOption(Option.builder("tls").hasArg(false).desc("TLS [false]").build());
+    options.addOption(
+        Option.builder("clusterModeEnabled")
+            .hasArg(false)
+            .desc("Is cluster-mode enabled, other standalone mode is used [false]")
+            .build());
+    options.addOption(
+        Option.builder("debugLogging").hasArg(false).desc("Verbose logs [false]").build());
 
     return options;
   }
@@ -137,20 +149,16 @@ public class BenchmarkingApp {
                         return Stream.of(
                             ClientName.JEDIS,
                             ClientName.JEDIS_ASYNC,
-                            ClientName.BABUSHKA,
-                            // ClientName.BABUSHKA_ASYNC,
+                            ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_ASYNC:
                         return Stream.of(
                             ClientName.JEDIS_ASYNC,
-                            // ClientName.BABUSHKA_ASYNC,
+                            ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_SYNC:
-                        return Stream.of(
-                            ClientName.JEDIS,
-                            // ClientName.BABUSHKA,
-                            ClientName.LETTUCE);
+                        return Stream.of(ClientName.JEDIS, ClientName.LETTUCE);
                       default:
                         return Stream.of(e);
                     }
@@ -171,6 +179,8 @@ public class BenchmarkingApp {
     }
 
     runConfiguration.tls = line.hasOption("tls");
+    runConfiguration.clusterModeEnabled = line.hasOption("clusterModeEnabled");
+    runConfiguration.debugLogging = line.hasOption("debugLogging");
 
     return runConfiguration;
   }
@@ -182,8 +192,12 @@ public class BenchmarkingApp {
     if (lineValue.startsWith("[") && lineValue.endsWith("]")) {
       lineValue = lineValue.substring(1, lineValue.length() - 1);
     }
+
+    // trim whitespace
+    lineValue = lineValue.trim();
+
     // check if it's the correct format
-    if (!lineValue.matches("\\d+(\\s+\\d+)?")) {
+    if (!lineValue.matches("\\d+(\\s+\\d+)*")) {
       throw new ParseException("Invalid option: " + line);
     }
     // split the string into a list of integers
@@ -195,7 +209,6 @@ public class BenchmarkingApp {
     JEDIS_ASYNC("Jedis async"),
     LETTUCE("Lettuce"),
     LETTUCE_ASYNC("Lettuce async"),
-    BABUSHKA("Babushka"),
     BABUSHKA_ASYNC("Babushka async"),
     ALL("All"),
     ALL_SYNC("All sync"),
@@ -227,6 +240,7 @@ public class BenchmarkingApp {
     public int port;
     public int[] clientCount;
     public boolean tls;
+    public boolean clusterModeEnabled;
     public boolean debugLogging = false;
 
     public RunConfiguration() {
@@ -237,12 +251,13 @@ public class BenchmarkingApp {
       clients =
           new ClientName[] {
             // ClientName.BABUSHKA_ASYNC,
-            ClientName.JEDIS, ClientName.JEDIS_ASYNC, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
+            ClientName.LETTUCE_ASYNC
           };
       host = "localhost";
       port = 6379;
       clientCount = new int[] {1, 2};
       tls = false;
+      clusterModeEnabled = false;
     }
   }
 }

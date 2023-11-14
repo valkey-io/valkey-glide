@@ -15,7 +15,7 @@ public class LettuceClientIT {
   private static LettuceClient lettuceClient;
 
   @BeforeAll
-  static void initializeJedisClient() {
+  static void initializeLettuceClient() {
     lettuceClient = new LettuceClient();
     lettuceClient.connectToRedis();
   }
