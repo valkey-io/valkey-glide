@@ -161,7 +161,6 @@ public class Benchmarking {
                               ChosenAction.GET_EXISTING, new ArrayList<>(),
                               ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
                               ChosenAction.SET, new ArrayList<>());
-                      int tasksCompleted = 0;
                       int iterationIncrement = iterationCounter.getAndIncrement();
                       int clientIndex = iterationIncrement % clients.size();
 
@@ -182,7 +181,6 @@ public class Benchmarking {
                         Pair<ChosenAction, Long> result = measurePerformance(actions);
                         taskActionResults.get(result.getLeft()).add(result.getRight());
 
-                        tasksCompleted++;
                         iterationIncrement = iterationCounter.getAndIncrement();
                         clientIndex = iterationIncrement % clients.size();
                       }
@@ -206,6 +204,7 @@ public class Benchmarking {
             e.printStackTrace();
             throw new RuntimeException(e);
           }
+          long after = System.nanoTime();
 
           // Map to save latency results separately for each action
           Map<ChosenAction, ArrayList<Long>> actionResults =
@@ -225,7 +224,6 @@ public class Benchmarking {
                   e.printStackTrace();
                 }
               });
-          long after = System.nanoTime();
           var calculatedResults = calculateResults(actionResults);
 
           if (config.resultsFile.isPresent()) {
