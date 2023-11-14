@@ -1,51 +1,148 @@
-# NodeJS wrapper
+# Getting Started - Node Wrapper
 
-This package contains an internal package under the folder `rust-client`, which is just the Rust library and its auto-generated TypeSCript code. The external package, in this folder, contains all wrapping TypeSCript code and tests.
+## System Requirements
 
-## Building
+The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
-### dependency installation
+## NodeJS supported version
+Node.js 16.20 or higher.
+> Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
 
-Homebrew is the easiest way to install node, but you can choose any way you want to install it.
-Npm should come as part as node. IMPORTANT - right now we support only npm major version 8.
-The default install will be of version 9, so you'll need to downgrade - run `npm i -g npm@8`.
+## Installation and Setup
 
-### Adding the babushka package to your package
+### Install from package manager
+At the moment, the beta release of Babushka is only available by building from source.
 
-Before you add the babushka package to your application, make sure to perform the stages in "[Building the wrapper](#building-the-wrapper)".
-ATM Babushka isn't on npm, so you'll need to clone this repo to you device, and add the package using a folder path - `npm install <path to Babushka>/node`.
+### Build from source
 
-### Building the wrapper
+#### Prerequisites
 
-Before you start, make sure that you have all dependencies mentioned [here](../README.md#development-pre-requirements), [rustup](../README.md#rustup), [node](../README.md#node-16-or-newer) installed, and all [submodules updated](../README.md#git-submodule).
-Enter this folder in your terminal.
-On the first install, run `npm i`, to install all dependencies. Also enter the `rust-client` folder, and run `npm i` there, too.
+Software Dependencies
+-   npm v8
+-   git
+-   GCC
+-   pkg-config
+-   protoc (protobuf compiler)
+-   openssl
+-   openssl-dev
+-   rustup
 
-make sure that all dependencies, including rustup, have been installed.
-Run `npm run build:release` runs a full build in release mode, stripped from all symbols. This might take a while.
-Run `npm run build:benchmark` runs a fully optimized build with release symbols. This creates a larger binary than release build, but the binary can be profiled.
+**Dependencies installation for Ubuntu**
+```bash
+sudo apt update -y
+sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
+npm i -g npm@8
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
 
-For testing purposes, you can run `npm run build` runs a full, unoptimized build.
-If you've only made changes to the Rust code, run `npm run build-internal` to build the internal package and generates TypeSCript code.
-If you've only made changes to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
-Run `npm run build-protobuf` to generate node's protobuf files.
+**Dependencies installation for CentOS**
+``` bash
+sudo yum update -y
+sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel
+npm i -g npm@8
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
 
-Once building completed, you'll find the compiled JavaScript code in the ./build-ts folder,
+**Dependencies installation for MacOS**
+```bash
+brew update
+brew install nodejs git gcc pkgconfig protobuf openssl 
+npm i -g npm@8
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
 
-### Testing
+#### Building and installation steps
+Before starting this step, make sure you've installed all software requirments. 
+1. Clone the repository:
+    ```bash
+    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+    git clone --branch ${VERSION} https://github.com/aws/babushka.git
+    cd babushka
+    ```
+2. Initialize git submodule:
+    ```bash
+    git submodule update --init --recursive
+    ```
+3. Install all node dependencies:
+    ```bash
+    cd node
+    npm i
+    cd rust-client
+    npm i
+    cd ..
+    ```
+4. Build the Node wrapper: 
+    Choose a build option from the following and run it from the `node` folder:
+    1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
+        ```bash
+        npm run build:release
+        ```
 
-Run `npm test` after building.
+    2. Build in release mode with debug symbols (optimized but large binary size):
+        ```bash
+        npm run build:benchmark
+        ```
 
-### [Optional] Manually compile protobuf files
+    3. For testing purposes, you can execute an unoptimized but fast build using:
+        ```bash
+        npm run build
+        ```
+    Once building completed, you'll find the compiled JavaScript code in the `./build-ts` folder.
+5. Run tests:
+    ```bash
+    npm test
+    ```
 
-1. Run `npm install protobufjs-cli` to install the JS protobuf command line utility
-2. Generate static JS code `pbjs -t static-module -o ProtobufMessage.js ~/babushka/babushka-core/src/protobuf/*.proto`
-3. Generates TypeSCript definitions from the compiled JS file `pbts -o ProtobufMessage.d.ts ProtobufMessage.js`
-4. Due to a bug in the autogenerated files (see https://github.com/protobufjs/protobuf.js/issues/1063), manually replace `return this.encode(message, writer).ldelim();` to `return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();` in the encodeDelimited functions of Request and Response under babushka/node/src/ProtobufMessage.js.
+## Integrating the Babushka Package into Your Project
 
-## Recommended VSCode extensions
+Before adding the Babushka package into your application, ensure you follow the build steps outlined in "[Build the Node wrapper](#Building-and-installation-steps)".
 
-[Prettier - Code formatter](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) -JavaScript / TypeScript formatter.
-[Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
-[Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
-[ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) - linter.
+Currently, Babushka is not available on npm. Therefore, you'll need to build this repository to your device and add the package using the folder path with the command `npm install <path to Babushka>/node`.
+
+## Basic Examples
+
+#### Cluster Redis:
+
+```node
+import { RedisClusterClient } from "babushka-rs";
+
+const addresses = [
+    {
+        host: "redis.example.com",
+        port: 6379,
+    },
+];
+const client = await RedisClusterClient.createClient({
+    addresses: addresses,
+});
+await client.set("foo", "bar");
+const value = await client.get("foo");
+client.dispose();
+```
+
+
+#### Standalone Redis:
+
+```node
+import { RedisClient } from "babushka-rs";
+
+const addresses = [
+    {
+        host: "redis_primary.example.com",
+        port: 6379,
+    },
+    {
+        host: "redis_replica.example.com",
+        port: 6379,
+    },
+];
+const client = await RedisClient.createClient({
+    addresses: addresses,
+});
+await client.set("foo", "bar");
+const value = await client.get("foo");
+client.dispose();
+```
