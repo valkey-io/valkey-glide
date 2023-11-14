@@ -6,6 +6,9 @@ use pyo3::Python;
 
 use redis::Value;
 
+pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
+    babushka::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+
 #[pyclass]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
 pub enum Level {
@@ -28,6 +31,10 @@ impl Level {
 #[pymodule]
 fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Level>()?;
+    m.add(
+        "DEFAULT_TIMEOUT_IN_MILLISECONDS",
+        DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    )?;
 
     #[pyfn(m)]
     fn py_log(log_level: Level, log_identifier: String, message: String) {

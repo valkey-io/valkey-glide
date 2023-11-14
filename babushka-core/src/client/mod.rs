@@ -237,8 +237,6 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let tls_mode = request.tls_mode.enum_value_or_default();
     let cluster_mode = request.cluster_mode_enabled;
     let request_timeout = format_non_zero_value("response timeout", request.request_timeout);
-    let client_creation_timeout =
-        format_non_zero_value("client creation timeout", request.client_creation_timeout);
     let database_id = format_non_zero_value("database ID", request.database_id);
     let rfr_strategy = request.read_from.enum_value_or_default();
     let connection_retry_strategy = match &request.connection_retry_strategy.0 {
@@ -250,24 +248,20 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     };
 
     format!(
-        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{request_timeout}{client_creation_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
+        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{request_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
     )
 }
 
 impl Client {
     pub async fn new(request: ConnectionRequest) -> Result<Self, ConnectionError> {
-        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_millis(2500);
+        const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
 
         log_info(
             "Connection configuration",
             sanitized_request_string(&request),
         );
         let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
-        let total_connection_timeout = to_duration(
-            request.client_creation_timeout,
-            DEFAULT_CLIENT_CREATION_TIMEOUT,
-        );
-        tokio::time::timeout(total_connection_timeout, async move {
+        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
                 let client = create_cluster_client(request)
                     .await

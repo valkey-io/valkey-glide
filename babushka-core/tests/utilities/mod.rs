@@ -566,9 +566,6 @@ pub fn create_connection_request(
     if let Some(request_timeout) = configuration.request_timeout {
         connection_request.request_timeout = request_timeout;
     }
-    if let Some(connection_timeout) = configuration.connection_timeout {
-        connection_request.client_creation_timeout = connection_timeout;
-    }
     if let Some(strategy) = configuration.read_from {
         connection_request.read_from = strategy.into()
     }
@@ -589,7 +586,6 @@ pub struct TestConfiguration {
     pub connection_info: Option<RedisConnectionInfo>,
     pub cluster_mode: ClusterMode,
     pub request_timeout: Option<u32>,
-    pub connection_timeout: Option<u32>,
     pub shared_server: bool,
     pub read_from: Option<connection_request::ReadFrom>,
     pub database_id: u32,

@@ -24,7 +24,11 @@ from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
 from pybushka.routes import Route, set_protobuf_route
 from typing_extensions import Self
 
-from .pybushka import start_socket_listener_external, value_from_pointer
+from .pybushka import (
+    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    start_socket_listener_external,
+    value_from_pointer,
+)
 
 
 def get_request_error_class(
@@ -100,7 +104,7 @@ class BaseRedisClient(CoreCommands):
     async def _create_uds_connection(self) -> None:
         try:
             # Open an UDS connection
-            async with async_timeout.timeout(self.config.client_creation_timeout):
+            async with async_timeout.timeout(DEFAULT_TIMEOUT_IN_MILLISECONDS):
                 reader, writer = await asyncio.open_unix_connection(
                     path=self.socket_path
                 )
