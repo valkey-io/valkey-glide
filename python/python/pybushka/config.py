@@ -81,7 +81,6 @@ class BaseClientConfiguration:
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
-        client_creation_timeout: Optional[int] = None,
         request_timeout: Optional[int] = None,
     ):
         """
@@ -103,10 +102,6 @@ class BaseClientConfiguration:
             credentials (RedisCredentials): Credentials for authentication process.
                     If none are set, the client will not authenticate itself with the server.
             read_from (ReadFrom): If not set, `PRIMARY` will be used.
-            client_creation_timeout (Optional[int]): The duration in milliseconds that the client should wait its initialization,
-                encompassing tasks such as connection establishment and topology mapping.
-                If the client fails to complete its initialization within this specified time, an error will be returned.
-                If not set, a default value will be used.
             request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
@@ -115,7 +110,6 @@ class BaseClientConfiguration:
         self.use_tls = use_tls
         self.credentials = credentials
         self.read_from = read_from
-        self.client_creation_timeout = client_creation_timeout
         self.request_timeout = request_timeout
 
     def _create_a_protobuf_conn_request(
@@ -139,8 +133,6 @@ class BaseClientConfiguration:
         request.read_from = self.read_from.value
         if self.request_timeout:
             request.request_timeout = self.request_timeout
-        if self.client_creation_timeout:
-            request.client_creation_timeout = self.client_creation_timeout
         request.cluster_mode_enabled = True if cluster_mode else False
         if self.credentials:
             if self.credentials.username:
@@ -167,10 +159,6 @@ class RedisClientConfiguration(BaseClientConfiguration):
         credentials (RedisCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
-        client_creation_timeout (Optional[int]): The duration in milliseconds that the client should wait its initialization,
-            encompassing tasks such as connection establishment and topology mapping.
-            If the client fails to complete its initialization within this specified time, an error will be returned.
-            If not set, a default value will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
@@ -187,7 +175,6 @@ class RedisClientConfiguration(BaseClientConfiguration):
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
-        client_creation_timeout: Optional[int] = None,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
@@ -197,7 +184,6 @@ class RedisClientConfiguration(BaseClientConfiguration):
             use_tls=use_tls,
             credentials=credentials,
             read_from=read_from,
-            client_creation_timeout=client_creation_timeout,
             request_timeout=request_timeout,
         )
         self.reconnect_strategy = reconnect_strategy
@@ -238,10 +224,6 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         credentials (RedisCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
-        client_creation_timeout (Optional[int]): The duration in milliseconds that the client should wait its initialization,
-            encompassing tasks such as connection establishment and topology mapping.
-            If the client fails to complete its initialization within this specified time, an error will be returned.
-            If not set, a default value will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
@@ -257,7 +239,6 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
-        client_creation_timeout: Optional[int] = None,
         request_timeout: Optional[int] = None,
     ):
         super().__init__(
@@ -265,6 +246,5 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             use_tls=use_tls,
             credentials=credentials,
             read_from=read_from,
-            client_creation_timeout=client_creation_timeout,
             request_timeout=request_timeout,
         )

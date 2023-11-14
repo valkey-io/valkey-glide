@@ -4,6 +4,8 @@ from typing import Optional
 
 from pybushka.constants import TResult
 
+DEFAULT_TIMEOUT_IN_MILLISECONDS: int = ...
+
 class Level(Enum):
     Error = 0
     Warn = 1

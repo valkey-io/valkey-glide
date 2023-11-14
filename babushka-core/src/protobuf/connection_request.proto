@@ -30,11 +30,10 @@ message ConnectionRequest {
     TlsMode tls_mode = 2;
     bool cluster_mode_enabled = 3;
     uint32 request_timeout = 4;
-    uint32 client_creation_timeout = 5;
-    ReadFrom read_from = 6;
-    ConnectionRetryStrategy connection_retry_strategy = 7;
-    AuthenticationInfo authentication_info = 8;
-    uint32 database_id = 9;
+    ReadFrom read_from = 5;
+    ConnectionRetryStrategy connection_retry_strategy = 6;
+    AuthenticationInfo authentication_info = 7;
+    uint32 database_id = 8;
 }
 
 message ConnectionRetryStrategy {
