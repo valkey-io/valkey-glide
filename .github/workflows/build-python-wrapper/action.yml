@@ -21,24 +21,10 @@ env:
 runs:
     using: "composite"
     steps:        
-        - name: Install software dependencies for macOS
-          shell: bash
-          if: "${{ inputs.os == 'macOS' }}"
-          run: |
-              brew install git gcc pkgconfig protobuf openssl redis
-        
-        - name: Install software dependencies for Ubuntu
-          shell: bash
-          if: "${{ inputs.os == 'ubuntu' }}"
-          run: |
-              sudo apt update
-              sudo apt install protobuf-compiler
-
-        - name: Install software dependencies for Amazon-Linux
-          shell: bash
-          if: "${{ inputs.os == 'amazon-linux' }}"
-          run: |
-              yum install -y python3 gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 --allowerasing
+        - name: Install software dependencies
+          uses: ./.github/workflows/install-shared-dependencies
+          with:
+              os: ${{ inputs.os }}
 
         - name: Install Python software dependencies
           shell: bash
@@ -46,11 +32,6 @@ runs:
               python3 -m ensurepip --upgrade
               python3 -m pip install --upgrade pip
               python3 -m pip install virtualenv mypy-protobuf
-
-        - name: Install Rust
-          shell: bash
-          run: |
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
         - name: Generate protobuf files
           shell: bash

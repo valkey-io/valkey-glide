@@ -1,0 +1,38 @@
+name: Install shared software dependencies
+
+inputs:
+    os:
+        description: "The current operating system"
+        required: true
+        type: string
+        options:
+          - macOS
+          - ubuntu
+          - amazon-linux
+
+runs:
+    using: "composite"
+    steps:        
+        - name: Install software dependencies for macOS
+          shell: bash
+          if: "${{ inputs.os == 'macOS' }}"
+          run: |
+              brew install git gcc pkgconfig protobuf openssl redis
+        
+        - name: Install software dependencies for Ubuntu
+          shell: bash
+          if: "${{ inputs.os == 'ubuntu' }}"
+          run: |
+              sudo apt update
+              sudo apt install protobuf-compiler
+
+        - name: Install software dependencies for Amazon-Linux
+          shell: bash
+          if: "${{ inputs.os == 'amazon-linux' }}"
+          run: |
+              yum install -y gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 --allowerasing
+
+        - name: Install Rust
+          shell: bash
+          run: |
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

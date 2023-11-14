@@ -8,18 +8,24 @@ on:
             - submodules/**
             - node/**
             - utils/cluster_manager.py
+            - .github/workflows/node.yml
+            - .github/workflows/build-node-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
     pull_request:
         paths:
             - babushka-core/src/**
             - submodules/**
             - node/**
             - utils/cluster_manager.py
+            - .github/workflows/node.yml
+            - .github/workflows/build-node-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
 
 env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    build:
+    test-ubuntu-latest:
         runs-on: ubuntu-latest
         timeout-minutes: 15
         strategy:
@@ -49,17 +55,10 @@ jobs:
               with:
                   node-version: 16.x
 
-            - name: npm install and test
-              run: |
-                  rm -rf node_modules && npm install --frozen-lockfile
-                  npm install
-              working-directory: ./node/rust-client
-
-            - name: build
-              run: |
-                  rm -rf node_modules && npm install --frozen-lockfile
-                  npm run build
-              working-directory: ./node
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: 'ubuntu'
 
             - name: test
               run: npm test
@@ -77,3 +76,69 @@ jobs:
               with:
                   cargo-toml-folder: ./node/rust-client
               name: lint node rust
+
+    build-macos-latest:
+        runs-on: macos-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
+
+            - name: Install NodeJS
+              run: |
+                  brew install node
+
+            - name: Downgrade npm major version to 8
+              run: |
+                  npm i -g npm@8
+
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: 'macOS'
+
+            - name: Test compatibility 
+              run: npm test -- -t "set and get flow works"
+              working-directory: ./node
+
+    build-amazonlinux-latest:
+        runs-on: ubuntu-latest
+        container: amazonlinux:latest
+        timeout-minutes: 15
+        steps:
+            - name: Install git
+              run: |
+                yum -y remove git
+                yum -y remove git-*
+                yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+                yum install -y git 
+                git --version
+
+            - uses: actions/checkout@v3
+
+            - name: Checkout submodules
+              run: |
+                git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                git submodule update --init --recursive
+
+            - name: Install NodeJS
+              run: |
+                yum install -y nodejs
+
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: 'amazon-linux'
+
+            - name: Create a symbolic Link for redis6 binaries
+              working-directory: ./node
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+          
+            - name: Test compatibility 
+              run: npm test -- -t "set and get flow works"
+              working-directory: ./node
