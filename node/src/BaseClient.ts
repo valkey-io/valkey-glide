@@ -121,14 +121,6 @@ export type BaseClientConfiguration = {
      */
     requestTimeout?: number;
     /**
-     * The duration in milliseconds that the client should wait its initialization,
-     * encompassing tasks such as connection establishment and topology mapping.
-     * If the client fails to complete its initialization within this specified time, an error will be returned.
-     * If not set, a default value will be used.
-     * Value must be an integer.
-     */
-    clientCreationTimeout?: number;
-    /**
      * Represents the client's read from strategy.
      * If not set, `Primary` will be used.
      */
@@ -876,7 +868,6 @@ export class BaseClient {
                 : connection_request.TlsMode.NoTls,
             requestTimeout: options.requestTimeout,
             clusterModeEnabled: false,
-            clientCreationTimeout: options.clientCreationTimeout,
             readFrom,
             authenticationInfo,
         };
