@@ -1,0 +1,42 @@
+name: Build Node wrapper
+
+inputs:
+    os:
+        description: "The current operating system"
+        required: true
+        type: string
+        options:
+          - macOS
+          - ubuntu
+          - amazon-linux
+    release_mode:
+        description: "Enable building the wrapper in release mode"
+        required: false
+        type: boolean
+        default: 'false'
+
+env:
+    CARGO_TERM_COLOR: always
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install software dependencies
+          uses: ./.github/workflows/install-shared-dependencies
+          with:
+              os: ${{ inputs.os }}
+
+        - name: npm install
+          shell: bash
+          working-directory: ./node/rust-client
+          run: |
+              rm -rf node_modules && npm install --frozen-lockfile
+              npm install
+
+        - name: Build
+          shell: bash
+          run: |
+              source "$HOME/.cargo/env"
+              rm -rf node_modules && npm install --frozen-lockfile
+              npm run build
+          working-directory: ./node
