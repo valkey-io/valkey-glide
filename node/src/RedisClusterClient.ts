@@ -13,7 +13,7 @@ import {
     createPing,
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
-import { ClusterTransaction } from "./Transaction";
+import { BaseTransaction, ClusterTransaction } from "./Transaction";
 
 export type ClusterClientConfiguration = BaseClientConfiguration;
 
@@ -48,16 +48,19 @@ export type SlotKeyTypes = {
     key: string;
 };
 
-export type Routes =
+export type Routes = 
+    | SingleNodeRoute      
     /**
      * Route request to all primary nodes.
      */
-
     | "allPrimaries"
     /**
      * Route request to all nodes.
      */
-    | "allNodes"
+    | "allNodes";
+    
+
+export type SingleNodeRoute =
     /**
      * Route request to a random node.
      */
@@ -193,12 +196,15 @@ export class RedisClusterClient extends BaseClient {
      *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
      *
      * @param transaction - A ClusterTransaction object containing a list of commands to be executed.
+     * @param route - If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction. 
+     *   If no key is found, the command will be sent to a random node.
+     *   If `route` is provided, the client will route the command to the nodes defined by `route`.  
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
      */
-    public exec(transaction: ClusterTransaction): Promise<ReturnType[]> {
-        return this.createWritePromise(transaction.commands);
+    public exec(transaction: ClusterTransaction | BaseTransaction , route?: SingleNodeRoute): Promise<ReturnType[]> {
+        return this.createWritePromise(transaction.commands , toProtobufRoute(route));
     }
 
     /** Ping the Redis server.
