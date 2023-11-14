@@ -9,6 +9,8 @@ on:
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
+            - .github/workflows/build-python-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
     pull_request:
         paths:
             - python/**
@@ -16,6 +18,8 @@ on:
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
+            - .github/workflows/build-python-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
 
 permissions:
     contents: read
@@ -145,6 +149,10 @@ jobs:
             run: |
               git config --global --add safe.directory "$GITHUB_WORKSPACE"
               git submodule update --init --recursive
+
+          - name: Install python
+            run: |
+              yum install -y python3
 
           - name: Build Python wrapper
             uses: ./.github/workflows/build-python-wrapper
