@@ -72,7 +72,7 @@ jobs:
             - name: Lint with black
               working-directory: ./python
               run: |
-                  black --target-version py36 --check --diff .
+                  black --check --diff .
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
