@@ -11,7 +11,7 @@ max-line-length = 127
 extend-ignore = ['E203']
 
 [tool.black]
-target-version = ['py36']
+target-version = ['py38', 'py39', 'py310', 'py311']
 
 [project.option-dependencies]
 test = [
@@ -21,7 +21,7 @@ test = [
 
 [project]
 name = "babushka"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
