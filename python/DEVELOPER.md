@@ -1,10 +1,10 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test Babushka Python wrapper.
+This document describes how to set up your development environment to build and test the Babushka Python wrapper.
 
 ### Development Overview
 
-The Babushka Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the  [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Babushka Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
 
 ### Build
@@ -79,6 +79,7 @@ Run from the main `/python` folder
 1. Python
     > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running mypy linter
     ```bash
+    pip install -r dev_requirements.txt
     isort . --profile black --skip-glob python/pybushka/protobuf
     black . --exclude python/pybushka/protobuf
     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
@@ -88,6 +89,7 @@ Run from the main `/python` folder
     ```
 2. Rust
     ```bash
+    rustup component add clippy rustfmt
     cargo clippy --all-features --all-targets -- -D warnings
     cargo fmt --manifest-path ./Cargo.toml --all
 
