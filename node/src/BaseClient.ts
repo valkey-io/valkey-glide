@@ -52,7 +52,6 @@ import {
     ExecAbortError,
     RedisError,
     RequestError,
-    TIMEOUT_ERROR,
     TimeoutError,
 } from "./Errors";
 import { Logger } from "./Logger";
@@ -257,9 +256,6 @@ export class BaseClient {
         route?: redis_request.Routes
     ): Promise<T> {
         return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                reject(TIMEOUT_ERROR);
-            }, this.requestTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
             this.writeOrBufferRedisRequest(callbackIndex, command, route);
