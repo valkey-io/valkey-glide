@@ -137,3 +137,5 @@ yarn.lock
 
 # Protobuf
 src/ProtobufMessage*
+
+.npmignore

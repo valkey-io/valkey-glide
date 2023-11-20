@@ -1,12 +1,13 @@
 {
   "name": "babushka-rs-internal",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Redis client",
   "main": "index.js",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "files": [
     "index.d.ts",
-    "index.js"
+    "index.js",
+    "babushka*.*.node"
   ],
   "napi": {
     "name": "babushka-rs-internal",
@@ -15,13 +16,11 @@
       "additional": [
         "x86_64-unknown-linux-musl",
         "aarch64-unknown-linux-gnu",
-        "i686-pc-windows-msvc",
         "armv7-unknown-linux-gnueabihf",
         "aarch64-apple-darwin",
         "aarch64-linux-android",
         "x86_64-unknown-freebsd",
         "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc",
         "armv7-linux-androideabi"
       ]
     }
@@ -71,5 +70,17 @@
     "trailingComma": "all",
     "singleQuote": true,
     "arrowParens": "always"
+  },
+  "optionalDependencies": {
+    "babushka-rs-internal-darwin-x64": "0.1.0",
+    "babushka-rs-internal-linux-x64-gnu": "0.1.0",
+    "babushka-rs-internal-linux-x64-musl": "0.1.0",
+    "babushka-rs-internal-linux-arm64-gnu": "0.1.0",
+    "babushka-rs-internal-linux-arm-gnueabihf": "0.1.0",
+    "babushka-rs-internal-darwin-arm64": "0.1.0",
+    "babushka-rs-internal-android-arm64": "0.1.0",
+    "babushka-rs-internal-freebsd-x64": "0.1.0",
+    "babushka-rs-internal-linux-arm64-musl": "0.1.0",
+    "babushka-rs-internal-android-arm-eabi": "0.1.0"
   }
 }

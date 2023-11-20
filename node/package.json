@@ -1,14 +1,18 @@
 {
-    "name": "babushka-rs",
-    "version": "1.0.0",
+    "name": "@barhsaul/bar-test-13",
+    "version": "0.1.2",
     "description": "",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
     "dependencies": {
         "babushka-rs-internal": "file:rust-client",
         "long": "^5.2.3",
+        "npmignore": "^0.3.0",
         "protobufjs": "^7.2.2"
     },
+    "bundleDependencies": [
+        "babushka-rs-internal"
+    ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
         "build:release": "npm run build-internal:release &&  npm run build-protobuf && npm run build-external",
@@ -21,7 +25,8 @@
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "jest --verbose --runInBand",
-        "lint": "eslint -f unix \"src/**/*.{ts,tsx}\""
+        "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
+        "prepack": "npmignore --auto"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
@@ -43,6 +48,16 @@
         "typescript": "^4.9.5",
         "uuid": "^9.0.0"
     },
-    "author": "",
-    "license": "MIT"
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "publishConfig": {
+        "ignore": [
+            "src/**",
+            "tests/",
+            "rust-client/**",
+            "!build-ts/**",
+            "babel.config.js",
+            "jest.config.js"
+        ]
+    }
 }
