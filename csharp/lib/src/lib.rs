@@ -1,6 +1,5 @@
-use babushka::client::Client as BabushkaClient;
 use babushka::connection_request;
-use babushka::connection_request::AddressInfo;
+use babushka::{client::Client as BabushkaClient, connection_request::NodeAddress};
 use redis::{Cmd, FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
@@ -29,7 +28,7 @@ fn create_connection_request(
     port: u32,
     use_tls: bool,
 ) -> connection_request::ConnectionRequest {
-    let mut address_info = AddressInfo::new();
+    let mut address_info = NodeAddress::new();
     address_info.host = host.to_string().into();
     address_info.port = port;
     let addresses_info = vec![address_info];
