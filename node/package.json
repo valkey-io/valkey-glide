@@ -1,9 +1,11 @@
 {
-    "name": "@barhsaul/bar-test-13",
-    "version": "0.1.2",
+    "name": "@barshaul/babushka-linux-x64",
+    "version": "0.1.4",
     "description": "",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
+    "os": ["linux"],
+    "cpu": ["x64"],
     "dependencies": {
         "babushka-rs-internal": "file:rust-client",
         "long": "^5.2.3",
