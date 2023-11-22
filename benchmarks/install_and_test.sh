@@ -24,13 +24,16 @@ runAllBenchmarks=1
 runPython=0
 runNode=0
 runCsharp=0
+runJava=0
 runRust=0
 concurrentTasks="1 10 100 1000"
 dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
+port=6379
 tlsFlag="--tls"
+javaTlsFlag="-tls"
 
 function runPythonBenchmark(){
   # generate protobuf files
@@ -66,6 +69,12 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release
   dotnet run --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag
+}
+
+function runJavaBenchmark(){
+  cd ${BENCH_FOLDER}/../java
+  echo "./gradlew run --args=\"-resultsFile ${BENCH_FOLDER}/$1 -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clientCount \"$clientCount\" -clients $chosenClients -host $host $javaPortFlag $javaTlsFlag $javaClusterFlag\""
+  ./gradlew run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
 }
 
 function runRustBenchmark(){
@@ -109,7 +118,7 @@ function resultFileName() {
 
 function Help() {
     echo Running the script without any arguments runs all benchmarks.
-    echo Pass -node, -csharp, -python as arguments in order to run the node, csharp, or python benchmarks accordingly.
+    echo Pass -node, -csharp, -python, -java as arguments in order to run the node, csharp, python, or java benchmarks accordingly.
     echo Multiple such flags can be passed.
     echo Pass -no-csv to skip analysis of the results.
     echo
@@ -185,6 +194,21 @@ do
             runAllBenchmarks=0
             runNode=1
             ;;
+        -java)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Babushka"
+            ;;
+        -lettuce)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="lettuce_async"
+            ;;
+        -jedis)
+            runAllBenchmarks=0
+            runJava=1
+            chosenClients="Jedis"
+            ;;
         -csharp)
             runAllBenchmarks=0
             runCsharp=1
@@ -205,12 +229,15 @@ do
         -no-csv) writeResultsCSV=0 ;;
         -no-tls)
             tlsFlag=
+            javaTlsFlag=
             ;;
         -is-cluster)
             clusterFlag="--clusterModeEnabled"
+            javaClusterFlag="-clusterModeEnabled"
             ;;
         -port)
             portFlag="--port "$2
+            javaPortFlag="-port "$2
             shift
             ;;
     esac
@@ -242,6 +269,13 @@ do
         runCSharpBenchmark $csharpResults $currentDataSize
     fi
 
+    if [ $runAllBenchmarks == 1 ] || [ $runJava == 1 ];
+    then
+        javaResults=$(resultFileName java $currentDataSize)
+        resultFiles+=$javaResults" "
+        runJavaBenchmark $javaResults $currentDataSize
+    fi
+
     if [ $runAllBenchmarks == 1 ] || [ $runRust == 1 ];
     then
         rustResults=$(resultFileName rust $currentDataSize)
@@ -249,8 +283,6 @@ do
         runRustBenchmark $rustResults $currentDataSize
     fi
 done
-
-
 
 flushDB
 
