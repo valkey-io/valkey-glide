@@ -10,23 +10,37 @@ repositories {
 
 dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.24.3'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+
+    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.100.Final'
+    // https://github.com/netty/netty/wiki/Native-transports
+    // Windows is not supported, because babushka does not support windows, because tokio does not support windows, because ... 42
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
 }
 
 tasks.register('protobuf', Exec) {
     doFirst {
-        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/org/babushka/javababushka/generated').toString())
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/javababushka/generated').toString())
     }
     commandLine 'protoc',
         '-Iprotobuf=babushka-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/org/babushka/javababushka/generated',
+        '--java_out=java/client/src/main/java/javababushka/generated',
         'babushka-core/src/protobuf/connection_request.proto',
         'babushka-core/src/protobuf/redis_request.proto',
         'babushka-core/src/protobuf/response.proto'
-    workingDir Paths.get(project.rootDir.path, '../..').toFile()
+    workingDir Paths.get(project.rootDir.path, '..').toFile()
+}
+
+tasks.register('cleanProtobuf') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, 'src/main/java/javababushka/generated').toString())
+    }
 }
 
 tasks.register('buildRust', Exec) {
-    commandLine 'cargo', 'build'
+    commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
 }
 
@@ -45,3 +59,14 @@ tasks.register('buildAll') {
     finalizedBy 'build'
 }
 
+compileJava.dependsOn('protobuf')
+clean.dependsOn('cleanProtobuf')
+
+tasks.withType(Test) {
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    jvmArgs "-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/debug"
+}
