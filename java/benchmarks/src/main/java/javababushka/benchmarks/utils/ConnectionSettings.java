@@ -1,13 +1,12 @@
 package javababushka.benchmarks.utils;
 
-public class ConnectionSettings {
-  public String host;
-  public int port;
-  public boolean useSsl;
+import lombok.AllArgsConstructor;
 
-  public ConnectionSettings(String host, int port, boolean useSsl) {
-    this.host = host;
-    this.port = port;
-    this.useSsl = useSsl;
-  }
+/** Redis-client settings */
+@AllArgsConstructor
+public class ConnectionSettings {
+  public final String host;
+  public final int port;
+  public final boolean useSsl;
+  public final boolean clusterMode;
 }

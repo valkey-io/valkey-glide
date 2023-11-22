@@ -5,11 +5,12 @@ import static javababushka.benchmarks.utils.Benchmarking.testClientSetGet;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
-import javababushka.benchmarks.jedis.JedisClient;
-import javababushka.benchmarks.jedis.JedisPseudoAsyncClient;
-import javababushka.benchmarks.lettuce.LettuceAsyncClient;
-import javababushka.benchmarks.lettuce.LettuceAsyncClusterClient;
-import javababushka.benchmarks.lettuce.LettuceClient;
+import javababushka.benchmarks.clients.babushka.JniNettyClient;
+import javababushka.benchmarks.clients.jedis.JedisClient;
+import javababushka.benchmarks.clients.jedis.JedisPseudoAsyncClient;
+import javababushka.benchmarks.clients.lettuce.LettuceAsyncClient;
+import javababushka.benchmarks.clients.lettuce.LettuceAsyncClusterClient;
+import javababushka.benchmarks.clients.lettuce.LettuceClient;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -48,9 +49,11 @@ public class BenchmarkingApp {
     for (ClientName client : runConfiguration.clients) {
       switch (client) {
         case JEDIS:
+          // run testClientSetGet on JEDIS sync client
           testClientSetGet(JedisClient::new, runConfiguration, false);
           break;
         case JEDIS_ASYNC:
+          // run testClientSetGet on JEDIS pseudo-async client
           testClientSetGet(JedisPseudoAsyncClient::new, runConfiguration, true);
           break;
         case LETTUCE:
@@ -63,8 +66,11 @@ public class BenchmarkingApp {
             testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
           }
           break;
+        case BABUSHKA:
+          testClientSetGet(() -> new JniNettyClient(false), runConfiguration, false);
+          break;
         case BABUSHKA_ASYNC:
-          System.out.println("Babushka async not yet configured");
+          testClientSetGet(() -> new JniNettyClient(true), runConfiguration, true);
           break;
       }
     }
@@ -93,8 +99,8 @@ public class BenchmarkingApp {
         Option.builder("clients")
             .hasArg(true)
             .desc(
-                "one of: all|jedis|jedis_async|lettuce|lettuce_async"
-                    + "|babushka_async|all_async|all_sync [all]")
+                "one of: all|jedis|jedis_async|lettuce|lettuce_async|"
+                    + "babushka|babushka_async|all_async|all_sync")
             .build());
     options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
     options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
@@ -149,6 +155,7 @@ public class BenchmarkingApp {
                         return Stream.of(
                             ClientName.JEDIS,
                             ClientName.JEDIS_ASYNC,
+                            ClientName.BABUSHKA,
                             ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE,
                             ClientName.LETTUCE_ASYNC);
@@ -158,7 +165,7 @@ public class BenchmarkingApp {
                             ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_SYNC:
-                        return Stream.of(ClientName.JEDIS, ClientName.LETTUCE);
+                        return Stream.of(ClientName.JEDIS, ClientName.LETTUCE, ClientName.BABUSHKA);
                       default:
                         return Stream.of(e);
                     }
@@ -210,6 +217,7 @@ public class BenchmarkingApp {
     LETTUCE("Lettuce"),
     LETTUCE_ASYNC("Lettuce async"),
     BABUSHKA_ASYNC("Babushka async"),
+    BABUSHKA("Babushka"),
     ALL("All"),
     ALL_SYNC("All sync"),
     ALL_ASYNC("All async");
@@ -250,8 +258,9 @@ public class BenchmarkingApp {
       concurrentTasks = new int[] {100, 1000};
       clients =
           new ClientName[] {
-            // ClientName.BABUSHKA_ASYNC,
-            ClientName.LETTUCE_ASYNC
+            // ClientName.LETTUCE,
+            // ClientName.LETTUCE_ASYNC,
+            ClientName.BABUSHKA_ASYNC, ClientName.BABUSHKA,
           };
       host = "localhost";
       port = 6379;

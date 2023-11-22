@@ -4,6 +4,7 @@
 package javababushka.benchmarks.lettuce;
 
 import java.util.HashMap;
+import javababushka.benchmarks.clients.lettuce.LettuceClient;
 import javababushka.benchmarks.utils.Benchmarking;
 import javababushka.benchmarks.utils.ChosenAction;
 import org.junit.jupiter.api.AfterAll;

@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import javababushka.benchmarks.clients.jedis.JedisClient;
 import javababushka.benchmarks.utils.Benchmarking;
 import javababushka.benchmarks.utils.ChosenAction;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,12 +23,6 @@ public class JedisClientIT {
   static void initializeJedisClient() {
     jedisClient = new JedisClient();
     jedisClient.connectToRedis();
-  }
-
-  @Test
-  public void someLibraryMethodReturnsTrue() {
-    JedisClient classUnderTest = new JedisClient();
-    assertTrue(classUnderTest.someLibraryMethod(), "someLibraryMethod should return 'true'");
   }
 
   @Test
@@ -56,7 +52,7 @@ public class JedisClientIT {
         ChosenAction.GET_NON_EXISTING, () -> jedisClient.get(Benchmarking.generateKeyGet()));
     actions.put(ChosenAction.SET, () -> jedisClient.set(Benchmarking.generateKeySet(), value));
 
-    Map<ChosenAction, ArrayList<Long>> latencies =
+    Map<ChosenAction, List<Long>> latencies =
         Map.of(
             ChosenAction.GET_EXISTING, new ArrayList<>(),
             ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
@@ -66,6 +62,6 @@ public class JedisClientIT {
       latencies.get(latency.getKey()).add(latency.getValue());
     }
 
-    Benchmarking.printResults(Benchmarking.calculateResults(latencies));
+    Benchmarking.printResults(Benchmarking.calculateResults(latencies), 0, iterations);
   }
 }

@@ -1,6 +1,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'application'
+    id 'io.freefair.lombok'
 }
 
 repositories {
@@ -9,6 +10,8 @@ repositories {
 }
 
 dependencies {
+    implementation project(':client')
+
     // Use JUnit test framework.
     testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
 
@@ -34,12 +37,14 @@ java {
 application {
     // Define the main class for the application.
     mainClass = 'javababushka.benchmarks.BenchmarkingApp'
+    applicationDefaultJvmArgs += "-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/debug"
 }
 
-tasks.withType(Test) { 
-  testLogging {
-    exceptionFormat "full"
-    events "started", "skipped", "passed", "failed"
-    showStandardStreams true
-  }
+tasks.withType(Test) {
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    jvmArgs "-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/debug"
 }

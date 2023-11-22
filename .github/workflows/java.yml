@@ -41,12 +41,10 @@ jobs:
           distribution: "temurin"
           java-version: ${{ matrix.java }}
 
-      - name: Install and run protoc (protobuf)
+      - name: Install protoc (protobuf)
         run: |
           sudo apt update
           sudo apt install -y protobuf-compiler
-          mkdir -p java/client/src/main/java/org/babushka/javababushka/generated
-          protoc -Iprotobuf=babushka-core/src/protobuf/ --java_out=java/client/src/main/java/org/babushka/javababushka/generated babushka-core/src/protobuf/*.proto
 
       - name: Build rust part
         working-directory: java
