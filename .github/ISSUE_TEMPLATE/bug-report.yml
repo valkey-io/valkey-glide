@@ -12,6 +12,7 @@ body:
       description: What is the problem? A clear and concise description of the bug.
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
@@ -20,6 +21,7 @@ body:
         What did you expect to happen?
     validations:
       required: true
+
   - type: textarea
     id: current
     attributes:
@@ -31,6 +33,7 @@ body:
         If service responses are relevant, please include wire logs.
     validations:
       required: true
+
   - type: textarea
     id: reproduction
     attributes:
@@ -43,6 +46,7 @@ body:
         The code sample should be an SSCCE. See http://sscce.org/ for details. In short, please provide a code sample that we can copy/paste, run and reproduce.
     validations:
       required: true
+
   - type: textarea
     id: solution
     attributes:
@@ -51,6 +55,7 @@ body:
         Suggest a fix/reason for the bug
     validations:
       required: false
+
   - type: textarea
     id: context
     attributes:
@@ -59,6 +64,21 @@ body:
         Anything else that might be relevant for troubleshooting this bug. Providing context helps us come up with a solution that is most useful in the real world.
     validations:
       required: false
+
+  - type: input
+    id: client-version
+    attributes:
+      label: Client version used
+    validations:
+      required: true
+
+  - type: input
+    id: redis-version
+    attributes:
+      label: Redis Version
+      description: E.g. 6.2, 7.0
+    validations:
+      required: true
 
   - type: input
     id: operating-system
@@ -83,6 +103,24 @@ body:
     attributes:
       label: Language Version
       description: E.g. TypeScript (5.2.2) | Python (3.9)
+    validations:
+      required: true
+
+  - type: textarea
+    id: cluster-info
+    attributes:
+      label: Cluster information
+      description: |
+        Redis cluster information, cluster topology, number of shards, number of replicas, used data types.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Client and/or Redis logs.
     validations:
       required: false
 
