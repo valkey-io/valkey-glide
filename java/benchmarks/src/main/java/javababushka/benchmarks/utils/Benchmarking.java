@@ -1,14 +1,12 @@
 package javababushka.benchmarks.utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javababushka.benchmarks.BenchmarkingApp;
@@ -23,14 +21,6 @@ public class Benchmarking {
   static final double PROB_GET_EXISTING_KEY = 0.8;
   static final int SIZE_GET_KEYSPACE = 3750000;
   static final int SIZE_SET_KEYSPACE = 3000000;
-  static final int ASYNC_OPERATION_TIMEOUT_SEC = 1;
-  static final double LATENCY_NORMALIZATION = 1000000.0;
-  static final int LATENCY_MIN = 100000;
-  static final int LATENCY_MAX = 10000000;
-  static final int LATENCY_MULTIPLIER = 10000;
-  static final double TPS_NORMALIZATION = 1000000000.0; // nano to seconds
-  // measurements are done in nano-seconds, but it should be converted to seconds later
-  static final double SECONDS_IN_NANO = 1e-9;
   public static final double NANO_TO_SECONDS = 1e9;
 
   private static ChosenAction randomAction() {
@@ -69,25 +59,6 @@ public class Benchmarking {
     return Pair.of(action, after - before);
   }
 
-  // Assumption: latencies is sorted in ascending order
-  private static Long percentile(List<Long> latencies, int percentile) {
-    int N = latencies.size();
-    double n = (N - 1) * percentile / 100. + 1;
-    if (n == 1d) return latencies.get(0);
-    else if (n == N) return latencies.get(N - 1);
-    int k = (int) n;
-    double d = n - k;
-    return Math.round(latencies.get(k - 1) + d * (latencies.get(k) - latencies.get(k - 1)));
-  }
-
-  private static double stdDeviation(List<Long> latencies, Double avgLatency) {
-    double stdDeviation =
-        latencies.stream()
-            .mapToDouble(Long::doubleValue)
-            .reduce(0.0, (stdDev, latency) -> stdDev + Math.pow(latency - avgLatency, 2));
-    return Math.sqrt(stdDeviation / latencies.size());
-  }
-
   // This has the side-effect of sorting each latencies ArrayList
   public static Map<ChosenAction, LatencyResults> calculateResults(
       Map<ChosenAction, List<Long>> actionLatencies) {
@@ -95,26 +66,10 @@ public class Benchmarking {
 
     for (Map.Entry<ChosenAction, List<Long>> entry : actionLatencies.entrySet()) {
       ChosenAction action = entry.getKey();
-      List<Long> latencies = entry.getValue();
+      double[] latencies = entry.getValue().stream().mapToDouble(Long::doubleValue).toArray();
 
-      if (latencies.size() == 0) {
-        results.put(action, new LatencyResults(0, 0, 0, 0, 0, 0));
-      } else {
-        double avgLatency =
-            SECONDS_IN_NANO
-                * latencies.stream().mapToLong(Long::longValue).sum()
-                / latencies.size();
-
-        Collections.sort(latencies);
-        results.put(
-            action,
-            new LatencyResults(
-                avgLatency,
-                SECONDS_IN_NANO * percentile(latencies, 50),
-                SECONDS_IN_NANO * percentile(latencies, 90),
-                SECONDS_IN_NANO * percentile(latencies, 99),
-                SECONDS_IN_NANO * stdDeviation(latencies, avgLatency),
-                latencies.size()));
+      if (latencies.length != 0) {
+        results.put(action, new LatencyResults(latencies));
       }
     }
 
@@ -162,8 +117,8 @@ public class Benchmarking {
           var clientName = clients.get(0).getName();
 
           System.out.printf(
-              "%n =====> %s <===== %d clients %d concurrent %n%n",
-              clientName, clientCount, concurrentNum);
+              "%n =====> %s <===== %d clients %d concurrent %d data size %n%n",
+              clientName, clientCount, concurrentNum, dataSize);
           AtomicInteger iterationCounter = new AtomicInteger(0);
 
           long started = System.nanoTime();
@@ -260,7 +215,7 @@ public class Benchmarking {
                 concurrentNum,
                 tps);
           }
-          printResults(calculatedResults, (after - started) / TPS_NORMALIZATION, iterations);
+          printResults(calculatedResults, (after - started) / NANO_TO_SECONDS, iterations);
         }
       }
     }
@@ -276,26 +231,17 @@ public class Benchmarking {
     actions.put(
         ChosenAction.GET_EXISTING,
         async
-            ? () ->
-                ((AsyncClient) client)
-                    .asyncGet(generateKeySet())
-                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            ? () -> ((AsyncClient) client).asyncGet(generateKeySet()).get()
             : () -> ((SyncClient) client).get(generateKeySet()));
     actions.put(
         ChosenAction.GET_NON_EXISTING,
         async
-            ? () ->
-                ((AsyncClient) client)
-                    .asyncGet(generateKeyGet())
-                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            ? () -> ((AsyncClient) client).asyncGet(generateKeyGet()).get()
             : () -> ((SyncClient) client).get(generateKeyGet()));
     actions.put(
         ChosenAction.SET,
         async
-            ? () ->
-                ((AsyncClient) client)
-                    .asyncSet(generateKeySet(), value)
-                    .get(ASYNC_OPERATION_TIMEOUT_SEC, TimeUnit.SECONDS)
+            ? () -> ((AsyncClient) client).asyncSet(generateKeySet(), value).get()
             : () -> ((SyncClient) client).set(generateKeySet(), value));
     return actions;
   }
