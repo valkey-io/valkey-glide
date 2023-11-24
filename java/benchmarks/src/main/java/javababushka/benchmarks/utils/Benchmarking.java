@@ -127,40 +127,16 @@ public class Benchmarking {
           for (int taskNum = 0; taskNum < concurrentNum; taskNum++) {
             final int taskNumDebugging = taskNum;
             asyncTasks.add(
-                CompletableFuture.supplyAsync(
-                    () -> {
-                      Map<ChosenAction, ArrayList<Long>> taskActionResults =
-                          Map.of(
-                              ChosenAction.GET_EXISTING, new ArrayList<>(),
-                              ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
-                              ChosenAction.SET, new ArrayList<>());
-                      int iterationIncrement = iterationCounter.getAndIncrement();
-                      int clientIndex = iterationIncrement % clients.size();
-
-                      if (config.debugLogging) {
-                        System.out.printf(
-                            "%n concurrent = %d/%d, client# = %d/%d%n",
-                            taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
-                      }
-                      while (iterationIncrement < iterations) {
-                        if (config.debugLogging) {
-                          System.out.printf(
-                              "> iteration = %d/%d, client# = %d/%d%n",
-                              iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
-                        }
-
-                        var actions = getActionMap(clients.get(clientIndex), dataSize, async);
-                        // operate and calculate tik-tok
-                        Pair<ChosenAction, Long> result = measurePerformance(actions);
-                        if (result != null) {
-                          taskActionResults.get(result.getLeft()).add(result.getRight());
-                        }
-
-                        iterationIncrement = iterationCounter.getAndIncrement();
-                        clientIndex = iterationIncrement % clients.size();
-                      }
-                      return taskActionResults;
-                    }));
+                createTask(
+                    async,
+                    concurrentNum,
+                    clientCount,
+                    dataSize,
+                    iterationCounter,
+                    clients,
+                    taskNumDebugging,
+                    iterations,
+                    config.debugLogging));
           }
           if (config.debugLogging) {
             System.out.printf("%s client Benchmarking: %n", clientName);
@@ -221,6 +197,52 @@ public class Benchmarking {
     }
 
     System.out.println();
+  }
+
+  private static CompletableFuture<Map<ChosenAction, ArrayList<Long>>> createTask(
+      boolean async,
+      int concurrentNum,
+      int clientCount,
+      int dataSize,
+      AtomicInteger iterationCounter,
+      List<Client> clients,
+      int taskNumDebugging,
+      int iterations,
+      boolean debugLogging) {
+    return CompletableFuture.supplyAsync(
+        () -> {
+          Map<ChosenAction, ArrayList<Long>> taskActionResults =
+              Map.of(
+                  ChosenAction.GET_EXISTING, new ArrayList<>(),
+                  ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
+                  ChosenAction.SET, new ArrayList<>());
+          int iterationIncrement = iterationCounter.getAndIncrement();
+          int clientIndex = iterationIncrement % clients.size();
+
+          if (debugLogging) {
+            System.out.printf(
+                "%n concurrent = %d/%d, client# = %d/%d%n",
+                taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
+          }
+          while (iterationIncrement < iterations) {
+            if (debugLogging) {
+              System.out.printf(
+                  "> iteration = %d/%d, client# = %d/%d%n",
+                  iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
+            }
+
+            var actions = getActionMap(clients.get(clientIndex), dataSize, async);
+            // operate and calculate tik-tok
+            Pair<ChosenAction, Long> result = measurePerformance(actions);
+            if (result != null) {
+              taskActionResults.get(result.getLeft()).add(result.getRight());
+            }
+
+            iterationIncrement = iterationCounter.getAndIncrement();
+            clientIndex = iterationIncrement % clients.size();
+          }
+          return taskActionResults;
+        });
   }
 
   public static Map<ChosenAction, Operation> getActionMap(
