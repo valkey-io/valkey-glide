@@ -2,11 +2,11 @@
 
 ## System Requirements
 
-The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, and macOS 14.1.
+The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, and amd64 using macOS 14.1.
 
 ## Java supported version
 
-Tested on Aamzon Corretto version 11.0.21, and 17.0.3
+Tested on Amazon Corretto version 11.0.21, and 17.0.3
 
 ## Installation and Setup
 
@@ -16,7 +16,7 @@ At the moment, the beta release of Babushka mush be build from source.
 
 ### Build from source
 
-Software Dependencies
+Software Dependencies:
 
 - JDK 11+
 - git
@@ -25,6 +25,7 @@ Software Dependencies
 
 #### Prerequisites
 
+**Dependencies installation for Ubuntu**
 ```bash
 sudo apt update -y
 sudo apt-get install openjdk-11-jdk
@@ -36,8 +37,8 @@ source "$HOME/.cargo/env"
 ```
 
 **Dependencies installation for MacOS**
-Ensure that you have a minimum Java version of JDK 11 installed on your system: 
 
+Ensure that you have a minimum Java version of JDK 11 installed on your system:
 ```bash
  $ echo $JAVA_HOME
 /Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
@@ -87,7 +88,7 @@ Before starting this step, make sure you've installed all software requirments.
    BUILD SUCCESSFUL
     ```
 
-Other useful gradle commands: 
+Other useful gradle developer commands: 
 * `./gradle :client:test` to run client unit tests
 * `./gradle :client:spotlessCheck` to check for codestyle issues
 * `./gradle :client:spotlessApply` to apply codestyle recommendations
@@ -120,11 +121,7 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 
 ```shell
 ./gradlew run --args="-help"
-<<<<<<< Updated upstream
-./gradlew run --args="-resultsFile=output.csv -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
-=======
-./gradlew run --args="-resultsFile=output.json -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients java -host localhost -port 6279 -clientCount \"1 5\" -tls"
->>>>>>> Stashed changes
+./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
 ```
 
 ### Troubleshooting
