@@ -35,18 +35,18 @@ public class BenchmarkingApp {
       runConfiguration = verifyOptions(line);
     } catch (ParseException exp) {
       // oops, something went wrong
-      System.err.println("Parsing failed.  Reason: " + exp.getMessage());
+      System.err.println("Parsing failed. Reason: " + exp.getMessage());
     }
 
     for (ClientName client : runConfiguration.clients) {
       switch (client) {
         case JEDIS:
-          // run testClientSetGet on JEDIS sync client
-          System.out.println("Run JEDIS sync client");
+          // run testClientSetGet on JEDIS pseudo-sync client
+          System.out.println("Run JEDIS async client");
           break;
         case LETTUCE:
-          // run testClientSetGet on LETTUCE sync client
-          System.out.println("Run LETTUCE sync client");
+          // run testClientSetGet on LETTUCE async client
+          System.out.println("Run LETTUCE async client");
           break;
         case BABUSHKA:
           System.out.println("Babushka async not yet configured");
@@ -178,7 +178,7 @@ public class BenchmarkingApp {
   }
 
   public enum ClientName {
-    JEDIS("Jedis"), // sync
+    JEDIS("Jedis"), // async
     LETTUCE("Lettuce"), // async
     BABUSHKA("Babushka"), // async
     ALL("All");
