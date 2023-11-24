@@ -2,14 +2,11 @@ package javababushka.benchmarks.clients;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import javababushka.benchmarks.utils.ConnectionSettings;
 
 /** A Redis client with async capabilities */
 public interface AsyncClient<T> extends Client {
 
   long DEFAULT_TIMEOUT_MILLISECOND = 1000;
-
-  Future<T> asyncConnectToRedis(ConnectionSettings connectionSettings);
 
   Future<T> asyncSet(String key, String value);
 

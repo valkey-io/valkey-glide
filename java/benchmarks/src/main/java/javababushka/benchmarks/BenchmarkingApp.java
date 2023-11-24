@@ -44,19 +44,11 @@ public class BenchmarkingApp {
           // run testClientSetGet on JEDIS sync client
           System.out.println("Run JEDIS sync client");
           break;
-        case JEDIS_ASYNC:
-          // run testClientSetGet on JEDIS pseudo-async client
-          System.out.println("Run JEDIS pseudo-async client");
-          break;
         case LETTUCE:
           // run testClientSetGet on LETTUCE sync client
           System.out.println("Run LETTUCE sync client");
           break;
-        case LETTUCE_ASYNC:
-          // run testClientSetGet on LETTUCE async client
-          System.out.println("Run LETTUCE async client");
-          break;
-        case BABUSHKA_ASYNC:
+        case BABUSHKA:
           System.out.println("Babushka async not yet configured");
           break;
       }
@@ -139,20 +131,7 @@ public class BenchmarkingApp {
                   e -> {
                     switch (e) {
                       case ALL:
-                        return Stream.of(
-                            ClientName.JEDIS,
-                            ClientName.JEDIS_ASYNC,
-                            ClientName.BABUSHKA,
-                            ClientName.BABUSHKA_ASYNC,
-                            ClientName.LETTUCE,
-                            ClientName.LETTUCE_ASYNC);
-                      case ALL_ASYNC:
-                        return Stream.of(
-                            ClientName.JEDIS_ASYNC,
-                            ClientName.BABUSHKA_ASYNC,
-                            ClientName.LETTUCE_ASYNC);
-                      case ALL_SYNC:
-                        return Stream.of(ClientName.JEDIS, ClientName.LETTUCE, ClientName.BABUSHKA);
+                        return Stream.of(ClientName.JEDIS, ClientName.BABUSHKA, ClientName.LETTUCE);
                       default:
                         return Stream.of(e);
                     }
@@ -199,15 +178,10 @@ public class BenchmarkingApp {
   }
 
   public enum ClientName {
-    JEDIS("Jedis"),
-    JEDIS_ASYNC("Jedis async"),
-    LETTUCE("Lettuce"),
-    LETTUCE_ASYNC("Lettuce async"),
-    BABUSHKA_ASYNC("Babushka async"),
-    BABUSHKA("Babushka"),
-    ALL("All"),
-    ALL_SYNC("All sync"),
-    ALL_ASYNC("All async");
+    JEDIS("Jedis"), // sync
+    LETTUCE("Lettuce"), // async
+    BABUSHKA("Babushka"), // async
+    ALL("All");
 
     private String name;
 
@@ -242,16 +216,14 @@ public class BenchmarkingApp {
       configuration = "Release";
       resultsFile = Optional.empty();
       dataSize = new int[] {100, 4000};
-      concurrentTasks = new int[] {100, 1000};
+      concurrentTasks = new int[] {1, 10, 100, 1000};
       clients =
           new ClientName[] {
-            // ClientName.LETTUCE,
-            // ClientName.LETTUCE_ASYNC,
-            ClientName.BABUSHKA_ASYNC, ClientName.BABUSHKA,
+            ClientName.ALL,
           };
       host = "localhost";
       port = 6379;
-      clientCount = new int[] {1, 2};
+      clientCount = new int[] {1};
       tls = false;
       clusterModeEnabled = false;
     }
