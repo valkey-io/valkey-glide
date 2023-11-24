@@ -1,46 +1,131 @@
-# Summary - Java Wrapper
+# Getting Started - Java Wrapper
 
-This module contains a Java-client wrapper that connects to the `Babushka`-rust-client. The rust client connects to
-redis, while this wrapper provides Java-language binding. The objective of this wrapper is to provide a thin-wrapper
-language api to enhance performance and limit cpu cycles at scale. 
+## System Requirements
 
-## Organization
+The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, and macOS 14.1.
 
-The Java client (javababushka) contains the following parts:
+## Java supported version
 
-1. A Java client (lib folder): wrapper to rust-client.
-2. An examples script: to sanity test javababushka and similar java-clients against a redis host.
-3. A benchmark app: to performance benchmark test javababushka and similar java-clients against a redis host.
+Tested on Aamzon Corretto version 11.0.21, and 17.0.3
 
-## Building
+## Installation and Setup
 
-You can assemble the Java clients benchmarks by compiling using `./gradlew build`. 
+### Install from Gradle
 
-## Code style
+At the moment, the beta release of Babushka mush be build from source. 
 
-Code style is enforced by spotless with Google Java Format. The build fails if code formatted incorrectly, but you can auto-format code with `./gradlew spotlessApply`.
-Run this command before every commit to keep code in the same style.
-These IDE plugins can auto-format code on file save or by single click:
-* [For Intellij IDEA](https://plugins.jetbrains.com/plugin/18321-spotless-gradle)
-* [For VS Code](https://marketplace.visualstudio.com/items?itemName=richardwillis.vscode-spotless-gradle)
+### Build from source
 
-## Benchmarks
+Software Dependencies
+
+- JDK 11+
+- git
+- protoc (protobuf compiler)
+- Gradle
+
+#### Prerequisites
+
+```bash
+sudo apt update -y
+sudo apt-get install openjdk-11-jdk
+VERSION=8.3
+wget https://services.gradle.org/distributions/gradle-${VERSION}-bin.zip -P /tmp
+sudo apt install -y protobuf-compiler
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies installation for MacOS**
+Ensure that you have a minimum Java version of JDK 11 installed on your system: 
+
+```bash
+ $ echo $JAVA_HOME
+/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
+
+$ java -version
+ openjdk version "11.0.1" 2018-10-16
+ OpenJDK Runtime Environment 18.9 (build 11.0.1+13)
+ OpenJDK 64-Bit Server VM 18.9 (build 11.0.1+13, mixed mode)
+```
+
+Ensure that you have a Gradle version 8 installed on your system: 
+```bash
+$ gradle --version
+------------------------------------------------------------
+Gradle 8.3
+------------------------------------------------------------
+```
+
+#### Building and installation steps
+Before starting this step, make sure you've installed all software requirments.
+1. Clone the repository:
+    ```bash
+    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+    git clone --branch ${VERSION} https://github.com/aws/babushka.git
+    cd babushka
+    ```
+2. Initialize git submodule:
+    ```bash
+    git submodule update --init --recursive
+    ```
+3. Generate protobuf files:
+    ```bash
+   $ cd java/
+   $ ./gradle :client:protobuf
+   BUILD SUCCESSFUL
+    ```
+4. Build the client library:
+    ```bash
+   $ cd java/
+   $ ./gradle :client:build
+   BUILD SUCCESSFUL
+    ```
+5. Run tests:
+   ```bash
+   $ cd java/
+   $ ./gradle :client:test
+   BUILD SUCCESSFUL
+    ```
+
+Other useful gradle commands: 
+* `./gradle :client:test` to run client unit tests
+* `./gradle :client:spotlessCheck` to check for codestyle issues
+* `./gradle :client:spotlessApply` to apply codestyle recommendations
+* `./gradle :benchmarks:run` to run performance benchmarks
+
+## Basic Examples
+
+### Standalone Redis:
+
+```java
+import javababushka.Client;
+import response.ResponseOuterClass.Response;
+
+public class RedisClient {
+
+   Client testClient = new Client();
+
+   public RedisClient() {
+      testClient.asyncConnectToRedis("localhost", 6379, false, false).get(); // expect Ok
+      Response setResponse = testClient.asyncSet("name", "johnsmith").get(); // expect Ok
+      Response getResponse = testClient.asyncGet("name").get(); // expect "johnsmith"
+   }
+  
+}
+```
+
+### Benchmarks
 
 You can run benchmarks using `./gradlew run`. You can set arguments using the args flag like:
 
 ```shell
 ./gradlew run --args="-help"
+<<<<<<< Updated upstream
 ./gradlew run --args="-resultsFile=output.csv -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
+=======
+./gradlew run --args="-resultsFile=output.json -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients java -host localhost -port 6279 -clientCount \"1 5\" -tls"
+>>>>>>> Stashed changes
 ```
-
-The following arguments are accepted: 
-* `resultsFile`: the results output file
-* `concurrentTasks`: Number of concurrent tasks
-* `clients`: one of: all|jedis|lettuce|babushka
-* `clientCount`: Client count
-* `host`: redis server host url
-* `port`: redis server port number
-* `tls`: redis TLS configured
 
 ### Troubleshooting
 
