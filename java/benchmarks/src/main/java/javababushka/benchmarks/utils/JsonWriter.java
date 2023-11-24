@@ -9,8 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Getter;
 
 public class JsonWriter {
 
@@ -35,35 +33,28 @@ public class JsonWriter {
         recordings = gson.fromJson(json, collectionType);
       }
       var data =
-          new Measurements.MeasurementsBuilder()
-              .is_cluster(isCluster)
-              .data_size(dataSize)
-              .client(client)
-              .client_count(clientCount)
-              .num_of_tasks(numOfTasks)
-              .tps(tps)
-              .get_existing_average_latency(
-                  calculatedResults.get(ChosenAction.GET_EXISTING).avgLatency)
-              .get_existing_p50_latency(calculatedResults.get(ChosenAction.GET_EXISTING).p50Latency)
-              .get_existing_p90_latency(calculatedResults.get(ChosenAction.GET_EXISTING).p90Latency)
-              .get_existing_p99_latency(calculatedResults.get(ChosenAction.GET_EXISTING).p99Latency)
-              .get_existing_std_dev(calculatedResults.get(ChosenAction.GET_EXISTING).stdDeviation)
-              .get_non_existing_average_latency(
-                  calculatedResults.get(ChosenAction.GET_NON_EXISTING).avgLatency)
-              .get_non_existing_p50_latency(
-                  calculatedResults.get(ChosenAction.GET_NON_EXISTING).p50Latency)
-              .get_non_existing_p90_latency(
-                  calculatedResults.get(ChosenAction.GET_NON_EXISTING).p90Latency)
-              .get_non_existing_p99_latency(
-                  calculatedResults.get(ChosenAction.GET_NON_EXISTING).p99Latency)
-              .get_non_existing_std_dev(
-                  calculatedResults.get(ChosenAction.GET_NON_EXISTING).stdDeviation)
-              .set_average_latency(calculatedResults.get(ChosenAction.SET).avgLatency)
-              .set_p50_latency(calculatedResults.get(ChosenAction.SET).p50Latency)
-              .set_p90_latency(calculatedResults.get(ChosenAction.SET).p90Latency)
-              .set_p99_latency(calculatedResults.get(ChosenAction.SET).p99Latency)
-              .set_std_dev(calculatedResults.get(ChosenAction.SET).stdDeviation)
-              .build();
+          new Measurements(
+              client,
+              clientCount,
+              dataSize,
+              isCluster,
+              numOfTasks,
+              calculatedResults.get(ChosenAction.GET_EXISTING).avgLatency,
+              calculatedResults.get(ChosenAction.GET_EXISTING).p50Latency,
+              calculatedResults.get(ChosenAction.GET_EXISTING).p90Latency,
+              calculatedResults.get(ChosenAction.GET_EXISTING).p99Latency,
+              calculatedResults.get(ChosenAction.GET_EXISTING).stdDeviation,
+              calculatedResults.get(ChosenAction.GET_NON_EXISTING).avgLatency,
+              calculatedResults.get(ChosenAction.GET_NON_EXISTING).p50Latency,
+              calculatedResults.get(ChosenAction.GET_NON_EXISTING).p90Latency,
+              calculatedResults.get(ChosenAction.GET_NON_EXISTING).p99Latency,
+              calculatedResults.get(ChosenAction.GET_NON_EXISTING).stdDeviation,
+              calculatedResults.get(ChosenAction.SET).avgLatency,
+              calculatedResults.get(ChosenAction.SET).p50Latency,
+              calculatedResults.get(ChosenAction.SET).p90Latency,
+              calculatedResults.get(ChosenAction.SET).p99Latency,
+              calculatedResults.get(ChosenAction.SET).stdDeviation,
+              tps);
 
       recordings.add(data);
 
@@ -76,29 +67,72 @@ public class JsonWriter {
     }
   }
 
-  @Getter
-  @Builder
   public static class Measurements {
-    private String client;
-    private int client_count;
-    private int data_size;
-    private double get_existing_average_latency;
-    private double get_existing_p50_latency;
-    private double get_existing_p90_latency;
-    private double get_existing_p99_latency;
-    private double get_existing_std_dev;
-    private double get_non_existing_average_latency;
-    private double get_non_existing_p50_latency;
-    private double get_non_existing_p90_latency;
-    private double get_non_existing_p99_latency;
-    private double get_non_existing_std_dev;
-    private boolean is_cluster;
-    private int num_of_tasks;
-    private double set_average_latency;
-    private double set_p50_latency;
-    private double set_p90_latency;
-    private double set_p99_latency;
-    private double set_std_dev;
-    private double tps;
+    public Measurements(
+        String client,
+        int client_count,
+        int data_size,
+        boolean is_cluster,
+        int num_of_tasks,
+        double get_existing_average_latency,
+        double get_existing_p50_latency,
+        double get_existing_p90_latency,
+        double get_existing_p99_latency,
+        double get_existing_std_dev,
+        double get_non_existing_average_latency,
+        double get_non_existing_p50_latency,
+        double get_non_existing_p90_latency,
+        double get_non_existing_p99_latency,
+        double get_non_existing_std_dev,
+        double set_average_latency,
+        double set_p50_latency,
+        double set_p90_latency,
+        double set_p99_latency,
+        double set_std_dev,
+        double tps) {
+      this.client = client;
+      this.client_count = client_count;
+      this.data_size = data_size;
+      this.is_cluster = is_cluster;
+      this.num_of_tasks = num_of_tasks;
+      this.get_existing_average_latency = get_existing_average_latency;
+      this.get_existing_p50_latency = get_existing_p50_latency;
+      this.get_existing_p90_latency = get_existing_p90_latency;
+      this.get_existing_p99_latency = get_existing_p99_latency;
+      this.get_existing_std_dev = get_existing_std_dev;
+      this.get_non_existing_average_latency = get_non_existing_average_latency;
+      this.get_non_existing_p50_latency = get_non_existing_p50_latency;
+      this.get_non_existing_p90_latency = get_non_existing_p90_latency;
+      this.get_non_existing_p99_latency = get_non_existing_p99_latency;
+      this.get_non_existing_std_dev = get_non_existing_std_dev;
+      this.set_average_latency = set_average_latency;
+      this.set_p50_latency = set_p50_latency;
+      this.set_p90_latency = set_p90_latency;
+      this.set_p99_latency = set_p99_latency;
+      this.set_std_dev = set_std_dev;
+      this.tps = tps;
+    }
+
+    public String client;
+    public int client_count;
+    public int data_size;
+    public boolean is_cluster;
+    public int num_of_tasks;
+    public double get_existing_average_latency;
+    public double get_existing_p50_latency;
+    public double get_existing_p90_latency;
+    public double get_existing_p99_latency;
+    public double get_existing_std_dev;
+    public double get_non_existing_average_latency;
+    public double get_non_existing_p50_latency;
+    public double get_non_existing_p90_latency;
+    public double get_non_existing_p99_latency;
+    public double get_non_existing_std_dev;
+    public double set_average_latency;
+    public double set_p50_latency;
+    public double set_p90_latency;
+    public double set_p99_latency;
+    public double set_std_dev;
+    public double tps;
   }
 }
