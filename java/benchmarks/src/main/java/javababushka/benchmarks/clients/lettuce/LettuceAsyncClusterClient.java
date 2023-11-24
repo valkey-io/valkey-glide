@@ -8,6 +8,7 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
+import java.time.Duration;
 import javababushka.benchmarks.utils.ConnectionSettings;
 
 public class LettuceAsyncClusterClient extends LettuceAsyncClient {
@@ -15,11 +16,6 @@ public class LettuceAsyncClusterClient extends LettuceAsyncClient {
   private RedisClusterClient clusterClient;
   private RedisAdvancedClusterAsyncCommands clusterAsyncCommands;
   private StatefulRedisClusterConnection<String, String> clusterConnection;
-
-  @Override
-  public void connectToRedis() {
-    connectToRedis(new ConnectionSettings("localhost", 6379, false, true));
-  }
 
   @Override
   public void connectToRedis(ConnectionSettings connectionSettings) {
@@ -31,6 +27,7 @@ public class LettuceAsyncClusterClient extends LettuceAsyncClient {
             .build();
     clusterClient = RedisClusterClient.create(uri);
     clusterConnection = clusterClient.connect();
+    clusterConnection.setTimeout(Duration.ofSeconds(ASYNC_OPERATION_TIMEOUT_SEC));
     clusterAsyncCommands = clusterConnection.async();
   }
 

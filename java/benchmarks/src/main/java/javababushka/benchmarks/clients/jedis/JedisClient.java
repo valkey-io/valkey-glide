@@ -3,21 +3,11 @@ package javababushka.benchmarks.clients.jedis;
 import javababushka.benchmarks.clients.SyncClient;
 import javababushka.benchmarks.utils.ConnectionSettings;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 
 /** A Jedis client with sync capabilities. See: https://github.com/redis/jedis */
 public class JedisClient implements SyncClient {
 
-  public static final String DEFAULT_HOST = "localhost";
-  public static final int DEFAULT_PORT = 6379;
-
   protected Jedis jedisResource;
-
-  @Override
-  public void connectToRedis() {
-    JedisPool pool = new JedisPool(DEFAULT_HOST, DEFAULT_PORT);
-    jedisResource = pool.getResource();
-  }
 
   @Override
   public void closeConnection() {
