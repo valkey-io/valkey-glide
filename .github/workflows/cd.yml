@@ -1,0 +1,148 @@
+name: Continuous Deployment
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  pull_request:
+    paths:
+      - node/**
+      - ./.github/workflows/**
+
+jobs:
+  publish-npm-binaries:
+    name: Publish NPM packages
+    runs-on: ${{ matrix.build.os }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - {
+              NAME: linux-x64-glibc,
+              OS: ubuntu-latest,
+              INTERNAL_OS: ubuntu-latest,
+              arch: x64,
+              TOOLCHAIN: stable,
+              TARGET: x86_64-unknown-linux-gnu,
+            }
+          - {
+              NAME: linux-arm64-glibc,
+              OS: [self-hosted, Linux, ARM64],
+              INTERNAL_OS: ubuntu-latest,
+              arch: arm64,
+              TOOLCHAIN: stable,
+              TARGET: aarch64-unknown-linux-gnu,
+            }
+          - {
+              NAME: darwin-x64,
+              OS: macos-latest,
+              INTERNAL_OS: macos-latest,
+              arch: x64,
+              TOOLCHAIN: stable,
+              TARGET: x86_64-apple-darwin,
+            }
+          - {
+              NAME: darwin-arm64,
+              OS: macos-13-xlarge,
+              INTERNAL_OS: macos-latest,
+              arch: arm64,
+              TOOLCHAIN: stable,
+              TARGET: aarch64-apple-darwin,
+            }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+
+      - name: Set the release version
+        shell: bash
+        run: |
+          # echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=1.1.1" >> $GITHUB_ENV
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.build.TOOLCHAIN }}
+          target: ${{ matrix.build.TARGET }}
+          override: true
+
+      - name: Create package.json file
+        shell: bash
+        working-directory: ./node
+        run: |
+          # Remove the current package.json
+          rm package.json
+          # set the binary name
+          name="babushka"
+          # derive the OS and architecture from the build matrix name
+          # note: when split by a hyphen, first part is the OS and the second is the architecture
+          node_os=$(echo "${{ matrix.build.NAME }}" | cut -d '-' -f1)
+          export node_os
+          node_arch=$(echo "${{ matrix.build.NAME }}" | cut -d '-' -f2)
+          export node_arch
+          # set the version
+          export node_version="${{ env.RELEASE_VERSION }}"
+          # set the package name 
+          export node_pkg="${name}-${node_os}-${node_arch}"
+          # generate package.json from the template
+          envsubst < package.json.tmpl > "package.json"
+          cat package.json
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+          registry-url: "https://registry.npmjs.org"
+          architecture: ${{ matrix.build.arch }}
+          scope: "@barshaul"
+          always-auth: true
+
+      - name: Build Node wrapper
+        uses: ./.github/workflows/build-node-wrapper
+        with:
+          os: ${{ matrix.build.INTERNAL_OS }}
+          target: ${{ matrix.build.TARGET }}
+
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+      - name: Publish to NPM
+        shell: bash
+        working-directory: ./node
+        run: |
+          echo -e "\nscope=@barshaul" >> $NPM_CONFIG_USERCONFIG
+          cat $NPM_CONFIG_USERCONFIG
+          npm publish --loglevel verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+  publish-npm-base:
+    name: Publish the base NPM package
+    needs: publish-npm-binaries
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@barshaul"
+          always-auth: true
+
+      - name: Publish the package
+        shell: bash
+        run: |
+          cd npm/babushka
+          npm install # requires optional dependencies to be present in the registry
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

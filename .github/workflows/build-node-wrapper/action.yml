@@ -6,14 +6,22 @@ inputs:
         required: true
         type: string
         options:
-          - macOS
-          - ubuntu
-          - amazon-linux
+            - macOS
+            - ubuntu
+            - amazon-linux
+            - macos-latest
+            - ubuntu-latest
+    target:
+        description: "The platform target, for example x86_64-unknown-linux-gnu"
+        required: false
+        type: string
+        default: ""
+
     release_mode:
         description: "Enable building the wrapper in release mode"
         required: false
         type: boolean
-        default: 'false'
+        default: "false"
 
 env:
     CARGO_TERM_COLOR: always
@@ -28,15 +36,17 @@ runs:
 
         - name: npm install
           shell: bash
-          working-directory: ./node/rust-client
+          working-directory: ./node
           run: |
-              rm -rf node_modules && npm install --frozen-lockfile
+              ARCH_FLAG=`if [ ${{ inputs.target  == 'aarch64-unknown-linux-gnu' }} ]; then echo "--arch=arm64"; fi`
+              rm -rf node_modules && npm install $ARCH_FLAG --frozen-lockfile
+              cd rust-client
               npm install
 
         - name: Build
           shell: bash
+          working-directory: ./node
           run: |
               source "$HOME/.cargo/env"
-              rm -rf node_modules && npm install --frozen-lockfile
-              npm run build
-          working-directory: ./node
+              TARGET_FLAG=`if [ "${{ inputs.target }}" != ''  ]; then echo "--target ${{ inputs.target }}"; fi`
+              npm run build --build-flags="$TARGET_FLAG"

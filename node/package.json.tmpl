@@ -1,6 +1,6 @@
 {
-    "name": "@barshaul/babushka-main",
-    "version": "0.1.0",
+    "name": "@barshaul/${node_pkg}",
+    "version": "${node_version}",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
@@ -9,6 +9,12 @@
         "url": "git+https://github.com/aws/babushka.git"
     },
     "homepage": "https://github.com/aws/babushka#readme",
+    "os": [
+      "${node_os}"
+    ],
+    "cpu": [
+      "${node_arch}"
+    ],
     "dependencies": {
         "babushka-rs-internal": "file:rust-client",
         "long": "^5.2.3",
