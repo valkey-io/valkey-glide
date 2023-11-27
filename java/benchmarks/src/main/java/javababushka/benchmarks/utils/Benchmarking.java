@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import javababushka.benchmarks.BenchmarkingApp;
 import javababushka.benchmarks.clients.AsyncClient;
@@ -46,11 +47,12 @@ public class Benchmarking {
     void go() throws InterruptedException, ExecutionException;
   }
 
-  public static Pair<ChosenAction, Long> measurePerformance(Map<ChosenAction, Operation> actions) {
+  public static Pair<ChosenAction, Long> measurePerformance(
+      Client client, Map<ChosenAction, Function<Client, Operation>> actions) {
     var action = randomAction();
     long before = System.nanoTime();
     try {
-      actions.get(action).go();
+      actions.get(action).apply(client).go();
     } catch (ExecutionException e) {
       throw new RuntimeException("Client error", e);
     } catch (InterruptedException e) {
@@ -215,11 +217,12 @@ public class Benchmarking {
       boolean debugLogging) {
     return CompletableFuture.supplyAsync(
         () -> {
-          Map<ChosenAction, ArrayList<Long>> taskActionResults =
+          var taskActionResults =
               Map.of(
-                  ChosenAction.GET_EXISTING, new ArrayList<>(),
-                  ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
-                  ChosenAction.SET, new ArrayList<>());
+                  ChosenAction.GET_EXISTING, new ArrayList<Long>(),
+                  ChosenAction.GET_NON_EXISTING, new ArrayList<Long>(),
+                  ChosenAction.SET, new ArrayList<Long>());
+          var actions = getActionMap(dataSize, async);
           int iterationIncrement = iterationCounter.getAndIncrement();
           int clientIndex = iterationIncrement % clients.size();
 
@@ -235,9 +238,8 @@ public class Benchmarking {
                   iterationIncrement + 1, iterations, clientIndex + 1, clientCount);
             }
 
-            var actions = getActionMap(clients.get(clientIndex), dataSize, async);
             // operate and calculate tik-tok
-            Pair<ChosenAction, Long> result = measurePerformance(actions);
+            Pair<ChosenAction, Long> result = measurePerformance(clients.get(clientIndex), actions);
             if (result != null) {
               taskActionResults.get(result.getLeft()).add(result.getRight());
             }
@@ -249,26 +251,37 @@ public class Benchmarking {
         });
   }
 
-  public static Map<ChosenAction, Operation> getActionMap(
-      Client client, int dataSize, boolean async) {
+  public static Map<ChosenAction, Function<Client, Operation>> getActionMap(
+      int dataSize, boolean async) {
 
     String value = "0".repeat(dataSize);
-    Map<ChosenAction, Operation> actions = new HashMap<>();
-    actions.put(
+    return Map.of(
         ChosenAction.GET_EXISTING,
-        async
-            ? () -> ((AsyncClient) client).asyncGet(generateKeySet()).get()
-            : () -> ((SyncClient) client).get(generateKeySet()));
-    actions.put(
+        client ->
+            () -> {
+              if (async) {
+                ((AsyncClient) client).asyncGet(generateKeySet()).get();
+              } else {
+                ((SyncClient) client).get(generateKeySet());
+              }
+            },
         ChosenAction.GET_NON_EXISTING,
-        async
-            ? () -> ((AsyncClient) client).asyncGet(generateKeyGet()).get()
-            : () -> ((SyncClient) client).get(generateKeyGet()));
-    actions.put(
+        client ->
+            () -> {
+              if (async) {
+                ((AsyncClient) client).asyncGet(generateKeyGet()).get();
+              } else {
+                ((SyncClient) client).get(generateKeyGet());
+              }
+            },
         ChosenAction.SET,
-        async
-            ? () -> ((AsyncClient) client).asyncSet(generateKeySet(), value).get()
-            : () -> ((SyncClient) client).set(generateKeySet(), value));
-    return actions;
+        client ->
+            () -> {
+              if (async) {
+                ((AsyncClient) client).asyncSet(generateKeySet(), value).get();
+              } else {
+                ((SyncClient) client).set(generateKeySet(), value);
+              }
+            });
   }
 }
