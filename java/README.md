@@ -6,7 +6,8 @@ The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, an
 
 ## Java supported version
 
-Tested on Amazon Corretto version 11.0.21, and 17.0.3
+On Linux, tested on Temurin JDK version 11.0.21, and 17.0.9. 
+On MacOs, tested on Amazon Corretto version 11.0.21, and 17.0.3. 
 
 ## Installation and Setup
 
@@ -21,17 +22,14 @@ Software Dependencies:
 - JDK 11+
 - git
 - protoc (protobuf compiler)
-- Gradle
+- Rust
 
 #### Prerequisites
 
 **Dependencies installation for Ubuntu**
 ```bash
 sudo apt update -y
-sudo apt-get install openjdk-11-jdk
-VERSION=8.3
-wget https://services.gradle.org/distributions/gradle-${VERSION}-bin.zip -P /tmp
-sudo apt install -y protobuf-compiler
+sudo apt install -y protobuf-compiler openjdk-11-jdk openssl gcc
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -49,14 +47,6 @@ $ java -version
  OpenJDK 64-Bit Server VM 18.9 (build 11.0.1+13, mixed mode)
 ```
 
-Ensure that you have a Gradle version 8 installed on your system: 
-```bash
-$ gradle --version
-------------------------------------------------------------
-Gradle 8.3
-------------------------------------------------------------
-```
-
 #### Building and installation steps
 Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
@@ -72,27 +62,27 @@ Before starting this step, make sure you've installed all software requirments.
 3. Generate protobuf files:
     ```bash
    $ cd java/
-   $ ./gradle :client:protobuf
+   $ ./gradlew :client:protobuf
    BUILD SUCCESSFUL
     ```
 4. Build the client library:
     ```bash
    $ cd java/
-   $ ./gradle :client:build
+   $ ./gradlew :client:build
    BUILD SUCCESSFUL
     ```
 5. Run tests:
    ```bash
    $ cd java/
-   $ ./gradle :client:test
+   $ ./gradlew :client:test
    BUILD SUCCESSFUL
     ```
 
 Other useful gradle developer commands: 
-* `./gradle :client:test` to run client unit tests
-* `./gradle :client:spotlessCheck` to check for codestyle issues
-* `./gradle :client:spotlessApply` to apply codestyle recommendations
-* `./gradle :benchmarks:run` to run performance benchmarks
+* `./gradlew :client:test` to run client unit tests
+* `./gradlew :client:spotlessCheck` to check for codestyle issues
+* `./gradlew :client:spotlessApply` to apply codestyle recommendations
+* `./gradlew :benchmarks:run` to run performance benchmarks
 
 ## Basic Examples
 
