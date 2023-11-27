@@ -34,7 +34,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-**Dependencies installation for MacOS**
+**Dependencies for MacOS**
 
 Ensure that you have a minimum Java version of JDK 11 installed on your system:
 ```bash
