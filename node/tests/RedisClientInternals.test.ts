@@ -13,7 +13,6 @@ import {
     RedisClient,
     RedisClusterClient,
     RequestError,
-    TimeoutError,
     Transaction,
 } from "../build-ts";
 import { RedisClientConfiguration } from "../build-ts/src/RedisClient";
