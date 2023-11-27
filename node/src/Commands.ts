@@ -51,6 +51,9 @@ function createCommand(
     return singleCommand;
 }
 
+/**
+ * @internal
+ */
 export function createGet(key: string): redis_request.Command {
     return createCommand(RequestType.GetString, [key]);
 }
@@ -96,6 +99,9 @@ export type SetOptions = {
           };
 };
 
+/**
+ * @internal
+ */
 export function createSet(
     key: string,
     value: string,
@@ -212,50 +218,83 @@ export enum InfoOptions {
     Everything = "everything",
 }
 
+/**
+ * @internal
+ */
 export function createPing(str?: string): redis_request.Command {
     const args: string[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
 
+/**
+ * @internal
+ */
 export function createInfo(options?: InfoOptions[]): redis_request.Command {
     const args: string[] = options == undefined ? [] : options;
     return createCommand(RequestType.Info, args);
 }
 
+/**
+ * @internal
+ */
 export function createDel(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Del, keys);
 }
 
+/**
+ * @internal
+ */
 export function createSelect(index: number): redis_request.Command {
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
+/**
+ * @internal
+ */
 export function createClientGetName(): redis_request.Command {
     return createCommand(RequestType.ClientGetName, []);
 }
 
+/**
+ * @internal
+ */
 export function createConfigRewrite(): redis_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }
 
+/**
+ * @internal
+ */
 export function createConfigResetStat(): redis_request.Command {
     return createCommand(RequestType.ConfigResetStat, []);
 }
 
+/**
+ * @internal
+ */
 export function createMGet(keys: string[]): redis_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
+/**
+ * @internal
+ */
 export function createMSet(
     keyValueMap: Record<string, string>
 ): redis_request.Command {
     return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
 }
 
+/**
+ * @internal
+ */
 export function createIncr(key: string): redis_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createIncrBy(
     key: string,
     amount: number
@@ -263,6 +302,9 @@ export function createIncrBy(
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
 }
 
+/**
+ * @internal
+ */
 export function createIncrByFloat(
     key: string,
     amount: number
@@ -270,14 +312,23 @@ export function createIncrByFloat(
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
+/**
+ * @internal
+ */
 export function createClientId(): redis_request.Command {
     return createCommand(RequestType.ClientId, []);
 }
 
+/**
+ * @internal
+ */
 export function createConfigGet(parameters: string[]): redis_request.Command {
     return createCommand(RequestType.ConfigGet, parameters);
 }
 
+/**
+ * @internal
+ */
 export function createConfigSet(
     parameters: Record<string, string>
 ): redis_request.Command {
@@ -287,10 +338,16 @@ export function createConfigSet(
     );
 }
 
+/**
+ * @internal
+ */
 export function createHGet(key: string, field: string): redis_request.Command {
     return createCommand(RequestType.HashGet, [key, field]);
 }
 
+/**
+ * @internal
+ */
 export function createHSet(
     key: string,
     fieldValueMap: Record<string, string>
@@ -301,10 +358,16 @@ export function createHSet(
     );
 }
 
+/**
+ * @internal
+ */
 export function createDecr(key: string): redis_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createDecrBy(
     key: string,
     amount: number
@@ -312,6 +375,9 @@ export function createDecrBy(
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
 }
 
+/**
+ * @internal
+ */
 export function createHDel(
     key: string,
     fields: string[]
@@ -319,6 +385,9 @@ export function createHDel(
     return createCommand(RequestType.HashDel, [key].concat(fields));
 }
 
+/**
+ * @internal
+ */
 export function createHMGet(
     key: string,
     fields: string[]
@@ -326,6 +395,9 @@ export function createHMGet(
     return createCommand(RequestType.HashMGet, [key].concat(fields));
 }
 
+/**
+ * @internal
+ */
 export function createHExists(
     key: string,
     field: string
@@ -333,10 +405,16 @@ export function createHExists(
     return createCommand(RequestType.HashExists, [key, field]);
 }
 
+/**
+ * @internal
+ */
 export function createHGetAll(key: string): redis_request.Command {
     return createCommand(RequestType.HashGetAll, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createLPush(
     key: string,
     elements: string[]
@@ -344,11 +422,17 @@ export function createLPush(
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
 
+/**
+ * @internal
+ */
 export function createLPop(key: string, count?: number): redis_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
 
+/**
+ * @internal
+ */
 export function createLRange(
     key: string,
     start: number,
@@ -361,10 +445,16 @@ export function createLRange(
     ]);
 }
 
+/**
+ * @internal
+ */
 export function createLLen(key: string): redis_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createLTrim(
     key: string,
     start: number,
@@ -377,6 +467,9 @@ export function createLTrim(
     ]);
 }
 
+/**
+ * @internal
+ */
 export function createLRem(
     key: string,
     count: number,
@@ -385,6 +478,9 @@ export function createLRem(
     return createCommand(RequestType.LRem, [key, count.toString(), element]);
 }
 
+/**
+ * @internal
+ */
 export function createRPush(
     key: string,
     elements: string[]
@@ -392,11 +488,17 @@ export function createRPush(
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
 
+/**
+ * @internal
+ */
 export function createRPop(key: string, count?: number): redis_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
 
+/**
+ * @internal
+ */
 export function createSAdd(
     key: string,
     members: string[]
@@ -404,6 +506,9 @@ export function createSAdd(
     return createCommand(RequestType.SAdd, [key].concat(members));
 }
 
+/**
+ * @internal
+ */
 export function createSRem(
     key: string,
     members: string[]
@@ -411,18 +516,30 @@ export function createSRem(
     return createCommand(RequestType.SRem, [key].concat(members));
 }
 
+/**
+ * @internal
+ */
 export function createSMembers(key: string): redis_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createSCard(key: string): redis_request.Command {
     return createCommand(RequestType.SCard, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createCustomCommand(commandName: string, args: string[]) {
     return createCommand(RequestType.CustomCommand, [commandName, ...args]);
 }
 
+/**
+ * @internal
+ */
 export function createHIncrBy(
     key: string,
     field: string,
@@ -435,6 +552,9 @@ export function createHIncrBy(
     ]);
 }
 
+/**
+ * @internal
+ */
 export function createHIncrByFloat(
     key: string,
     field: string,
@@ -447,10 +567,16 @@ export function createHIncrByFloat(
     ]);
 }
 
+/**
+ * @internal
+ */
 export function createExists(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
 
+/**
+ * @internal
+ */
 export function createUnlink(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Unlink, keys);
 }
@@ -474,6 +600,9 @@ export enum ExpireOptions {
     NewExpiryLessThanCurrent = "LT",
 }
 
+/**
+ * @internal
+ */
 export function createExpire(
     key: string,
     seconds: number,
@@ -486,6 +615,9 @@ export function createExpire(
     return createCommand(RequestType.Expire, args);
 }
 
+/**
+ * @internal
+ */
 export function createExpireAt(
     key: string,
     unixSeconds: number,
@@ -498,6 +630,9 @@ export function createExpireAt(
     return createCommand(RequestType.ExpireAt, args);
 }
 
+/**
+ * @internal
+ */
 export function createPExpire(
     key: string,
     milliseconds: number,
@@ -510,6 +645,9 @@ export function createPExpire(
     return createCommand(RequestType.PExpire, args);
 }
 
+/**
+ * @internal
+ */
 export function createPExpireAt(
     key: string,
     unixMilliseconds: number,
@@ -522,6 +660,9 @@ export function createPExpireAt(
     return createCommand(RequestType.PExpireAt, args);
 }
 
+/**
+ * @internal
+ */
 export function createTTL(key: string): redis_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
