@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javababushka.benchmarks.BenchmarkingApp;
@@ -51,15 +52,21 @@ public class Benchmarking {
     long before = System.nanoTime();
     try {
       actions.get(action).go();
-    } catch (Exception e) {
-      // timed out - exception from Future::get
+    } catch (TimeoutException ignored) {
       return null;
+    } catch (ExecutionException e) {
+      throw new RuntimeException("Client error", e);
+    } catch (InterruptedException e) {
+      if (Thread.currentThread().isInterrupted()) {
+        // restore interrupt
+        Thread.interrupted();
+      }
+      throw new RuntimeException("The thread was interrupted", e);
     }
     long after = System.nanoTime();
     return Pair.of(action, after - before);
   }
 
-  // This has the side-effect of sorting each latencies ArrayList
   public static Map<ChosenAction, LatencyResults> calculateResults(
       Map<ChosenAction, List<Long>> actionLatencies) {
     Map<ChosenAction, LatencyResults> results = new HashMap<>();
