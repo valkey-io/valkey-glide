@@ -1,7 +1,9 @@
 package javababushka.benchmarks.clients;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** A Redis client with async capabilities */
 public interface AsyncClient<T> extends Client {
@@ -19,8 +21,16 @@ public interface AsyncClient<T> extends Client {
   default <T> T waitForResult(Future<T> future, long timeout) {
     try {
       return future.get(timeout, TimeUnit.MILLISECONDS);
-    } catch (Exception ignored) {
+    } catch (TimeoutException ignored) {
       return null;
+    } catch (ExecutionException e) {
+      throw new RuntimeException("Client error", e);
+    } catch (InterruptedException e) {
+      if (Thread.currentThread().isInterrupted()) {
+        // restore interrupt
+        Thread.interrupted();
+      }
+      throw new RuntimeException("The thread was interrupted", e);
     }
   }
 }
