@@ -93,7 +93,7 @@ public class BenchmarkingApp {
             .hasArg(true)
             .desc(
                 "one of:"
-                    + " all|jedis|jedis_async|lettuce|lettuce_async|babushka_async|all_async|all_sync"
+                    + " all|jedis|lettuce|lettuce_async|babushka_async|all_async|all_sync"
                     + " [all]")
             .build());
     options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
@@ -146,13 +146,11 @@ public class BenchmarkingApp {
                       case ALL:
                         return Stream.of(
                             ClientName.JEDIS,
-                            ClientName.JEDIS_ASYNC,
                             //                            ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_ASYNC:
                         return Stream.of(
-                            ClientName.JEDIS_ASYNC,
                             // ClientName.BABUSHKA_ASYNC,
                             ClientName.LETTUCE_ASYNC);
                       case ALL_SYNC:
@@ -201,7 +199,6 @@ public class BenchmarkingApp {
 
   public enum ClientName {
     JEDIS("Jedis"),
-    JEDIS_ASYNC("Jedis async"),
     LETTUCE("Lettuce"),
     LETTUCE_ASYNC("Lettuce async"),
     BABUSHKA_ASYNC("Babushka async"),
@@ -245,7 +242,7 @@ public class BenchmarkingApp {
       clients =
           new ClientName[] {
             // ClientName.BABUSHKA_ASYNC,
-            ClientName.JEDIS, ClientName.JEDIS_ASYNC, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
+            ClientName.JEDIS, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
           };
       host = "localhost";
       port = 6379;
