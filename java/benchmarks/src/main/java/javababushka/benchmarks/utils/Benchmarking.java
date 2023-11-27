@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javababushka.benchmarks.BenchmarkingApp;
@@ -44,7 +43,7 @@ public class Benchmarking {
   }
 
   public interface Operation {
-    void go() throws Exception;
+    void go() throws InterruptedException, ExecutionException;
   }
 
   public static Pair<ChosenAction, Long> measurePerformance(Map<ChosenAction, Operation> actions) {
@@ -52,8 +51,6 @@ public class Benchmarking {
     long before = System.nanoTime();
     try {
       actions.get(action).go();
-    } catch (TimeoutException ignored) {
-      return null;
     } catch (ExecutionException e) {
       throw new RuntimeException("Client error", e);
     } catch (InterruptedException e) {
