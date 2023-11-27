@@ -46,10 +46,6 @@ public class BenchmarkingApp {
           // run testClientSetGet on JEDIS sync client
           System.out.println("Run JEDIS sync client");
           break;
-        case JEDIS_ASYNC:
-          // run testClientSetGet on JEDIS pseudo-async client
-          System.out.println("Run JEDIS pseudo-async client");
-          break;
         case LETTUCE:
           // run testClientSetGet on LETTUCE sync client
           System.out.println("Run LETTUCE sync client");

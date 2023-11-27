@@ -3,18 +3,16 @@ package javababushka.benchmarks.clients.jedis;
 import javababushka.benchmarks.clients.SyncClient;
 import javababushka.benchmarks.utils.ConnectionSettings;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 /** A Jedis client with sync capabilities. See: https://github.com/redis/jedis */
 public class JedisClient implements SyncClient {
 
-  protected Jedis jedisResource;
+  protected JedisPool pool;
 
   @Override
   public void closeConnection() {
-    try {
-      jedisResource.close();
-    } catch (Exception ignored) {
-    }
+    // nothing to do
   }
 
   @Override
@@ -24,29 +22,38 @@ public class JedisClient implements SyncClient {
 
   @Override
   public void connectToRedis(ConnectionSettings connectionSettings) {
-    jedisResource =
-        new Jedis(connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
-    jedisResource.connect();
-    if (!jedisResource.isConnected()) {
-      throw new RuntimeException("failed to connect to jedis");
+    pool =
+        new JedisPool(connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
+
+    // check if the pool is properly connected
+    try (Jedis jedis = pool.getResource()) {
+      assert jedis.isConnected() : "failed to connect to jedis";
     }
   }
 
   public String info() {
-    return jedisResource.info();
+    try (Jedis jedis = pool.getResource()) {
+      return jedis.info();
+    }
   }
 
   public String info(String section) {
-    return jedisResource.info(section);
+    try (Jedis jedis = pool.getResource()) {
+      return jedis.info(section);
+    }
   }
 
   @Override
   public void set(String key, String value) {
-    jedisResource.set(key, value);
+    try (Jedis jedis = pool.getResource()) {
+      jedis.set(key, value);
+    }
   }
 
   @Override
   public String get(String key) {
-    return jedisResource.get(key);
+    try (Jedis jedis = pool.getResource()) {
+      return jedis.get(key);
+    }
   }
 }
