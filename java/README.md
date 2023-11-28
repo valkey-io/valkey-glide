@@ -1,19 +1,15 @@
 # Getting Started - Java Wrapper
 
-## System Requirements
+## Wrapper Status
 
-The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, and amd64 using macOS 14.1.
-
-## Java supported version
-
-On Linux, tested on Temurin JDK version 11.0.21, and 17.0.9. 
-On MacOs, tested on Amazon Corretto version 11.0.21, and 17.0.3. 
+The Java client is currently a work in progress and offers no guarantees.  The client must be built from source, and 
+we assume no responsibilities or performance guarantees.  
 
 ## Installation and Setup
 
 ### Install from Gradle
 
-At the moment, the beta release of Babushka mush be build from source. 
+At the moment, the Java client must be build from source. 
 
 ### Build from source
 
@@ -48,35 +44,34 @@ $ java -version
 ```
 
 #### Building and installation steps
-Before starting this step, make sure you've installed all software requirments.
+The Java client is currently a work in progress and offers no guarantees.  Users should build at their own risk.      
+
+Before starting this step, make sure you've installed all software requirements.
 1. Clone the repository:
-    ```bash
-    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/babushka.git
-    cd babushka
-    ```
+```bash
+VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+git clone --branch ${VERSION} https://github.com/aws/babushka.git
+cd babushka
+```
 2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
+```bash
+git submodule update --init --recursive
+```
 3. Generate protobuf files:
-    ```bash
-   $ cd java/
-   $ ./gradlew :client:protobuf
-   BUILD SUCCESSFUL
-    ```
+```bash
+cd java/
+./gradlew :client:protobuf
+```
 4. Build the client library:
-    ```bash
-   $ cd java/
-   $ ./gradlew :client:build
-   BUILD SUCCESSFUL
-    ```
+```bash
+cd java/
+./gradlew :client:build
+```
 5. Run tests:
-   ```bash
-   $ cd java/
-   $ ./gradlew :client:test
-   BUILD SUCCESSFUL
-    ```
+```bash
+cd java/
+$ ./gradlew :client:test
+```
 
 Other useful gradle developer commands: 
 * `./gradlew :client:test` to run client unit tests
@@ -90,19 +85,18 @@ Other useful gradle developer commands:
 
 ```java
 import javababushka.Client;
-import response.ResponseOuterClass.Response;
+import javababushka.Client.SingleResponse;
 
-public class RedisClient {
+Client client = new Client();
 
-   Client testClient = new Client();
+SingleResponse connect = client.asyncConnectToRedis("localhost", 6379);
+connect.await().isSuccess();
 
-   public RedisClient() {
-      testClient.asyncConnectToRedis("localhost", 6379, false, false).get(); // expect Ok
-      Response setResponse = testClient.asyncSet("name", "johnsmith").get(); // expect Ok
-      Response getResponse = testClient.asyncGet("name").get(); // expect "johnsmith"
-   }
-  
-}
+SingleResponse set = client.asyncSet("key", "foobar");
+set.await().isSuccess();
+
+SingleResponse get = client.asyncGet("key");
+get.await().getValue() == "foobar";
 ```
 
 ### Benchmarks
@@ -113,10 +107,3 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 ./gradlew run --args="-help"
 ./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
 ```
-
-### Troubleshooting
-
-* Connection Timeout: 
-  * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
-* Only server-side certificates are supported by the TLS configured redis.
-
