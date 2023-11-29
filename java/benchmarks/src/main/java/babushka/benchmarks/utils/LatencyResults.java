@@ -1,4 +1,4 @@
-package javababushka.benchmarks.utils;
+package babushka.benchmarks.utils;
 
 import java.util.Arrays;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;

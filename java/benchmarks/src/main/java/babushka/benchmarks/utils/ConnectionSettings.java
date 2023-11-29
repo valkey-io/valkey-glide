@@ -1,4 +1,4 @@
-package javababushka.benchmarks.utils;
+package babushka.benchmarks.utils;
 
 /** Redis-client settings */
 public class ConnectionSettings {

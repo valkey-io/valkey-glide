@@ -14,11 +14,11 @@ dependencies {
 
 tasks.register('protobuf', Exec) {
     doFirst {
-        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/org/babushka/javababushka/generated').toString())
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/org/babushka/generated').toString())
     }
     commandLine 'protoc',
         '-Iprotobuf=babushka-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/org/babushka/javababushka/generated',
+        '--java_out=java/client/src/main/java/org/babushka/generated',
         'babushka-core/src/protobuf/connection_request.proto',
         'babushka-core/src/protobuf/redis_request.proto',
         'babushka-core/src/protobuf/response.proto'
@@ -44,4 +44,3 @@ tasks.register('buildAll') {
     dependsOn 'protobuf', 'buildRust'
     finalizedBy 'build'
 }
-
