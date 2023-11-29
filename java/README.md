@@ -1,9 +1,11 @@
 # Getting Started - Java Wrapper
 
-## Wrapper Status
+## Notice: Java Wrapper - Work in Progress
 
-The Java client is currently a work in progress and offers no guarantees.  The client must be built from source, and 
-we assume no responsibilities or performance guarantees.  
+We're excited to share that the Java client is currently in development! However, it's important to note that this client 
+is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as 
+we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue 
+to develop this Java wrapper.
 
 ## Installation and Setup
 
