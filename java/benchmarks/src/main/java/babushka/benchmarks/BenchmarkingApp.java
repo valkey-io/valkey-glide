@@ -1,4 +1,4 @@
-package javababushka.benchmarks;
+package babushka.benchmarks;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -30,7 +30,7 @@ public class BenchmarkingApp {
       // generate the help statement
       if (line.hasOption("help")) {
         HelpFormatter formatter = new HelpFormatter();
-        formatter.printHelp("javababushka", options);
+        formatter.printHelp("babushka", options);
         return;
       }
 
