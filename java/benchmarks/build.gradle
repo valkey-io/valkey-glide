@@ -29,10 +29,10 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = 'javababushka.benchmarks.BenchmarkingApp'
+    mainClass = 'babushka.benchmarks.BenchmarkingApp'
 }
 
-tasks.withType(Test) { 
+tasks.withType(Test) {
   testLogging {
     exceptionFormat "full"
     events "started", "skipped", "passed", "failed"

@@ -1,4 +1,4 @@
-package javababushka.benchmarks.clients.babushka;
+package babushka.benchmarks.clients.babushka;
 
 /*
 

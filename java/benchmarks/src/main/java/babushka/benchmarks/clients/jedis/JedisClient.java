@@ -1,7 +1,7 @@
-package javababushka.benchmarks.clients.jedis;
+package babushka.benchmarks.clients.jedis;
 
-import javababushka.benchmarks.clients.SyncClient;
-import javababushka.benchmarks.utils.ConnectionSettings;
+import babushka.benchmarks.clients.SyncClient;
+import babushka.benchmarks.utils.ConnectionSettings;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 

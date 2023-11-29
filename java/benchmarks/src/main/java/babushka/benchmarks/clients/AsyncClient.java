@@ -1,4 +1,4 @@
-package javababushka.benchmarks.clients;
+package babushka.benchmarks.clients;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
