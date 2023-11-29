@@ -1,8 +1,6 @@
-package javababushka;
+package babushka;
 
-import static connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import static connection_request.ConnectionRequestOuterClass.ConnectionRequest;
-import static connection_request.ConnectionRequestOuterClass.ConnectionRetryStrategy;
 import static connection_request.ConnectionRequestOuterClass.NodeAddress;
 import static connection_request.ConnectionRequestOuterClass.ReadFrom;
 import static connection_request.ConnectionRequestOuterClass.TlsMode;
@@ -36,8 +34,6 @@ import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.channel.unix.UnixChannel;
 import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import java.util.ArrayList;
@@ -55,7 +51,6 @@ import org.apache.commons.lang3.tuple.Pair;
 
 public class Client implements AutoCloseable {
 
-  private static final int REQUEST_TIMEOUT_MILLISECONDS = 250;
   private static final int HIGH_WRITE_WATERMARK = 4096;
   private static final int LOW_WRITE_WATERMARK = 1024;
   private static final long DEFAULT_TIMEOUT_MILLISECONDS = 1000;
@@ -80,7 +75,7 @@ public class Client implements AutoCloseable {
 
   // Futures to handle responses. Index is callback id, starting from 1 (0 index is for connection
   // request always).
-  // Is it not a concurrent nor sync collection, but it is synced on adding. No removes.
+  // It is not a concurrent nor sync collection, but it is synced on adding. No removes.
   private final List<CompletableFuture<Response>> responses = new ArrayList<>();
   // Unique offset for every client to avoid having multiple commands with the same id at a time.
   // For debugging replace with: new Random().nextInt(1000) * 1000
@@ -93,7 +88,7 @@ public class Client implements AutoCloseable {
     try {
       return BabushkaCoreNativeDefinitions.startSocketListenerExternal();
     } catch (Exception | UnsatisfiedLinkError e) {
-      System.err.printf("Failed to get UDS from babushka and dedushka: %s%n%n", e);
+      System.err.printf("Failed to create UDS connection: %s%n%n", e);
       throw new RuntimeException(e);
     }
   }
@@ -101,8 +96,7 @@ public class Client implements AutoCloseable {
   private Channel channel = null;
   private EventLoopGroup group = null;
 
-  // We support MacOS and Linux only, because Babushka does not support Windows, because tokio does
-  // not support it.
+  // At the moment, Windows is not supported.
   // Probably we should use NIO (NioEventLoopGroup) for Windows.
   private static final boolean isMacOs = isMacOs();
 
@@ -136,7 +130,6 @@ public class Client implements AutoCloseable {
                     @Override
                     public void initChannel(UnixChannel ch) throws Exception {
                       ch.pipeline()
-                          .addLast("logger", new LoggingHandler(LogLevel.DEBUG))
                           // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
                           .addLast("protobufDecoder", new ProtobufVarint32FrameDecoder())
                           .addLast("protobufEncoder", new ProtobufVarint32LengthFieldPrepender())
@@ -145,7 +138,6 @@ public class Client implements AutoCloseable {
                                 @Override
                                 public void channelRead(ChannelHandlerContext ctx, Object msg)
                                     throws Exception {
-                                  // System.out.printf("=== channelRead %s %s %n", ctx, msg);
                                   var buf = (ByteBuf) msg;
                                   var bytes = new byte[buf.readableBytes()];
                                   buf.readBytes(bytes);
@@ -158,8 +150,6 @@ public class Client implements AutoCloseable {
                                     // https://github.com/aws/babushka/issues/600
                                     callbackId -= callbackOffset;
                                   }
-                                  // System.out.printf("== Received response with callback %d%n",
-                                  // response.getCallbackIdx());
                                   responses.get(callbackId).complete(response);
                                   responses.set(callbackId, null);
                                   super.channelRead(ctx, bytes);
@@ -179,7 +169,6 @@ public class Client implements AutoCloseable {
                                 public void write(
                                     ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
                                     throws Exception {
-                                  // System.out.printf("=== write %s %s %s %n", ctx, msg, promise);
                                   var bytes = (byte[]) msg;
 
                                   boolean needFlush = false;
@@ -199,7 +188,6 @@ public class Client implements AutoCloseable {
                                   if (needFlush) {
                                     // flush outside the sync block
                                     flush(ctx);
-                                    // System.out.println("-- auto flush - buffer");
                                   }
                                 }
                               });
@@ -290,6 +278,8 @@ public class Client implements AutoCloseable {
     closeConnection();
   }
 
+  // TODO use a configuration object
+  // TODO support multiple addresses
   public Future<Response> asyncConnectToRedis(
       String host, int port, boolean useSsl, boolean clusterMode) {
     createChannel();
@@ -302,17 +292,8 @@ public class Client implements AutoCloseable {
                     ? TlsMode.SecureTls
                     : TlsMode.NoTls)
             .setClusterModeEnabled(clusterMode)
-            .setRequestTimeout(REQUEST_TIMEOUT_MILLISECONDS)
             .setReadFrom(ReadFrom.Primary)
-            .setConnectionRetryStrategy(
-                ConnectionRetryStrategy.newBuilder()
-                    .setNumberOfRetries(1)
-                    .setFactor(1)
-                    .setExponentBase(1)
-                    .build())
-            .setAuthenticationInfo(
-                AuthenticationInfo.newBuilder().setPassword("").setUsername("default").build())
-            .setDatabaseId(0)
+            // TODO connection timeout and retry strategy and auth and db id configurable by user
             .build();
 
     var future = new CompletableFuture<Response>();
@@ -323,7 +304,6 @@ public class Client implements AutoCloseable {
 
   private CompletableFuture<Response> submitNewCommand(RequestType command, List<String> args) {
     var commandId = getNextCallback();
-    // System.out.printf("== %s(%s), callback %d%n", command, String.join(", ", args), commandId);
 
     return CompletableFuture.supplyAsync(
             () -> {
@@ -360,7 +340,6 @@ public class Client implements AutoCloseable {
           } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
           } catch (TimeoutException e) {
-            // System.out.println("-- auto flush - timeout");
             channel.flush();
             nonFlushedBytesCounter.set(0);
             nonFlushedWritesCounter.set(0);
@@ -374,12 +353,10 @@ public class Client implements AutoCloseable {
   }
 
   public Future<Response> asyncSet(String key, String value) {
-    // System.out.printf("== set(%s, %s), callback %d%n", key, value, callbackId);
     return submitNewCommand(RequestType.SetString, List.of(key, value));
   }
 
   public Future<String> asyncGet(String key) {
-    // System.out.printf("== get(%s), callback %d%n", key, callbackId);
     return submitNewCommand(RequestType.GetString, List.of(key))
         .thenApply(
             response ->

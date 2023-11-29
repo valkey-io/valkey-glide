@@ -25,20 +25,12 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
         Value::Bulk(_bulk) => {
             let _ = env.throw("Not implemented");
             JObject::null()
-            /*
-            let elements: &PyList = PyList::new(
-                py,
-                bulk.into_iter()
-                    .map(|item| redis_value_to_py(py, item).unwrap()),
-            );
-            Ok(elements.into_py(py))
-            */
         }
     }
 }
 
 #[no_mangle]
-pub extern "system" fn Java_javababushka_BabushkaCoreNativeDefinitions_valueFromPointer<'local>(
+pub extern "system" fn Java_babushka_BabushkaCoreNativeDefinitions_valueFromPointer<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong
@@ -48,13 +40,11 @@ pub extern "system" fn Java_javababushka_BabushkaCoreNativeDefinitions_valueFrom
 }
 
 #[no_mangle]
-pub extern "system" fn Java_javababushka_BabushkaCoreNativeDefinitions_startSocketListenerExternal<'local>(
+pub extern "system" fn Java_babushka_BabushkaCoreNativeDefinitions_startSocketListenerExternal<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>
 ) -> JObject<'local> {
     let (tx, rx) = mpsc::channel::<Result<String, String>>();
-
-    //logger_core::init(Some(Level::Trace), None);
 
     start_socket_listener(move |socket_path : Result<String, String>| {
         // Signals that thread has started
