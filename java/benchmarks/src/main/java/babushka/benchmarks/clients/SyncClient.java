@@ -1,4 +1,4 @@
-package javababushka.benchmarks.clients;
+package babushka.benchmarks.clients;
 
 /** A Redis client with sync capabilities */
 public interface SyncClient extends Client {

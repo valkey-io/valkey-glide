@@ -1,4 +1,4 @@
-package javababushka.benchmarks.utils;
+package babushka.benchmarks.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

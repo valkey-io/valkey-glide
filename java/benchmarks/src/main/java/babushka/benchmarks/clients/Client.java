@@ -1,6 +1,6 @@
-package javababushka.benchmarks.clients;
+package babushka.benchmarks.clients;
 
-import javababushka.benchmarks.utils.ConnectionSettings;
+import babushka.benchmarks.utils.ConnectionSettings;
 
 /** A Redis client interface */
 public interface Client {

@@ -1,5 +1,9 @@
-package javababushka.benchmarks.utils;
+package babushka.benchmarks.utils;
 
+import babushka.benchmarks.BenchmarkingApp;
+import babushka.benchmarks.clients.AsyncClient;
+import babushka.benchmarks.clients.Client;
+import babushka.benchmarks.clients.SyncClient;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -10,10 +14,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import javababushka.benchmarks.BenchmarkingApp;
-import javababushka.benchmarks.clients.AsyncClient;
-import javababushka.benchmarks.clients.Client;
-import javababushka.benchmarks.clients.SyncClient;
 import org.apache.commons.lang3.tuple.Pair;
 
 /** Class to calculate latency on client-actions */

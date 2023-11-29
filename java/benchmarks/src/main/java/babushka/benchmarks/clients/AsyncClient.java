@@ -1,4 +1,4 @@
-package javababushka.benchmarks.clients;
+package babushka.benchmarks.clients;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;

@@ -6,11 +6,11 @@ language api to enhance performance and limit cpu cycles at scale.
 
 ## Organization
 
-The Java client (javababushka) contains the following parts:
+The Java client contains the following parts:
 
 1. A Java client (lib folder): wrapper to rust-client.
-2. An examples script: to sanity test javababushka and similar java-clients against a redis host.
-3. A benchmark app: to performance benchmark test javababushka and similar java-clients against a redis host.
+2. An examples script: to sanity test babushka and similar java-clients against a redis host.
+3. A benchmark app: to performance benchmark test babushka and similar java-clients against a redis host.
 
 ## Building
 
@@ -47,4 +47,3 @@ The following arguments are accepted:
 * Connection Timeout: 
   * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
 * Only server-side certificates are supported by the TLS configured redis.
-
