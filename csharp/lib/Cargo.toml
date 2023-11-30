@@ -11,7 +11,7 @@ authors = ["Amazon Web Services"]
 crate-type = ["cdylib"]
 
 [dependencies]
-redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp"] }
+redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp","tokio-native-tls-comp"] }
 babushka = { path = "../../babushka-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 num-derive = "0.4.0"
