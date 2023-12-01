@@ -88,7 +88,7 @@ spotless {
     java {
         target fileTree('.') {
             include '**/*.java'
-            exclude '**/build/**', '**/build-*/**', '**/generated/**'
+            exclude '**/build/**', '**/build-*/**', '**/protobuf/**'
         }
         importOrder()
         removeUnusedImports()
@@ -98,4 +98,3 @@ spotless {
     }
 }
 // End of Spotless section
-
