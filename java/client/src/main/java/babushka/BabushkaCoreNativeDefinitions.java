@@ -6,6 +6,6 @@ public class BabushkaCoreNativeDefinitions {
   public static native Object valueFromPointer(long pointer);
 
   static {
-    System.loadLibrary("babushka");
+    System.loadLibrary("javababushka");
   }
 }
