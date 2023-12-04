@@ -6,22 +6,32 @@ inputs:
         required: true
         type: string
         options:
-            - macOS
-            - ubuntu
             - amazon-linux
+            - macos-latest
+            - ubuntu-latest
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        type: string
+        required: false
+        defalt: "x86_64-unknown-linux-gnu"
+        options:
+            - x86_64-unknown-linux-gnu
+            - aarch64-unknown-linux-gnu
+            - x86_64-apple-darwin
+            - aarch64-apple-darwin
 
 runs:
     using: "composite"
     steps:
         - name: Install software dependencies for macOS
           shell: bash
-          if: "${{ inputs.os == 'macOS' }}"
+          if: "${{ inputs.os == 'macos-latest' }}"
           run: |
               brew install git gcc pkgconfig protobuf openssl redis
 
         - name: Install software dependencies for Ubuntu
           shell: bash
-          if: "${{ inputs.os == 'ubuntu' }}"
+          if: "${{ inputs.os == 'ubuntu-latest' }}"
           run: |
               sudo apt update
               sudo apt install protobuf-compiler
@@ -30,9 +40,10 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 --allowerasing
+              yum install -y gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 gettext --allowerasing
 
-        - name: Install Rust
-          shell: bash
-          run: |
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        - name: Install Rust toolchain
+          uses: dtolnay/rust-toolchain@stable
+          with:
+              targets: ${{ inputs.target }}
+        - uses: Swatinem/rust-cache@v2
