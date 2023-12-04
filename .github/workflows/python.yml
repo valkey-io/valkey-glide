@@ -77,8 +77,8 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: 'ubuntu'
-                  release_mode: 'true'
+                  os: "ubuntu"
+                  release_mode: "true"
 
             - name: Type check with mypy
               working-directory: ./python
@@ -107,9 +107,9 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./python                  
+                  cargo-toml-folder: ./python
               name: lint python-rust
-    
+
     build-macos-latest:
         runs-on: macos-latest
         timeout-minutes: 15
@@ -123,50 +123,50 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: 'macOS'              
+                  os: "macOS"
             - name: Test compatibility with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
                   pytest --asyncio-mode=auto -m smoke_test
-    
+
     build-amazonlinux-latest:
-      runs-on: ubuntu-latest
-      container: amazonlinux:latest
-      timeout-minutes: 15
-      steps:
-          - name: Install git
-            run: |
-              yum -y remove git
-              yum -y remove git-*
-              yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-              yum install -y git 
-              git --version
+        runs-on: ubuntu-latest
+        container: amazonlinux:latest
+        timeout-minutes: 15
+        steps:
+            - name: Install git
+              run: |
+                  yum -y remove git
+                  yum -y remove git-*
+                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+                  yum install -y git 
+                  git --version
 
-          - uses: actions/checkout@v3
+            - uses: actions/checkout@v3
 
-          - name: Checkout submodules
-            run: |
-              git config --global --add safe.directory "$GITHUB_WORKSPACE"
-              git submodule update --init --recursive
+            - name: Checkout submodules
+              run: |
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  git submodule update --init --recursive
 
-          - name: Install python
-            run: |
-              yum install -y python3
+            - name: Install python
+              run: |
+                  yum install -y python3
 
-          - name: Build Python wrapper
-            uses: ./.github/workflows/build-python-wrapper
-            with:
-                os: 'amazon-linux'
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: "amazon-linux"
 
-          - name: Create a symbolic Link for redis6 binaries
-            working-directory: ./python
-            run: |
-                ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
-            
-          - name: Test compatibility with pytest
-            working-directory: ./python
-            run: |
-                source .env/bin/activate
-                pytest --asyncio-mode=auto -m smoke_test
+            - name: Create a symbolic Link for redis6 binaries
+              working-directory: ./python
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
+            - name: Test compatibility with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  pytest --asyncio-mode=auto -m smoke_test
