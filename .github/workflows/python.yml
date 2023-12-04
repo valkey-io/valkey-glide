@@ -77,8 +77,7 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "ubuntu"
-                  release_mode: "true"
+                  os: "ubuntu-latest"
 
             - name: Type check with mypy
               working-directory: ./python
@@ -123,7 +122,7 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "macOS"
+                  os: "macos-latest"
             - name: Test compatibility with pytest
               working-directory: ./python
               run: |
