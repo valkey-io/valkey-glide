@@ -1,5 +1,5 @@
 import random
-from typing import AsyncGenerator, Optional, Union
+from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from pybushka.config import (
@@ -58,7 +58,7 @@ def call_before_all_pytests(request):
     """
     tls = request.config.getoption("--tls")
     pytest.redis_cluster = RedisCluster(tls, True)
-    pytest.standalone_cluster = RedisCluster(tls, False)
+    pytest.standalone_cluster = RedisCluster(tls, False, 1, 1)
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -95,6 +95,7 @@ async def create_client(
     cluster_mode: bool,
     credentials: Optional[RedisCredentials] = None,
     database_id: int = 0,
+    addresses: Optional[List[NodeAddress]] = None,
 ) -> Union[RedisClient, RedisClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -103,13 +104,17 @@ async def create_client(
         assert database_id == 0
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=3)
         cluster_config = ClusterClientConfiguration(
-            addresses=seed_nodes, use_tls=use_tls, credentials=credentials
+            addresses=seed_nodes if addresses is None else addresses,
+            use_tls=use_tls,
+            credentials=credentials,
         )
         return await RedisClusterClient.create(cluster_config)
     else:
         assert type(pytest.standalone_cluster) is RedisCluster
         config = RedisClientConfiguration(
-            addresses=pytest.standalone_cluster.nodes_addr,
+            addresses=pytest.standalone_cluster.nodes_addr
+            if addresses is None
+            else addresses,
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
