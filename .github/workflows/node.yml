@@ -58,7 +58,7 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: 'ubuntu'
+                  os: "ubuntu"
 
             - name: test
               run: npm test
@@ -98,9 +98,9 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: 'macOS'
+                  os: "macOS"
 
-            - name: Test compatibility 
+            - name: Test compatibility
               run: npm test -- -t "set and get flow works"
               working-directory: ./node
 
@@ -111,34 +111,34 @@ jobs:
         steps:
             - name: Install git
               run: |
-                yum -y remove git
-                yum -y remove git-*
-                yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                yum install -y git 
-                git --version
+                  yum -y remove git
+                  yum -y remove git-*
+                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+                  yum install -y git 
+                  git --version
 
             - uses: actions/checkout@v3
 
             - name: Checkout submodules
               run: |
-                git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                git submodule update --init --recursive
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  git submodule update --init --recursive
 
             - name: Install NodeJS
               run: |
-                yum install -y nodejs
+                  yum install -y nodejs
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: 'amazon-linux'
+                  os: "amazon-linux"
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node
               run: |
                   ln -s /usr/bin/redis6-server /usr/bin/redis-server
                   ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
-          
-            - name: Test compatibility 
+
+            - name: Test compatibility
               run: npm test -- -t "set and get flow works"
               working-directory: ./node
