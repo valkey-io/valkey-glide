@@ -6,14 +6,39 @@ inputs:
         required: true
         type: string
         options:
-            - macOS
-            - ubuntu
             - amazon-linux
-    release_mode:
+            - macos-latest
+            - ubuntu-latest
+    named_os:
+        description: "The name of the current operating system"
+        required: false
+        default: "linux"
+        type: string
+        options:
+            - linux
+            - darwin
+    arch:
+        description: "The current architecture"
+        required: false
+        default: "x64"
+        type: string
+        options:
+            - x64
+            - arm64
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        type: string
+        required: true
+    publish:
         description: "Enable building the wrapper in release mode"
         required: false
         type: boolean
         default: "false"
+    npm_scope:
+        description: "The NPM scope"
+        required: false
+        type: string
+        default: ""
 
 env:
     CARGO_TERM_COLOR: always
@@ -25,18 +50,21 @@ runs:
           uses: ./.github/workflows/install-shared-dependencies
           with:
               os: ${{ inputs.os }}
+              target: ${{ inputs.target }}
 
         - name: npm install
           shell: bash
-          working-directory: ./node/rust-client
+          working-directory: ./node
           run: |
               rm -rf node_modules && npm install --frozen-lockfile
+              cd rust-client
               npm install
 
         - name: Build
           shell: bash
+          working-directory: ./node
           run: |
               source "$HOME/.cargo/env"
-              rm -rf node_modules && npm install --frozen-lockfile
-              npm run build
-          working-directory: ./node
+              TARGET_FLAG=`if [ "${{ inputs.target }}" != ''  ]; then echo "--target ${{ inputs.target }}"; fi`
+              BUILD_FLAG=`if [ "${{ inputs.publish }}" == 'true' ]; then echo "build:release"; else echo "build"; fi`
+              npm run $BUILD_FLAG --build-flags="$TARGET_FLAG"
