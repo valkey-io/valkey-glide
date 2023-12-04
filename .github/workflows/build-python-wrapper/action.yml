@@ -6,10 +6,14 @@ inputs:
         required: true
         type: string
         options:
-            - macOS
-            - ubuntu
             - amazon-linux
-    release_mode:
+            - macos-latest
+            - ubuntu-latest
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        type: string
+        required: true
+    publish:
         description: "Enable building the wrapper in release mode"
         required: false
         type: boolean
@@ -21,10 +25,11 @@ env:
 runs:
     using: "composite"
     steps:
-        - name: Install software dependencies
+        - name: Install shared software dependencies
           uses: ./.github/workflows/install-shared-dependencies
           with:
               os: ${{ inputs.os }}
+              target: ${{ inputs.target }}
 
         - name: Install Python software dependencies
           shell: bash
@@ -50,5 +55,5 @@ runs:
               source .env/bin/activate
               python3 -m pip install --upgrade pip
               python3 -m pip install -r requirements.txt
-              RELEASE_FLAG=`if [ ${{ inputs.release_mode }} = 'true'  ]; then echo --release; fi`
+              RELEASE_FLAG=`if [ ${{ inputs.publish }} = 'true'  ]; then echo --release; fi`
               maturin develop ${RELEASE_FLAG}
