@@ -1,18 +1,29 @@
 {
-    "name": "babushka-rs",
-    "version": "1.0.0",
-    "description": "",
+    "name": "${scope}${pkg_name}",
+    "version": "${package_version}",
+    "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/aws/babushka.git"
+    },
+    "homepage": "https://github.com/aws/babushka#readme",
+    "os": ["${node_os}"],
+    "cpu": ["${node_arch}"],
     "dependencies": {
         "babushka-rs-internal": "file:rust-client",
         "long": "^5.2.3",
+        "npmignore": "^0.3.0",
         "protobufjs": "^7.2.2"
     },
+    "bundleDependencies": [
+        "babushka-rs-internal"
+    ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
-        "build:release": "npm run build-internal:release &&  npm run build-protobuf && npm run build-external",
-        "build:benchmark": "npm run build-internal:benchmark &&  npm run build-protobuf && npm run build-external",
+        "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external",
+        "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
         "build-internal:release": "cd rust-client && npm run build:release",
         "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
@@ -21,7 +32,8 @@
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "jest --verbose --runInBand",
-        "lint": "eslint -f unix \"src/**/*.{ts,tsx}\""
+        "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
+        "prepack": "npmignore --auto"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
@@ -43,6 +55,17 @@
         "typescript": "^4.9.5",
         "uuid": "^9.0.0"
     },
-    "author": "",
-    "license": "MIT"
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "publishConfig": {
+        "${registry_scope}registry": "https://registry.npmjs.org/",
+        "ignore": [
+            "src/**",
+            "tests/",
+            "rust-client/**",
+            "!build-ts/**",
+            "babel.config.js",
+            "jest.config.js"
+        ]
+    }
 }
