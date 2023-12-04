@@ -6,7 +6,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-npm/
 rust-client/index.*
 
 
@@ -137,4 +136,6 @@ yarn.lock
 
 # Protobuf
 src/ProtobufMessage*
+
+.npmignore
 package.json
