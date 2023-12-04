@@ -20,11 +20,14 @@
     "rust-analyzer.runnableEnv": {
         "REDISRS_SERVER_TYPE": "tcp"
     },
-    "python.testing.pytestArgs": ["python"],
+    "python.testing.pytestArgs": [
+        "python"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[yaml]": {
-        "editor.tabSize": 4
+        "editor.tabSize": 4,
+        "editor.defaultFormatter": "redhat.vscode-yaml"
     },
     "python.linting.flake8Enabled": false,
     "python.linting.enabled": true,
@@ -32,6 +35,12 @@
         "--extend-ignore=E203",
         "--max-line-length=127"
     ],
-    "python.formatting.blackArgs": ["--target-version", "py36"],
-    "isort.args": ["--profile", "black"]
+    "python.formatting.blackArgs": [
+        "--target-version",
+        "py36"
+    ],
+    "isort.args": [
+        "--profile",
+        "black"
+    ]
 }
