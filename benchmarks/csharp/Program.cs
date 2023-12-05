@@ -282,7 +282,7 @@ public static class MainClass
         {
             var clients = await createClients(clientCount, () =>
             {
-                var babushka_client = new AsyncClient(getAddressWithRedisPrefix(host, useTLS));
+                var babushka_client = new AsyncClient(host, PORT, useTLS);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
                     (async (key) => await babushka_client.GetAsync(key),
                      async (key, value) => await babushka_client.SetAsync(key, value),
@@ -296,30 +296,6 @@ public static class MainClass
                 data_size,
                 num_of_concurrent_tasks
             );
-        }
-
-
-        if (clientsToRun == "all" || clientsToRun == "socket" || clientsToRun == "babushka")
-        {
-            var clients = await createClients(clientCount, async () =>
-                {
-                    var babushka_client = await AsyncSocketClient.CreateSocketClient(getAddressWithRedisPrefix(host, useTLS));
-                    return (async (key) => await babushka_client.GetAsync(key),
-                            async (key, value) => await babushka_client.SetAsync(key, value),
-                            () => babushka_client.Dispose());
-                });
-            await run_clients(
-                clients,
-                "babushka socket",
-                total_commands,
-                data_size,
-                num_of_concurrent_tasks
-            );
-
-            foreach (var client in clients)
-            {
-                client.Dispose();
-            }
         }
 
         if (clientsToRun == "all")
@@ -350,13 +326,12 @@ public static class MainClass
 
     private static int number_of_iterations(int num_of_concurrent_tasks)
     {
-        return Math.min(Math.Max(100000, num_of_concurrent_tasks * 10000), 10000000);
+        return Math.Min(Math.Max(100000, num_of_concurrent_tasks * 10000), 10000000);
     }
 
     public static async Task Main(string[] args)
     {
-        // Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
-        Logger.SetLoggerConfig(Level.Info, "first.log");
+        Logger.SetLoggerConfig(Level.Info, null);
         CommandLineOptions options = new CommandLineOptions();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
