@@ -4,7 +4,7 @@ using System.Text;
 
 namespace babushka
 {
-
+    // TODO - use a bindings generator to create this enum.
     public enum Level
     {
         Error = 0,

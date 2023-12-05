@@ -35,7 +35,7 @@ fn create_connection_request(
     let mut connection_request = connection_request::ConnectionRequest::new();
     connection_request.addresses = addresses_info;
     connection_request.tls_mode = if use_tls {
-        connection_request::TlsMode::InsecureTls
+        connection_request::TlsMode::SecureTls
     } else {
         connection_request::TlsMode::NoTls
     }
@@ -114,7 +114,7 @@ pub extern "C" fn set(
         unsafe {
             let client = Box::leak(Box::from_raw(ptr_address as *mut Connection));
             match result {
-                Ok(_) => (client.success_callback)(callback_index, std::ptr::null()),
+                Ok(_) => (client.success_callback)(callback_index, std::ptr::null()), // TODO - should return "OK" string.
                 Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
             };
         }

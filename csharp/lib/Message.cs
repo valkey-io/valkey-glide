@@ -59,12 +59,18 @@ internal class Message<T> : INotifyCompletion
 
     private void CheckRaceAndCallContinuation()
     {
-        if (Interlocked.CompareExchange(ref this.completionState, COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION, COMPLETION_STAGE_STARTED) != COMPLETION_STAGE_STARTED)
+        if (Interlocked.CompareExchange(ref this.completionState, COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION, COMPLETION_STAGE_STARTED) == COMPLETION_STAGE_NEXT_SHOULD_EXECUTE_CONTINUATION)
         {
             Debug.Assert(this.continuation != null);
             this.completionState = COMPLETION_STAGE_CONTINUATION_EXECUTED;
-            continuation();
-            this.container.ReturnFreeMessage(this);
+            try
+            {
+                continuation();
+            }
+            finally
+            {
+                this.container.ReturnFreeMessage(this);
+            }
         }
     }
 
@@ -87,6 +93,8 @@ internal class Message<T> : INotifyCompletion
         this.ValuePtr = value is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(value);
     }
 
+    // This function isn't thread-safe. Access to it should be from a single thread, and only once per operation.
+    // For the sake of performance, this responsibility is on the caller, and the function doesn't contain any safety measures.
     private void FreePointers()
     {
         if (KeyPtr != IntPtr.Zero)
@@ -108,7 +116,6 @@ internal class Message<T> : INotifyCompletion
 
     public void OnCompleted(Action continuation)
     {
-
         this.continuation = continuation;
         CheckRaceAndCallContinuation();
     }
