@@ -7,11 +7,13 @@ on:
             - csharp/**
             - babushka-core/**
             - submodules/**
+            - .github/workflows/csharp.yml
     pull_request:
         paths:
             - csharp/**
             - babushka-core/src/**
             - submodules/**
+            - .github/workflows/csharp.yml
 
 permissions:
     contents: read

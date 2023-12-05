@@ -8,12 +8,14 @@ on:
             - babushka-core/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/rust.yml
     pull_request:
         paths:
             - logger_core/**
             - babushka-core/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/rust.yml
 
 env:
     CARGO_TERM_COLOR: always
