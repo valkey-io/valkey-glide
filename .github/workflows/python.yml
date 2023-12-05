@@ -97,6 +97,10 @@ jobs:
                   source .env/bin/activate
                   pytest --asyncio-mode=auto
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -python
+
     lint-rust:
         runs-on: ubuntu-latest
         timeout-minutes: 15

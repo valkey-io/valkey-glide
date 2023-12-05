@@ -54,6 +54,10 @@ jobs:
               working-directory: ./csharp
               run: dotnet test
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -csharp
+
     lint-rust:
         timeout-minutes: 10
         runs-on: ubuntu-latest

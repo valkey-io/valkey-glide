@@ -64,6 +64,10 @@ jobs:
               run: npm test
               working-directory: ./node
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -node
+
     lint-rust:
         timeout-minutes: 15
         runs-on: ubuntu-latest

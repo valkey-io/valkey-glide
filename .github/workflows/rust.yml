@@ -61,6 +61,10 @@ jobs:
                   cargo check --benches --all-features
                   cargo check --no-default-features
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -rust
+
     lint:
         runs-on: ubuntu-latest
         timeout-minutes: 30
