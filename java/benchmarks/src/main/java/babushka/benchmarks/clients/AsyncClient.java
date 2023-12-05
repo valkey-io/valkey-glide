@@ -21,8 +21,8 @@ public interface AsyncClient<T> extends Client {
   default <T> T waitForResult(Future<T> future, long timeout) {
     try {
       return future.get(timeout, TimeUnit.MILLISECONDS);
-    } catch (TimeoutException ignored) {
-      return null;
+    } catch (TimeoutException e) {
+      throw new RuntimeException("A task timed out", e);
     } catch (ExecutionException e) {
       throw new RuntimeException("Client error", e);
     } catch (InterruptedException e) {
