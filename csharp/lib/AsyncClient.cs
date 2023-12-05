@@ -11,36 +11,36 @@ namespace babushka
             var successCallbackPointer = Marshal.GetFunctionPointerForDelegate(successCallbackDelegate);
             failureCallbackDelegate = FailureCallback;
             var failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(failureCallbackDelegate);
-            connectionPointer = CreateConnectionFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
-            if (connectionPointer == IntPtr.Zero)
+            clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
+            if (clientPointer == IntPtr.Zero)
             {
-                throw new Exception("Failed creating a connection");
+                throw new Exception("Failed creating a client");
             }
         }
 
         public async Task SetAsync(string key, string value)
         {
             var message = messageContainer.GetMessageForCall(key, value);
-            SetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr, message.ValuePtr);
+            SetFfi(clientPointer, (ulong)message.Index, message.KeyPtr, message.ValuePtr);
             await message;
         }
 
         public async Task<string?> GetAsync(string key)
         {
             var message = messageContainer.GetMessageForCall(key, null);
-            GetFfi(connectionPointer, (ulong)message.Index, message.KeyPtr);
+            GetFfi(clientPointer, (ulong)message.Index, message.KeyPtr);
             return await message;
         }
 
         public void Dispose()
         {
-            if (connectionPointer == IntPtr.Zero)
+            if (clientPointer == IntPtr.Zero)
             {
                 return;
             }
             messageContainer.DisposeWithError(null);
-            CloseConnectionFfi(connectionPointer);
-            connectionPointer = IntPtr.Zero;
+            CloseClientFfi(clientPointer);
+            clientPointer = IntPtr.Zero;
         }
 
         #endregion public methods
@@ -84,8 +84,8 @@ namespace babushka
         /// and held in order to prevent the cost of marshalling on each function call.
         private StringAction successCallbackDelegate;
 
-        /// Raw pointer to the underlying native connection.
-        private IntPtr connectionPointer;
+        /// Raw pointer to the underlying native client.
+        private IntPtr clientPointer;
 
         private readonly MessageContainer<string> messageContainer = new();
 
@@ -96,17 +96,17 @@ namespace babushka
         private delegate void StringAction(ulong index, IntPtr str);
         private delegate void FailureAction(ulong index);
         [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "get")]
-        private static extern void GetFfi(IntPtr connection, ulong index, IntPtr key);
+        private static extern void GetFfi(IntPtr client, ulong index, IntPtr key);
 
         [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "set")]
-        private static extern void SetFfi(IntPtr connection, ulong index, IntPtr key, IntPtr value);
+        private static extern void SetFfi(IntPtr client, ulong index, IntPtr key, IntPtr value);
 
         private delegate void IntAction(IntPtr arg);
-        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_connection")]
-        private static extern IntPtr CreateConnectionFfi(String host, UInt32 port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
+        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
+        private static extern IntPtr CreateClientFfi(String host, UInt32 port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
 
-        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_connection")]
-        private static extern void CloseConnectionFfi(IntPtr connection);
+        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
+        private static extern void CloseClientFfi(IntPtr client);
 
         #endregion
     }

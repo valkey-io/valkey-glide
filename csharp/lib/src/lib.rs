@@ -16,8 +16,8 @@ pub enum Level {
     Trace = 4,
 }
 
-pub struct Connection {
-    connection: BabushkaClient,
+pub struct Client {
+    client: BabushkaClient,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
     runtime: Runtime,
@@ -44,13 +44,13 @@ fn create_connection_request(
     connection_request
 }
 
-fn create_connection_internal(
+fn create_client_internal(
     host: *const c_char,
     port: u32,
     use_tls: bool,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
-) -> RedisResult<Connection> {
+) -> RedisResult<Client> {
     let host_cstring = unsafe { CStr::from_ptr(host as *mut c_char) };
     let host_string = host_cstring.to_str()?.to_string();
     let request = create_connection_request(host_string, port, use_tls);
@@ -59,60 +59,60 @@ fn create_connection_internal(
         .thread_name("Babushka C# thread")
         .build()?;
     let _runtime_handle = runtime.enter();
-    let connection = runtime.block_on(BabushkaClient::new(request)).unwrap(); // TODO - handle errors.
-    Ok(Connection {
-        connection,
+    let client = runtime.block_on(BabushkaClient::new(request)).unwrap(); // TODO - handle errors.
+    Ok(Client {
+        client,
         success_callback,
         failure_callback,
         runtime,
     })
 }
 
-/// Creates a new connection to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. All callbacks should be offloaded to separate threads in order not to exhaust the connection's thread pool.
+/// Creates a new client to the given address. The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. All callbacks should be offloaded to separate threads in order not to exhaust the client's thread pool.
 #[no_mangle]
-pub extern "C" fn create_connection(
+pub extern "C" fn create_client(
     host: *const c_char,
     port: u32,
     use_tls: bool,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (),
 ) -> *const c_void {
-    match create_connection_internal(host, port, use_tls, success_callback, failure_callback) {
+    match create_client_internal(host, port, use_tls, success_callback, failure_callback) {
         Err(_) => std::ptr::null(), // TODO - log errors
-        Ok(connection) => Box::into_raw(Box::new(connection)) as *const c_void,
+        Ok(client) => Box::into_raw(Box::new(client)) as *const c_void,
     }
 }
 
 #[no_mangle]
-pub extern "C" fn close_connection(connection_ptr: *const c_void) {
-    let connection_ptr = unsafe { Box::from_raw(connection_ptr as *mut Connection) };
-    let _runtime_handle = connection_ptr.runtime.enter();
-    drop(connection_ptr);
+pub extern "C" fn close_client(client_ptr: *const c_void) {
+    let client_ptr = unsafe { Box::from_raw(client_ptr as *mut Client) };
+    let _runtime_handle = client_ptr.runtime.enter();
+    drop(client_ptr);
 }
 
 /// Expects that key and value will be kept valid until the callback is called.
 #[no_mangle]
 pub extern "C" fn set(
-    connection_ptr: *const c_void,
+    client_ptr: *const c_void,
     callback_index: usize,
     key: *const c_char,
     value: *const c_char,
 ) {
-    let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
+    let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = connection_ptr as usize;
+    let ptr_address = client_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
     let value_cstring = unsafe { CStr::from_ptr(value as *mut c_char) };
-    let mut connection_clone = connection.connection.clone();
-    connection.runtime.spawn(async move {
+    let mut client_clone = client.client.clone();
+    client.runtime.spawn(async move {
         let key_bytes = key_cstring.to_bytes();
         let value_bytes = value_cstring.to_bytes();
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg(key_bytes).arg(value_bytes);
-        let result = connection_clone.req_packed_command(&cmd, None).await;
+        let result = client_clone.req_packed_command(&cmd, None).await;
         unsafe {
-            let client = Box::leak(Box::from_raw(ptr_address as *mut Connection));
+            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
             match result {
                 Ok(_) => (client.success_callback)(callback_index, std::ptr::null()), // TODO - should return "OK" string.
                 Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
@@ -124,23 +124,23 @@ pub extern "C" fn set(
 /// Expects that key will be kept valid until the callback is called. If the callback is called with a string pointer, the pointer must
 /// be used synchronously, because the string will be dropped after the callback.
 #[no_mangle]
-pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key: *const c_char) {
-    let connection = unsafe { Box::leak(Box::from_raw(connection_ptr as *mut Connection)) };
+pub extern "C" fn get(client_ptr: *const c_void, callback_index: usize, key: *const c_char) {
+    let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = connection_ptr as usize;
+    let ptr_address = client_ptr as usize;
 
     let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    let mut connection_clone = connection.connection.clone();
-    connection.runtime.spawn(async move {
+    let mut client_clone = client.client.clone();
+    client.runtime.spawn(async move {
         let key_bytes = key_cstring.to_bytes();
         let mut cmd = Cmd::new();
         cmd.arg("GET").arg(key_bytes);
-        let result = connection_clone.req_packed_command(&cmd, None).await;
-        let connection = unsafe { Box::leak(Box::from_raw(ptr_address as *mut Connection)) };
+        let result = client_clone.req_packed_command(&cmd, None).await;
+        let client = unsafe { Box::leak(Box::from_raw(ptr_address as *mut Client)) };
         let value = match result {
             Ok(value) => value,
             Err(_) => {
-                unsafe { (connection.failure_callback)(callback_index) }; // TODO - report errors,
+                unsafe { (client.failure_callback)(callback_index) }; // TODO - report errors,
                 return;
             }
         };
@@ -148,9 +148,9 @@ pub extern "C" fn get(connection_ptr: *const c_void, callback_index: usize, key:
 
         unsafe {
             match result {
-                Ok(None) => (connection.success_callback)(callback_index, std::ptr::null()),
-                Ok(Some(c_str)) => (connection.success_callback)(callback_index, c_str.as_ptr()),
-                Err(_) => (connection.failure_callback)(callback_index), // TODO - report errors
+                Ok(None) => (client.success_callback)(callback_index, std::ptr::null()),
+                Ok(Some(c_str)) => (client.success_callback)(callback_index, c_str.as_ptr()),
+                Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
             };
         }
     });
