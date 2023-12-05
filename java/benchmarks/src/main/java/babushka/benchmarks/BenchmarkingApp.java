@@ -41,8 +41,8 @@ public class BenchmarkingApp {
     for (ClientName client : runConfiguration.clients) {
       switch (client) {
         case JEDIS:
-          // run testClientSetGet on JEDIS pseudo-sync client
-          System.out.println("Run JEDIS async client");
+          // run testClientSetGet on JEDIS sync client
+          System.out.println("Run JEDIS sync client");
           break;
         case LETTUCE:
           // run testClientSetGet on LETTUCE async client
@@ -75,12 +75,7 @@ public class BenchmarkingApp {
             .desc("Number of concurrent tasks [100, 1000]")
             .build());
     options.addOption(
-        Option.builder("clients")
-            .hasArg(true)
-            .desc(
-                "one of: all|jedis|jedis_async|lettuce|lettuce_async|"
-                    + "babushka|babushka_async|all_async|all_sync")
-            .build());
+        Option.builder("clients").hasArg(true).desc("one of: all|jedis|lettuce|babushka").build());
     options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
     options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
     options.addOption(
@@ -178,7 +173,7 @@ public class BenchmarkingApp {
   }
 
   public enum ClientName {
-    JEDIS("Jedis"), // async
+    JEDIS("Jedis"), // sync
     LETTUCE("Lettuce"), // async
     BABUSHKA("Babushka"), // async
     ALL("All");
