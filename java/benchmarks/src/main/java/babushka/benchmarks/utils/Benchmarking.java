@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -44,15 +43,15 @@ public class Benchmarking {
   }
 
   public interface Operation {
-    void go() throws InterruptedException, ExecutionException;
+    void go(Client client) throws InterruptedException, ExecutionException;
   }
 
   public static Pair<ChosenAction, Long> measurePerformance(
-      Client client, Map<ChosenAction, Function<Client, Operation>> actions) {
+      Client client, Map<ChosenAction, Operation> actions) {
     var action = randomAction();
     long before = System.nanoTime();
     try {
-      actions.get(action).apply(client).go();
+      actions.get(action).go(client);
     } catch (ExecutionException e) {
       throw new RuntimeException("Client error", e);
     } catch (InterruptedException e) {
@@ -223,15 +222,14 @@ public class Benchmarking {
                   ChosenAction.GET_NON_EXISTING, new ArrayList<Long>(),
                   ChosenAction.SET, new ArrayList<Long>());
           var actions = getActionMap(dataSize, async);
-          int iterationIncrement = iterationCounter.getAndIncrement();
-          int clientIndex = iterationIncrement % clients.size();
 
           if (debugLogging) {
-            System.out.printf(
-                "%n concurrent = %d/%d, client# = %d/%d%n",
-                taskNumDebugging, concurrentNum, clientIndex + 1, clientCount);
+            System.out.printf("%n concurrent = %d/%d%n", taskNumDebugging, concurrentNum);
           }
-          while (iterationIncrement < iterations) {
+          while (iterationCounter.get() < iterations) {
+            int iterationIncrement = iterationCounter.getAndIncrement();
+            int clientIndex = iterationIncrement % clients.size();
+
             if (debugLogging) {
               System.out.printf(
                   "> iteration = %d/%d, client# = %d/%d%n",
@@ -240,25 +238,18 @@ public class Benchmarking {
 
             // operate and calculate tik-tok
             Pair<ChosenAction, Long> result = measurePerformance(clients.get(clientIndex), actions);
-            if (result != null) {
-              taskActionResults.get(result.getLeft()).add(result.getRight());
-            }
-
-            iterationIncrement = iterationCounter.getAndIncrement();
-            clientIndex = iterationIncrement % clients.size();
+            taskActionResults.get(result.getLeft()).add(result.getRight());
           }
           return taskActionResults;
         });
   }
 
-  public static Map<ChosenAction, Function<Client, Operation>> getActionMap(
-      int dataSize, boolean async) {
+  public static Map<ChosenAction, Operation> getActionMap(int dataSize, boolean async) {
 
     String value = "0".repeat(dataSize);
     return Map.of(
         ChosenAction.GET_EXISTING,
-        client ->
-            () -> {
+            (client) -> {
               if (async) {
                 ((AsyncClient) client).asyncGet(generateKeySet()).get();
               } else {
@@ -266,8 +257,7 @@ public class Benchmarking {
               }
             },
         ChosenAction.GET_NON_EXISTING,
-        client ->
-            () -> {
+            (client) -> {
               if (async) {
                 ((AsyncClient) client).asyncGet(generateKeyGet()).get();
               } else {
@@ -275,8 +265,7 @@ public class Benchmarking {
               }
             },
         ChosenAction.SET,
-        client ->
-            () -> {
+            (client) -> {
               if (async) {
                 ((AsyncClient) client).asyncSet(generateKeySet(), value).get();
               } else {
