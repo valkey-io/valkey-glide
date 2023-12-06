@@ -4,7 +4,7 @@ using System.Text;
 
 namespace babushka
 {
-
+    // TODO - use a bindings generator to create this enum.
     public enum Level
     {
         Error = 0,
@@ -44,7 +44,7 @@ namespace babushka
         // if the level is higher then the logger level (error is 0, warn 1, etc.) simply return without operation
         // if a logger instance doesn't exist, create new one with default mode (decided by rust core, normally - level: error, target: console)
         // logIdentifier arg is a string contain data that suppose to give the log a context and make it easier to find certain type of logs.
-        // when the log is connect to certain task the identifier should be the task id, when the log is not part of specific task the identifier should give a context to the log - for example, "socket connection".
+        // when the log is connect to certain task the identifier should be the task id, when the log is not part of specific task the identifier should give a context to the log - for example, "create client".
         internal static void Log(Level logLevel, string logIdentifier, string message)
         {
             if (Logger.loggerLevel is null)

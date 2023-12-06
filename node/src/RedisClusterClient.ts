@@ -48,8 +48,8 @@ export type SlotKeyTypes = {
     key: string;
 };
 
-export type Routes = 
-    | SingleNodeRoute      
+export type Routes =
+    | SingleNodeRoute
     /**
      * Route request to all primary nodes.
      */
@@ -58,7 +58,6 @@ export type Routes =
      * Route request to all nodes.
      */
     | "allNodes";
-    
 
 export type SingleNodeRoute =
     /**
@@ -143,6 +142,9 @@ export function convertMultiNodeResponseToDict<T>(
 }
 
 export class RedisClusterClient extends BaseClient {
+    /**
+     * @internal
+     */
     protected createClientRequest(
         options: ClusterClientConfiguration
     ): connection_request.IConnectionRequest {
@@ -174,7 +176,7 @@ export class RedisClusterClient extends BaseClient {
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
-     *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, 
+     *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
      * @example
@@ -196,15 +198,21 @@ export class RedisClusterClient extends BaseClient {
      *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
      *
      * @param transaction - A ClusterTransaction object containing a list of commands to be executed.
-     * @param route - If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction. 
+     * @param route - If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
      *   If no key is found, the command will be sent to a random node.
-     *   If `route` is provided, the client will route the command to the nodes defined by `route`.  
+     *   If `route` is provided, the client will route the command to the nodes defined by `route`.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
      */
-    public exec(transaction: ClusterTransaction | BaseTransaction , route?: SingleNodeRoute): Promise<ReturnType[]> {
-        return this.createWritePromise(transaction.commands , toProtobufRoute(route));
+    public exec(
+        transaction: ClusterTransaction | BaseTransaction,
+        route?: SingleNodeRoute
+    ): Promise<ReturnType[]> {
+        return this.createWritePromise(
+            transaction.commands,
+            toProtobufRoute(route)
+        );
     }
 
     /** Ping the Redis server.

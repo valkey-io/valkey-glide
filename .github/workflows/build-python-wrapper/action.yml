@@ -6,21 +6,21 @@ inputs:
         required: true
         type: string
         options:
-          - macOS
-          - ubuntu
-          - amazon-linux
+            - macOS
+            - ubuntu
+            - amazon-linux
     release_mode:
         description: "Enable building the wrapper in release mode"
         required: false
         type: boolean
-        default: 'false'
+        default: "false"
 
 env:
     CARGO_TERM_COLOR: always
 
 runs:
     using: "composite"
-    steps:        
+    steps:
         - name: Install software dependencies
           uses: ./.github/workflows/install-shared-dependencies
           with:
