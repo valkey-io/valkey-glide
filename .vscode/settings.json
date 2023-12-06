@@ -25,6 +25,19 @@
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
+    "[github-actions-workflow]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": [
+            "*.github/workflows/*.yaml",
+            "*.github/workflows/*.yml",
+        ],
+        "https://json.schemastore.org/github-action.json": [
+            "action.yaml",
+            "action.yml",
+        ]
+    },
     "[yaml]": {
         "editor.tabSize": 4,
         "editor.defaultFormatter": "redhat.vscode-yaml"
