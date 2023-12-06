@@ -1,4 +1,4 @@
-rootProject.name = 'javababushka'
+rootProject.name = 'babushka'
 
 include 'client'
 include 'integTest'
