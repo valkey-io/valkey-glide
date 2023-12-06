@@ -167,7 +167,7 @@ async function run_clients(
         num_of_tasks: num_of_concurrent_tasks,
         data_size,
         tps,
-        clientCount: clients.length,
+        client_count: clients.length,
         is_cluster,
         ...set_latency_results,
         ...get_existing_latency_results,

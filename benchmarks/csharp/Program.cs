@@ -226,7 +226,7 @@ public static class MainClass
             {"num_of_tasks", num_of_concurrent_tasks},
             {"data_size", data_size},
             {"tps", tps},
-            {"clientCount", clients.Length},
+            {"client_count", clients.Length},
             {"is_cluster", "false"}
         };
         result = result
