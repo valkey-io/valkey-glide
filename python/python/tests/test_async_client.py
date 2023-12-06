@@ -131,6 +131,10 @@ class TestRedisClients:
         is_cluster = isinstance(redis_client, RedisClusterClient)
         password = "TEST_AUTH"
         credentials = RedisCredentials(password)
+        # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
+        #  init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
+        # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+        primary_address = redis_client.config.addresses[0]
         try:
             await redis_client.custom_command(
                 ["CONFIG", "SET", "requirepass", password]
@@ -138,16 +142,26 @@ class TestRedisClients:
 
             with pytest.raises(ClosingError) as e:
                 # Creation of a new client without password should fail
-                await create_client(request, is_cluster)
+                await create_client(request, is_cluster, addresses=[primary_address])
             assert "NOAUTH" in str(e)
 
-            auth_client = await create_client(request, is_cluster, credentials)
+            auth_client = await create_client(
+                request,
+                is_cluster,
+                credentials,
+                addresses=[primary_address],
+            )
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
             assert await auth_client.get(key) == key
         finally:
             # Reset the password
-            auth_client = await create_client(request, is_cluster, credentials)
+            auth_client = await create_client(
+                request,
+                is_cluster,
+                credentials,
+                addresses=[primary_address],
+            )
             await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -179,7 +193,17 @@ class TestRedisClients:
             key = get_random_string(10)
             assert await redis_client.set(key, key) == OK
             credentials = RedisCredentials(password, username)
-            testuser_client = await create_client(request, is_cluster, credentials)
+
+            # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
+            # init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
+            # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+            primary_address = redis_client.config.addresses[0]
+            testuser_client = await create_client(
+                request,
+                is_cluster,
+                credentials,
+                addresses=[primary_address],
+            )
             assert await testuser_client.get(key) == key
             with pytest.raises(RequestError) as e:
                 # This client isn't authorized to perform SET

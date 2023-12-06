@@ -6,19 +6,19 @@ inputs:
         required: true
         type: string
         options:
-          - macOS
-          - ubuntu
-          - amazon-linux
+            - macOS
+            - ubuntu
+            - amazon-linux
 
 runs:
     using: "composite"
-    steps:        
+    steps:
         - name: Install software dependencies for macOS
           shell: bash
           if: "${{ inputs.os == 'macOS' }}"
           run: |
               brew install git gcc pkgconfig protobuf openssl redis
-        
+
         - name: Install software dependencies for Ubuntu
           shell: bash
           if: "${{ inputs.os == 'ubuntu' }}"

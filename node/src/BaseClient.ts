@@ -52,7 +52,6 @@ import {
     ExecAbortError,
     RedisError,
     RequestError,
-    TIMEOUT_ERROR,
     TimeoutError,
 } from "./Errors";
 import { Logger } from "./Logger";
@@ -214,6 +213,9 @@ export class BaseClient {
         this.remainingReadData = undefined;
     }
 
+    /**
+     * @internal
+     */
     protected constructor(
         socket: net.Socket,
         options?: BaseClientConfiguration
@@ -252,14 +254,14 @@ export class BaseClient {
         });
     }
 
+    /**
+     * @internal
+     */
     protected createWritePromise<T>(
         command: redis_request.Command | redis_request.Command[],
         route?: redis_request.Routes
     ): Promise<T> {
         return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                reject(TIMEOUT_ERROR);
-            }, this.requestTimeout);
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
             this.writeOrBufferRedisRequest(callbackIndex, command, route);
@@ -847,6 +849,9 @@ export class BaseClient {
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
 
+    /**
+     * @internal
+     */
     protected createClientRequest(
         options: BaseClientConfiguration
     ): connection_request.IConnectionRequest {
@@ -873,6 +878,9 @@ export class BaseClient {
         };
     }
 
+    /**
+     * @internal
+     */
     protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
             this.promiseCallbackFunctions[0] = [resolve, reject];
@@ -904,6 +912,9 @@ export class BaseClient {
         this.socket.end();
     }
 
+    /**
+     * @internal
+     */
     protected static async __createClientInternal<
         TConnection extends BaseClient
     >(
@@ -920,6 +931,9 @@ export class BaseClient {
         return connection;
     }
 
+    /**
+     * @internal
+     */
     protected static GetSocket(path: string): Promise<net.Socket> {
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
@@ -930,6 +944,9 @@ export class BaseClient {
         });
     }
 
+    /**
+     * @internal
+     */
     protected static async createClientInternal<TConnection extends BaseClient>(
         options: BaseClientConfiguration,
         constructor: (
