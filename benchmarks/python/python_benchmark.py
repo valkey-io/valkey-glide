@@ -226,7 +226,7 @@ async def run_clients(
             "num_of_tasks": num_of_concurrent_tasks,
             "data_size": data_size,
             "tps": tps,
-            "clientCount": len(clients),
+            "client_count": len(clients),
             "is_cluster": is_cluster,
         },
         **get_existing_latency_results,
