@@ -44,6 +44,11 @@ tasks.register('buildRustRelease', Exec) {
     workingDir project.rootDir
 }
 
+tasks.register('buildRustReleaseStrip', Exec) {
+    commandLine 'cargo', 'build', '--release', '--strip'
+    workingDir project.rootDir
+}
+
 tasks.register('buildRust', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
@@ -56,6 +61,11 @@ tasks.register('buildWithRust') {
 
 tasks.register('buildWithRustRelease') {
     dependsOn 'buildRustRelease'
+    finalizedBy 'build'
+}
+
+tasks.register('buildWithRustReleaseStrip') {
+    dependsOn 'buildRustReleaseStrip'
     finalizedBy 'build'
 }
 
