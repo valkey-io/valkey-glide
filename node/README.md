@@ -92,9 +92,11 @@ Before starting this step, make sure you've installed all software requirments.
         ```
     Once building completed, you'll find the compiled JavaScript code in the `./build-ts` folder.
 5. Run tests:
-    ```bash
-    npm test
-    ```
+    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    2. Execute the following command from the node folder:
+        ```bash
+        npm test
+        ```
 
 ## Integrating the Babushka Package into Your Project
 

@@ -3,39 +3,35 @@ using System.Collections.Concurrent;
 namespace babushka
 {
 
-    internal class MessageContainer
+    internal class MessageContainer<T>
     {
-        internal Message<string?> GetMessage(int index)
+        internal Message<T> GetMessage(int index)
         {
             return messages[index];
         }
 
-        internal (Message<string?>, Task<string?>) GetMessageForCall(string? key, string? value)
+        internal Message<T> GetMessageForCall(string? key, string? value)
         {
             var message = GetFreeMessage();
-            var task = message.CreateTask(key, value, this).ContinueWith(result =>
-            {
-                ReturnFreeMessage(message);
-                return result.Result;
-            });
-            return (message, task);
+            message.StartTask(key, value, this);
+            return message;
         }
 
-        private Message<string?> GetFreeMessage()
+        private Message<T> GetFreeMessage()
         {
             if (!availableMessages.TryDequeue(out var message))
             {
                 lock (messages)
                 {
                     var index = messages.Count;
-                    message = new Message<string?>(index);
+                    message = new Message<T>(index, this);
                     messages.Add(message);
                 }
             }
             return message;
         }
 
-        private void ReturnFreeMessage(Message<string?> message)
+        public void ReturnFreeMessage(Message<T> message)
         {
             availableMessages.Enqueue(message);
         }
@@ -44,7 +40,7 @@ namespace babushka
         {
             lock (messages)
             {
-                foreach (var message in messages)
+                foreach (var message in messages.Where(message => !message.IsCompleted))
                 {
                     try
                     {
@@ -60,11 +56,11 @@ namespace babushka
         /// This list allows us random-access to the message in each index,
         /// which means that once we receive a callback with an index, we can
         /// find the message to resolve in constant time.
-        private List<Message<string?>> messages = new();
+        private List<Message<T>> messages = new();
 
         /// This queue contains the messages that were created and are currently unused by any task,
         /// so they can be reused y new tasks instead of allocating new messages.
-        private ConcurrentQueue<Message<string?>> availableMessages = new();
+        private ConcurrentQueue<Message<T>> availableMessages = new();
     }
 
 }

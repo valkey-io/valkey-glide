@@ -70,6 +70,9 @@ import { redis_request } from "./ProtobufMessage";
  *       [OK , "value"]
  */
 export class BaseTransaction {
+    /**
+     * @internal
+     */
     readonly commands: redis_request.Command[] = [];
 
     /** Get the value associated with the given key, or null if no such value exists.

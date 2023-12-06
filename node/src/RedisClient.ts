@@ -49,6 +49,9 @@ export type RedisClientConfiguration = BaseClientConfiguration & {
 };
 
 export class RedisClient extends BaseClient {
+    /**
+     * @internal
+     */
     protected createClientRequest(
         options: RedisClientConfiguration
     ): connection_request.IConnectionRequest {
