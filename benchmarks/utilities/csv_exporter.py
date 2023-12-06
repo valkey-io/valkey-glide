@@ -1,3 +1,5 @@
+#!/bin/python3
+
 import csv
 import json
 import os
@@ -12,7 +14,7 @@ with open(output_file_name, "w+") as output_file:
         "is_cluster",
         "num_of_tasks",
         "data_size",
-        "clientCount",
+        "client_count",
         "tps",
         "get_non_existing_p50_latency",
         "get_non_existing_p90_latency",
@@ -39,7 +41,7 @@ with open(output_file_name, "w+") as output_file:
 
             json_file_name = os.path.basename(json_file_full_path)
 
-            languages = ["csharp", "node", "python", "rust"]
+            languages = ["csharp", "node", "python", "rust", "java"]
             language = next(
                 (language for language in languages if language in json_file_name), None
             )
