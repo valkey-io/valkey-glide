@@ -1,10 +1,11 @@
-# Summary - Java Wrapper
+# Getting Started - Java Wrapper
 
-This module contains a Java-client wrapper that connects to the `Babushka`-rust-client. The rust client connects to
-redis, while this wrapper provides Java-language binding. The objective of this wrapper is to provide a thin-wrapper
-language api to enhance performance and limit cpu cycles at scale. 
+## Notice: Java Wrapper - Work in Progress
 
-## Organization
+We're excited to share that the Java client is currently in development! However, it's important to note that this client
+is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as
+we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue
+to develop this Java wrapper.
 
 The Java client contains the following parts:
 
@@ -12,25 +13,107 @@ The Java client contains the following parts:
 2. An examples script: to sanity test babushka and similar java-clients against a redis host.
 3. A benchmark app: to performance benchmark test babushka and similar java-clients against a redis host.
 
-## Building
+## Installation and Setup
 
-You can assemble the Java clients benchmarks by compiling using `./gradlew build`. 
+### Install from Gradle
 
-## Code style
+At the moment, the Java client must be built from source.
 
-Code style is enforced by spotless with Google Java Format. The build fails if code formatted incorrectly, but you can auto-format code with `./gradlew spotlessApply`.
-Run this command before every commit to keep code in the same style.
-These IDE plugins can auto-format code on file save or by single click:
-* [For Intellij IDEA](https://plugins.jetbrains.com/plugin/18321-spotless-gradle)
-* [For VS Code](https://marketplace.visualstudio.com/items?itemName=richardwillis.vscode-spotless-gradle)
+### Build from source
 
-## Benchmarks
+Software Dependencies:
+
+- JDK 11+
+- git
+- protoc (protobuf compiler)
+- Rust
+
+#### Prerequisites
+
+**Dependencies installation for Ubuntu**
+```bash
+sudo apt update -y
+sudo apt install -y protobuf-compiler openjdk-11-jdk openssl gcc
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies for MacOS**
+
+Ensure that you have a minimum Java version of JDK 11 installed on your system:
+```bash
+ $ echo $JAVA_HOME
+/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
+
+$ java -version
+ openjdk version "11.0.1" 2018-10-16
+ OpenJDK Runtime Environment 18.9 (build 11.0.1+13)
+ OpenJDK 64-Bit Server VM 18.9 (build 11.0.1+13, mixed mode)
+```
+
+#### Building and installation steps
+The Java client is currently a work in progress and offers no guarantees. Users should build at their own risk.
+
+Before starting this step, make sure you've installed all software requirements.
+1. Clone the repository:
+```bash
+VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+git clone --branch ${VERSION} https://github.com/aws/babushka.git
+cd babushka
+```
+2. Initialize git submodule:
+```bash
+git submodule update --init --recursive
+```
+3. Generate protobuf files:
+```bash
+cd java/
+./gradlew :client:protobuf
+```
+4. Build the client library:
+```bash
+cd java/
+./gradlew :client:build
+```
+5. Run tests:
+```bash
+cd java/
+$ ./gradlew :client:test
+```
+
+Other useful gradle developer commands:
+* `./gradlew :client:test` to run client unit tests
+* `./gradlew :client:spotlessCheck` to check for codestyle issues
+* `./gradlew :client:spotlessApply` to apply codestyle recommendations
+* `./gradlew :benchmarks:run` to run performance benchmarks
+
+## Basic Examples
+
+### Standalone Redis:
+
+```java
+import javababushka.Client;
+import javababushka.Client.SingleResponse;
+
+Client client = new Client();
+
+SingleResponse connect = client.asyncConnectToRedis("localhost", 6379);
+connect.await().isSuccess();
+
+SingleResponse set = client.asyncSet("key", "foobar");
+set.await().isSuccess();
+
+SingleResponse get = client.asyncGet("key");
+get.await().getValue() == "foobar";
+```
+
+### Benchmarks
 
 You can run benchmarks using `./gradlew run`. You can set arguments using the args flag like:
 
 ```shell
 ./gradlew run --args="-help"
-./gradlew run --args="-resultsFile=output.csv -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
+./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
 ```
 
 The following arguments are accepted: 

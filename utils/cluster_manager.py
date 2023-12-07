@@ -409,20 +409,81 @@ def create_cluster(
     if err or "[OK] All 16384 slots covered." not in output:
         raise Exception(f"Failed to create cluster: {err if err else output}")
 
+    wait_for_a_message_in_redis_logs(cluster_folder, "Cluster state changed: ok")
+    wait_for_all_topology_views(servers, cluster_folder, use_tls)
+    logging.debug("The cluster was successfully created!")
+    toc = time.perf_counter()
+    logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
+
+
+def create_standalone_replication(
+    servers: List[RedisServer],
+    cluster_folder: str,
+    use_tls: bool,
+):
+    # Sets up replication among Redis servers, making them replicas of the primary server.
+    tic = time.perf_counter()
+    primary_server = servers[0]
+
+    logging.debug("## Starting replication setup...")
+
+    for i, server in enumerate(servers):
+        if i == 0:
+            continue  # Skip the primary server
+        replica_of_command = [
+            "redis-cli",
+            *get_redis_cli_option_args(cluster_folder, use_tls),
+            "-h",
+            str(server.host),
+            "-p",
+            str(server.port),
+            "REPLICAOF",
+            str(primary_server.host),
+            str(primary_server.port),
+        ]
+        p = subprocess.Popen(
+            replica_of_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=20)
+        if err or "OK" not in output:
+            raise Exception(
+                f"Failed to set up replication for server {server}: {err if err else output}"
+            )
+    servers_ports = [str(server.port) for server in servers]
+    wait_for_a_message_in_redis_logs(
+        cluster_folder,
+        "sync: Finished with success",
+        servers_ports[1:],
+    )
+    logging.debug(
+        f"{len(servers) - 1} nodes successfully became replicas of the primary {primary_server}!"
+    )
+
+    toc = time.perf_counter()
+    logging.debug(f"create_replication Elapsed time: {toc - tic:0.4f}")
+
+
+def wait_for_a_message_in_redis_logs(
+    cluster_folder: str,
+    message: str,
+    server_ports: Optional[List[str]] = None,
+):
+
     for dir in Path(cluster_folder).rglob("*"):
         if not dir.is_dir():
             continue
         log_file = f"{dir}/redis.log"
 
-        if not wait_for_status_ok(log_file):
+        if server_ports and str(dir) not in server_ports:
+            continue
+        if not wait_for_message(log_file, message, 10):
             raise Exception(
-                f"Waiting for server with log {log_file} to reach status OK.\n"
+                f"During the timeout duration, the server logs associated with port {dir} did not contain the message:{message}."
                 f"See {dir}/redis.log for more information"
             )
-    wait_for_all_topology_views(servers, cluster_folder, use_tls)
-    logging.debug("The cluster was successfully created!")
-    toc = time.perf_counter()
-    logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
 
 
 def wait_for_all_topology_views(
@@ -516,8 +577,9 @@ def wait_for_server(
     return False
 
 
-def wait_for_status_ok(
+def wait_for_message(
     log_file: str,
+    message: str,
     timeout: int = 5,
 ):
     logging.debug(f"checking state changed in {log_file}")
@@ -525,12 +587,12 @@ def wait_for_status_ok(
     while time.time() < timeout_start + timeout:
         with open(log_file, "r") as f:
             redis_log = f.read()
-            if "Cluster state changed: ok" in redis_log:
+            if message in redis_log:
                 return True
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(f"Timeout exceeded trying to check if {log_file} contains status ok!")
+    logging.warn(f"Timeout exceeded trying to check if {log_file} contains {message}")
     return False
 
 
@@ -863,9 +925,6 @@ def main():
     if args.action == "start":
         if not args.cluster_mode:
             args.shard_count = 1
-            # TODO: remove setting the replica count to zero after replica support in standalone mode is added to the script
-            args.replica_count = 0
-
         if args.ports and len(args.ports) != args.shard_count * (
             1 + args.replica_count
         ):
@@ -898,6 +957,12 @@ def main():
                 servers,
                 args.shard_count,
                 args.replica_count,
+                cluster_folder,
+                args.tls,
+            )
+        else:
+            create_standalone_replication(
+                servers,
                 cluster_folder,
                 args.tls,
             )

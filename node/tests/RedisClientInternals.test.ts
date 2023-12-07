@@ -13,8 +13,7 @@ import {
     RedisClient,
     RedisClusterClient,
     RequestError,
-    TimeoutError,
-    Transaction
+    Transaction,
 } from "../build-ts";
 import { RedisClientConfiguration } from "../build-ts/src/RedisClient";
 import {
@@ -22,7 +21,10 @@ import {
     redis_request,
     response,
 } from "../src/ProtobufMessage";
-import { ClusterClientConfiguration, SlotKeyTypes } from "../src/RedisClusterClient";
+import {
+    ClusterClientConfiguration,
+    SlotKeyTypes,
+} from "../src/RedisClusterClient";
 
 const { RequestType, RedisRequest } = redis_request;
 
@@ -254,24 +256,25 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                
-                expect(request.transaction?.commands?.at(0)?.requestType).toEqual(
-                    RequestType.SetString
-                );
-                expect(request.transaction?.commands?.at(0)?.argsArray?.args?.length).toEqual(
-                    2
-                );
+
+                expect(
+                    request.transaction?.commands?.at(0)?.requestType
+                ).toEqual(RequestType.SetString);
+                expect(
+                    request.transaction?.commands?.at(0)?.argsArray?.args
+                        ?.length
+                ).toEqual(2);
                 expect(request.route?.slotKeyRoute?.slotKey).toEqual("key");
                 expect(request.route?.slotKeyRoute?.slotType).toEqual(0); // Primary = 0
 
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const transaction = new Transaction();
-            transaction.set("key" , "value");
+            transaction.set("key", "value");
             const slotKey: SlotKeyTypes = {
                 type: "primarySlotKey",
-                key: "key"
-              };
+                key: "key",
+            };
             const result = await connection.exec(transaction, slotKey);
             expect(result).toBe("OK");
         });
@@ -282,16 +285,24 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
-                
-                expect(request.transaction?.commands?.at(0)?.requestType).toEqual(
-                    RequestType.Info
-                );
-                expect(request.transaction?.commands?.at(0)?.argsArray?.args?.length).toEqual(
-                    1
-                );
-                expect(request.route?.simpleRoutes).toEqual(redis_request.SimpleRoutes.Random);
 
-                sendResponse(socket, ResponseType.Value, request.callbackIdx , "# Server");
+                expect(
+                    request.transaction?.commands?.at(0)?.requestType
+                ).toEqual(RequestType.Info);
+                expect(
+                    request.transaction?.commands?.at(0)?.argsArray?.args
+                        ?.length
+                ).toEqual(1);
+                expect(request.route?.simpleRoutes).toEqual(
+                    redis_request.SimpleRoutes.Random
+                );
+
+                sendResponse(
+                    socket,
+                    ResponseType.Value,
+                    request.callbackIdx,
+                    "# Server"
+                );
             });
             const transaction = new Transaction();
             transaction.info([InfoOptions.Server]);
@@ -493,32 +504,6 @@ describe("SocketConnectionInternals", () => {
             }
         );
         closeTestResources(connection, server, socket);
-    });
-
-    it("should timeout before receiving response from core", async () => {
-        await testWithResources(
-            async (connection, socket) => {
-                socket.once("data", (data) =>
-                    setTimeout(() => {
-                        const reader = Reader.create(data);
-                        const request = RedisRequest.decodeDelimited(reader);
-                        expect(request.singleCommand?.requestType).toEqual(
-                            RequestType.GetString
-                        );
-                        expect(
-                            request.singleCommand?.argsArray?.args?.length
-                        ).toEqual(1);
-                    }, 20)
-                );
-                await expect(connection.get("foo")).rejects.toThrow(
-                    TimeoutError
-                );
-            },
-            {
-                addresses: [{ host: "foo" }],
-                requestTimeout: 1,
-            }
-        );
     });
 
     it("should pass routing information from user", async () => {

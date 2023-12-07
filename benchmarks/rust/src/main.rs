@@ -130,7 +130,7 @@ async fn perform_benchmark(args: Args) {
             Value::Number((number_of_operations as i64 * 1000 / stopwatch.elapsed_ms()).into()),
         );
         results_json.insert(
-            "clientCount".to_string(),
+            "client_count".to_string(),
             Value::Number(args.client_count.into()),
         );
         results_json.insert(

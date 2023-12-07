@@ -1,7 +1,5 @@
 package babushka.benchmarks;
 
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -37,7 +35,7 @@ public class BenchmarkingApp {
       runConfiguration = verifyOptions(line);
     } catch (ParseException exp) {
       // oops, something went wrong
-      System.err.println("Parsing failed.  Reason: " + exp.getMessage());
+      System.err.println("Parsing failed. Reason: " + exp.getMessage());
     }
 
     for (ClientName client : runConfiguration.clients) {
@@ -47,24 +45,12 @@ public class BenchmarkingApp {
           System.out.println("Run JEDIS sync client");
           break;
         case LETTUCE:
-          // run testClientSetGet on LETTUCE sync client
-          System.out.println("Run LETTUCE sync client");
-          break;
-        case LETTUCE_ASYNC:
           // run testClientSetGet on LETTUCE async client
           System.out.println("Run LETTUCE async client");
           break;
-        case BABUSHKA_ASYNC:
+        case BABUSHKA:
           System.out.println("Babushka async not yet configured");
           break;
-      }
-    }
-
-    if (runConfiguration.resultsFile.isPresent()) {
-      try {
-        runConfiguration.resultsFile.get().close();
-      } catch (IOException ioException) {
-        System.out.println("Error closing results file: " + ioException.getLocalizedMessage());
       }
     }
   }
@@ -89,18 +75,19 @@ public class BenchmarkingApp {
             .desc("Number of concurrent tasks [100, 1000]")
             .build());
     options.addOption(
-        Option.builder("clients")
-            .hasArg(true)
-            .desc(
-                "one of:"
-                    + " all|jedis|lettuce|lettuce_async|babushka_async|all_async|all_sync"
-                    + " [all]")
-            .build());
+        Option.builder("clients").hasArg(true).desc("one of: all|jedis|lettuce|babushka").build());
     options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
     options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
     options.addOption(
         Option.builder("clientCount").hasArg(true).desc("Number of clients to run [1]").build());
     options.addOption(Option.builder("tls").hasArg(false).desc("TLS [false]").build());
+    options.addOption(
+        Option.builder("clusterModeEnabled")
+            .hasArg(false)
+            .desc("Is cluster-mode enabled, other standalone mode is used [false]")
+            .build());
+    options.addOption(
+        Option.builder("debugLogging").hasArg(false).desc("Verbose logs [false]").build());
 
     return options;
   }
@@ -119,16 +106,11 @@ public class BenchmarkingApp {
     }
 
     if (line.hasOption("resultsFile")) {
-      String resultsFileName = line.getOptionValue("resultsFile");
-      try {
-        runConfiguration.resultsFile = Optional.of(new FileWriter(resultsFileName));
-      } catch (IOException ioException) {
-        throw new ParseException(
-            "Unable to write to resultsFile ("
-                + resultsFileName
-                + "): "
-                + ioException.getMessage());
-      }
+      runConfiguration.resultsFile = Optional.ofNullable(line.getOptionValue("resultsFile"));
+    }
+
+    if (line.hasOption("dataSize")) {
+      runConfiguration.dataSize = parseIntListOption(line.getOptionValue("dataSize"));
     }
 
     if (line.hasOption("concurrentTasks")) {
@@ -144,20 +126,7 @@ public class BenchmarkingApp {
                   e -> {
                     switch (e) {
                       case ALL:
-                        return Stream.of(
-                            ClientName.JEDIS,
-                            //                            ClientName.BABUSHKA_ASYNC,
-                            ClientName.LETTUCE,
-                            ClientName.LETTUCE_ASYNC);
-                      case ALL_ASYNC:
-                        return Stream.of(
-                            // ClientName.BABUSHKA_ASYNC,
-                            ClientName.LETTUCE_ASYNC);
-                      case ALL_SYNC:
-                        return Stream.of(
-                            ClientName.JEDIS,
-                            // ClientName.BABUSHKA_ASYNC,
-                            ClientName.LETTUCE);
+                        return Stream.of(ClientName.JEDIS, ClientName.BABUSHKA, ClientName.LETTUCE);
                       default:
                         return Stream.of(e);
                     }
@@ -178,6 +147,8 @@ public class BenchmarkingApp {
     }
 
     runConfiguration.tls = line.hasOption("tls");
+    runConfiguration.clusterModeEnabled = line.hasOption("clusterModeEnabled");
+    runConfiguration.debugLogging = line.hasOption("debugLogging");
 
     return runConfiguration;
   }
@@ -189,8 +160,12 @@ public class BenchmarkingApp {
     if (lineValue.startsWith("[") && lineValue.endsWith("]")) {
       lineValue = lineValue.substring(1, lineValue.length() - 1);
     }
+
+    // trim whitespace
+    lineValue = lineValue.trim();
+
     // check if it's the correct format
-    if (!lineValue.matches("\\d+(\\s+\\d+)?")) {
+    if (!lineValue.matches("\\d+(\\s+\\d+)*")) {
       throw new ParseException("Invalid option: " + line);
     }
     // split the string into a list of integers
@@ -198,13 +173,10 @@ public class BenchmarkingApp {
   }
 
   public enum ClientName {
-    JEDIS("Jedis"),
-    LETTUCE("Lettuce"),
-    LETTUCE_ASYNC("Lettuce async"),
-    BABUSHKA_ASYNC("Babushka async"),
-    ALL("All"),
-    ALL_SYNC("All sync"),
-    ALL_ASYNC("All async");
+    JEDIS("Jedis"), // sync
+    LETTUCE("Lettuce"), // async
+    BABUSHKA("Babushka"), // async
+    ALL("All");
 
     private String name;
 
@@ -224,7 +196,7 @@ public class BenchmarkingApp {
 
   public static class RunConfiguration {
     public String configuration;
-    public Optional<FileWriter> resultsFile;
+    public Optional<String> resultsFile;
     public int[] dataSize;
     public int[] concurrentTasks;
     public ClientName[] clients;
@@ -232,22 +204,23 @@ public class BenchmarkingApp {
     public int port;
     public int[] clientCount;
     public boolean tls;
+    public boolean clusterModeEnabled;
     public boolean debugLogging = false;
 
     public RunConfiguration() {
       configuration = "Release";
       resultsFile = Optional.empty();
       dataSize = new int[] {100, 4000};
-      concurrentTasks = new int[] {100, 1000};
+      concurrentTasks = new int[] {1, 10, 100, 1000};
       clients =
           new ClientName[] {
-            // ClientName.BABUSHKA_ASYNC,
-            ClientName.JEDIS, ClientName.LETTUCE, ClientName.LETTUCE_ASYNC
+            ClientName.ALL,
           };
       host = "localhost";
       port = 6379;
       clientCount = new int[] {1};
       tls = false;
+      clusterModeEnabled = false;
     }
   }
 }
