@@ -1,5 +1,10 @@
 package babushka.benchmarks;
 
+import static babushka.benchmarks.utils.Benchmarking.testClientSetGet;
+
+import babushka.benchmarks.clients.jedis.JedisClient;
+import babushka.benchmarks.clients.lettuce.LettuceAsyncClient;
+import babushka.benchmarks.clients.lettuce.LettuceAsyncClusterClient;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -43,10 +48,17 @@ public class BenchmarkingApp {
         case JEDIS:
           // run testClientSetGet on JEDIS sync client
           System.out.println("Run JEDIS sync client");
+          testClientSetGet(JedisClient::new, runConfiguration, false);
           break;
         case LETTUCE:
           // run testClientSetGet on LETTUCE async client
           System.out.println("Run LETTUCE async client");
+          testClientSetGet(
+              runConfiguration.clusterModeEnabled
+                  ? LettuceAsyncClusterClient::new
+                  : LettuceAsyncClient::new,
+              runConfiguration,
+              true);
           break;
         case BABUSHKA:
           System.out.println("Babushka async not yet configured");
