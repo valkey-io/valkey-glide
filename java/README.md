@@ -2,16 +2,16 @@
 
 ## Notice: Java Wrapper - Work in Progress
 
-We're excited to share that the Java client is currently in development! However, it's important to note that this client 
-is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as 
-we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue 
+We're excited to share that the Java client is currently in development! However, it's important to note that this client
+is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as
+we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue
 to develop this Java wrapper.
 
 ## Installation and Setup
 
 ### Install from Gradle
 
-At the moment, the Java client must be build from source. 
+At the moment, the Java client must be build from source.
 
 ### Build from source
 
@@ -46,7 +46,7 @@ $ java -version
 ```
 
 #### Building and installation steps
-The Java client is currently a work in progress and offers no guarantees.  Users should build at their own risk.      
+The Java client is currently a work in progress and offers no guarantees. Users should build at their own risk.
 
 Before starting this step, make sure you've installed all software requirements.
 1. Clone the repository:
@@ -75,7 +75,7 @@ cd java/
 $ ./gradlew :client:test
 ```
 
-Other useful gradle developer commands: 
+Other useful gradle developer commands:
 * `./gradlew :client:test` to run client unit tests
 * `./gradlew :client:spotlessCheck` to check for codestyle issues
 * `./gradlew :client:spotlessApply` to apply codestyle recommendations
@@ -109,3 +109,18 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 ./gradlew run --args="-help"
 ./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
 ```
+
+The following arguments are accepted: 
+* `resultsFile`: the results output file
+* `concurrentTasks`: Number of concurrent tasks
+* `clients`: one of: all|jedis|lettuce|babushka
+* `clientCount`: Client count
+* `host`: redis server host url
+* `port`: redis server port number
+* `tls`: redis TLS configured
+
+### Troubleshooting
+
+* Connection Timeout: 
+  * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
+* Only server-side certificates are supported by the TLS configured redis.
