@@ -9,9 +9,9 @@ to develop this Java wrapper.
 
 The Java client contains the following parts:
 
-1. A Java client (lib folder): wrapper to rust-client.
-2. An examples script: to sanity test babushka and similar java-clients against a redis host.
-3. A benchmark app: to performance benchmark test babushka and similar java-clients against a redis host.
+1. A Java client (lib folder): wrapper to rust client.
+2. An examples script: to sanity test babushka against a Redis host.
+3. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of Babushka and other Java clients.
 
 ## Installation and Setup
 
@@ -124,9 +124,3 @@ The following arguments are accepted:
 * `host`: redis server host url
 * `port`: redis server port number
 * `tls`: redis TLS configured
-
-### Troubleshooting
-
-* Connection Timeout: 
-  * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
-* Only server-side certificates are supported by the TLS configured redis.

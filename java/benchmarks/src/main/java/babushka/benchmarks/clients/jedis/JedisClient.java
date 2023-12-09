@@ -2,13 +2,17 @@ package babushka.benchmarks.clients.jedis;
 
 import babushka.benchmarks.clients.SyncClient;
 import babushka.benchmarks.utils.ConnectionSettings;
-import redis.clients.jedis.Jedis;
+import java.util.Set;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.commands.JedisCommands;
 
 /** A Jedis client with sync capabilities. See: https://github.com/redis/jedis */
 public class JedisClient implements SyncClient {
 
-  protected JedisPool pool;
+  private JedisCommands jedis;
 
   @Override
   public void closeConnection() {
@@ -22,38 +26,27 @@ public class JedisClient implements SyncClient {
 
   @Override
   public void connectToRedis(ConnectionSettings connectionSettings) {
-    pool =
-        new JedisPool(connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
-
-    // check if the pool is properly connected
-    try (Jedis jedis = pool.getResource()) {
-      assert jedis.isConnected() : "failed to connect to jedis";
-    }
-  }
-
-  public String info() {
-    try (Jedis jedis = pool.getResource()) {
-      return jedis.info();
-    }
-  }
-
-  public String info(String section) {
-    try (Jedis jedis = pool.getResource()) {
-      return jedis.info(section);
+    if (connectionSettings.clusterMode) {
+      jedis =
+          new JedisCluster(
+              Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
+              DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
+    } else {
+      try (JedisPool pool =
+          new JedisPool(
+              connectionSettings.host, connectionSettings.port, connectionSettings.useSsl)) {
+        jedis = pool.getResource();
+      }
     }
   }
 
   @Override
   public void set(String key, String value) {
-    try (Jedis jedis = pool.getResource()) {
-      jedis.set(key, value);
-    }
+    jedis.set(key, value);
   }
 
   @Override
   public String get(String key) {
-    try (Jedis jedis = pool.getResource()) {
-      return jedis.get(key);
-    }
+    return jedis.get(key);
   }
 }
