@@ -1,12 +1,13 @@
 {
   "name": "babushka-rs-internal",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Redis client",
   "main": "index.js",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "files": [
     "index.d.ts",
-    "index.js"
+    "index.js",
+    "babushka*.*.node"
   ],
   "napi": {
     "name": "babushka-rs-internal",
@@ -15,13 +16,11 @@
       "additional": [
         "x86_64-unknown-linux-musl",
         "aarch64-unknown-linux-gnu",
-        "i686-pc-windows-msvc",
         "armv7-unknown-linux-gnueabihf",
         "aarch64-apple-darwin",
         "aarch64-linux-android",
         "x86_64-unknown-freebsd",
         "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc",
         "armv7-linux-androideabi"
       ]
     }
@@ -35,9 +34,9 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "npm install && napi build --platform --pipe \"prettier -w\"",
-    "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\"",
-    "build:benchmark": "npm install && napi build --platform --release --pipe \"prettier -w\"",
+    "build": "npm install && napi build --platform --pipe \"prettier -w\" $npm_config_build_flags",
+    "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+    "build:benchmark": "npm install && napi build --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
     "format": "run-p format:prettier format:rs",
     "format:prettier": "prettier . -w",
     "format:rs": "cargo fmt",

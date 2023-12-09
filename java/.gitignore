@@ -4,5 +4,5 @@
 # Ignore Gradle build output directory
 build
 
-# Ignore generated files (e.g. protobuf)
-generated
+# Ignore protobuf generated files
+protobuf

@@ -1,3 +1,6 @@
+# Generated code
+build-ts/**
+
 # Logs
 logs
 *.log
@@ -6,8 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
-rust-client/index.*
-
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -130,12 +131,3 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-*babushka*.node
-build-ts/**
-yarn.lock
-
-# Protobuf
-src/ProtobufMessage*
-
-.npmignore
-package.json

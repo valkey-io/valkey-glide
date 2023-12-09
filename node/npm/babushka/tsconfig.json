@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "target": "es2017",
+        "module": "node16",
+        "allowJs": true,
+        "esModuleInterop": true,
+        "baseUrl": "./",
+        "outDir": "./build-ts",
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "declaration": true,
+    }
+}
