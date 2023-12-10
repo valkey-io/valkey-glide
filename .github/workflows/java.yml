@@ -67,3 +67,8 @@ jobs:
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
+
+                  #   TODO - enable once benchmark works
+            # - uses: ./.github/workflows/test-benchmark
+            #   with:
+            #       language-flag: -java
