@@ -327,7 +327,7 @@ mod socket_listener {
         let mut responses = std::collections::HashMap::new();
         responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::Data(b"role:master\r\nconnected_slaves:0\r\n".to_vec()),
+            Value::BulkString(b"role:master\r\nconnected_slaves:0\r\n".to_vec()),
         );
         let server_mock = ServerMock::new(responses);
         let addresses = server_mock.get_addresses();
@@ -490,7 +490,7 @@ mod socket_listener {
             &buffer,
             0,
             CALLBACK2_INDEX,
-            Some(Value::Data(value.into_bytes())),
+            Some(Value::BulkString(value.into_bytes())),
             ResponseType::Value,
         );
     }
@@ -545,7 +545,7 @@ mod socket_listener {
             &buffer,
             0,
             CALLBACK2_INDEX,
-            Some(Value::Data(value.into_bytes())),
+            Some(Value::BulkString(value.into_bytes())),
             ResponseType::Value,
         );
     }
@@ -617,16 +617,16 @@ mod socket_listener {
         };
         let pointer = pointer as *mut Value;
         let received_value = unsafe { Box::from_raw(pointer) };
-        let Value::Bulk(values) = *received_value else {
+        let Value::Array(values) = *received_value else {
             panic!("Unexpected value {:?}", received_value);
         };
         assert_eq!(values.len(), 3);
         for i in 0..3 {
-            let Value::Bulk(nested_values) = values.get(i).unwrap() else {
+            let Value::Array(nested_values) = values.get(i).unwrap() else {
                 panic!("Unexpected value {:?}", values[i]);
             };
             assert_eq!(nested_values.len(), 2);
-            assert_eq!(nested_values[1], Value::Data(b"foo".to_vec()));
+            assert_eq!(nested_values[1], Value::BulkString(b"foo".to_vec()));
         }
     }
 
@@ -732,7 +732,7 @@ mod socket_listener {
             &buffer,
             0,
             CALLBACK2_INDEX,
-            Some(Value::Data(value.into_bytes())),
+            Some(Value::BulkString(value.into_bytes())),
             ResponseType::Value,
         );
     }
@@ -799,7 +799,7 @@ mod socket_listener {
 
                                     assert_value(
                                         pointer,
-                                        Some(Value::Data(values[callback_index].clone())),
+                                        Some(Value::BulkString(values[callback_index].clone())),
                                     );
                                     results[callback_index] = State::ReceivedValue;
                                 }
@@ -982,9 +982,9 @@ mod socket_listener {
             buffer.as_slice(),
             0,
             CALLBACK_INDEX,
-            Some(Value::Bulk(vec![
+            Some(Value::Array(vec![
                 Value::Okay,
-                Value::Data(vec![b'b', b'a', b'r']),
+                Value::BulkString(vec![b'b', b'a', b'r']),
                 Value::Okay,
                 Value::Nil,
             ])),

@@ -53,9 +53,11 @@ pub(super) fn get_redis_connection_info(
             db: database_id as i64,
             username: chars_to_string_option(&info.username),
             password: chars_to_string_option(&info.password),
+            use_resp3: false,
         },
         None => redis::RedisConnectionInfo {
             db: database_id as i64,
+            use_resp3: false,
             ..Default::default()
         },
     }
@@ -71,6 +73,7 @@ pub(super) fn get_connection_info(
             host: address.host.to_string(),
             port: get_port(address),
             insecure: tls_mode == TlsMode::InsecureTls,
+            tls_params: None,
         }
     } else {
         redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
@@ -168,7 +171,7 @@ async fn create_cluster_client(
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or_default();
     let redis_connection_info = get_redis_connection_info(request.authentication_info.0, 0);
-    let initial_nodes = request
+    let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))

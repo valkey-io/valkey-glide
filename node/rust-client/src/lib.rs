@@ -5,6 +5,7 @@ use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use redis::aio::MultiplexedConnection;
+use redis::FromRedisValue;
 use redis::{AsyncCommands, Value};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
@@ -146,26 +147,56 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
 fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
-        Value::Status(str) => js_env
+        Value::SimpleString(str) => js_env
             .create_string_from_std(str)
             .map(|val| val.into_unknown()),
         Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
         Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
-        Value::Data(data) => {
+        Value::BulkString(data) => {
             let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
             js_env.create_string(str).map(|val| val.into_unknown())
         }
-        Value::Bulk(bulk) => {
-            let mut js_array_view = js_env.create_array_with_length(bulk.len())?;
-            for (index, item) in bulk.into_iter().enumerate() {
+        Value::Array(array) => {
+            let mut js_array_view = js_env.create_array_with_length(array.len())?;
+            for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(index as u32, redis_value_to_js(item, js_env)?)?;
             }
             Ok(js_array_view.into_unknown())
         }
+        Value::Map(map) => {
+            let mut obj = js_env.create_object()?;
+            for (key, value) in map {
+                let field_name = String::from_redis_value(&key).map_err(to_js_error)?;
+                let value = redis_value_to_js(value, js_env)?;
+                obj.set_named_property(&field_name, value)?;
+            }
+            Ok(obj.into_unknown())
+        }
+        Value::Double(float) => js_env
+            .create_double(float.into())
+            .map(|val| val.into_unknown()),
+        Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
+        Value::VerbatimString { format: _, text } => js_env // TODO - handle format
+            .create_string_from_std(text)
+            .map(|val| val.into_unknown()),
+        Value::BigNumber(_) => todo!(), // Use either Long, or once we advance to support Ecmascript2020 or above, the BigInt type.
+        Value::Set(array) => {
+            // TODO - return a set object instead of an array object
+            let mut js_array_view = js_env.create_array_with_length(array.len())?;
+            for (index, item) in array.into_iter().enumerate() {
+                js_array_view.set_element(index as u32, redis_value_to_js(item, js_env)?)?;
+            }
+            Ok(js_array_view.into_unknown())
+        }
+        Value::Attribute {
+            data: _,
+            attributes: _,
+        } => todo!(),
+        Value::Push { kind: _, data: _ } => todo!(),
     }
 }
 
-#[napi(ts_return_type = "null | string | number | any[]")]
+#[napi(ts_return_type = "null | string | number | {} | Boolean | Long | Set | any[]")]
 pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
@@ -188,7 +219,7 @@ pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
 pub fn create_leaked_value(message: String) -> usize {
-    let value = Value::Status(message);
+    let value = Value::SimpleString(message);
     Box::leak(Box::new(value)) as *mut Value as usize
 }
 

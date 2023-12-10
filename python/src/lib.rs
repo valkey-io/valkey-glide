@@ -66,14 +66,14 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
-            Value::Status(str) => Ok(str.into_py(py)),
+            Value::SimpleString(str) => Ok(str.into_py(py)),
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
-            Value::Data(data) => match std::str::from_utf8(data.as_ref()) {
+            Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
                 Ok(val) => Ok(val.into_py(py)),
                 Err(_err) => Err(PyUnicodeDecodeError::new_err(data)),
             },
-            Value::Bulk(bulk) => {
+            Value::Array(bulk) => {
                 let elements: &PyList = PyList::new(
                     py,
                     bulk.into_iter()
@@ -81,6 +81,17 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
                 );
                 Ok(elements.into_py(py))
             }
+            Value::Map(_) => todo!(),
+            Value::Attribute {
+                data: _,
+                attributes: _,
+            } => todo!(),
+            Value::Set(_) => todo!(),
+            Value::Double(_) => todo!(),
+            Value::Boolean(_) => todo!(),
+            Value::VerbatimString { format: _, text: _ } => todo!(),
+            Value::BigNumber(_) => todo!(),
+            Value::Push { kind: _, data: _ } => todo!(),
         }
     }
 
@@ -94,7 +105,7 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
     /// This function is for tests that require a value allocated on the heap.
     /// Should NOT be used in production.
     pub fn create_leaked_value(message: String) -> usize {
-        let value = Value::Status(message);
+        let value = Value::SimpleString(message);
         Box::leak(Box::new(value)) as *mut Value as usize
     }
     Ok(())

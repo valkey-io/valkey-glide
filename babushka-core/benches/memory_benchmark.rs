@@ -66,9 +66,9 @@ fn send_and_receive_messages() {
             .unwrap();
         assert!(
             result
-                == Value::Bulk(vec![
-                    Value::Data(b"foo".to_vec()),
-                    Value::Data(b"bar".to_vec())
+                == Value::Array(vec![
+                    Value::BulkString(b"foo".to_vec()),
+                    Value::BulkString(b"bar".to_vec())
                 ])
         )
     });
@@ -98,9 +98,9 @@ fn lots_of_messages() {
                 .unwrap();
             assert!(
                 result
-                    == Value::Bulk(vec![
-                        Value::Data(b"foo".to_vec()),
-                        Value::Data(b"bar".to_vec())
+                    == Value::Array(vec![
+                        Value::BulkString(b"foo".to_vec()),
+                        Value::BulkString(b"bar".to_vec())
                     ])
             )
         }
