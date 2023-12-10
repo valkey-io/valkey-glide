@@ -8,12 +8,14 @@ on:
             - babushka-core/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/rust.yml
     pull_request:
         paths:
             - logger_core/**
             - babushka-core/**
             - submodules/**
             - utils/cluster_manager.py
+            - .github/workflows/rust.yml
 
 env:
     CARGO_TERM_COLOR: always
@@ -60,6 +62,10 @@ jobs:
               run: |
                   cargo check --benches --all-features
                   cargo check --no-default-features
+
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -rust
 
     lint:
         runs-on: ubuntu-latest

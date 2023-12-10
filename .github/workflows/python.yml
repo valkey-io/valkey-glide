@@ -96,6 +96,10 @@ jobs:
                   source .env/bin/activate
                   pytest --asyncio-mode=auto
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -python
+
     lint-rust:
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -142,7 +146,7 @@ jobs:
                   yum install -y git 
                   git --version
 
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
 
             - name: Checkout submodules
               run: |

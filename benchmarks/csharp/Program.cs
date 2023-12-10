@@ -34,6 +34,10 @@ public static class MainClass
 
         [Option('t', "tls", Default = false, HelpText = "Should benchmark a TLS server")]
         public bool tls { get; set; } = false;
+
+
+        [Option('m', "minimal", Default = false, HelpText = "Should use a minimal number of actions")]
+        public bool minimal { get; set; } = false;
     }
 
     private const int PORT = 6379;
@@ -340,7 +344,8 @@ public static class MainClass
             options.clientCount.Select(clientCount => (concurrentTasks: concurrentTasks, dataSize: options.dataSize, clientCount: clientCount))).Where(tuple => tuple.concurrentTasks >= tuple.clientCount);
         foreach (var (concurrentTasks, dataSize, clientCount) in product)
         {
-            await run_with_parameters(number_of_iterations(concurrentTasks), dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount, options.tls);
+            var iterations = options.minimal ? 1000 : number_of_iterations(concurrentTasks);
+            await run_with_parameters(iterations, dataSize, concurrentTasks, options.clientsToRun, options.host, clientCount, options.tls);
         }
 
         print_results(options.resultsFile);
