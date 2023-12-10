@@ -45,6 +45,7 @@ const optionDefinitions = [
     { name: "host", type: String },
     { name: "clientCount", type: String, multiple: true },
     { name: "tls", type: Boolean, defaultValue: false },
+    { name: "minimal", type: Boolean, defaultValue: false },
     { name: "clusterModeEnabled", type: Boolean, defaultValue: false },
     { name: "port", type: Number, defaultValue: PORT },
 ];

@@ -86,6 +86,7 @@ public class BenchmarkingApp {
             .hasArg(false)
             .desc("Is cluster-mode enabled, other standalone mode is used [false]")
             .build());
+    Option.builder("minimal").hasArg(false).desc("Run·benchmark·in·minimal·mode").build();
     options.addOption(
         Option.builder("debugLogging").hasArg(false).desc("Verbose logs [false]").build());
 
@@ -148,6 +149,7 @@ public class BenchmarkingApp {
 
     runConfiguration.tls = line.hasOption("tls");
     runConfiguration.clusterModeEnabled = line.hasOption("clusterModeEnabled");
+    runConfiguration.minimal = line.hasOption("minimal");
     runConfiguration.debugLogging = line.hasOption("debugLogging");
 
     return runConfiguration;
@@ -206,6 +208,7 @@ public class BenchmarkingApp {
     public boolean tls;
     public boolean clusterModeEnabled;
     public boolean debugLogging = false;
+    public boolean minimal = false;
 
     public RunConfiguration() {
       configuration = "Release";
@@ -221,6 +224,7 @@ public class BenchmarkingApp {
       clientCount = new int[] {1};
       tls = false;
       clusterModeEnabled = false;
+      minimal = false;
     }
   }
 }

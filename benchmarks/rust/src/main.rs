@@ -40,6 +40,9 @@ struct Args {
 
     #[arg(name = "port", long, default_value_t = PORT)]
     port: u32,
+
+    #[arg(long, default_value_t = false)]
+    minimal: bool,
 }
 
 // Connection constants - these should be adjusted to fit your connection.
@@ -81,7 +84,11 @@ async fn perform_benchmark(args: Args) {
             args.data_size, args.client_count, args.cluster_mode_enabled, chrono::offset::Utc::now()
         );
         let counter = Arc::new(AtomicUsize::new(0));
-        let number_of_operations = max(100000, concurrent_tasks_count * 10000);
+        let number_of_operations = if args.minimal {
+            1000
+        } else {
+            max(100000, concurrent_tasks_count * 10000)
+        };
 
         let connections = stream::iter(0..args.client_count)
             .fold(Vec::with_capacity(args.client_count), |mut acc, _| async {

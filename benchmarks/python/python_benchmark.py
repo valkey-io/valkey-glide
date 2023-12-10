@@ -76,6 +76,9 @@ arguments_parser.add_argument(
     type=int,
     help="Which port to connect to, defaults to `%(default)s`",
 )
+arguments_parser.add_argument(
+    "--minimal", help="Should run a minimal benchmark", action="store_true"
+)
 args = arguments_parser.parse_args()
 
 PROB_GET = 0.8
@@ -318,10 +321,11 @@ if __name__ == "__main__":
     ]
 
     for data_size, num_of_concurrent_tasks, number_of_clients in product_of_arguments:
+        iterations = 1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
         asyncio.run(
             main(
                 "asyncio",
-                number_of_iterations(num_of_concurrent_tasks),
+                iterations,
                 num_of_concurrent_tasks,
                 data_size,
                 clients_to_run,

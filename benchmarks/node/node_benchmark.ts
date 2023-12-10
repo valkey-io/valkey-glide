@@ -292,8 +292,11 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             );
 
         for (const [concurrent_tasks, data_size, clientCount] of product) {
+            const iterations = receivedOptions.minimal
+                ? 1000
+                : number_of_iterations(concurrent_tasks);
             await main(
-                number_of_iterations(concurrent_tasks),
+                iterations,
                 concurrent_tasks,
                 data_size,
                 clients_to_run,

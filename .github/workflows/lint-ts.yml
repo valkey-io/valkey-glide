@@ -6,11 +6,13 @@ on:
             - benchmarks/node/**
             - node/**
             - benchmarks/utilities/*
+            - .github/workflows/lint-ts.yml
     pull_request:
         paths:
             - benchmarks/node/**
             - node/**
             - benchmarks/utilities/*
+            - .github/workflows/lint-ts.yml
 
 env:
     CARGO_TERM_COLOR: always

@@ -7,11 +7,13 @@ on:
             - csharp/**
             - babushka-core/**
             - submodules/**
+            - .github/workflows/csharp.yml
     pull_request:
         paths:
             - csharp/**
             - babushka-core/src/**
             - submodules/**
+            - .github/workflows/csharp.yml
 
 permissions:
     contents: read
@@ -53,6 +55,10 @@ jobs:
             - name: Test
               working-directory: ./csharp
               run: dotnet test
+
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -csharp
 
     lint-rust:
         timeout-minutes: 10
