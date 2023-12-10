@@ -111,6 +111,7 @@ impl RedisServer {
                         host: "127.0.0.1".to_string(),
                         port: redis_port,
                         insecure: true,
+                        tls_params: None,
                     }
                 } else {
                     redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), redis_port)
@@ -204,6 +205,7 @@ impl RedisServer {
                     host: host.clone(),
                     port,
                     insecure: true,
+                    tls_params: None,
                 };
 
                 RedisServer {
@@ -253,6 +255,29 @@ impl Drop for RedisServer {
     }
 }
 
+fn encode_iter<W>(values: &Vec<Value>, writer: &mut W, prefix: &str) -> io::Result<()>
+where
+    W: io::Write,
+{
+    write!(writer, "{}{}\r\n", prefix, values.len())?;
+    for val in values.iter() {
+        encode_value(val, writer)?;
+    }
+    Ok(())
+}
+
+fn encode_map<W>(values: &Vec<(Value, Value)>, writer: &mut W, prefix: &str) -> io::Result<()>
+where
+    W: io::Write,
+{
+    write!(writer, "{}{}\r\n", prefix, values.len())?;
+    for (k, v) in values.iter() {
+        encode_value(k, writer)?;
+        encode_value(v, writer)?;
+    }
+    Ok(())
+}
+
 pub fn encode_value<W>(value: &Value, writer: &mut W) -> io::Result<()>
 where
     W: io::Write,
@@ -261,20 +286,48 @@ where
     match *value {
         Value::Nil => write!(writer, "$-1\r\n"),
         Value::Int(val) => write!(writer, ":{val}\r\n"),
-        Value::Data(ref val) => {
+        Value::BulkString(ref val) => {
             write!(writer, "${}\r\n", val.len())?;
             writer.write_all(val)?;
             writer.write_all(b"\r\n")
         }
-        Value::Bulk(ref values) => {
-            write!(writer, "*{}\r\n", values.len())?;
-            for val in values.iter() {
+        Value::Array(ref values) => encode_iter(values, writer, "*"),
+        Value::Okay => write!(writer, "+OK\r\n"),
+        Value::SimpleString(ref s) => write!(writer, "+{s}\r\n"),
+        Value::Map(ref values) => encode_map(values, writer, "%"),
+        Value::Attribute {
+            ref data,
+            ref attributes,
+        } => {
+            encode_map(attributes, writer, "|")?;
+            encode_value(data, writer)?;
+            Ok(())
+        }
+        Value::Set(ref values) => encode_iter(values, writer, "~"),
+        // Value::Nil => write!(writer, "_\r\n"), //TODO is it okey to use $-1 in resp3 ?
+        Value::Double(val) => write!(writer, ",{}\r\n", val),
+        Value::Boolean(v) => {
+            if v {
+                write!(writer, "#t\r\n")
+            } else {
+                write!(writer, "#f\r\n")
+            }
+        }
+        Value::VerbatimString {
+            ref format,
+            ref text,
+        } => {
+            // format is always 3 bytes
+            write!(writer, "={}\r\n{}:{}\r\n", 3 + text.len(), format, text)
+        }
+        Value::BigNumber(ref val) => write!(writer, "({}\r\n", val),
+        Value::Push { ref kind, ref data } => {
+            write!(writer, ">{}\r\n+{kind}\r\n", data.len() + 1)?;
+            for val in data.iter() {
                 encode_value(val, writer)?;
             }
             Ok(())
         }
-        Value::Okay => write!(writer, "+OK\r\n"),
-        Value::Status(ref s) => write!(writer, "+{s}\r\n"),
     }
 }
 
@@ -447,6 +500,7 @@ pub fn get_address_info(address: &ConnectionAddr) -> NodeAddress {
             host,
             port,
             insecure: _,
+            tls_params: _,
         } => {
             address_info.host = host.to_string().into();
             address_info.port = *port as u32;
@@ -482,7 +536,7 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
     let get_result = client.req_packed_command(&get_command, None).await.unwrap();
 
     assert_eq!(set_result, Value::Okay);
-    assert_eq!(get_result, Value::Data(value.into_bytes()));
+    assert_eq!(get_result, Value::BulkString(value.into_bytes()));
 }
 
 pub struct TestBasics {
