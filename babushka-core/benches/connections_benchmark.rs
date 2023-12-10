@@ -129,6 +129,7 @@ fn get_tls_address() -> Result<ConnectionAddr, impl std::error::Error> {
         host,
         port: 6379,
         insecure: false,
+        tls_params: None,
     })
 }
 
@@ -155,6 +156,7 @@ fn cluster_connection_benchmarks(c: &mut Criterion) {
         host,
         port: 6379,
         insecure: false,
+        tls_params: None,
     }) else {
         return;
     };

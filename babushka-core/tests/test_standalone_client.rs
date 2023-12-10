@@ -98,22 +98,22 @@ mod standalone_client_tests {
         let mut primary_responses = std::collections::HashMap::new();
         primary_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::Data(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec()),
         );
         primary_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::Data(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
+            Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
         );
         let primary = ServerMock::new_with_listener(primary_responses, listeners.pop().unwrap());
         let mut mocks = vec![primary];
         let mut replica_responses = std::collections::HashMap::new();
         replica_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
-            Value::Data(b"PONG".to_vec()),
+            Value::BulkString(b"PONG".to_vec()),
         );
         replica_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
-            Value::Data(b"role:slave\r\n".to_vec()),
+            Value::BulkString(b"role:slave\r\n".to_vec()),
         );
         mocks.extend(
             listeners
