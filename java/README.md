@@ -10,8 +10,7 @@ to develop this Java wrapper.
 The Java client contains the following parts:
 
 1. A Java client (lib folder): wrapper to rust client.
-2. An examples script: to sanity test babushka against a Redis host.
-3. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of Babushka and other Java clients.
+2. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of Babushka and other Java clients.
 
 ## Installation and Setup
 
