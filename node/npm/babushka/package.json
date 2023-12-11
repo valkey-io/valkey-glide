@@ -8,6 +8,9 @@
     "scripts": {
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
+        "clean": "rm -rf build-ts/",
+        "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/",
+        "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files"
     },
     "files": [
         "/build-ts"
