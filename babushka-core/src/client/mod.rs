@@ -47,17 +47,18 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 pub(super) fn get_redis_connection_info(
     authentication_info: Option<Box<AuthenticationInfo>>,
     database_id: u32,
+    use_resp3: bool,
 ) -> redis::RedisConnectionInfo {
     match authentication_info {
         Some(info) => redis::RedisConnectionInfo {
             db: database_id as i64,
             username: chars_to_string_option(&info.username),
             password: chars_to_string_option(&info.password),
-            use_resp3: false,
+            use_resp3,
         },
         None => redis::RedisConnectionInfo {
             db: database_id as i64,
-            use_resp3: false,
+            use_resp3,
             ..Default::default()
         },
     }
@@ -170,7 +171,8 @@ async fn create_cluster_client(
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or_default();
-    let redis_connection_info = get_redis_connection_info(request.authentication_info.0, 0);
+    let redis_connection_info =
+        get_redis_connection_info(request.authentication_info.0, 0, request.use_resp3);
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -183,6 +185,7 @@ async fn create_cluster_client(
     if read_from_replicas {
         builder = builder.read_from_replicas();
     }
+    builder = builder.use_resp3(request.use_resp3);
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure

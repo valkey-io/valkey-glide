@@ -73,6 +73,7 @@ impl StandaloneClient {
         let redis_connection_info = get_redis_connection_info(
             connection_request.authentication_info.0,
             connection_request.database_id,
+            connection_request.use_resp3,
         );
 
         let tls_mode = connection_request.tls_mode.enum_value_or_default();
