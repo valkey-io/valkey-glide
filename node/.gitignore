@@ -138,4 +138,3 @@ yarn.lock
 src/ProtobufMessage*
 
 .npmignore
-package.json

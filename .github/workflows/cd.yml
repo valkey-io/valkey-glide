@@ -52,12 +52,6 @@ jobs:
               run: |
                   echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
 
-            - name: Install Rust toolchain
-              uses: actions-rs/toolchain@v1
-              with:
-                  target: ${{ matrix.build.TARGET }}
-                  override: true
-
             - name: Setup node
               uses: actions/setup-node@v3
               with:
@@ -131,6 +125,7 @@ jobs:
                   echo "${GITHUB_REF:11}"
                   export package_version=${GITHUB_REF:11}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                  mv package.json package.json.tmpl
                   envsubst < package.json.tmpl > "package.json"
                   cat package.json
                   # Fix index.ts based on the scope variable
