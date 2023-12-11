@@ -192,7 +192,7 @@ async function main(
     total_commands: number,
     num_of_concurrent_tasks: number,
     data_size: number,
-    clients_to_run: "all" | "ffi" | "socket" | "babushka",
+    clients_to_run: "all" | "babushka",
     host: string,
     clientCount: number,
     useTLS: boolean,
@@ -200,11 +200,7 @@ async function main(
     port: number
 ) {
     const data = generate_value(data_size);
-    if (
-        clients_to_run == "socket" ||
-        clients_to_run == "all" ||
-        clients_to_run == "babushka"
-    ) {
+    if (clients_to_run == "all" || clients_to_run == "babushka") {
         const clientClass = clusterModeEnabled
             ? RedisClusterClient
             : RedisClient;
@@ -216,7 +212,7 @@ async function main(
         );
         await run_clients(
             clients,
-            "babushka socket",
+            "babushka",
             total_commands,
             num_of_concurrent_tasks,
             data_size,

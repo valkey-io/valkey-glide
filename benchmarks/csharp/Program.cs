@@ -282,7 +282,7 @@ public static class MainClass
         int clientCount,
         bool useTLS)
     {
-        if (clientsToRun == "all" || clientsToRun == "ffi" || clientsToRun == "babushka")
+        if (clientsToRun == "all" || clientsToRun == "babushka")
         {
             var clients = await createClients(clientCount, () =>
             {
@@ -295,7 +295,7 @@ public static class MainClass
 
             await run_clients(
                 clients,
-                "babushka FFI",
+                "babushka",
                 total_commands,
                 data_size,
                 num_of_concurrent_tasks

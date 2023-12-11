@@ -276,7 +276,6 @@ async def main(
 
     if (
         clients_to_run == "all"
-        or clients_to_run == "socket"
         or clients_to_run == "babushka"
     ):
         # Babushka Socket
@@ -290,7 +289,7 @@ async def main(
         )
         await run_clients(
             clients,
-            "babushka-socket",
+            "babushka",
             event_loop_name,
             total_commands,
             num_of_concurrent_tasks,
