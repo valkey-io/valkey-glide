@@ -32,6 +32,5 @@ switch (platform) {
 if (!nativeBinding) {
     throw new Error(`Failed to load native binding`);
 }
-// Can't export SetOptions, BaseClientConfiguration, ReturnType, as those are types
 export const { RedisClient, RedisClusterClient, Logger, ExpireOptions, InfoOptions, ClosingError, ExecAbortError, RedisError, RequestError, TimeoutError, ClusterTransaction, Transaction } = nativeBinding;
 export default Object.assign(global, nativeBinding);
