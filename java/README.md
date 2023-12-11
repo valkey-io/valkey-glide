@@ -7,11 +7,16 @@ is a work in progress and is not yet complete or fully tested. Your contribution
 we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue
 to develop this Java wrapper.
 
+The Java client contains the following parts:
+
+1. A Java client (lib folder): wrapper to rust client.
+2. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of Babushka and other Java clients.
+
 ## Installation and Setup
 
 ### Install from Gradle
 
-At the moment, the Java client must be build from source.
+At the moment, the Java client must be built from source.
 
 ### Build from source
 
@@ -118,9 +123,3 @@ The following arguments are accepted:
 * `host`: redis server host url
 * `port`: redis server port number
 * `tls`: redis TLS configured
-
-### Troubleshooting
-
-* Connection Timeout: 
-  * If you're unable to connect to redis, check that you are connecting to the correct host, port, and TLS configuration.
-* Only server-side certificates are supported by the TLS configured redis.
