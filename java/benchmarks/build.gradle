@@ -9,9 +9,6 @@ repositories {
 }
 
 dependencies {
-    // Use JUnit test framework.
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
-
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'
     implementation 'redis.clients:jedis:4.4.3'
@@ -33,12 +30,4 @@ java {
 application {
     // Define the main class for the application.
     mainClass = 'babushka.benchmarks.BenchmarkingApp'
-}
-
-tasks.withType(Test) {
-  testLogging {
-    exceptionFormat "full"
-    events "started", "skipped", "passed", "failed"
-    showStandardStreams true
-  }
 }
