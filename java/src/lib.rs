@@ -27,12 +27,12 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
             let _ = env.throw("Not implemented");
             JObject::null()
         }
-        Value::Map(map) => todo!(),
-        Value::Double(float) => todo!(),
-        Value::Boolean(bool) => todo!(),
-        Value::VerbatimString { format: _, text } => todo!(),
-        Value::BigNumber(num) => todo!(),
-        Value::Set(array) => todo!(),
+        Value::Map(_map) => todo!(),
+        Value::Double(_float) => todo!(),
+        Value::Boolean(_bool) => todo!(),
+        Value::VerbatimString { format: _, text: _ } => todo!(),
+        Value::BigNumber(_num) => todo!(),
+        Value::Set(_array) => todo!(),
         Value::Attribute {
             data: _,
             attributes: _,
@@ -43,7 +43,7 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
 
 #[no_mangle]
 pub extern "system" fn Java_babushka_BabushkaCoreNativeDefinitions_valueFromPointer<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong,
 ) -> JObject<'local> {
@@ -55,7 +55,7 @@ pub extern "system" fn Java_babushka_BabushkaCoreNativeDefinitions_valueFromPoin
 pub extern "system" fn Java_babushka_BabushkaCoreNativeDefinitions_startSocketListenerExternal<
     'local,
 >(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JObject<'local> {
     let (tx, rx) = mpsc::channel::<Result<String, String>>();
