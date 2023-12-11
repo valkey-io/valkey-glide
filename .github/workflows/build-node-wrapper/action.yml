@@ -56,8 +56,6 @@ runs:
           shell: bash
           working-directory: ./node
           run: |
-              # Remove the current package.json if exists
-              rm -f package.json
               # set the package name
               name="babushka"
               # derive the OS and architecture from the inputs
@@ -71,7 +69,13 @@ runs:
               export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
               # set the registry scope
               export registry_scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}:"; fi`
+              # remove the current name section
+              SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+              sed -i $SED_FOR_MACOS '/"name":/d' ./package.json
+              # Remove all `///` occurrences to enable the commented out sections
+              sed -i -e 's|///||g' package.json
               # generate package.json from the template
+              mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
               cat package.json
 
