@@ -66,17 +66,9 @@ Before starting this step, make sure you've installed all software requirments.
     ```bash
     git submodule update --init --recursive
     ```
-3. Create package.json file from the template 
-    ```bash
-    cd node
-    export pkg_name=babushka
-    envsubst < package.json.tmpl > "package.json"
-     # Remove the "cpu" and "os" fileds from the package.json file
-    SED_FOR_MACOS=`if [[ $OSTYPE == 'darwin'* ]]; then echo "''"; fi`
-    sed -i $SED_FOR_MACOS '/"cpu":/d' ./package.json && sed -i $SED_FOR_MACOS '/"os":/d' ./package.json 
-    ```
 3. Install all node dependencies:
     ```bash
+    cd node
     npm i
     cd rust-client
     npm i

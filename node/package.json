@@ -1,6 +1,5 @@
 {
-    "name": "${scope}${pkg_name}",
-    "version": "${package_version}",
+    "name": "babushka",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
@@ -9,8 +8,6 @@
         "url": "git+https://github.com/aws/babushka.git"
     },
     "homepage": "https://github.com/aws/babushka#readme",
-    "os": ["${node_os}"],
-    "cpu": ["${node_arch}"],
     "dependencies": {
         "babushka-rs-internal": "file:rust-client",
         "long": "^5.2.3",
@@ -67,5 +64,12 @@
             "babel.config.js",
             "jest.config.js"
         ]
-    }
+    },
+    "//": [
+        "The fields below have been commented out and are only necessary for publishing the package."
+    ],
+    "///cpu": ["${node_arch}"],
+    "///os": ["${node_os}"],
+    "///name": "${scope}${pkg_name}",
+    "///version": "${package_version}"
 }

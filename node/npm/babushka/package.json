@@ -8,7 +8,6 @@
     "scripts": {
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "build": "tsc"
     },
     "files": [
         "/build-ts"
