@@ -214,12 +214,6 @@ do
             runAllBenchmarks=0
             runRust=1
             ;;
-        -only-socket)
-            chosenClients="socket"
-            ;;
-        -only-ffi)
-            chosenClients="ffi"
-            ;;
         -only-babushka)
             chosenClients="babushka"
             ;;
