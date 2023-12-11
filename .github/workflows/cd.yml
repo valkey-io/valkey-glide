@@ -133,6 +133,11 @@ jobs:
               env:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
 
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: ubuntu-latest
+
             - name: Create a directory for the packed packages
               shell: bash
               working-directory: ./node/npm/babushka
