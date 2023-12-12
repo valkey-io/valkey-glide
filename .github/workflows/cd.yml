@@ -137,6 +137,7 @@ jobs:
               uses: ./.github/workflows/build-node-wrapper
               with:
                   os: ubuntu-latest
+                  target: "x86_64-unknown-linux-gnu"
 
             - name: Create a directory for the packed packages
               shell: bash
