@@ -4,9 +4,8 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
-use redis::aio::MultiplexedConnection;
-use redis::FromRedisValue;
-use redis::{AsyncCommands, Value};
+use num_traits::sign::Signed;
+use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use std::str;
 use tokio::runtime::{Builder, Runtime};
 
@@ -176,10 +175,20 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             .create_double(float.into())
             .map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
-        Value::VerbatimString { format: _, text } => js_env // TODO - handle format
+        // format is ignored, as per the RESP3 recommendations -
+        // "Normal client libraries may ignore completely the difference between this"
+        // "type and the String type, and return a string in both cases.""
+        // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
+        Value::VerbatimString { format: _, text } => js_env
             .create_string_from_std(text)
             .map(|val| val.into_unknown()),
-        Value::BigNumber(_) => todo!(), // Use either Long, or once we advance to support Ecmascript2020 or above, the BigInt type.
+        Value::BigNumber(num) => {
+            let sign = num.is_negative();
+            let words = num.iter_u64_digits().collect();
+            js_env
+                .create_bigint_from_words(sign, words)
+                .and_then(|val| val.into_unknown())
+        }
         Value::Set(array) => {
             // TODO - return a set object instead of an array object
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
@@ -188,15 +197,21 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             }
             Ok(js_array_view.into_unknown())
         }
-        Value::Attribute {
-            data: _,
-            attributes: _,
-        } => todo!(),
+        Value::Attribute { data, attributes } => {
+            let mut obj = js_env.create_object()?;
+            let value = redis_value_to_js(*data, js_env)?;
+            obj.set_named_property("value", value)?;
+
+            let value = redis_value_to_js(Value::Map(attributes), js_env)?;
+            obj.set_named_property("attributes", value)?;
+
+            Ok(obj.into_unknown())
+        }
         Value::Push { kind: _, data: _ } => todo!(),
     }
 }
 
-#[napi(ts_return_type = "null | string | number | {} | Boolean | Long | Set | any[]")]
+#[napi(ts_return_type = "null | string | number | {} | Boolean | BigInt | Set<any> | any[]")]
 pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])

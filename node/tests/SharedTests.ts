@@ -32,7 +32,9 @@ type BaseClient = {
     decr: (key: string) => Promise<number>;
     decrBy: (key: string, amount: number) => Promise<number>;
     incrByFloat: (key: string, amount: number) => Promise<string>;
-    configGet: (parameters: string[]) => Promise<ClusterResponse<string[]>>;
+    configGet: (
+        parameters: string[]
+    ) => Promise<ClusterResponse<Record<string, string>>>;
     configSet: (parameters: Record<string, string>) => Promise<"OK">;
     hset: (
         key: string,
@@ -513,17 +515,19 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
-                ])) as string[];
+                ])) as Record<string, string>;
                 expect(await client.configSet({ timeout: "1000" })).toEqual(
                     "OK"
                 );
                 const currTimeout = (await client.configGet([
                     "timeout",
-                ])) as string[];
-                expect(currTimeout).toEqual(["timeout", "1000"]);
+                ])) as Record<string, string>;
+                expect(currTimeout).toEqual({ timeout: "1000" });
                 /// Revert to the pervious configuration
                 expect(
-                    await client.configSet({ [prevTimeout[0]]: prevTimeout[1] })
+                    await client.configSet({
+                        timeout: prevTimeout["timeout"],
+                    })
                 ).toEqual("OK");
             });
         },
@@ -644,13 +648,11 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hgetall(key)).toEqual([
-                    field1,
-                    value,
-                    field2,
-                    value,
-                ]);
-                expect(await client.hgetall("nonExistingKey")).toEqual([]);
+                expect(await client.hgetall(key)).toEqual({
+                    [field1]: value,
+                    [field2]: value,
+                });
+                expect(await client.hgetall("nonExistingKey")).toEqual({});
             });
         },
         config.timeout

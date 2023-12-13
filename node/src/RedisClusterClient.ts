@@ -306,8 +306,8 @@ export class RedisClusterClient extends BaseClient {
     public configGet(
         parameters: string[],
         route?: Routes
-    ): Promise<ClusterResponse<string[]>> {
-        return this.createWritePromise<ClusterResponse<string[]>>(
+    ): Promise<ClusterResponse<Record<string, string>>> {
+        return this.createWritePromise<ClusterResponse<Record<string, string>>>(
             createConfigGet(parameters),
             toProtobufRoute(route)
         );
