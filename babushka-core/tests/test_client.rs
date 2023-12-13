@@ -4,6 +4,8 @@ mod utilities;
 mod shared_client_tests {
     use super::*;
     use babushka::client::Client;
+    use redis::RedisConnectionInfo;
+    use redis::Value;
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::*;
@@ -71,6 +73,71 @@ mod shared_client_tests {
             .await;
             let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_resp3_support(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    connection_info: Some(RedisConnectionInfo {
+                        use_resp3: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let hello: std::collections::HashMap<String, Value> = redis::from_redis_value(
+                &test_basics
+                    .client
+                    .req_packed_command(&redis::cmd("HELLO"), None)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(hello.get("proto").unwrap(), &Value::Int(3));
+
+            let mut cmd = redis::cmd("HSET");
+            cmd.arg("hash").arg("foo").arg("baz");
+            test_basics
+                .client
+                .req_packed_command(&cmd, None)
+                .await
+                .unwrap();
+            let mut cmd = redis::cmd("HSET");
+            cmd.arg("hash").arg("bar").arg("foobar");
+            test_basics
+                .client
+                .req_packed_command(&cmd, None)
+                .await
+                .unwrap();
+
+            let mut cmd = redis::cmd("HGETALL");
+            cmd.arg("hash");
+            let result = test_basics
+                .client
+                .req_packed_command(&cmd, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                result,
+                Value::Map(vec![
+                    (
+                        Value::BulkString("foo".as_bytes().to_vec()),
+                        Value::BulkString("baz".as_bytes().to_vec())
+                    ),
+                    (
+                        Value::BulkString("bar".as_bytes().to_vec()),
+                        Value::BulkString("foobar".as_bytes().to_vec())
+                    )
+                ])
+            );
         });
     }
 
