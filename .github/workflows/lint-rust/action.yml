@@ -17,11 +17,6 @@ runs:
         - uses: dtolnay/rust-toolchain@stable
         - uses: Swatinem/rust-cache@v2
 
-        - run: |
-              sudo apt update
-              sudo apt install protobuf-compiler
-          shell: bash
-
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash

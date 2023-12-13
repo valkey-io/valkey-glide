@@ -45,11 +45,6 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install protoc
-              run: |
-                  sudo apt update
-                  sudo apt install protobuf-compiler
-
             - name: Use Node.js 16.x
               uses: actions/setup-node@v3
               with:
