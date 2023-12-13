@@ -617,16 +617,12 @@ mod socket_listener {
         };
         let pointer = pointer as *mut Value;
         let received_value = unsafe { Box::from_raw(pointer) };
-        let Value::Array(values) = *received_value else {
+        let Value::Map(values) = *received_value else {
             panic!("Unexpected value {:?}", received_value);
         };
         assert_eq!(values.len(), 3);
         for i in 0..3 {
-            let Value::Array(nested_values) = values.get(i).unwrap() else {
-                panic!("Unexpected value {:?}", values[i]);
-            };
-            assert_eq!(nested_values.len(), 2);
-            assert_eq!(nested_values[1], Value::BulkString(b"foo".to_vec()));
+            assert_eq!(values.get(i).unwrap().1, Value::BulkString(b"foo".to_vec()));
         }
     }
 

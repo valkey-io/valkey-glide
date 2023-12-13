@@ -122,25 +122,6 @@ function toProtobufRoute(
     }
 }
 
-/** Convert the multi-node response from a list of [address, nodeResponse] pairs to
- * a dictionary where each address is the key and its corresponding node response is the value.
- *
- * @param response - A list of lists, where each inner list contains an address (string)
- *  and the corresponding node response (of type T). Or a single node response (of type T).
- * @param isSingleResponse - Predicate that checks if `response` is single node response.
- * @returns `response` if response is single node response,
- * otherwise a dictionary where each address is the key and its corresponding node response is the value.
- */
-export function convertMultiNodeResponseToDict<T>(
-    response: T | [string, T][],
-    isSingleResponse: (res: T | [string, T][]) => boolean
-): T | Record<string, T> {
-    if (isSingleResponse(response)) {
-        return response as T;
-    }
-    return Object.fromEntries(response as [string, T][]);
-}
-
 export class RedisClusterClient extends BaseClient {
     /**
      * @internal
@@ -241,16 +222,10 @@ export class RedisClusterClient extends BaseClient {
         options?: InfoOptions[],
         route?: Routes
     ): Promise<ClusterResponse<string>> {
-        const result = this.createWritePromise<string | [string, string][]>(
+        return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options),
             toProtobufRoute(route)
         );
-        return result.then((res) => {
-            return convertMultiNodeResponseToDict<string>(
-                res,
-                (response) => typeof response == "string"
-            );
-        });
     }
 
     /** Get the name of the current connection.
@@ -266,16 +241,10 @@ export class RedisClusterClient extends BaseClient {
     public clientGetName(
         route?: Routes
     ): Promise<ClusterResponse<string | null>> {
-        const result = this.createWritePromise<string | null>(
+        return this.createWritePromise<ClusterResponse<string | null>>(
             createClientGetName(),
             toProtobufRoute(route)
         );
-        return result.then((res) => {
-            return convertMultiNodeResponseToDict<string | null>(
-                res,
-                (response) => typeof response == "string" || response == null
-            );
-        });
     }
 
     /** Rewrite the configuration file with the current configuration.
@@ -317,16 +286,10 @@ export class RedisClusterClient extends BaseClient {
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public clientId(route?: Routes): Promise<ClusterResponse<number>> {
-        const result = this.createWritePromise<number>(
+        return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
             toProtobufRoute(route)
         );
-        return result.then((res) => {
-            return convertMultiNodeResponseToDict<number>(
-                res,
-                (response) => typeof response == "number"
-            );
-        });
     }
 
     /** Reads the configuration parameters of a running Redis server.
@@ -344,18 +307,10 @@ export class RedisClusterClient extends BaseClient {
         parameters: string[],
         route?: Routes
     ): Promise<ClusterResponse<string[]>> {
-        const result = this.createWritePromise<string[] | [string, string[]][]>(
+        return this.createWritePromise<ClusterResponse<string[]>>(
             createConfigGet(parameters),
             toProtobufRoute(route)
         );
-        return result.then((res) => {
-            return convertMultiNodeResponseToDict<string[]>(
-                res,
-                (response: (string | [string, string[]])[]) =>
-                    Array.isArray(response) &&
-                    response.every((item) => typeof item === "string")
-            );
-        });
     }
 
     /** Set configuration parameters to the specified values.

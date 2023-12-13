@@ -245,8 +245,10 @@ pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) ->
     };
 
     if let Some(redis_connection_info) = &configuration.connection_info {
-        assert!(!configuration.shared_server);
-        setup_acl_for_cluster(&addresses, redis_connection_info).await;
+        if redis_connection_info.password.is_some() {
+            assert!(!configuration.shared_server);
+            setup_acl_for_cluster(&addresses, redis_connection_info).await;
+        }
     }
     configuration.cluster_mode = ClusterMode::Enabled;
     configuration.request_timeout = configuration.request_timeout.or(Some(10000));

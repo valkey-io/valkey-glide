@@ -5,12 +5,11 @@ import random
 import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Union
+from typing import Dict, List, TypeVar, Union
 
 import pytest
 from packaging import version
 from pybushka import ClosingError, RequestError, TimeoutError
-from pybushka.async_commands.cluster_commands import is_single_response
 from pybushka.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
@@ -31,6 +30,32 @@ from pybushka.routes import (
     SlotType,
 )
 from tests.conftest import create_client
+
+T = TypeVar("T")
+
+
+def is_single_response(response: T, single_res: T) -> bool:
+    """
+    Recursively checks if a given response matches the type structure of single_res.
+
+    Args:
+        response (T): The response to check.
+        single_res (T): An object with the expected type structure as an example for the single node response.
+
+    Returns:
+        bool: True if response matches the structure of single_res, False otherwise.
+
+     Example:
+        >>> is_single_response(["value"], LIST_STR)
+        True
+        >>> is_single_response([["value"]], LIST_STR)
+        False
+    """
+    if isinstance(single_res, list) and isinstance(response, list):
+        return is_single_response(response[0], single_res[0])
+    elif isinstance(response, type(single_res)):
+        return True
+    return False
 
 
 def get_first_result(res: str | List[str] | List[List[str]] | Dict[str, str]) -> str:
@@ -944,12 +969,11 @@ class TestClusterRoutes:
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
-        assert isinstance(all_results, list)
+        assert isinstance(all_results, dict)
         assert len(all_results) == expected_num_of_results
         primary_count = 0
         replica_count = 0
-        for info_res in all_results:
-            info_res = info_res[1]
+        for _, info_res in all_results.items():
             assert "role:master" in info_res or "role:slave" in info_res
             if "role:master" in info_res:
                 primary_count += 1
