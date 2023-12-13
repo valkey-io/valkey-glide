@@ -1,11 +1,14 @@
 use babushka::start_socket_listener;
 use babushka::MAX_REQUEST_ARGS_LENGTH;
 use byteorder::{LittleEndian, WriteBytesExt};
+#[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
 use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
+#[cfg(feature = "testing_utilities")]
+use std::collections::HashMap;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
 
@@ -225,23 +228,96 @@ pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> R
     redis_value_to_js(*value, js_env)
 }
 
-#[napi]
-pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
-    *unsafe { Box::from_raw(pointer_as_bigint.get_u64().1 as *mut String) }
+fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
+    let pointer = pointer as usize;
+    let bytes = usize::to_le_bytes(pointer);
+    let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
+    [lower, higher]
 }
 
-#[napi]
+#[napi(ts_return_type = "[number, number]")]
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
-pub fn create_leaked_value(message: String) -> usize {
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_string(message: String) -> [u32; 2] {
     let value = Value::SimpleString(message);
-    Box::leak(Box::new(value)) as *mut Value as usize
+    let pointer = Box::leak(Box::new(value)) as *mut Value;
+    split_pointer(pointer)
 }
 
 #[napi(ts_return_type = "[number, number]")]
 pub fn create_leaked_string_vec(message: Vec<String>) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(message)) as *mut Vec<String> as u64;
-    let bytes = u64::to_le_bytes(pointer);
-    let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
-    [lower, higher]
+    let pointer = Box::leak(Box::new(message)) as *mut Vec<String>;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_map(map: HashMap<String, String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Map(
+        map.into_iter()
+            .map(|(key, value)| (Value::SimpleString(key), Value::SimpleString(value)))
+            .collect(),
+    ))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_array(array: Vec<String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Array(
+        array.into_iter().map(Value::SimpleString).collect(),
+    ))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_attribute(message: String, attribute: HashMap<String, String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Attribute {
+        data: Box::new(Value::SimpleString(message)),
+        attributes: attribute
+            .into_iter()
+            .map(|(key, value)| (Value::SimpleString(key), Value::SimpleString(value)))
+            .collect(),
+    })) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::BigNumber(num_bigint::BigInt::new(
+        if big_int.sign_bit {
+            num_bigint::Sign::Minus
+        } else {
+            num_bigint::Sign::Plus
+        },
+        big_int
+            .words
+            .into_iter()
+            .flat_map(|word| {
+                let bytes = u64::to_le_bytes(word);
+                unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) }
+            })
+            .collect(),
+    )))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_double(float: f64) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Double(float.into()))) as *mut Value;
+    split_pointer(pointer)
 }
