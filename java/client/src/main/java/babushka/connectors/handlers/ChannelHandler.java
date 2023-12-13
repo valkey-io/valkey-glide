@@ -23,16 +23,16 @@ public class ChannelHandler {
     request.setCallbackIdx(commandId.getKey());
 
     if (flush) {
-      channel.writeAndFlush(request.build().toByteArray());
+      channel.writeAndFlush(request.build());
     } else {
-      channel.write(request.build().toByteArray());
+      channel.write(request.build());
     }
     return commandId.getValue();
   }
 
   /** Write a protobuf message to the socket. */
   public CompletableFuture<Response> connect(ConnectionRequest request) {
-    channel.writeAndFlush(request.toByteArray());
+    channel.writeAndFlush(request);
     return callbackManager.getConnectionPromise();
   }
 
