@@ -41,10 +41,11 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install protoc
-              run: |
-                  sudo apt update
-                  sudo apt install protobuf-compiler
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: "ubuntu-latest"
+                  target: "x86_64-unknown-linux-gnu"
 
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2

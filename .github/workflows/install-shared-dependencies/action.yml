@@ -27,22 +27,27 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'macos-latest' }}"
           run: |
-              brew install git gcc pkgconfig protobuf openssl redis
+              brew install git gcc pkgconfig openssl redis
 
         - name: Install software dependencies for Ubuntu
           shell: bash
           if: "${{ inputs.os == 'ubuntu-latest' }}"
           run: |
               sudo apt update -y
-              sudo apt install -y git gcc pkg-config protobuf-compiler openssl libssl-dev
+              sudo apt install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig protobuf-compiler openssl openssl-devel which curl redis6 gettext --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl redis6 gettext --allowerasing
 
         - name: Install Rust toolchain
           uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
+
+        - name: Install protoc (protobuf)
+          uses: arduino/setup-protoc@v2.1.0
+          with:
+            version: "25.1"
