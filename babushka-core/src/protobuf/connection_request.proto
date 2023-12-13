@@ -34,6 +34,7 @@ message ConnectionRequest {
     ConnectionRetryStrategy connection_retry_strategy = 6;
     AuthenticationInfo authentication_info = 7;
     uint32 database_id = 8;
+    bool use_resp3 = 9;
 }
 
 message ConnectionRetryStrategy {

@@ -1,70 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, TypeVar, Union, cast
+from typing import List, Mapping, Optional, cast
 
 from pybushka.async_commands.core import CoreCommands, InfoSection
 from pybushka.async_commands.transaction import BaseTransaction, ClusterTransaction
 from pybushka.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import Route
-
-T = TypeVar("T")
-
-# TODO: remove constant parameters after redis-rs return type for multi node is Dict[str , T]
-# This constant value is used to define the structure of a cluster single response type
-# without the necessity of recreating it for each use, thereby conserving memory
-LIST_STR = [""]
-
-
-def is_single_response(response: T, single_res: T) -> bool:
-    """
-    Recursively checks if a given response matches the type structure of single_res.
-
-    Args:
-        response (T): The response to check.
-        single_res (T): An object with the expected type structure as an example for the single node response.
-
-    Returns:
-        bool: True if response matches the structure of single_res, False otherwise.
-
-     Example:
-        >>> is_single_response(["value"], LIST_STR)
-        True
-        >>> is_single_response([["value"]], LIST_STR)
-        False
-    """
-    if isinstance(single_res, list) and isinstance(response, list):
-        return is_single_response(response[0], single_res[0])
-    elif isinstance(response, type(single_res)):
-        return True
-    return False
-
-
-def convert_multi_node_res_to_dict(
-    response: List[List[Union[str, T]]],
-) -> Dict[str, T]:
-    """
-    Convert the multi-node response from a list of [address, nodeResponse] pairs to a dictionary {address: nodeResponse}.
-
-    Args:
-        response (List[List[Union[str, T]]]): A list of lists, where each inner list contains an address (str)
-            and the corresponding node response (of type T).
-
-    Returns:
-        Dict[str, T]: A dictionary where each address is the key and its corresponding node response is the value.
-
-    Example:
-        >>> response = [["node1", "value1"], ["node2", "value2"]]
-        >>> convert_multi_node_res_to_dict(response)
-        {'node1': 'value1', 'node2': 'value2'}
-    """
-    dict_res: Dict[str, T] = {}
-    while len(response) > 0:
-        cur_res = response.pop()
-        if cur_res is not None and isinstance(cur_res[0], str):
-            dict_res[cur_res[0]] = cast(T, cur_res[1])
-
-    return dict_res
 
 
 class ClusterCommands(CoreCommands):
@@ -109,14 +51,9 @@ class ClusterCommands(CoreCommands):
         """
         args = [section.value for section in sections] if sections else []
 
-        info_res = cast(
-            Union[str, List[List[str]]],
+        return cast(
+            TClusterResponse[str],
             await self._execute_command(RequestType.Info, args, route),
-        )
-        return (
-            info_res
-            if isinstance(info_res, str)
-            else convert_multi_node_res_to_dict(info_res)
         )
 
     async def exec(
@@ -189,14 +126,9 @@ class ClusterCommands(CoreCommands):
             Otherwise, returns a dict of [str , int] where each key contains the address of
             the queried node and the value contains the client's id.
         """
-        client_id_res = cast(
-            Union[int, List[List[Union[str, int]]]],
+        return cast(
+            TClusterResponse[int],
             await self._execute_command(RequestType.ClientId, [], route),
-        )
-        return (
-            client_id_res
-            if isinstance(client_id_res, int)
-            else convert_multi_node_res_to_dict(client_id_res)
         )
 
     async def ping(
@@ -247,16 +179,9 @@ class ClusterCommands(CoreCommands):
             >>> await client.config_get(["timeout" , "maxmemory"])
             ['timeout', '1000', "maxmemory", "1GB"]
         """
-        config_get_res = await self._execute_command(
-            RequestType.ConfigGet, parameters, route
-        )
-
-        return (
-            cast(List[str], config_get_res)
-            if is_single_response(config_get_res, LIST_STR)
-            else convert_multi_node_res_to_dict(
-                cast(List[List[Union[str, List[str]]]], config_get_res)
-            )
+        return cast(
+            TClusterResponse[List[str]],
+            await self._execute_command(RequestType.ConfigGet, parameters, route),
         )
 
     async def config_set(
@@ -310,14 +235,7 @@ class ClusterCommands(CoreCommands):
             {'addr': 'Connection Name'', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
         """
 
-        client_get_name = await self._execute_command(
-            RequestType.ClientGetName, [], route
-        )
-
-        return (
-            cast(Optional[str], client_get_name)
-            if isinstance(client_get_name, str) or client_get_name is None
-            else convert_multi_node_res_to_dict(
-                cast(List[List[Union[str, Optional[str]]]], client_get_name)
-            )
+        return cast(
+            TClusterResponse[Optional[str]],
+            await self._execute_command(RequestType.ClientGetName, [], route),
         )

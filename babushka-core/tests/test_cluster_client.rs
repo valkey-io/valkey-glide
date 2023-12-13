@@ -2,6 +2,8 @@ mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
+    use std::collections::HashMap;
+
     use super::*;
     use babushka::connection_request::ReadFrom;
     use redis::cluster_routing::{
@@ -11,17 +13,22 @@ mod cluster_client_tests {
     use utilities::cluster::{setup_test_basics_internal, SHORT_CLUSTER_TEST_TIMEOUT};
     use utilities::*;
 
-    fn count_primaries_and_replicas(info_replication: Vec<Vec<String>>) -> (u16, u16) {
+    fn count_primary_or_replica(value: &str) -> (u16, u16) {
+        if value.contains("role:master") {
+            (1, 0)
+        } else if value.contains("role:slave") {
+            (0, 1)
+        } else {
+            (0, 0)
+        }
+    }
+
+    fn count_primaries_and_replicas(info_replication: HashMap<String, String>) -> (u16, u16) {
         info_replication
             .into_iter()
-            .fold((0, 0), |acc, internal_vec| {
-                if internal_vec.iter().any(|str| str.contains("role:master")) {
-                    (acc.0 + 1, acc.1)
-                } else if internal_vec.iter().any(|str| str.contains("role:slave")) {
-                    (acc.0, acc.1 + 1)
-                } else {
-                    (acc.0, acc.1)
-                }
+            .fold((0, 0), |acc, (_, value)| {
+                let count = count_primary_or_replica(&value);
+                (acc.0 + count.0, acc.1 + count.1)
             })
     }
 
@@ -43,7 +50,7 @@ mod cluster_client_tests {
                 .req_packed_command(&cmd, None)
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
+            let info = redis::from_redis_value::<HashMap<String, String>>(&info).unwrap();
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
             assert_eq!(replicas, 0);
@@ -74,7 +81,7 @@ mod cluster_client_tests {
                 )
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
+            let info = redis::from_redis_value::<HashMap<String, String>>(&info).unwrap();
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
             assert_eq!(replicas, 0);
@@ -105,7 +112,7 @@ mod cluster_client_tests {
                 )
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
+            let info = redis::from_redis_value::<HashMap<String, String>>(&info).unwrap();
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
             assert_eq!(replicas, 3);
@@ -135,8 +142,8 @@ mod cluster_client_tests {
                 )
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
-            let (primaries, replicas) = count_primaries_and_replicas(info);
+            let info = redis::from_redis_value::<String>(&info).unwrap();
+            let (primaries, replicas) = count_primary_or_replica(&info);
             assert_eq!(primaries, 1);
             assert_eq!(replicas, 0);
         });
@@ -169,8 +176,8 @@ mod cluster_client_tests {
                 )
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
-            let (primaries, replicas) = count_primaries_and_replicas(info);
+            let info = redis::from_redis_value::<String>(&info).unwrap();
+            let (primaries, replicas) = count_primary_or_replica(&info);
             assert_eq!(primaries, 0);
             assert_eq!(replicas, 1);
         });
@@ -203,8 +210,8 @@ mod cluster_client_tests {
                 )
                 .await
                 .unwrap();
-            let info = redis::from_redis_value::<Vec<Vec<String>>>(&info).unwrap();
-            let (primaries, replicas) = count_primaries_and_replicas(info);
+            let info = redis::from_redis_value::<String>(&info).unwrap();
+            let (primaries, replicas) = count_primary_or_replica(&info);
             assert_eq!(primaries, 0);
             assert_eq!(replicas, 1);
         });
