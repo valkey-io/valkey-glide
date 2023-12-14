@@ -93,7 +93,7 @@ export function transactionTest(
         1,
         1,
         value,
-        [field, value],
+        { [field]: value },
         1,
         [null],
         0,

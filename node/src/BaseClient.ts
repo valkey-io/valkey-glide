@@ -60,7 +60,22 @@ import { connection_request, redis_request, response } from "./ProtobufMessage";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
-export type ReturnType = "OK" | string | ReturnType[] | number | null;
+export type ReturnTypeMap = { [key: string]: ReturnType };
+export type ReturnTypeAttribute = {
+    value: ReturnType;
+    attributes: ReturnTypeMap;
+};
+export type ReturnType =
+    | "OK"
+    | string
+    | number
+    | null
+    | boolean
+    | bigint
+    | Set<ReturnType>
+    | ReturnTypeMap
+    | ReturnTypeAttribute
+    | ReturnType[];
 
 type RedisCredentials = {
     /**
@@ -867,6 +882,7 @@ export class BaseClient {
                   }
                 : undefined;
         return {
+            useResp3: true,
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls

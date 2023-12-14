@@ -201,7 +201,7 @@ describe("RedisClusterClient", () => {
             transaction.configSet({ timeout: "1000" });
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(result).toEqual(["OK", ["timeout", "1000"]]);
+            expect(result).toEqual(["OK", { timeout: "1000" }]);
             client.dispose();
         },
         TIMEOUT
