@@ -228,6 +228,8 @@ pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> R
     redis_value_to_js(*value, js_env)
 }
 
+// Pointers are split because JS cannot represent a full usize using its `number` object.
+// The pointer is split into 2 `number`s, and then combined back in `value_from_split_pointer`.
 fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
     let pointer = pointer as usize;
     let bytes = usize::to_le_bytes(pointer);
