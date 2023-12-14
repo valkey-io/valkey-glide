@@ -24,6 +24,7 @@ public class ChannelHandler {
   public ChannelHandler(CallbackManager callbackManager, String socketPath) {
     channel =
         new Bootstrap()
+            // TODO let user specify the thread pool or pool size as an option
             .group(Platform.createNettyThreadPool("babushka-channel", OptionalInt.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackManager))
