@@ -46,7 +46,7 @@ jobs:
                   redis-version: ${{ matrix.redis }}
 
             - name: Set up Python 3.10
-              uses: actions/setup-python@v3
+              uses: actions/setup-python@v4
               with:
                   python-version: "3.10"
 
@@ -79,6 +79,7 @@ jobs:
               with:
                   os: "ubuntu-latest"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Type check with mypy
               working-directory: ./python
@@ -129,6 +130,7 @@ jobs:
               with:
                   os: "macos-latest"
                   target: "x86_64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility with pytest
               working-directory: ./python
@@ -165,6 +167,7 @@ jobs:
               with:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./python
