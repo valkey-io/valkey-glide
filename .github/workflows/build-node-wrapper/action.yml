@@ -39,6 +39,10 @@ inputs:
         required: false
         type: string
         default: ""
+    github-token:
+        description: "GITHUB_TOKEN, GitHub App installation access token"
+        required: true
+        type: string
 
 env:
     CARGO_TERM_COLOR: always
@@ -51,6 +55,7 @@ runs:
           with:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
         - name: Create package.json file
           shell: bash
