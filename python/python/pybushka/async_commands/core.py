@@ -5,7 +5,6 @@ from typing import List, Mapping, Optional, Protocol, Tuple, Type, Union, cast, 
 from pybushka.constants import TOK, TResult
 from pybushka.protobuf.redis_request_pb2 import RequestType
 from pybushka.routes import Route
-from pyparsing import Any
 
 
 class ConditionalSet(Enum):
@@ -150,7 +149,10 @@ class ExpirySet:
 
 class CoreCommands(Protocol):
     async def _execute_command(
-        self, request_type: Any, args: List[str], route: Optional[Route] = ...
+        self,
+        request_type: RequestType.ValueType,
+        args: List[str],
+        route: Optional[Route] = ...,
     ) -> TResult:
         ...
 

@@ -719,10 +719,6 @@ Package SPDX-License-Identifier: MIT
 Package Artifact: https://crates.io/api/v1/crates/valuable/0.1.0/download
 Package Artifact: https://github.com/tokio-rs/valuable.git
 -----------------------
-Package ID: attrs:21.4.0
-Package Homepage: https://www.attrs.org/
-Package SPDX-License-Identifier: MIT
-Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: black:22.10.0
 Package Homepage: None
 Package SPDX-License-Identifier: MIT
@@ -741,10 +737,6 @@ Package SPDX-License-Identifier: MIT
 Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: httplib2:0.22.0
 Package Homepage: https://github.com/httplib2/httplib2
-Package SPDX-License-Identifier: MIT
-Package Artifact: 0Package Artifact: 0-----------------------
-Package ID: iniconfig:1.1.1
-Package Homepage: http://github.com/RonnyPfannschmidt/iniconfig
 Package SPDX-License-Identifier: MIT
 Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: isort:5.10.0
@@ -767,10 +759,6 @@ Package ID: platformdirs:3.11.0
 Package Homepage: None
 Package SPDX-License-Identifier: MIT
 Package Artifact: 0Package Artifact: 0-----------------------
-Package ID: pluggy:1.0.0
-Package Homepage: https://github.com/pytest-dev/pluggy
-Package SPDX-License-Identifier: MIT
-Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: py:1.11.0
 Package Homepage: https://py.readthedocs.io/
 Package SPDX-License-Identifier: MIT
@@ -783,16 +771,8 @@ Package ID: pyflakes:2.5.0
 Package Homepage: https://github.com/PyCQA/pyflakes
 Package SPDX-License-Identifier: MIT
 Package Artifact: 0Package Artifact: 0-----------------------
-Package ID: pyparsing:3.0.9
-Package Homepage: None
-Package SPDX-License-Identifier: MIT
-Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: pytest:7.1.2
 Package Homepage: https://docs.pytest.org/en/latest/
-Package SPDX-License-Identifier: MIT
-Package Artifact: 0Package Artifact: 0-----------------------
-Package ID: tomli:2.0.1
-Package Homepage: None
 Package SPDX-License-Identifier: MIT
 Package Artifact: 0Package Artifact: 0-----------------------
 Package ID: urllib3:2.0.7
@@ -66210,32 +66190,6 @@ BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
 ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
------------------------
-
-
-
-iniconfig/1.1.1 LICENSE
-
-/home/ubuntu/babushka/python/ort_results/PyPI/unknown/iniconfig/1.1.1/LICENSE
-
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-     
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
- 
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
 
 -----------------------
 
@@ -66306,37 +66260,6 @@ DEALINGS IN THE SOFTWARE.
 
 = = = = =
 -----------------------
-
-
-
-pluggy/1.0.0 LICENSE
-
-/home/ubuntu/babushka/python/ort_results/PyPI/unknown/pluggy/1.0.0/LICENSE
-
-The MIT License (MIT)
-
-Copyright (c) 2015 holger krekel (rather uses bitbucket/hpk42)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
------------------------
-
-
 
 pyflakes/2.5.0 LICENSE
 
