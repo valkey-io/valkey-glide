@@ -258,6 +258,39 @@ mod standalone_client_tests {
 
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_send_acl_request_to_all_nodes() {
+        let mocks = create_primary_mock_with_replicas(2);
+        let mut cmd = redis::cmd("ACL");
+        cmd.arg("SETUSER").arg("foo");
+
+        for mock in mocks.iter() {
+            for _ in 0..3 {
+                mock.add_response(&cmd, "+OK\r\n".to_string());
+            }
+        }
+
+        let addresses: Vec<redis::ConnectionAddr> =
+            mocks.iter().flat_map(|mock| mock.get_addresses()).collect();
+
+        let connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+
+        block_on_all(async {
+            let mut client = StandaloneClient::create_client(connection_request)
+                .await
+                .unwrap();
+
+            let result = client.send_command(&cmd).await;
+            assert_eq!(result, Ok(Value::Okay));
+        });
+
+        for mock in mocks {
+            assert_eq!(mock.get_number_of_received_commands(), 1);
+        }
+    }
+
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();
         client_info_cmd.arg("CLIENT").arg("INFO");
