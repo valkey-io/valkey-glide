@@ -1,6 +1,6 @@
 [package]
 name = "pybushka"
-version = "0.1.0"
+version = "255.255.255"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Amazon Web Services"]
