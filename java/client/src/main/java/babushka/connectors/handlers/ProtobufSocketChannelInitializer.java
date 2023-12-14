@@ -12,9 +12,9 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
 
-/** Builder for the channel used by {@link babushka.connectors.SocketConnection}. */
+/** Builder for the channel used by {@link ChannelHandler}. */
 @RequiredArgsConstructor
-public class ChannelBuilder extends ChannelInitializer<UnixChannel> {
+public class ProtobufSocketChannelInitializer extends ChannelInitializer<UnixChannel> {
 
   private final CallbackManager callbackManager;
 
