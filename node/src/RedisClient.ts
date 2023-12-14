@@ -174,10 +174,10 @@ export class RedisClient extends BaseClient {
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
-     * @returns A list of values corresponding to the configuration parameters.
+     * @returns A map of values corresponding to the configuration parameters.
      *
      */
-    public configGet(parameters: string[]): Promise<string[]> {
+    public configGet(parameters: string[]): Promise<Record<string, string>> {
         return this.createWritePromise(createConfigGet(parameters));
     }
 
