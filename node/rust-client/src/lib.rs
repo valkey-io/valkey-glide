@@ -1,12 +1,14 @@
 use babushka::start_socket_listener;
 use babushka::MAX_REQUEST_ARGS_LENGTH;
 use byteorder::{LittleEndian, WriteBytesExt};
+#[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
-use redis::aio::MultiplexedConnection;
-use redis::FromRedisValue;
-use redis::{AsyncCommands, Value};
+use num_traits::sign::Signed;
+use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
+#[cfg(feature = "testing_utilities")]
+use std::collections::HashMap;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
 
@@ -176,10 +178,20 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             .create_double(float.into())
             .map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
-        Value::VerbatimString { format: _, text } => js_env // TODO - handle format
+        // format is ignored, as per the RESP3 recommendations -
+        // "Normal client libraries may ignore completely the difference between this"
+        // "type and the String type, and return a string in both cases.""
+        // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
+        Value::VerbatimString { format: _, text } => js_env
             .create_string_from_std(text)
             .map(|val| val.into_unknown()),
-        Value::BigNumber(_) => todo!(), // Use either Long, or once we advance to support Ecmascript2020 or above, the BigInt type.
+        Value::BigNumber(num) => {
+            let sign = num.is_negative();
+            let words = num.iter_u64_digits().collect();
+            js_env
+                .create_bigint_from_words(sign, words)
+                .and_then(|val| val.into_unknown())
+        }
         Value::Set(array) => {
             // TODO - return a set object instead of an array object
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
@@ -188,15 +200,21 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             }
             Ok(js_array_view.into_unknown())
         }
-        Value::Attribute {
-            data: _,
-            attributes: _,
-        } => todo!(),
+        Value::Attribute { data, attributes } => {
+            let mut obj = js_env.create_object()?;
+            let value = redis_value_to_js(*data, js_env)?;
+            obj.set_named_property("value", value)?;
+
+            let value = redis_value_to_js(Value::Map(attributes), js_env)?;
+            obj.set_named_property("attributes", value)?;
+
+            Ok(obj.into_unknown())
+        }
         Value::Push { kind: _, data: _ } => todo!(),
     }
 }
 
-#[napi(ts_return_type = "null | string | number | {} | Boolean | Long | Set | any[]")]
+#[napi(ts_return_type = "null | string | number | {} | Boolean | BigInt | Set<any> | any[]")]
 pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
@@ -210,23 +228,98 @@ pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> R
     redis_value_to_js(*value, js_env)
 }
 
-#[napi]
-pub fn string_from_pointer(pointer_as_bigint: BigInt) -> String {
-    *unsafe { Box::from_raw(pointer_as_bigint.get_u64().1 as *mut String) }
+// Pointers are split because JS cannot represent a full usize using its `number` object.
+// The pointer is split into 2 `number`s, and then combined back in `value_from_split_pointer`.
+fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
+    let pointer = pointer as usize;
+    let bytes = usize::to_le_bytes(pointer);
+    let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
+    [lower, higher]
 }
 
-#[napi]
+#[napi(ts_return_type = "[number, number]")]
 /// This function is for tests that require a value allocated on the heap.
 /// Should NOT be used in production.
-pub fn create_leaked_value(message: String) -> usize {
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_string(message: String) -> [u32; 2] {
     let value = Value::SimpleString(message);
-    Box::leak(Box::new(value)) as *mut Value as usize
+    let pointer = Box::leak(Box::new(value)) as *mut Value;
+    split_pointer(pointer)
 }
 
 #[napi(ts_return_type = "[number, number]")]
 pub fn create_leaked_string_vec(message: Vec<String>) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(message)) as *mut Vec<String> as u64;
-    let bytes = u64::to_le_bytes(pointer);
-    let [lower, higher] = unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) };
-    [lower, higher]
+    let pointer = Box::leak(Box::new(message)) as *mut Vec<String>;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_map(map: HashMap<String, String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Map(
+        map.into_iter()
+            .map(|(key, value)| (Value::SimpleString(key), Value::SimpleString(value)))
+            .collect(),
+    ))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_array(array: Vec<String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Array(
+        array.into_iter().map(Value::SimpleString).collect(),
+    ))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_attribute(message: String, attribute: HashMap<String, String>) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Attribute {
+        data: Box::new(Value::SimpleString(message)),
+        attributes: attribute
+            .into_iter()
+            .map(|(key, value)| (Value::SimpleString(key), Value::SimpleString(value)))
+            .collect(),
+    })) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::BigNumber(num_bigint::BigInt::new(
+        if big_int.sign_bit {
+            num_bigint::Sign::Minus
+        } else {
+            num_bigint::Sign::Plus
+        },
+        big_int
+            .words
+            .into_iter()
+            .flat_map(|word| {
+                let bytes = u64::to_le_bytes(word);
+                unsafe { std::mem::transmute::<[u8; 8], [u32; 2]>(bytes) }
+            })
+            .collect(),
+    )))) as *mut Value;
+    split_pointer(pointer)
+}
+
+#[napi(ts_return_type = "[number, number]")]
+/// This function is for tests that require a value allocated on the heap.
+/// Should NOT be used in production.
+#[cfg(feature = "testing_utilities")]
+pub fn create_leaked_double(float: f64) -> [u32; 2] {
+    let pointer = Box::leak(Box::new(Value::Double(float.into()))) as *mut Value;
+    split_pointer(pointer)
 }
