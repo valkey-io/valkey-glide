@@ -19,6 +19,10 @@ inputs:
             - aarch64-unknown-linux-gnu
             - x86_64-apple-darwin
             - aarch64-apple-darwin
+    github-token:
+        description: "GITHUB_TOKEN, GitHub App installation access token"
+        required: true
+        type: string
 
 runs:
     using: "composite"
@@ -50,4 +54,5 @@ runs:
         - name: Install protoc (protobuf)
           uses: arduino/setup-protoc@v2.1.0
           with:
-            version: "25.1"
+              version: "25.1"
+              repo-token: ${{ inputs.github-token }}

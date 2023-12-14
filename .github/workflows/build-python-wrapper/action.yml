@@ -18,7 +18,10 @@ inputs:
         required: false
         type: boolean
         default: "false"
-
+    github-token:
+        description: "GITHUB_TOKEN, GitHub App installation access token"
+        required: true
+        type: string
 env:
     CARGO_TERM_COLOR: always
 
@@ -30,6 +33,7 @@ runs:
           with:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
         - name: Install Python software dependencies
           shell: bash

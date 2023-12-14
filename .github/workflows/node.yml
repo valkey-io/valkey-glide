@@ -55,6 +55,7 @@ jobs:
               with:
                   os: "ubuntu-latest"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: test
               run: npm test
@@ -101,6 +102,7 @@ jobs:
                   os: "macos-latest"
                   named_os: "darwin"
                   target: "x86_64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"
@@ -135,6 +137,7 @@ jobs:
               with:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node
