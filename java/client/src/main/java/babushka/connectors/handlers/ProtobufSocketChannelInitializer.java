@@ -1,6 +1,5 @@
 package babushka.connectors.handlers;
 
-import babushka.managers.CallbackManager;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.unix.UnixChannel;
@@ -16,7 +15,7 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ProtobufSocketChannelInitializer extends ChannelInitializer<UnixChannel> {
 
-  private final CallbackManager callbackManager;
+  private final CallbackDispatcher callbackDispatcher;
 
   @Override
   public void initChannel(@NonNull UnixChannel ch) {
@@ -26,7 +25,7 @@ public class ProtobufSocketChannelInitializer extends ChannelInitializer<UnixCha
         .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
         .addLast("protobufDecoder", new ProtobufDecoder(Response.getDefaultInstance()))
         .addLast("protobufEncoder", new ProtobufEncoder())
-        .addLast(new ReadHandler(callbackManager))
+        .addLast(new ReadHandler(callbackDispatcher))
         .addLast(new ChannelOutboundHandlerAdapter());
   }
 }

@@ -1,6 +1,5 @@
 package babushka.connectors.handlers;
 
-import babushka.managers.CallbackManager;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import lombok.NonNull;
@@ -11,12 +10,12 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ReadHandler extends ChannelInboundHandlerAdapter {
 
-  private final CallbackManager callbackManager;
+  private final CallbackDispatcher callbackDispatcher;
 
-  /** Submit responses from babushka to an instance {@link CallbackManager} to handle them. */
+  /** Submit responses from babushka to an instance {@link CallbackDispatcher} to handle them. */
   @Override
   public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg) {
-    callbackManager.completeRequest((Response) msg);
+    callbackDispatcher.completeRequest((Response) msg);
   }
 
   /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
