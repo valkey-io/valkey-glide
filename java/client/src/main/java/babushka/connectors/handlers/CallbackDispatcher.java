@@ -1,16 +1,14 @@
-package babushka.managers;
+package babushka.connectors.handlers;
 
-import babushka.connectors.handlers.ReadHandler;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.Getter;
 import org.apache.commons.lang3.tuple.Pair;
 import response.ResponseOuterClass.Response;
 
 /** Holder for resources required to dispatch responses and used by {@link ReadHandler}. */
-public class CallbackManager {
+public class CallbackDispatcher {
   /** Unique request ID (callback ID). Thread-safe. */
   private final AtomicInteger requestId = new AtomicInteger(0);
 
@@ -25,7 +23,7 @@ public class CallbackManager {
    * requests can't be stored in the same storage, because callback ID = 0 is hardcoded for
    * connection requests.
    */
-  @Getter private final CompletableFuture<Response> connectionPromise = new CompletableFuture<>();
+  private final CompletableFuture<Response> connectionPromise = new CompletableFuture<>();
 
   /**
    * Register a new request to be sent. Once response received, the given future completes with it.
@@ -38,6 +36,10 @@ public class CallbackManager {
     var future = new CompletableFuture<Response>();
     responses.put(callbackId, future);
     return Pair.of(callbackId, future);
+  }
+
+  public CompletableFuture<Response> registerConnection() {
+    return connectionPromise;
   }
 
   /**
@@ -56,9 +58,8 @@ public class CallbackManager {
   }
 
   public void shutdownGracefully() {
-    connectionPromise.completeExceptionally(new InterruptedException());
-    responses.forEach(
-        (callbackId, future) -> future.completeExceptionally(new InterruptedException()));
+    connectionPromise.cancel(false);
+    responses.values().forEach(future -> future.cancel(false));
     responses.clear();
   }
 }
