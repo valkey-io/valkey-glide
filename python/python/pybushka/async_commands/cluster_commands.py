@@ -60,7 +60,7 @@ class ClusterCommands(CoreCommands):
         self,
         transaction: BaseTransaction | ClusterTransaction,
         route: Optional[TSingleNodeRoute] = None,
-    ) -> List[TResult]:
+    ) -> Optional[List[TResult]]:
         """Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
@@ -71,9 +71,10 @@ class ClusterCommands(CoreCommands):
             If `route` is provided, the client will route the command to the nodes defined by `route`.
 
         Returns:
-            List[TResult]: A list of results corresponding to the execution of each command
+            Optional[List[TResult]]: A list of results corresponding to the execution of each command
             in the transaction. If a command returns a value, it will be included in the list. If a command
             doesn't return a value, the list entry will be None.
+            If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
         return await self.execute_transaction(commands, route)
