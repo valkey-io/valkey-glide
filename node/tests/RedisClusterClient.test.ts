@@ -221,4 +221,30 @@ describe("RedisClusterClient", () => {
         },
         TIMEOUT
     );
+
+    it(
+        "can return null on WATCH transaction failures",
+        async () => {
+            const client1 = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const client2 = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const transaction = new ClusterTransaction();
+            transaction.get("key");
+            const result1 = await client1.customCommand("WATCH", ["key"]);
+            expect(result1).toEqual("OK");
+
+            const result2 = await client2.set("key", "foo");
+            expect(result2).toEqual("OK");
+
+            const result3 = await client1.exec(transaction);
+            expect(result3).toBeNull();
+
+            client1.dispose();
+            client2.dispose();
+        },
+        TIMEOUT
+    );
 });

@@ -185,11 +185,12 @@ export class RedisClusterClient extends BaseClient {
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
+     *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
     public exec(
         transaction: ClusterTransaction | BaseTransaction,
         route?: SingleNodeRoute
-    ): Promise<ReturnType[]> {
+    ): Promise<ReturnType[] | null> {
         return this.createWritePromise(
             transaction.commands,
             toProtobufRoute(route)
