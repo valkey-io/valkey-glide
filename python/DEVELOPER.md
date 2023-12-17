@@ -54,9 +54,9 @@ protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --pyt
 To generate the protobuf files with Python Interface files (pyi) for type-checking purposes, ensure you have installed `mypy-protobuf` with pip, and then execute the following command:
 
 ```bash
-BABUSHKA_PATH=. # e.g. /home/ubuntu/babushka
+BABUSHKA_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/babushka
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf={BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out={BABUSHKA_ROOT_FOLDER_PATH}/python/python/pybushka --mypy_out=./python/python/pybushka {BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
+protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out=${BABUSHKA_ROOT_FOLDER_PATH}/python/python/pybushka --mypy_out=${BABUSHKA_ROOT_FOLDER_PATH}/python/python/pybushka ${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
 ```
 
 ### Linters
