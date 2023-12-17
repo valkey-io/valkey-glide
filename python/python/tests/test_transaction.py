@@ -209,16 +209,17 @@ class TestTransaction:
         assert "# Memory" in result[0]
         assert result[1:] == expected
 
-    @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_cluster_can_return_null_on_watch_transaction_failures(
-        self, redis_client: RedisClusterClient, request
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_can_return_null_on_watch_transaction_failures(
+        self, redis_client: TRedisClient, request
     ):
+        is_cluster = isinstance(redis_client, RedisClusterClient)
         client2 = await create_client(
             request,
-            True,
+            is_cluster,
         )
         keyslot = get_random_string(3)
-        transaction = ClusterTransaction()
+        transaction = ClusterTransaction() if is_cluster else Transaction()
         transaction.get(keyslot)
         result1 = await redis_client.custom_command(["WATCH", keyslot])
         assert result1 == OK
@@ -250,28 +251,6 @@ class TestTransaction:
         assert "# Memory" in result[0]
         assert result[1:6] == [OK, OK, value, OK, None]
         assert result[6:] == expected
-
-    @pytest.mark.parametrize("cluster_mode", [False])
-    async def test_standalone_can_return_null_on_watch_transaction_failures(
-        self, redis_client: RedisClient, request
-    ):
-        client2 = await create_client(
-            request,
-            False,
-        )
-        keyslot = get_random_string(3)
-        transaction = ClusterTransaction()
-        transaction.get(keyslot)
-        result1 = await redis_client.custom_command(["WATCH", keyslot])
-        assert result1 == OK
-
-        result2 = await client2.set(keyslot, "foo")
-        assert result2 == OK
-
-        result3 = await redis_client.exec(transaction)
-        assert result3 is None
-
-        client2.close()
 
     def test_transaction_clear(self):
         transaction = Transaction()
