@@ -332,6 +332,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Exists => Some(cmd("EXISTS")),
         RequestType::Unlink => Some(cmd("UNLINK")),
         RequestType::TTL => Some(cmd("TTL")),
+        RequestType::CreateIndex => Some(cmd("FT.CREATE")),
     }
 }
 

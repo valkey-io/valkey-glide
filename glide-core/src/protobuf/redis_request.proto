@@ -96,6 +96,7 @@ enum RequestType {
     Exists = 58;
     Unlink = 59;
     TTL = 60;
+    CreateIndex=61;
 }
 
 message Command {
