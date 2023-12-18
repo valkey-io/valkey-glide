@@ -18,6 +18,7 @@ Cargo.lock
 *.pdb
 dump.rdb
 .env
+python/.env*
 benchmarks/results
 
 # IDE generaged files
@@ -41,3 +42,8 @@ babushka-logs/
 logger-rs.linux-x64-gnu.node
 utils/clusters/
 utils/tls_crts/
+
+# OSS Review Toolkit (ORT) files
+**/ort/**
+**/ort_results/**
+**/.ort.yml
