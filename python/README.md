@@ -9,8 +9,20 @@ Python 3.8 or higher.
 
 ## Installation and Setup
 
-### Install from package manager
-At the moment, the beta release of Babushka is only available by building from source.
+### Installing via Package Manager (pip)
+
+To install babushka using `pip`, follow these steps:
+
+1. Open your terminal.
+2. Execute the command below:
+   ```bash
+   $ pip install babushka
+   ```
+3. After installation, confirm the client is accessible by running:
+    ```bash
+    $ python3
+    >>> import babushka
+    ```
 
 ### Build from source
 
