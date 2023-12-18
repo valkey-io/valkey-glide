@@ -10,7 +10,7 @@ import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.unix.DomainSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.util.Map;
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.AccessLevel;
@@ -29,7 +29,7 @@ public class Platform {
   @Getter
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @ToString
-  public static class Capabilities {
+  private static class Capabilities {
     private final boolean isKQueueAvailable;
     private final boolean isEPollAvailable;
     // TODO support IO-Uring and NIO
@@ -76,7 +76,7 @@ public class Platform {
    *
    * @return A new thread pool.
    */
-  public static EventLoopGroup createNettyThreadPool(String prefix, OptionalInt threadLimit) {
+  public static EventLoopGroup createNettyThreadPool(String prefix, Optional<Integer> threadLimit) {
     int threadCount = threadLimit.orElse(Runtime.getRuntime().availableProcessors());
     if (capabilities.isKQueueAvailable()) {
       var name = prefix + "-kqueue-elg";
@@ -101,7 +101,7 @@ public class Platform {
     if (groups.containsKey(name)) {
       return groups.get(name);
     }
-    var group = supplier.get();
+    EventLoopGroup group = supplier.get();
     groups.put(name, group);
     return group;
   }

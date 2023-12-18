@@ -5,17 +5,20 @@ import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.unix.DomainSocketAddress;
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 /**
- * Class responsible for manipulations with Netty's {@link Channel}.<br>
+ * Class responsible for handling calls to/from a netty.io {@link Channel}.<br>
  * Uses a {@link CallbackDispatcher} to record callbacks of every request sent.
  */
 public class ChannelHandler {
+
+  private static final String THREAD_POOL_NAME = "babushka-channel";
+
   private final Channel channel;
   private final CallbackDispatcher callbackDispatcher;
 
@@ -24,7 +27,7 @@ public class ChannelHandler {
     channel =
         new Bootstrap()
             // TODO let user specify the thread pool or pool size as an option
-            .group(Platform.createNettyThreadPool("babushka-channel", OptionalInt.empty()))
+            .group(Platform.createNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
             .connect(new DomainSocketAddress(socketPath))
@@ -33,7 +36,13 @@ public class ChannelHandler {
     this.callbackDispatcher = callbackDispatcher;
   }
 
-  /** Write a protobuf message to the socket. */
+  /**
+   * Complete a protobuf message and write it to the channel (to UDS).
+   *
+   * @param request Incomplete request, function completes it by setting callback ID
+   * @param flush True to flush immediately
+   * @return A response promise
+   */
   public CompletableFuture<Response> write(RedisRequest.Builder request, boolean flush) {
     var commandId = callbackDispatcher.registerRequest();
     request.setCallbackIdx(commandId.getKey());
@@ -46,7 +55,12 @@ public class ChannelHandler {
     return commandId.getValue();
   }
 
-  /** Write a protobuf message to the socket. */
+  /**
+   * Write a protobuf message to the channel (to UDS).
+   *
+   * @param request A connection request
+   * @return A connection promise
+   */
   public CompletableFuture<Response> connect(ConnectionRequest request) {
     channel.writeAndFlush(request);
     return callbackDispatcher.registerConnection();
