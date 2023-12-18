@@ -10,8 +10,21 @@ Node.js 16.20 or higher.
 
 ## Installation and Setup
 
-### Install from package manager
-At the moment, the beta release of Babushka is only available by building from source.
+### Installing via Package Manager (npm)
+
+To install babushka using `npm`, follow these steps:
+
+1. Open your terminal.
+2. Execute the command below:
+   ```bash
+   $ npm install babushka
+   ```
+3. After installation, confirm the client is installed by running:
+    ```bash
+    $ npm list
+    myApp@ /home/ubuntu/myApp
+    └── babushka@0.1.0
+    ```
 
 ### Build from source
 
