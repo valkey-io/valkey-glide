@@ -38,7 +38,7 @@ node_modules/
 
 install_and_test_cp.sh
 
-babushka-logs/
+glide-logs/
 logger-rs.linux-x64-gnu.node
 utils/clusters/
 utils/tls_crts/

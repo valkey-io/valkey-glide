@@ -81,7 +81,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         let file_appender = RollingFileAppender::new(
             Rotation::HOURLY,
-            "babushka-logs",
+            "glide-logs",
             file_name.unwrap_or("output.log"),
         );
         let file_fmt = tracing_subscriber::fmt::layer()
@@ -125,7 +125,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 });
         }
         Some(file) => {
-            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "babushka-logs", file);
+            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "glide-logs", file);
             let _ = reloads
                 .file_reload
                 .write()
