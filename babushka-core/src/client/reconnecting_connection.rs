@@ -1,14 +1,13 @@
 use crate::connection_request::{NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
-use futures_intrusive::sync::ManualResetEvent;
+use futures_intrusive::sync::LocalManualResetEvent;
 use logger_core::{log_debug, log_trace, log_warn};
 use redis::aio::MultiplexedConnection;
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
-use tokio::task;
 use tokio_retry::Retry;
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
@@ -16,7 +15,7 @@ use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
     /// This signal is reset when a connection disconnects, and set when a new `ConnectionState` has been set with a `Connected` state.
-    connection_available_signal: ManualResetEvent,
+    connection_available_signal: LocalManualResetEvent,
     /// Information needed in order to create a new connection.
     connection_info: redis::Client,
     /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because all the outer clients were dropped.
@@ -34,13 +33,13 @@ enum ConnectionState {
 }
 
 struct InnerReconnectingConnection {
-    state: Mutex<ConnectionState>,
+    state: RefCell<ConnectionState>,
     backend: ConnectionBackend,
 }
 
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
-    inner: Arc<InnerReconnectingConnection>,
+    inner: Rc<InnerReconnectingConnection>,
 }
 
 async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
@@ -71,8 +70,8 @@ async fn create_connection(
                 ),
             );
             Ok(ReconnectingConnection {
-                inner: Arc::new(InnerReconnectingConnection {
-                    state: Mutex::new(ConnectionState::Connected(connection)),
+                inner: Rc::new(InnerReconnectingConnection {
+                    state: RefCell::new(ConnectionState::Connected(connection)),
                     backend: connection_backend,
                 }),
             })
@@ -89,8 +88,8 @@ async fn create_connection(
                 ),
             );
             let connection = ReconnectingConnection {
-                inner: Arc::new(InnerReconnectingConnection {
-                    state: Mutex::new(ConnectionState::InitializedDisconnected),
+                inner: Rc::new(InnerReconnectingConnection {
+                    state: RefCell::new(ConnectionState::InitializedDisconnected),
                     backend: connection_backend,
                 }),
             };
@@ -140,7 +139,7 @@ impl ReconnectingConnection {
         let connection_info = get_client(address, tls_mode, redis_connection_info);
         let backend = ConnectionBackend {
             connection_info,
-            connection_available_signal: ManualResetEvent::new(true),
+            connection_available_signal: LocalManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
         create_connection(backend, connection_retry_strategy).await
@@ -161,7 +160,7 @@ impl ReconnectingConnection {
     }
 
     pub(super) async fn try_get_connection(&self) -> Option<MultiplexedConnection> {
-        let guard = self.inner.state.lock().unwrap();
+        let guard = self.inner.state.borrow();
         if let ConnectionState::Connected(connection) = &*guard {
             Some(connection.clone())
         } else {
@@ -180,7 +179,7 @@ impl ReconnectingConnection {
 
     pub(super) fn reconnect(&self) {
         {
-            let mut guard = self.inner.state.lock().unwrap();
+            let mut guard = self.inner.state.borrow_mut();
             if matches!(*guard, ConnectionState::Reconnecting) {
                 log_trace("reconnect", "already started");
                 // exit early - if reconnection already started or failed, there's nothing else to do.
@@ -194,7 +193,7 @@ impl ReconnectingConnection {
         let connection_clone = self.clone();
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
-        task::spawn(async move {
+        tokio::task::spawn_local(async move {
             let client = &connection_clone.inner.backend.connection_info;
             for sleep_duration in internal_retry_iterator() {
                 if connection_clone.is_dropped() {
@@ -216,7 +215,7 @@ impl ReconnectingConnection {
                             continue;
                         }
                         {
-                            let mut guard = connection_clone.inner.state.lock().unwrap();
+                            let mut guard = connection_clone.inner.state.borrow_mut();
                             log_debug("reconnect", "completed succesfully");
                             connection_clone
                                 .inner
@@ -234,9 +233,6 @@ impl ReconnectingConnection {
     }
 
     pub fn is_connected(&self) -> bool {
-        !matches!(
-            *self.inner.state.lock().unwrap(),
-            ConnectionState::Reconnecting
-        )
+        !matches!(*self.inner.state.borrow(), ConnectionState::Reconnecting)
     }
 }

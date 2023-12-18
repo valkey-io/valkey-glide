@@ -9,14 +9,14 @@ use logger_core::{log_trace, log_warn};
 use protobuf::EnumOrUnknown;
 use redis::cluster_routing::is_readonly;
 use redis::{RedisError, RedisResult, Value};
-use std::sync::Arc;
+use std::rc::Rc;
 #[cfg(standalone_heartbeat)]
 use tokio::task;
 
 enum ReadFrom {
     Primary,
     PreferReplica {
-        latest_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
+        latest_read_replica_index: Rc<std::sync::atomic::AtomicUsize>,
     },
 }
 
@@ -37,7 +37,7 @@ impl Drop for DropWrapper {
 
 #[derive(Clone)]
 pub struct StandaloneClient {
-    inner: Arc<DropWrapper>,
+    inner: Rc<DropWrapper>,
 }
 
 pub enum StandaloneClientConnectionError {
@@ -133,7 +133,7 @@ impl StandaloneClient {
         }
 
         Ok(Self {
-            inner: Arc::new(DropWrapper {
+            inner: Rc::new(DropWrapper {
                 primary_index,
                 nodes,
                 read_from,

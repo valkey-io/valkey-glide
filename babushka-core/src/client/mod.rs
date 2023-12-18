@@ -1,7 +1,7 @@
 use crate::connection_request::{
     AuthenticationInfo, ConnectionRequest, NodeAddress, ReadFrom, TlsMode,
 };
-use futures::FutureExt;
+use futures::{Future, FutureExt};
 use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
@@ -97,14 +97,17 @@ pub struct Client {
     request_timeout: Duration,
 }
 
-async fn run_with_timeout<T>(
+fn run_with_timeout<'a, T: 'a>(
     timeout: Duration,
-    future: impl futures::Future<Output = RedisResult<T>> + Send,
-) -> redis::RedisResult<T> {
-    tokio::time::timeout(timeout, future)
-        .await
-        .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
-        .and_then(|res| res)
+    future: impl futures::Future<Output = RedisResult<T>> + 'a,
+) -> impl Future<Output = redis::RedisResult<T>> + 'a {
+    async move {
+        tokio::time::timeout(timeout, future)
+            .await
+            .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
+            .and_then(|res| res)
+    }
+    .boxed_local()
 }
 
 impl Client {
@@ -112,7 +115,7 @@ impl Client {
         &'a mut self,
         cmd: &'a redis::Cmd,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, redis::Value> {
+    ) -> impl Future<Output = redis::RedisResult<redis::Value>> + 'a {
         run_with_timeout(self.request_timeout, async {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
@@ -125,7 +128,6 @@ impl Client {
                 }
             }
         })
-        .boxed()
     }
 
     pub fn req_packed_commands<'a>(
@@ -134,27 +136,21 @@ impl Client {
         offset: usize,
         count: usize,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
-        (async move {
+    ) -> impl Future<Output = redis::RedisResult<Vec<redis::Value>>> + 'a {
+        run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.send_packed_commands(cmd, offset, count).await
                 }
-
                 ClientWrapper::Cluster { ref mut client } => {
                     let route = match routing {
                         Some(RoutingInfo::SingleNode(route)) => route,
                         _ => SingleNodeRoutingInfo::Random,
                     };
-                    run_with_timeout(
-                        self.request_timeout,
-                        client.route_pipeline(cmd, offset, count, route),
-                    )
-                    .await
+                    client.route_pipeline(cmd, offset, count, route).await
                 }
             }
         })
-        .boxed()
     }
 }
 
