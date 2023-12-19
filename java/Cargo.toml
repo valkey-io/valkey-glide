@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
-babushka = { path = "../babushka-core" }
+babushka = { path = "../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../logger_core"}
 tracing-subscriber = "0.3.16"

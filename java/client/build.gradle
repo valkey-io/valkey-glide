@@ -35,11 +35,11 @@ tasks.register('protobuf', Exec) {
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/babushka/models/protobuf').toString())
     }
     commandLine 'protoc',
-        '-Iprotobuf=babushka-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/babushka/models/protobuf',
-        'babushka-core/src/protobuf/connection_request.proto',
-        'babushka-core/src/protobuf/redis_request.proto',
-        'babushka-core/src/protobuf/response.proto'
+        '-Iprotobuf=glide-core/src/protobuf/',
+        '--java_out=java/client/src/main/java/glide/models/protobuf',
+        'glide-core/src/protobuf/connection_request.proto',
+        'glide-core/src/protobuf/redis_request.proto',
+        'glide-core/src/protobuf/response.proto'
     workingDir Paths.get(project.rootDir.path, '..').toFile()
 }
 

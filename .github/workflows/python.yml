@@ -5,7 +5,7 @@ on:
         branches: ["main"]
         paths:
             - python/**
-            - babushka-core/src/**
+            - glide-core/src/**
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
@@ -14,7 +14,7 @@ on:
     pull_request:
         paths:
             - python/**
-            - babushka-core/src/**
+            - glide-core/src/**
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml

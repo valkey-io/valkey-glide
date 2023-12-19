@@ -43,11 +43,11 @@ git submodule update
 ```
 
 ### Generate protobuf files
-During the initial build, Python protobuf files were created in `python/python/pybushka/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `babushka-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
+During the initial build, Python protobuf files were created in `python/python/pybushka/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
 
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
-protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
+protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ``` 
 
 #### Protobuf interface files
@@ -56,7 +56,7 @@ To generate the protobuf files with Python Interface files (pyi) for type-checki
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
+protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
 
 ### Linters

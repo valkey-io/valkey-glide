@@ -37,7 +37,7 @@ javaTlsFlag="-tls"
 
 function runPythonBenchmark(){
   # generate protobuf files
-  protoc -Iprotobuf=${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/*.proto
+  protoc -Iprotobuf=${BABUSHKA_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${BABUSHKA_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
