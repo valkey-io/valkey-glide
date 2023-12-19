@@ -71,10 +71,10 @@ namespace glide
         #endregion public methods
 
         #region FFI function declaration
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "log")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "log")]
         private static extern void log(Int32 logLevel, byte[] logIdentifier, byte[] message);
 
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
         private static extern Level InitInternalLogger(Int32 level, byte[]? filename);
 
         #endregion

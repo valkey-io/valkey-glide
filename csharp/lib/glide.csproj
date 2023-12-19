@@ -12,7 +12,7 @@
   </Target>
 
   <ItemGroup Condition=" '$(OS)' == 'UNIX'">
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide-rs.so">
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.so">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>%(FileName)%(Extension)</Link>
     </Content>

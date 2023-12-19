@@ -95,17 +95,17 @@ namespace glide
 
         private delegate void StringAction(ulong index, IntPtr str);
         private delegate void FailureAction(ulong index);
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "get")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "get")]
         private static extern void GetFfi(IntPtr client, ulong index, IntPtr key);
 
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "set")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "set")]
         private static extern void SetFfi(IntPtr client, ulong index, IntPtr key, IntPtr value);
 
         private delegate void IntAction(IntPtr arg);
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
         private static extern IntPtr CreateClientFfi(String host, UInt32 port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
 
-        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
+        [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
         private static extern void CloseClientFfi(IntPtr client);
 
         #endregion

@@ -31,7 +31,6 @@ dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
-host="localhost"
 port=6379
 tlsFlag="--tls"
 javaTlsFlag="-tls"
