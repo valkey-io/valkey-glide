@@ -1,4 +1,4 @@
-use glide::start_socket_listener;
+use glide_core::start_socket_listener;
 
 use jni::objects::{JClass, JObject, JThrowable};
 use jni::sys::jlong;

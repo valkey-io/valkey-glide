@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use futures::Future;
-use glide::{
+use glide_core::{
     client::{Client, StandaloneClient},
     connection_request::{self, AuthenticationInfo, NodeAddress},
 };

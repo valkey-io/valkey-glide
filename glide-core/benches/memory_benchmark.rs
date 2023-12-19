@@ -1,4 +1,4 @@
-use glide::{
+use glide_core::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };

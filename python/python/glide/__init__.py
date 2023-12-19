@@ -1,11 +1,11 @@
-from pybushka.async_commands.core import (
+from glide.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
 )
-from pybushka.async_commands.transaction import ClusterTransaction, Transaction
-from pybushka.config import (
+from glide.async_commands.transaction import ClusterTransaction, Transaction
+from glide.config import (
     BaseClientConfiguration,
     ClusterClientConfiguration,
     NodeAddress,
@@ -13,18 +13,18 @@ from pybushka.config import (
     RedisClientConfiguration,
     RedisCredentials,
 )
-from pybushka.constants import OK
-from pybushka.exceptions import (
+from glide.constants import OK
+from glide.exceptions import (
     ClosingError,
     ExecAbortError,
     RedisError,
     RequestError,
     TimeoutError,
 )
-from pybushka.logger import Level as LogLevel
-from pybushka.logger import Logger
-from pybushka.redis_client import RedisClient, RedisClusterClient
-from pybushka.routes import (
+from glide.logger import Level as LogLevel
+from glide.logger import Logger
+from glide.redis_client import RedisClient, RedisClusterClient
+from glide.routes import (
     AllNodes,
     AllPrimaries,
     RandomNode,

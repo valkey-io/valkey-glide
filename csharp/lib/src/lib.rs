@@ -1,5 +1,5 @@
-use glide::connection_request;
-use glide::{client::Client as GlideClient, connection_request::NodeAddress};
+use glide_core::connection_request;
+use glide_core::{client::Client as GlideClient, connection_request::NodeAddress};
 use redis::{Cmd, FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},

@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
-use glide::client::GlideClient;
+use glide_core::client::GlideClient;
 use redis::{
     cluster::ClusterClientBuilder, AsyncCommands, ConnectionAddr, ConnectionInfo,
     RedisConnectionInfo, RedisResult, Value,

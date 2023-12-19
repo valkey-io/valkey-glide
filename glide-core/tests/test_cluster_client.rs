@@ -5,7 +5,7 @@ mod cluster_client_tests {
     use std::collections::HashMap;
 
     use super::*;
-    use glide::connection_request::ReadFrom;
+    use glide_core::connection_request::ReadFrom;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };

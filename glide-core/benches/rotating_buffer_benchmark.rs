@@ -2,7 +2,7 @@ use std::io::Write;
 
 use bytes::BufMut;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use glide::{
+use glide_core::{
     redis_request::{command, redis_request},
     redis_request::{Command, RedisRequest, RequestType},
     rotating_buffer::RotatingBuffer,

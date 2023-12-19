@@ -2,7 +2,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import Optional
 
-from pybushka.constants import TResult
+from glide.constants import TResult
 
 DEFAULT_TIMEOUT_IN_MILLISECONDS: int = ...
 

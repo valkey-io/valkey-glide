@@ -1,8 +1,8 @@
 from typing import Dict, List, Literal, TypeVar, Union
 
-from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
-from pybushka.protobuf.redis_request_pb2 import RedisRequest
-from pybushka.routes import RandomNode, SlotIdRoute, SlotKeyRoute
+from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.protobuf.redis_request_pb2 import RedisRequest
+from glide.routes import RandomNode, SlotIdRoute, SlotKeyRoute
 
 OK: str = "OK"
 DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)

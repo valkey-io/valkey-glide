@@ -3,28 +3,28 @@ import threading
 from typing import List, Optional, Tuple, Union, cast
 
 import async_timeout
-from pybushka.async_commands.cluster_commands import ClusterCommands
-from pybushka.async_commands.core import CoreCommands
-from pybushka.async_commands.standalone_commands import StandaloneCommands
-from pybushka.config import BaseClientConfiguration
-from pybushka.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
-from pybushka.exceptions import (
+from glide.async_commands.cluster_commands import ClusterCommands
+from glide.async_commands.core import CoreCommands
+from glide.async_commands.standalone_commands import StandaloneCommands
+from glide.config import BaseClientConfiguration
+from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
+from glide.exceptions import (
     ClosingError,
     ConnectionError,
     ExecAbortError,
     RequestError,
     TimeoutError,
 )
-from pybushka.logger import Level as LogLevel
-from pybushka.logger import Logger as ClientLogger
-from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
-from pybushka.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
-from pybushka.protobuf.response_pb2 import RequestErrorType, Response
-from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
-from pybushka.routes import Route, set_protobuf_route
+from glide.logger import Level as LogLevel
+from glide.logger import Logger as ClientLogger
+from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
+from glide.protobuf.response_pb2 import RequestErrorType, Response
+from glide.protobuf_codec import PartialMessageException, ProtobufCodec
+from glide.routes import Route, set_protobuf_route
 from typing_extensions import Self
 
-from .pybushka import (
+from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     start_socket_listener_external,
     value_from_pointer,

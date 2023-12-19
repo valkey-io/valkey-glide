@@ -1,9 +1,9 @@
 from enum import Enum
 from typing import List, Optional
 
-from pybushka.protobuf.connection_request_pb2 import ConnectionRequest
-from pybushka.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
-from pybushka.protobuf.connection_request_pb2 import TlsMode
+from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
+from glide.protobuf.connection_request_pb2 import TlsMode
 
 
 class NodeAddress:

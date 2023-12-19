@@ -3,8 +3,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from .pybushka import Level as internalLevel
-from .pybushka import py_init, py_log
+from .glide import Level as internalLevel
+from .glide import py_init, py_log
 
 
 class Level(Enum):

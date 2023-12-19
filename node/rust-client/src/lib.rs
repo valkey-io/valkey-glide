@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian, WriteBytesExt};
-use glide::start_socket_listener;
-use glide::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::start_socket_listener;
+use glide_core::MAX_REQUEST_ARGS_LENGTH;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
@@ -26,7 +26,7 @@ pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[napi]
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
-    glide::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+    glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 
 #[napi]
 struct AsyncClient {

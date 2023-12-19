@@ -2,9 +2,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Mapping, Optional, Protocol, Tuple, Type, Union, cast, get_args
 
-from pybushka.constants import TOK, TResult
-from pybushka.protobuf.redis_request_pb2 import RequestType
-from pybushka.routes import Route
+from glide.constants import TOK, TResult
+from glide.protobuf.redis_request_pb2 import RequestType
+from glide.routes import Route
 
 
 class ConditionalSet(Enum):

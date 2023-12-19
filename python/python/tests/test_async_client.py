@@ -8,19 +8,18 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, TypeVar, Union
 
 import pytest
-from packaging import version
-from pybushka import ClosingError, RequestError, TimeoutError
-from pybushka.async_commands.core import (
+from glide import ClosingError, RequestError, TimeoutError
+from glide.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
     InfoSection,
 )
-from pybushka.config import RedisCredentials
-from pybushka.constants import OK
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
-from pybushka.routes import (
+from glide.config import RedisCredentials
+from glide.constants import OK
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.routes import (
     AllNodes,
     AllPrimaries,
     RandomNode,
@@ -29,6 +28,7 @@ from pybushka.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from packaging import version
 from tests.conftest import create_client
 
 T = TypeVar("T")

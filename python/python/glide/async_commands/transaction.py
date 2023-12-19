@@ -1,13 +1,13 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, Union
 
-from pybushka.async_commands.core import (
+from glide.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
     ExpirySet,
     InfoSection,
 )
-from pybushka.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.redis_request_pb2 import RequestType
 
 
 class BaseTransaction:

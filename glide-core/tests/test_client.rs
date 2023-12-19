@@ -3,7 +3,7 @@ mod utilities;
 #[cfg(test)]
 mod shared_client_tests {
     use super::*;
-    use glide::client::Client;
+    use glide_core::client::Client;
     use redis::RedisConnectionInfo;
     use redis::Value;
     use rstest::rstest;

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import List, Mapping, Optional, cast
 
-from pybushka.async_commands.core import CoreCommands, InfoSection
-from pybushka.async_commands.transaction import BaseTransaction, Transaction
-from pybushka.constants import TOK, TResult
-from pybushka.protobuf.redis_request_pb2 import RequestType
+from glide.async_commands.core import CoreCommands, InfoSection
+from glide.async_commands.transaction import BaseTransaction, Transaction
+from glide.constants import TOK, TResult
+from glide.protobuf.redis_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):

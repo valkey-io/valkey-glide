@@ -11,7 +11,7 @@ from typing import List
 
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
-from pybushka import (
+from glide import (
     BaseClientConfiguration,
     Logger,
     LogLevel,

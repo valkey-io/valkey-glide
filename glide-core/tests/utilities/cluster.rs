@@ -1,8 +1,8 @@
 use super::{create_connection_request, ClusterMode, TestConfiguration};
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
-use glide::client::Client;
-use glide::connection_request::NodeAddress;
+use glide_core::client::Client;
+use glide_core::connection_request::NodeAddress;
 use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};
 use std::process::Command;

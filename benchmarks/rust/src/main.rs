@@ -1,6 +1,6 @@
 use clap::Parser;
 use futures::{self, future::join_all, stream, StreamExt};
-use glide::{
+use glide_core::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
@@ -218,7 +218,7 @@ async fn get_connection(args: &Args) -> Client {
     connection_request.request_timeout = 2000;
     connection_request.cluster_mode_enabled = args.cluster_mode_enabled;
 
-    glide::client::Client::new(connection_request)
+    glide_core::client::Client::new(connection_request)
         .await
         .unwrap()
 }

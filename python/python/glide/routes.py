@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import Optional
 
-from pybushka.protobuf.redis_request_pb2 import RedisRequest, SimpleRoutes
-from pybushka.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
+from glide.protobuf.redis_request_pb2 import RedisRequest, SimpleRoutes
+from glide.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
 
 
 class SlotType(Enum):

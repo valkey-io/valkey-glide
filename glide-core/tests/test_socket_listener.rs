@@ -1,4 +1,4 @@
-use glide::*;
+use glide_core::*;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -17,9 +17,9 @@ mod socket_listener {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use glide::redis_request::command::{Args, ArgsArray};
-    use glide::redis_request::{Command, Transaction};
-    use glide::response::{response, ConstantResponse, Response};
+    use glide_core::redis_request::command::{Args, ArgsArray};
+    use glide_core::redis_request::{Command, Transaction};
+    use glide_core::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};

@@ -21,7 +21,7 @@ To install GLIDE for Redis using `pip`, follow these steps:
 3. After installation, confirm the client is accessible by running:
     ```bash
     $ python3
-    >>> import glide-for-redis
+    >>> import glide
     ```
 
 ### Build from source
@@ -80,7 +80,7 @@ Before starting this step, make sure you've installed all software requirments.
 3. Generate protobuf files:
     ```bash
     GLIDE_ROOT_FOLDER_PATH=.
-    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
     ```
 4. Create a virtual environment:
     ```bash
@@ -113,7 +113,7 @@ Before starting this step, make sure you've installed all software requirments.
 #### Cluster Redis:
 
 ```python:
->>> from pybushka import (
+>>> from glide import (
 ...     NodeAddress,
 ...     ClusterClientConfiguration,
 ...     RedisClusterClient,
@@ -132,7 +132,7 @@ Before starting this step, make sure you've installed all software requirments.
 #### Standalone Redis:
 
 ```python:
->>> from pybushka import (
+>>> from glide import (
 ...     NodeAddress,
 ...     RedisClientConfiguration,
 ...     RedisClient,

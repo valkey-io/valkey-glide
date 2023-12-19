@@ -43,11 +43,11 @@ git submodule update
 ```
 
 ### Generate protobuf files
-During the initial build, Python protobuf files were created in `python/python/pybushka/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
+During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
 
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
-protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ``` 
 
 #### Protobuf interface files
@@ -56,7 +56,7 @@ To generate the protobuf files with Python Interface files (pyi) for type-checki
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
 
 ### Linters
@@ -80,10 +80,10 @@ Run from the main `/python` folder
     > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running mypy linter
     ```bash
     pip install -r dev_requirements.txt
-    isort . --profile black --skip-glob python/pybushka/protobuf
-    black . --exclude python/pybushka/protobuf
-    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
-    flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/pybushka/protobuf,.env/* --extend-ignore=E230
+    isort . --profile black --skip-glob python/glide/protobuf
+    black . --exclude python/glide/protobuf
+    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
+    flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
     # run type check
     mypy .
     ```

@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional, Union
 
-from pybushka import (
+from glide import (
     AllNodes,
     BaseClientConfiguration,
     Logger,
