@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using babushka;
+using glide;
 using CommandLine;
 using LinqStatistics;
 using StackExchange.Redis;
@@ -282,20 +282,20 @@ public static class MainClass
         int clientCount,
         bool useTLS)
     {
-        if (clientsToRun == "all" || clientsToRun == "babushka")
+        if (clientsToRun == "all" || clientsToRun == "glide")
         {
             var clients = await createClients(clientCount, () =>
             {
-                var babushka_client = new AsyncClient(host, PORT, useTLS);
+                var glide_client = new AsyncClient(host, PORT, useTLS);
                 return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
-                    (async (key) => await babushka_client.GetAsync(key),
-                     async (key, value) => await babushka_client.SetAsync(key, value),
-                     () => babushka_client.Dispose()));
+                    (async (key) => await glide_client.GetAsync(key),
+                     async (key, value) => await glide_client.SetAsync(key, value),
+                     () => glide_client.Dispose()));
             });
 
             await run_clients(
                 clients,
-                "babushka",
+                "glide",
                 total_commands,
                 data_size,
                 num_of_concurrent_tasks

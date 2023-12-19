@@ -1,9 +1,9 @@
-package babushka.benchmarks.utils;
+package glide.benchmarks.utils;
 
-import babushka.benchmarks.BenchmarkingApp;
-import babushka.benchmarks.clients.AsyncClient;
-import babushka.benchmarks.clients.Client;
-import babushka.benchmarks.clients.SyncClient;
+import glide.benchmarks.BenchmarkingApp;
+import glide.benchmarks.clients.AsyncClient;
+import glide.benchmarks.clients.Client;
+import glide.benchmarks.clients.SyncClient;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;

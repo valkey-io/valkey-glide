@@ -1,4 +1,4 @@
-package babushka.benchmarks.utils;
+package glide.benchmarks.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

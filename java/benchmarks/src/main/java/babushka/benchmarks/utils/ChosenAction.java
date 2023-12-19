@@ -1,4 +1,4 @@
-package babushka.benchmarks.utils;
+package glide.benchmarks.utils;
 
 public enum ChosenAction {
   GET_NON_EXISTING,

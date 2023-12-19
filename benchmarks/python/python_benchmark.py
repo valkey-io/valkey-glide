@@ -277,8 +277,8 @@ async def main(
         for client in clients:
             await client.aclose()
 
-    if clients_to_run == "all" or clients_to_run == "babushka":
-        # Babushka Socket
+    if clients_to_run == "all" or clients_to_run == "glide":
+        # Glide Socket
         client_class = RedisClusterClient if is_cluster else RedisClient
         config = BaseClientConfiguration(
             [NodeAddress(host=host, port=port)], use_tls=use_tls
@@ -289,7 +289,7 @@ async def main(
         )
         await run_clients(
             clients,
-            "babushka",
+            "glide",
             event_loop_name,
             total_commands,
             num_of_concurrent_tasks,

@@ -1,4 +1,4 @@
-package babushka.benchmarks.utils;
+package glide.benchmarks.utils;
 
 /** Redis-client settings */
 public class ConnectionSettings {

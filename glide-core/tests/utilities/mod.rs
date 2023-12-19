@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-use babushka::{
+use futures::Future;
+use glide::{
     client::{Client, StandaloneClient},
     connection_request::{self, AuthenticationInfo, NodeAddress},
 };
-use futures::Future;
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{aio::ConnectionLike, ConnectionAddr, RedisConnectionInfo, RedisResult, Value};

@@ -32,7 +32,7 @@ dependencies {
 
 tasks.register('protobuf', Exec) {
     doFirst {
-        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/babushka/models/protobuf').toString())
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
     }
     commandLine 'protoc',
         '-Iprotobuf=glide-core/src/protobuf/',
@@ -45,7 +45,7 @@ tasks.register('protobuf', Exec) {
 
 tasks.register('cleanProtobuf') {
     doFirst {
-        project.delete(Paths.get(project.projectDir.path, 'src/main/java/babushka/models/protobuf').toString())
+        project.delete(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
     }
 }
 

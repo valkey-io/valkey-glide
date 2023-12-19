@@ -1,9 +1,9 @@
-package babushka.benchmarks;
+package glide.benchmarks;
 
-import static babushka.benchmarks.utils.Benchmarking.testClientSetGet;
+import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 
-import babushka.benchmarks.clients.jedis.JedisClient;
-import babushka.benchmarks.clients.lettuce.LettuceAsyncClient;
+import glide.benchmarks.clients.jedis.JedisClient;
+import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -32,7 +32,7 @@ public class BenchmarkingApp {
       // generate the help statement
       if (line.hasOption("help")) {
         HelpFormatter formatter = new HelpFormatter();
-        formatter.printHelp("babushka", options);
+        formatter.printHelp("glide", options);
         return;
       }
 
@@ -54,8 +54,8 @@ public class BenchmarkingApp {
           System.out.println("Run LETTUCE async client");
           testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
           break;
-        case BABUSHKA:
-          System.out.println("Babushka async not yet configured");
+        case GLIDE:
+          System.out.println("GLIDE for Redis async not yet configured");
           break;
       }
     }
@@ -81,7 +81,7 @@ public class BenchmarkingApp {
             .desc("Number of concurrent tasks [100, 1000]")
             .build());
     options.addOption(
-        Option.builder("clients").hasArg(true).desc("one of: all|jedis|lettuce|babushka").build());
+        Option.builder("clients").hasArg(true).desc("one of: all|jedis|lettuce|glide").build());
     options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
     options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
     options.addOption(
@@ -133,7 +133,7 @@ public class BenchmarkingApp {
                   e -> {
                     switch (e) {
                       case ALL:
-                        return Stream.of(ClientName.JEDIS, ClientName.BABUSHKA, ClientName.LETTUCE);
+                        return Stream.of(ClientName.JEDIS, ClientName.GLIDE, ClientName.LETTUCE);
                       default:
                         return Stream.of(e);
                     }
@@ -183,7 +183,7 @@ public class BenchmarkingApp {
   public enum ClientName {
     JEDIS("Jedis"), // sync
     LETTUCE("Lettuce"), // async
-    BABUSHKA("Babushka"), // async
+    GLIDE("Glide"), // async
     ALL("All");
 
     private String name;

@@ -1,6 +1,6 @@
-package babushka.benchmarks.clients;
+package glide.benchmarks.clients;
 
-import babushka.benchmarks.utils.ConnectionSettings;
+import glide.benchmarks.utils.ConnectionSettings;
 
 /** A Redis client interface */
 public interface Client {

@@ -1,4 +1,4 @@
-use babushka::*;
+use glide::*;
 use rsevents::{Awaitable, EventState, ManualResetEvent};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -17,9 +17,9 @@ mod socket_listener {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use babushka::redis_request::command::{Args, ArgsArray};
-    use babushka::redis_request::{Command, Transaction};
-    use babushka::response::{response, ConstantResponse, Response};
+    use glide::redis_request::command::{Args, ArgsArray};
+    use glide::redis_request::{Command, Transaction};
+    use glide::response::{response, ConstantResponse, Response};
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};

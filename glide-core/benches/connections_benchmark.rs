@@ -1,6 +1,6 @@
-use babushka::client::BabushkaClient;
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
+use glide::client::GlideClient;
 use redis::{
     cluster::ClusterClientBuilder, AsyncCommands, ConnectionAddr, ConnectionInfo,
     RedisConnectionInfo, RedisResult, Value,
@@ -8,7 +8,7 @@ use redis::{
 use std::env;
 use tokio::runtime::{Builder, Runtime};
 
-async fn run_get(mut connection: impl BabushkaClient) -> RedisResult<Value> {
+async fn run_get(mut connection: impl GlideClient) -> RedisResult<Value> {
     connection.get("foo").await
 }
 
@@ -16,7 +16,7 @@ fn benchmark_single_get(
     c: &mut Criterion,
     connection_id: &str,
     test_group: &str,
-    connection: impl BabushkaClient,
+    connection: impl GlideClient,
     runtime: &Runtime,
 ) {
     let mut group = c.benchmark_group(test_group);
@@ -30,7 +30,7 @@ fn benchmark_concurrent_gets(
     c: &mut Criterion,
     connection_id: &str,
     test_group: &str,
-    connection: impl BabushkaClient,
+    connection: impl GlideClient,
     runtime: &Runtime,
 ) {
     const ITERATIONS: usize = 100;
@@ -54,7 +54,7 @@ fn benchmark<Fun, Con>(
     group: &str,
     connection_creation: Fun,
 ) where
-    Con: BabushkaClient,
+    Con: GlideClient,
     Fun: FnOnce(ConnectionAddr, &Runtime) -> Con,
 {
     let runtime = Builder::new_current_thread().enable_all().build().unwrap();

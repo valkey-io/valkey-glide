@@ -2,7 +2,7 @@ import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     StartSocketConnection,
     valueFromSplitPointer,
-} from "babushka-rs-internal";
+} from "glide-rs-internal";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
@@ -290,15 +290,15 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
-                  callbackIdx,
-                  transaction: redis_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: redis_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : redis_request.RedisRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-              });
+                callbackIdx,
+                singleCommand: command,
+            });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -860,9 +860,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /**
      * @internal
@@ -875,11 +875,11 @@ export class BaseClient {
             : undefined;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         return {
             useResp3: true,

@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
-namespace babushka
+namespace glide
 {
     // TODO - use a bindings generator to create this enum.
     public enum Level
@@ -59,7 +59,7 @@ namespace babushka
         #region public methods
         // config the logger instance - in fact - create new logger instance with the new args
         // exist in addition to init for two main reason's:
-        // 1. if Babushka dev want intentionally to change the logger instance configuration
+        // 1. if GLIDE dev want intentionally to change the logger instance configuration
         // 2. external user want to set the logger and we don't want to return to him the logger itself, just config it
         // the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
         // the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console

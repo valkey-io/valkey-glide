@@ -158,7 +158,7 @@ class TestRedisClients:
         credentials = RedisCredentials(password)
         # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
         #  init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-        # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+        # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
         primary_address = redis_client.config.addresses[0]
         try:
             await redis_client.custom_command(
@@ -221,7 +221,7 @@ class TestRedisClients:
 
             # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
             # init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-            # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+            # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
             primary_address = redis_client.config.addresses[0]
             testuser_client = await create_client(
                 request,
@@ -465,12 +465,10 @@ class TestCommands:
     async def test_client_getname(self, redis_client: TRedisClient):
         assert await redis_client.client_getname() is None
         assert (
-            await redis_client.custom_command(
-                ["CLIENT", "SETNAME", "BabushkaConnection"]
-            )
+            await redis_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
             == OK
         )
-        assert await redis_client.client_getname() == "BabushkaConnection"
+        assert await redis_client.client_getname() == "GlideConnection"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mset_mget(self, redis_client: TRedisClient):

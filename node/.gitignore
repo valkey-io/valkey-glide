@@ -130,7 +130,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-*babushka*.node
+*glide*.node
 build-ts/**
 yarn.lock
 

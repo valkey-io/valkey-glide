@@ -1,5 +1,5 @@
 {
-  "name": "babushka-rs-internal",
+  "name": "glide-rs-internal",
   "version": "0.1.0",
   "description": "Redis client",
   "main": "index.js",
@@ -7,10 +7,10 @@
   "files": [
     "index.d.ts",
     "index.js",
-    "babushka*.*.node"
+    "glide*.*.node"
   ],
   "napi": {
-    "name": "babushka-rs-internal",
+    "name": "glide-rs-internal",
     "triples": {
       "defaults": true,
       "additional": [

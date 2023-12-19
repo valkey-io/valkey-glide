@@ -1,4 +1,4 @@
-package babushka.benchmarks.utils;
+package glide.benchmarks.utils;
 
 import java.util.Arrays;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;

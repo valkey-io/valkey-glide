@@ -1,6 +1,6 @@
 namespace tests;
 
-using babushka;
+using glide;
 
 // TODO - need to start a new redis server for each test?
 public class AsyncClientTests
@@ -8,7 +8,7 @@ public class AsyncClientTests
     [OneTimeSetUp]
     public void Setup()
     {
-        babushka.Logger.SetLoggerConfig(babushka.Level.Info);
+        glide.Logger.SetLoggerConfig(glide.Level.Info);
     }
 
     private async Task GetAndSetRandomValues(AsyncClient client)

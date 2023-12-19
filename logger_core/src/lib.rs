@@ -91,7 +91,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         // Enable logging only from allowed crates
         let targets_filter = filter::Targets::new()
-            .with_target("babushka", LevelFilter::TRACE)
+            .with_target("glide", LevelFilter::TRACE)
             .with_target("redis", LevelFilter::TRACE)
             .with_target("logger_core", LevelFilter::TRACE)
             .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);

@@ -1,6 +1,6 @@
-use babushka::start_socket_listener;
-use babushka::MAX_REQUEST_ARGS_LENGTH;
 use byteorder::{LittleEndian, WriteBytesExt};
+use glide::start_socket_listener;
+use glide::MAX_REQUEST_ARGS_LENGTH;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
@@ -26,7 +26,7 @@ pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[napi]
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
-    babushka::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+    glide::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 
 #[napi]
 struct AsyncClient {
@@ -51,7 +51,7 @@ impl AsyncClient {
         let runtime = Builder::new_multi_thread()
             .enable_all()
             .worker_threads(1)
-            .thread_name("Babushka node thread")
+            .thread_name("GLIDE node thread")
             .build()?;
         let _runtime_handle = runtime.enter();
         let client = to_js_result(redis::Client::open(connection_address))?;

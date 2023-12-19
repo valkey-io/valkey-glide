@@ -7,12 +7,11 @@ authors = ["Amazon Web Services"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "glide-for-redis"
 crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
-babushka = { path = "../glide-core" }
+glide = { path = "../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../logger_core"}
 tracing-subscriber = "0.3.16"

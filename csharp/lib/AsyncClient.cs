@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace babushka
+namespace glide
 {
     public class AsyncClient : IDisposable
     {

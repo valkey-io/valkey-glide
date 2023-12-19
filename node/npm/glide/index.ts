@@ -5,10 +5,10 @@ switch (platform) {
     case 'linux':
         switch (arch) {
             case 'x64':
-                nativeBinding = await import("@scope/babushka-linux-x64");
+                nativeBinding = await import("@scope/glide-for-redis-linux-x64");
                 break;
             case 'arm64':
-                nativeBinding = await import("@scope/babushka-linux-arm64");
+                nativeBinding = await import("@scope/glide-for-redis-linux-arm64");
                 break;
             default:
                 throw new Error(`Unsupported OS: ${platform}, architecture: ${arch}`);
@@ -17,10 +17,10 @@ switch (platform) {
     case 'darwin':
         switch (arch) {
             case 'x64':
-                nativeBinding = await import("@scope/babushka-darwin-x64");
+                nativeBinding = await import("@scope/glide-for-redis-darwin-x64");
                 break;
             case 'arm64':
-                nativeBinding = await import("@scope/babushka-darwin-arm64");
+                nativeBinding = await import("@scope/glide-for-redis-darwin-arm64");
                 break;
             default:
                 throw new Error(`Unsupported OS: ${platform}, architecture: ${arch}`);

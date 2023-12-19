@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace babushka
+namespace glide
 {
 
     internal class MessageContainer<T>

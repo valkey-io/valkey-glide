@@ -1,4 +1,4 @@
-use babushka::{
+use glide::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };

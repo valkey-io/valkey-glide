@@ -47,7 +47,7 @@ During the initial build, Python protobuf files were created in `python/python/p
 
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
-protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/pybushka ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ``` 
 
 #### Protobuf interface files

@@ -1,21 +1,21 @@
 {
-    "name": "babushka",
+    "name": "glide-for-redis",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/aws/babushka.git"
+        "url": "git+https://github.com/aws/glide-for-redis.git"
     },
-    "homepage": "https://github.com/aws/babushka#readme",
+    "homepage": "https://github.com/aws/glide-for-redis#readme",
     "dependencies": {
-        "babushka-rs-internal": "file:rust-client",
+        "glide-rs-internal": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
         "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
-        "babushka-rs-internal"
+        "glide-rs-internal"
     ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",

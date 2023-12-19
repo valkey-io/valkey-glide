@@ -1,7 +1,7 @@
-package babushka.benchmarks.clients.lettuce;
+package glide.benchmarks.clients.lettuce;
 
-import babushka.benchmarks.clients.AsyncClient;
-import babushka.benchmarks.utils.ConnectionSettings;
+import glide.benchmarks.clients.AsyncClient;
+import glide.benchmarks.utils.ConnectionSettings;
 import io.lettuce.core.AbstractRedisClient;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisFuture;

@@ -1,7 +1,7 @@
-package babushka.benchmarks.clients.jedis;
+package glide.benchmarks.clients.jedis;
 
-import babushka.benchmarks.clients.SyncClient;
-import babushka.benchmarks.utils.ConnectionSettings;
+import glide.benchmarks.clients.SyncClient;
+import glide.benchmarks.utils.ConnectionSettings;
 import java.util.Set;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;

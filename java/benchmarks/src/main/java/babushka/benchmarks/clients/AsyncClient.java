@@ -1,4 +1,4 @@
-package babushka.benchmarks.clients;
+package glide.benchmarks.clients;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;

@@ -1,8 +1,8 @@
 use super::{create_connection_request, ClusterMode, TestConfiguration};
-use babushka::client::Client;
-use babushka::connection_request::NodeAddress;
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
+use glide::client::Client;
+use glide::connection_request::NodeAddress;
 use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};
 use std::process::Command;

@@ -1,5 +1,5 @@
 [package]
-name = "pybushka"
+name = "glide-for-redis"
 version = "255.255.255"
 edition = "2021"
 license = "Apache-2.0"
@@ -7,14 +7,14 @@ authors = ["Amazon Web Services"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "pybushka"
+name = "glide_for_redis"
 crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "^0.20", features = ["extension-module"] }
 pyo3-asyncio = { version =  "^0.20", features = ["tokio-runtime"] }
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager","tokio-rustls-comp"] }
-babushka = { path = "../glide-core" }
+glide = { path = "../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../logger_core"}
 tracing-subscriber = "0.3.16"

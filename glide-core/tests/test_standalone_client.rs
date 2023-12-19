@@ -5,7 +5,7 @@ mod standalone_client_tests {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use babushka::{client::StandaloneClient, connection_request::ReadFrom};
+    use glide::{client::StandaloneClient, connection_request::ReadFrom};
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
     use utilities::*;
@@ -75,7 +75,7 @@ mod standalone_client_tests {
             });
 
             let _new_server = receiver.await;
-            tokio::time::sleep(babushka::client::HEARTBEAT_SLEEP_DURATION + Duration::from_secs(1))
+            tokio::time::sleep(glide::client::HEARTBEAT_SLEEP_DURATION + Duration::from_secs(1))
                 .await;
 
             let mut get_command = redis::Cmd::new();

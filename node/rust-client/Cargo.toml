@@ -1,5 +1,5 @@
 [package]
-name = "babushka_js"
+name = "glide-rs"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
-babushka = { path = "../../glide-core" }
+glide = { path = "../../glide-core" }
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 napi = {version = "2.14", features = ["napi4", "napi6"] }
 napi-derive = "2.14"

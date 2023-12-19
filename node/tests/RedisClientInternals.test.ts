@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "@jest/globals";
+import fs from "fs";
 import {
     MAX_REQUEST_ARGS_LEN,
     createLeakedArray,
@@ -7,8 +8,7 @@ import {
     createLeakedDouble,
     createLeakedMap,
     createLeakedString,
-} from "babushka-rs-internal";
-import fs from "fs";
+} from "glide-rs-internal";
 import Long from "long";
 import net from "net";
 import os from "os";

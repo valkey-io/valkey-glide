@@ -37,7 +37,7 @@ use ClosingReason::*;
 use PipeListeningResult::*;
 
 /// The socket file name
-const SOCKET_FILE_NAME: &str = "babushka-socket";
+const SOCKET_FILE_NAME: &str = "glide-socket";
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer

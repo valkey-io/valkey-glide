@@ -17,11 +17,11 @@ mod standalone_client;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
-pub trait BabushkaClient: ConnectionLike + Send + Clone {}
+pub trait GlideClient: ConnectionLike + Send + Clone {}
 
-impl BabushkaClient for MultiplexedConnection {}
-impl BabushkaClient for ConnectionManager {}
-impl BabushkaClient for ClusterConnection {}
+impl GlideClient for MultiplexedConnection {}
+impl GlideClient for ConnectionManager {}
+impl GlideClient for ClusterConnection {}
 
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
