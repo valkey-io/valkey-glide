@@ -71,10 +71,10 @@ namespace babushka
         #endregion public methods
 
         #region FFI function declaration
-        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "log")]
+        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "log")]
         private static extern void log(Int32 logLevel, byte[] logIdentifier, byte[] message);
 
-        [DllImport("libbabushka_csharp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
+        [DllImport("libglide-rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "init")]
         private static extern Level InitInternalLogger(Int32 level, byte[]? filename);
 
         #endregion

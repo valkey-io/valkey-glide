@@ -31,13 +31,14 @@ dataSize="100 4000"
 clientCount="1"
 chosenClients="all"
 host="localhost"
+host="localhost"
 port=6379
 tlsFlag="--tls"
 javaTlsFlag="-tls"
 
 function runPythonBenchmark(){
   # generate protobuf files
-  protoc -Iprotobuf=${BABUSHKA_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${BABUSHKA_HOME_FOLDER}/glide-core/src/protobuf/*.proto
+  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
@@ -103,7 +104,7 @@ script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
 export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
-export BABUSHKA_HOME_FOLDER="${BENCH_FOLDER}/.."
+export GLIDE_HOME_FOLDER="${BENCH_FOLDER}/.."
 export BENCH_RESULTS_FOLDER="${BENCH_FOLDER}/results"
 identifier=$(date +"%F")-$(date +"%H")-$(date +"%M")-$(date +"%S")
 # Create results folder
@@ -135,9 +136,9 @@ function Help() {
     echo "         2 clients, 100 concurrent tasks and 20 bytes of data per value, "
     echo and the outputs will be saved to a file prefixed with \"foo\".
     echo
-    echo Pass -only-ffi to only run Babushka FFI based clients.
-    echo Pass -only-socket to only run Babushka socket based clients.
-    echo Pass -only-babushka to only run Babushk clients.
+    echo Pass -only-ffi to only run GLIDE FFI based clients.
+    echo Pass -only-socket to only run GLIDE socket based clients.
+    echo Pass -only-glide to only run GLIDE clients.
     echo Pass -is-cluster if the host is a Cluster server. Otherwise the server is assumed to be in standalone mode.
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
@@ -194,7 +195,6 @@ do
         -java)
             runAllBenchmarks=0
             runJava=1
-            chosenClients="Babushka"
             ;;
         -lettuce)
             runAllBenchmarks=0
@@ -214,8 +214,8 @@ do
             runAllBenchmarks=0
             runRust=1
             ;;
-        -only-babushka)
-            chosenClients="babushka"
+        -only-glide)
+            chosenClients="glide"
             ;;
         -no-csv) writeResultsCSV=0 ;;
         -no-tls)

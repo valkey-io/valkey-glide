@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <RootNamespace>babushka</RootNamespace>
+    <RootNamespace>glide-for-redis</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -12,7 +12,7 @@
   </Target>
 
   <ItemGroup Condition=" '$(OS)' == 'UNIX'">
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libbabushka_csharp.so">
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide-rs.so">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>%(FileName)%(Extension)</Link>
     </Content>
