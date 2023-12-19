@@ -274,10 +274,10 @@ async def main(
             is_cluster,
         )
 
-    if (
-        clients_to_run == "all"
-        or clients_to_run == "babushka"
-    ):
+        for client in clients:
+            await client.aclose()
+
+    if clients_to_run == "all" or clients_to_run == "babushka":
         # Babushka Socket
         client_class = RedisClusterClient if is_cluster else RedisClient
         config = BaseClientConfiguration(
@@ -320,7 +320,9 @@ if __name__ == "__main__":
     ]
 
     for data_size, num_of_concurrent_tasks, number_of_clients in product_of_arguments:
-        iterations = 1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
+        iterations = (
+            1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
+        )
         asyncio.run(
             main(
                 "asyncio",
