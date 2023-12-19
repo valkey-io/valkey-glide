@@ -18,15 +18,25 @@ dependencies {
     implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
+
+    //lombok
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    // junit
+    testImplementation('org.junit.jupiter:junit-jupiter:5.6.2')
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
 }
 
 tasks.register('protobuf', Exec) {
     doFirst {
-        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/babushka/protobuf').toString())
+        project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/babushka/models/protobuf').toString())
     }
     commandLine 'protoc',
         '-Iprotobuf=babushka-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/babushka/protobuf',
+        '--java_out=java/client/src/main/java/babushka/models/protobuf',
         'babushka-core/src/protobuf/connection_request.proto',
         'babushka-core/src/protobuf/redis_request.proto',
         'babushka-core/src/protobuf/response.proto'
@@ -35,7 +45,7 @@ tasks.register('protobuf', Exec) {
 
 tasks.register('cleanProtobuf') {
     doFirst {
-        project.delete(Paths.get(project.projectDir.path, 'src/main/java/babushka/protobuf').toString())
+        project.delete(Paths.get(project.projectDir.path, 'src/main/java/babushka/models/protobuf').toString())
     }
 }
 
