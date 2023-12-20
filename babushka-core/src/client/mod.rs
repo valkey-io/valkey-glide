@@ -135,7 +135,7 @@ impl Client {
         count: usize,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
-        (async move {
+        run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.send_packed_commands(cmd, offset, count).await
@@ -146,11 +146,8 @@ impl Client {
                         Some(RoutingInfo::SingleNode(route)) => route,
                         _ => SingleNodeRoutingInfo::Random,
                     };
-                    run_with_timeout(
-                        self.request_timeout,
-                        client.route_pipeline(cmd, offset, count, route),
-                    )
-                    .await
+
+                    client.route_pipeline(cmd, offset, count, route).await
                 }
             }
         })
