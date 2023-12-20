@@ -257,4 +257,30 @@ mod shared_client_tests {
             assert!(err.is_timeout(), "{err}");
         });
     }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_request_pipeline_timeout(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(1),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut pipeline = redis::pipe();
+            pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
+            let result = test_basics
+                .client
+                .req_packed_commands(&pipeline, 0, 1, None)
+                .await;
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.is_timeout(), "{err}");
+        });
+    }
 }
