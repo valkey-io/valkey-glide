@@ -408,11 +408,17 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
 
 fn get_route(
     route: Option<Box<Routes>>,
-    response_policy: Option<ResponsePolicy>,
+    cmd: Option<&Cmd>,
 ) -> ClientUsageResult<Option<RoutingInfo>> {
     use crate::redis_request::routes::Value;
     let Some(route) = route.and_then(|route| route.value) else {
         return Ok(None);
+    };
+    let get_response_policy = |cmd: Option<&Cmd>| {
+        cmd.and_then(|cmd| {
+            cmd.command()
+                .and_then(|cmd| ResponsePolicy::for_command(&cmd))
+        })
     };
     match route {
         Value::SimpleRoutes(simple_route) => {
@@ -424,11 +430,14 @@ fn get_route(
             match simple_route {
                 crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode((
                     MultipleNodeRoutingInfo::AllNodes,
-                    response_policy,
+                    get_response_policy(cmd),
                 )))),
-                crate::redis_request::SimpleRoutes::AllPrimaries => Ok(Some(
-                    RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, response_policy)),
-                )),
+                crate::redis_request::SimpleRoutes::AllPrimaries => {
+                    Ok(Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllMasters,
+                        get_response_policy(cmd),
+                    ))))
+                }
                 crate::redis_request::SimpleRoutes::Random => {
                     Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
                 }
@@ -455,16 +464,10 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
             Some(action) => match action {
                 redis_request::Command::SingleCommand(command) => {
                     match get_redis_command(&command) {
-                        Ok(cmd) => {
-                            let response_policy = cmd
-                                .command()
-                                .map(|cmd| ResponsePolicy::for_command(&cmd))
-                                .unwrap_or(None);
-                            match get_route(request.route.0, response_policy) {
-                                Ok(routes) => send_command(cmd, client, routes).await,
-                                Err(e) => Err(e),
-                            }
-                        }
+                        Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
+                            Ok(routes) => send_command(cmd, client, routes).await,
+                            Err(e) => Err(e),
+                        },
                         Err(e) => Err(e),
                     }
                 }
