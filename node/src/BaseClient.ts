@@ -2,7 +2,7 @@ import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     StartSocketConnection,
     valueFromSplitPointer,
-} from "glide-rs-internal";
+} from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
@@ -860,9 +860,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-            primary: connection_request.ReadFrom.Primary,
-            preferReplica: connection_request.ReadFrom.PreferReplica,
-        };
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+    };
 
     /**
      * @internal

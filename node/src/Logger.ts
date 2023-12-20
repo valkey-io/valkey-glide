@@ -1,4 +1,4 @@
-import { InitInternalLogger, Level, log } from "glide-rs-internal";
+import { InitInternalLogger, Level, log } from "glide-rs";
 
 const LEVEL: Map<LevelOptions | undefined, Level | undefined> = new Map([
     ["error", Level.Error],

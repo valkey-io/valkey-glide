@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
-import { AsyncClient } from "glide-rs-internal";
+import { AsyncClient } from "glide-rs";
 import RedisServer from "redis-server";
 import { runCommonTests } from "./SharedTests";
 import { flushallOnPort } from "./TestUtilities";

@@ -8,7 +8,7 @@ import {
     createLeakedDouble,
     createLeakedMap,
     createLeakedString,
-} from "glide-rs-internal";
+} from "glide-rs";
 import Long from "long";
 import net from "net";
 import os from "os";

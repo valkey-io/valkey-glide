@@ -9,13 +9,13 @@
     },
     "homepage": "https://github.com/aws/glide-for-redis#readme",
     "dependencies": {
-        "glide-rs-internal": "file:rust-client",
+        "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
         "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
-        "glide-rs-internal"
+        "glide-rs"
     ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
