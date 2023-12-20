@@ -210,10 +210,8 @@ async fn write_result(
                     error_message.into(),
                 ))
             } else {
-                log_warn(
-                    "received error",
-                    format!("{} for callback {}", error_message.as_str(), callback_index),
-                );
+                log_warn("received error", error_message.as_str());
+                log_debug("received error", format!("for callback {}", callback_index));
                 let mut request_error = response::RequestError::default();
                 if err.is_connection_dropped() {
                     request_error.type_ = response::RequestErrorType::Disconnect.into();
