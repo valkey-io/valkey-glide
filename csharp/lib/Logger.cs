@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
-namespace glide
+namespace Glide
 {
     // TODO - use a bindings generator to create this enum.
     public enum Level

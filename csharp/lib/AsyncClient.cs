@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace glide
+namespace Glide
 {
     public class AsyncClient : IDisposable
     {

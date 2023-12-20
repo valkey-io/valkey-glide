@@ -1,6 +1,6 @@
 namespace tests;
 
-using glide;
+using Glide;
 
 // TODO - need to start a new redis server for each test?
 public class AsyncClientTests
@@ -8,7 +8,7 @@ public class AsyncClientTests
     [OneTimeSetUp]
     public void Setup()
     {
-        glide.Logger.SetLoggerConfig(glide.Level.Info);
+        Glide.Logger.SetLoggerConfig(Glide.Level.Info);
     }
 
     private async Task GetAndSetRandomValues(AsyncClient client)
