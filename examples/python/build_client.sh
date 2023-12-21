@@ -5,11 +5,11 @@ set -x
 script=`pwd`/${BASH_SOURCE[0]}
 RELATIVE_BUILD_PATH=`dirname ${script}`
 export PYTHON_EXAMPLE_FOLDER=`realpath ${RELATIVE_BUILD_PATH}`
-export BABUSHKA_HOME_FOLDER="${PYTHON_EXAMPLE_FOLDER}/../.."
-export PYTHON_FOLDER="${BABUSHKA_HOME_FOLDER}/python"
+export GLIDE_HOME_FOLDER="${PYTHON_EXAMPLE_FOLDER}/../.."
+export PYTHON_FOLDER="${GLIDE_HOME_FOLDER}/python"
 
 # Generate protobuf files
-protoc -Iprotobuf=${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/pybushka ${BABUSHKA_HOME_FOLDER}/babushka-core/src/protobuf/*.proto
+protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
 cd ${PYTHON_EXAMPLE_FOLDER}
 # Create a virtual environment 
 python3 -m pip install --user virtualenv

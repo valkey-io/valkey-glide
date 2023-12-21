@@ -19,11 +19,11 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
 }
 
-BABUSHKA_HOME_DIR = os.getenv("BABUSHKA_HOME_DIR") or f"{__file__}/../.."
+GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/../.."
 CLUSTERS_FOLDER = os.getenv("CLUSTERS_FOLDER") or os.path.abspath(
-    f"{BABUSHKA_HOME_DIR}/utils/clusters"
+    f"{GLIDE_HOME_DIR}/utils/clusters"
 )
-TLS_FOLDER = os.path.abspath(f"{BABUSHKA_HOME_DIR}/utils/tls_crts")
+TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/utils/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 REDIS_CRT = f"{TLS_FOLDER}/redis.crt"
 REDIS_KEY = f"{TLS_FOLDER}/redis.key"
@@ -471,7 +471,6 @@ def wait_for_a_message_in_redis_logs(
     message: str,
     server_ports: Optional[List[str]] = None,
 ):
-
     for dir in Path(cluster_folder).rglob("*"):
         if not dir.is_dir():
             continue

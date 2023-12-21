@@ -5,14 +5,14 @@ on:
         branches: [main]
         paths:
             - logger_core/**
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
     pull_request:
         paths:
             - logger_core/**
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
@@ -51,7 +51,7 @@ jobs:
             - uses: Swatinem/rust-cache@v2
 
             - name: Run tests
-              working-directory: ./babushka-core
+              working-directory: ./glide-core
               run: cargo test -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
 
             - name: Run logger tests
@@ -59,7 +59,7 @@ jobs:
               run: cargo test -- --nocapture --test-threads=1
 
             - name: Check features
-              working-directory: ./babushka-core
+              working-directory: ./glide-core
               run: |
                   cargo check --benches --all-features
                   cargo check --no-default-features
@@ -78,8 +78,8 @@ jobs:
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./babushka-core
-              name: lint babushka-core
+                  cargo-toml-folder: ./glide-core
+              name: lint glide-core
 
             - uses: ./.github/workflows/lint-rust
               with:

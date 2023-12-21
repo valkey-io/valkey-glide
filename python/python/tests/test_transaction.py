@@ -2,14 +2,14 @@ from datetime import datetime
 from typing import List, Union
 
 import pytest
-from pybushka import RequestError
-from pybushka.async_commands.transaction import (
+from glide import RequestError
+from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
     Transaction,
 )
-from pybushka.constants import OK, TResult
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.constants import OK, TResult
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
 from tests.test_async_client import get_random_string
 
