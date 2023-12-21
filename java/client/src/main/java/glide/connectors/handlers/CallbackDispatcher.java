@@ -4,9 +4,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.apache.commons.lang3.tuple.Pair;
-
 import response.ResponseOuterClass.Response;
 
 /** Holder for resources required to dispatch responses and used by {@link ReadHandler}. */

@@ -1,7 +1,7 @@
 package glide.connectors.handlers;
 
-import glide.connectors.resources.Platform;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
+import glide.connectors.resources.Platform;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.unix.DomainSocketAddress;
@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
+
 /**
  * Class responsible for handling calls to/from a netty.io {@link Channel}.<br>
  * Uses a {@link CallbackDispatcher} to record callbacks of every request sent.

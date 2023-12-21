@@ -1,7 +1,5 @@
 package glide.connectors.handlers;
 
-import glide.connectors.handlers.CallbackDispatcher;
-import glide.connectors.handlers.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.unix.UnixChannel;
