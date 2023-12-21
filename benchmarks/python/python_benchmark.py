@@ -11,7 +11,7 @@ from typing import List
 
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
-from pybushka import (
+from glide import (
     BaseClientConfiguration,
     Logger,
     LogLevel,
@@ -274,11 +274,11 @@ async def main(
             is_cluster,
         )
 
-    if (
-        clients_to_run == "all"
-        or clients_to_run == "babushka"
-    ):
-        # Babushka Socket
+        for client in clients:
+            await client.aclose()
+
+    if clients_to_run == "all" or clients_to_run == "glide":
+        # Glide Socket
         client_class = RedisClusterClient if is_cluster else RedisClient
         config = BaseClientConfiguration(
             [NodeAddress(host=host, port=port)], use_tls=use_tls
@@ -289,7 +289,7 @@ async def main(
         )
         await run_clients(
             clients,
-            "babushka",
+            "glide",
             event_loop_name,
             total_commands,
             num_of_concurrent_tasks,
@@ -320,7 +320,9 @@ if __name__ == "__main__":
     ]
 
     for data_size, num_of_concurrent_tasks, number_of_clients in product_of_arguments:
-        iterations = 1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
+        iterations = (
+            1000 if args.minimal else number_of_iterations(num_of_concurrent_tasks)
+        )
         asyncio.run(
             main(
                 "asyncio",

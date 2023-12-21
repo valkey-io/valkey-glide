@@ -15,4 +15,4 @@ runs:
 
         - shell: bash
           working-directory: ./benchmarks
-          run: ./install_and_test.sh -no-tls -minimal -only-babushka -data 1 -tasks 10 ${{ inputs.language-flag }}
+          run: ./install_and_test.sh -no-tls -minimal -only-glide -data 1 -tasks 10 ${{ inputs.language-flag }}

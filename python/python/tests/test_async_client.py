@@ -8,19 +8,18 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, TypeVar, Union
 
 import pytest
-from packaging import version
-from pybushka import ClosingError, RequestError, TimeoutError
-from pybushka.async_commands.core import (
+from glide import ClosingError, RequestError, TimeoutError
+from glide.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
     InfoSection,
 )
-from pybushka.config import RedisCredentials
-from pybushka.constants import OK
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
-from pybushka.routes import (
+from glide.config import RedisCredentials
+from glide.constants import OK
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.routes import (
     AllNodes,
     AllPrimaries,
     RandomNode,
@@ -29,6 +28,7 @@ from pybushka.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from packaging import version
 from tests.conftest import create_client
 
 T = TypeVar("T")
@@ -109,7 +109,7 @@ class TestRedisClients:
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert type(info) is str
-        assert "lib-name=BabushkaPy" in info
+        assert "lib-name=GlidePy" in info
         assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -158,7 +158,7 @@ class TestRedisClients:
         credentials = RedisCredentials(password)
         # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
         #  init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-        # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+        # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
         primary_address = redis_client.config.addresses[0]
         try:
             await redis_client.custom_command(
@@ -221,7 +221,7 @@ class TestRedisClients:
 
             # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
             # init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-            # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+            # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
             primary_address = redis_client.config.addresses[0]
             testuser_client = await create_client(
                 request,
@@ -465,12 +465,10 @@ class TestCommands:
     async def test_client_getname(self, redis_client: TRedisClient):
         assert await redis_client.client_getname() is None
         assert (
-            await redis_client.custom_command(
-                ["CLIENT", "SETNAME", "BabushkaConnection"]
-            )
+            await redis_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
             == OK
         )
-        assert await redis_client.client_getname() == "BabushkaConnection"
+        assert await redis_client.client_getname() == "GlideConnection"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mset_mget(self, redis_client: TRedisClient):

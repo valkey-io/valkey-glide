@@ -81,7 +81,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         let file_appender = RollingFileAppender::new(
             Rotation::HOURLY,
-            "babushka-logs",
+            "glide-logs",
             file_name.unwrap_or("output.log"),
         );
         let file_fmt = tracing_subscriber::fmt::layer()
@@ -91,7 +91,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         // Enable logging only from allowed crates
         let targets_filter = filter::Targets::new()
-            .with_target("babushka", LevelFilter::TRACE)
+            .with_target("glide", LevelFilter::TRACE)
             .with_target("redis", LevelFilter::TRACE)
             .with_target("logger_core", LevelFilter::TRACE)
             .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
@@ -125,7 +125,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 });
         }
         Some(file) => {
-            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "babushka-logs", file);
+            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "glide-logs", file);
             let _ = reloads
                 .file_reload
                 .write()

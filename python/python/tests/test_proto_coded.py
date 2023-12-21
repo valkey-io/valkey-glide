@@ -1,7 +1,7 @@
 import pytest
-from pybushka.protobuf.redis_request_pb2 import RedisRequest, RequestType
-from pybushka.protobuf.response_pb2 import Response
-from pybushka.protobuf_codec import PartialMessageException, ProtobufCodec
+from glide.protobuf.redis_request_pb2 import RedisRequest, RequestType
+from glide.protobuf.response_pb2 import Response
+from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 
 
 class TestProtobufCodec:

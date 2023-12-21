@@ -2,14 +2,15 @@ from datetime import datetime
 from typing import List, Union
 
 import pytest
-from pybushka import RequestError
-from pybushka.async_commands.transaction import (
+from glide import RequestError
+from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
     Transaction,
 )
-from pybushka.constants import OK, TResult
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.constants import OK, TResult
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from tests.conftest import create_client
 from tests.test_async_client import get_random_string
 
 
@@ -203,9 +204,33 @@ class TestTransaction:
         transaction.info()
         expected = transaction_test(transaction, keyslot)
         result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:] == expected
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_can_return_null_on_watch_transaction_failures(
+        self, redis_client: TRedisClient, request
+    ):
+        is_cluster = isinstance(redis_client, RedisClusterClient)
+        client2 = await create_client(
+            request,
+            is_cluster,
+        )
+        keyslot = get_random_string(3)
+        transaction = ClusterTransaction() if is_cluster else Transaction()
+        transaction.get(keyslot)
+        result1 = await redis_client.custom_command(["WATCH", keyslot])
+        assert result1 == OK
+
+        result2 = await client2.set(keyslot, "foo")
+        assert result2 == OK
+
+        result3 = await redis_client.exec(transaction)
+        assert result3 is None
+
+        client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_standalone_transaction(self, redis_client: RedisClient):
@@ -221,6 +246,7 @@ class TestTransaction:
         transaction.get(key)
         expected = transaction_test(transaction, keyslot)
         result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:6] == [OK, OK, value, OK, None]

@@ -235,9 +235,9 @@ jobs:
 
             - name: Create package.json file
               shell: bash
-              working-directory: ./node/npm/babushka
+              working-directory: ./node/npm/glide
               run: |
-                  export pkg_name=babushka
+                  export pkg_name=glide-for-redis
                   echo "${GITHUB_REF:11}"
                   export package_version=${GITHUB_REF:11}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
@@ -258,18 +258,18 @@ jobs:
 
             - name: Create a directory for the packed packages
               shell: bash
-              working-directory: ./node/npm/babushka
+              working-directory: ./node/npm/glide
               run: mkdir packages
 
             - name: Download the packed packages
               id: download
               uses: actions/download-artifact@v3
               with:
-                  path: ./node/npm/babushka/packages
+                  path: ./node/npm/glide/packages
 
             - name: Install the packed packages
               shell: bash
-              working-directory: ./node/npm/babushka
+              working-directory: ./node/npm/glide
               run: |
                   ls -LR packages/
                   packages_list=`find ${{steps.download.outputs.download-path}} -type f -follow -print`
@@ -284,7 +284,7 @@ jobs:
 
             - name: Publish the base package
               shell: bash
-              working-directory: ./node/npm/babushka
+              working-directory: ./node/npm/glide
               run: |
                   # Copy the main README file
                   cp ../../README.md .
