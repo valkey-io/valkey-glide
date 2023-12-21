@@ -29,5 +29,5 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = 'babushka.benchmarks.BenchmarkingApp'
+    mainClass = 'glide.benchmarks.BenchmarkingApp'
 }

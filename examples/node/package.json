@@ -2,7 +2,7 @@
     "type": "module",
     "dependencies": {
         "@types/node": "^20.4.8",
-        "babushka-rs": "file:../../node"
+        "glide-for-redis": "file:../../node"
     },
     "devDependencies": {
         "typescript": "^5.1.6"

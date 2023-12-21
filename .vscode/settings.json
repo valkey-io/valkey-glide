@@ -9,7 +9,7 @@
     "files.trimFinalNewlines": true,
     "python.formatting.provider": "black",
     "rust-analyzer.linkedProjects": [
-        "babushka-core/Cargo.toml",
+        "glide-core/Cargo.toml",
         "python/Cargo.toml",
         "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",

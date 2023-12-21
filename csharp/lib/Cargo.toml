@@ -1,5 +1,5 @@
 [package]
-name = "babushka_csharp"
+name = "glide-rs"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
@@ -8,11 +8,12 @@ authors = ["Amazon Web Services"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
+name = "glide_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
 redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp","tokio-native-tls-comp"] }
-babushka = { path = "../../babushka-core" }
+glide-core = { path = "../../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 num-derive = "0.4.0"
 num-traits = "0.2.15"

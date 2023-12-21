@@ -1,4 +1,4 @@
-from pybushka.logger import Level, Logger
+from glide.logger import Level, Logger
 from tests.conftest import DEFAULT_TEST_LOG_LEVEL
 
 

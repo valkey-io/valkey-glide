@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional, Union
 
-from pybushka import (
+from glide import (
     AllNodes,
     BaseClientConfiguration,
     Logger,
@@ -22,7 +22,7 @@ def set_file_logger(level: LogLevel = LogLevel.WARN, file: Optional[str] = None)
 
         curr_time = datetime.now(timezone.utc)
         curr_time_str = curr_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        file = f"{curr_time_str}-babushka.log"
+        file = f"{curr_time_str}-glide.log"
     Logger.set_logger_config(level, file)
 
 

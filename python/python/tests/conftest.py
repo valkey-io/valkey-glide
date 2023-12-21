@@ -2,15 +2,15 @@ import random
 from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
-from pybushka.config import (
+from glide.config import (
     ClusterClientConfiguration,
     NodeAddress,
     RedisClientConfiguration,
     RedisCredentials,
 )
-from pybushka.logger import Level as logLevel
-from pybushka.logger import Logger
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.logger import Level as logLevel
+from glide.logger import Logger
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.utils.cluster import RedisCluster
 
 DEFAULT_HOST = "localhost"

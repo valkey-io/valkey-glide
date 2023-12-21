@@ -2,7 +2,7 @@
 
 ## System Requirements
 
-The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
+The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## NodeJS supported version
 Node.js 16.20 or higher.
@@ -12,18 +12,18 @@ Node.js 16.20 or higher.
 
 ### Installing via Package Manager (npm)
 
-To install babushka using `npm`, follow these steps:
+To install GLIDE for Redis using `npm`, follow these steps:
 
 1. Open your terminal.
 2. Execute the command below:
    ```bash
-   $ npm install babushka
+   $ npm install glide-for-redis
    ```
 3. After installation, confirm the client is installed by running:
     ```bash
     $ npm list
     myApp@ /home/ubuntu/myApp
-    └── babushka@0.1.0
+    └── glide-for-redis@0.1.0
     ```
 
 ### Build from source
@@ -72,8 +72,8 @@ Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/babushka.git
-    cd babushka
+    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    cd glide-for-redis
     ```
 2. Initialize git submodule:
     ```bash
@@ -110,19 +110,15 @@ Before starting this step, make sure you've installed all software requirments.
         ```bash
         npm test
         ```
-
-## Integrating the Babushka Package into Your Project
-
-Before adding the Babushka package into your application, ensure you follow the build steps outlined in "[Build the Node wrapper](#Building-and-installation-steps)".
-
-Currently, Babushka is not available on npm. Therefore, you'll need to build this repository to your device and add the package using the folder path with the command `npm install <path to Babushka>/node`.
+6. Integrating the built GLIDE package into your project:
+    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 ## Basic Examples
 
 #### Cluster Redis:
 
 ```node
-import { RedisClusterClient } from "babushka-rs";
+import { RedisClusterClient } from "glide-for-redis";
 
 const addresses = [
     {
@@ -142,7 +138,7 @@ client.dispose();
 #### Standalone Redis:
 
 ```node
-import { RedisClient } from "babushka-rs";
+import { RedisClient } from "glide-for-redis";
 
 const addresses = [
     {

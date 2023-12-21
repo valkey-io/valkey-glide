@@ -1,5 +1,5 @@
-import { Logger, RedisClient, RedisClusterClient } from "babushka-rs";
 import { writeFileSync } from "fs";
+import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
 import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
@@ -127,8 +127,7 @@ async function run_clients(
 ) {
     const now = new Date();
     console.log(
-        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${
-            clients.length
+        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${clients.length
         } is_cluster: ${is_cluster} ${now.toLocaleTimeString()}`
     );
     const action_latencies = {
@@ -192,7 +191,7 @@ async function main(
     total_commands: number,
     num_of_concurrent_tasks: number,
     data_size: number,
-    clients_to_run: "all" | "babushka",
+    clients_to_run: "all" | "glide",
     host: string,
     clientCount: number,
     useTLS: boolean,
@@ -200,7 +199,7 @@ async function main(
     port: number
 ) {
     const data = generate_value(data_size);
-    if (clients_to_run == "all" || clients_to_run == "babushka") {
+    if (clients_to_run == "all" || clients_to_run == "glide") {
         const clientClass = clusterModeEnabled
             ? RedisClusterClient
             : RedisClient;
@@ -212,7 +211,7 @@ async function main(
         );
         await run_clients(
             clients,
-            "babushka",
+            "glide",
             total_commands,
             num_of_concurrent_tasks,
             data_size,
@@ -232,14 +231,14 @@ async function main(
             };
             const node_redis_client = clusterModeEnabled
                 ? createCluster({
-                      rootNodes: [{ socket: { host, port, tls: useTLS } }],
-                      defaults: {
-                          socket: {
-                              tls: useTLS,
-                          },
-                      },
-                      useReplicas: true,
-                  })
+                    rootNodes: [{ socket: { host, port, tls: useTLS } }],
+                    defaults: {
+                        socket: {
+                            tls: useTLS,
+                        },
+                    },
+                    useReplicas: true,
+                })
                 : createClient(node);
             await node_redis_client.connect();
             return node_redis_client;
