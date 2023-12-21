@@ -1,13 +1,13 @@
 package babushka.connectors.handlers;
 
 import babushka.connectors.resources.Platform;
+import babushka.connectors.resources.ThreadPoolAllocator;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.unix.DomainSocketAddress;
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
@@ -24,7 +24,7 @@ public class ChannelHandler {
     channel =
         new Bootstrap()
             // TODO let user specify the thread pool or pool size as an option
-            .group(Platform.createNettyThreadPool("babushka-channel", OptionalInt.empty()))
+            .group(ThreadPoolAllocator.createNettyThreadPool("babushka-channel", Optional.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
             .connect(new DomainSocketAddress(socketPath))
@@ -52,13 +52,9 @@ public class ChannelHandler {
     return callbackDispatcher.registerConnection();
   }
 
-  private final AtomicBoolean closed = new AtomicBoolean(false);
-
   /** Closes the UDS connection and frees corresponding resources. */
   public void close() {
-    if (closed.compareAndSet(false, true)) {
-      channel.close();
-      callbackDispatcher.shutdownGracefully();
-    }
+    channel.close();
+    callbackDispatcher.shutdownGracefully();
   }
 }
