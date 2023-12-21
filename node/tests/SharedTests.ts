@@ -60,7 +60,7 @@ export function runBaseTests<Context>(config: {
                     return;
                 }
 
-                const result = await client.customCommand("CLIENT", ["INFO"]);
+                const result = await client.customCommand(["CLIENT", "INFO"]);
 
                 expect(result).toContain("lib-name=BabushkaJS");
                 expect(result).toContain("lib-ver=0.1.0");
@@ -133,12 +133,13 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
                 const value = uuidv4() + "0".repeat(Math.random() * 7);
-                const setResult = await client.customCommand("SET", [
+                const setResult = await client.customCommand([
+                    "SET",
                     key,
                     value,
                 ]);
                 expect(setResult).toEqual("OK");
-                const result = await client.customCommand("GET", [key]);
+                const result = await client.customCommand(["GET", key]);
                 expect(result).toEqual(value);
             });
         },
@@ -155,17 +156,20 @@ export function runBaseTests<Context>(config: {
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
                 const value1 = uuidv4() + "0".repeat(Math.random() * 7);
                 const value2 = uuidv4() + "0".repeat(Math.random() * 7);
-                const setResult1 = await client.customCommand("SET", [
+                const setResult1 = await client.customCommand([
+                    "SET",
                     key1,
                     value1,
                 ]);
                 expect(setResult1).toEqual("OK");
-                const setResult2 = await client.customCommand("SET", [
+                const setResult2 = await client.customCommand([
+                    "SET",
                     key2,
                     value2,
                 ]);
                 expect(setResult2).toEqual("OK");
-                const mget_result = await client.customCommand("MGET", [
+                const mget_result = await client.customCommand([
+                    "MGET",
                     key1,
                     key2,
                     key3,

@@ -100,14 +100,11 @@ export class RedisClient extends BaseClient {
      * @example
      * Returns a list of all pub/sub clients:
      * ```ts
-     * connection.customCommand("CLIENT", ["LIST","TYPE", "PUBSUB"])
+     * connection.customCommand(["CLIENT","LIST","TYPE", "PUBSUB"])
      * ```
      */
-    public customCommand(
-        commandName: string,
-        args: string[]
-    ): Promise<ReturnType> {
-        return this.createWritePromise(createCustomCommand(commandName, args));
+    public customCommand(args: string[]): Promise<ReturnType> {
+        return this.createWritePromise(createCustomCommand(args));
     }
 
     /** Ping the Redis server.
