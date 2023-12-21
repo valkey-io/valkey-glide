@@ -109,7 +109,7 @@ class TestRedisClients:
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert type(info) is str
-        assert "lib-name=BabushkaPy" in info
+        assert "lib-name=GlidePy" in info
         assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

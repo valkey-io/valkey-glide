@@ -55,6 +55,7 @@ pub(super) fn get_redis_connection_info(
             username: chars_to_string_option(&info.username),
             password: chars_to_string_option(&info.password),
             use_resp3,
+            client_name: None,
         },
         None => redis::RedisConnectionInfo {
             db: database_id as i64,
