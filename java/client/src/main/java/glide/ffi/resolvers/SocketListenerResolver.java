@@ -6,7 +6,7 @@ public class SocketListenerResolver {
   private static native String startSocketListener() throws Exception;
 
   static {
-    System.loadLibrary("glide-rs");
+    System.loadLibrary("glide_rs");
   }
 
   /**

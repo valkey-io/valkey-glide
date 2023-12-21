@@ -52,7 +52,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSocketListenerExternal<
+pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSocketListener<
     'local,
 >(
     env: JNIEnv<'local>,
