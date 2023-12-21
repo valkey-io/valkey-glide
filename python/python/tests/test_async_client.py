@@ -422,7 +422,7 @@ class TestCommands:
         assert await redis_client.get(key) == "11"
         assert await redis_client.incrby(key, 4) == 15
         assert await redis_client.get(key) == "15"
-        assert await redis_client.incrbyfloat(key, 5.5) == "20.5"
+        assert await redis_client.incrbyfloat(key, 5.5) == 20.5
         assert await redis_client.get(key) == "20.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -440,7 +440,7 @@ class TestCommands:
         assert await redis_client.get(key2) == "3"
 
         assert await redis_client.get(key3) is None
-        assert await redis_client.incrbyfloat(key3, 0.5) == "0.5"
+        assert await redis_client.incrbyfloat(key3, 0.5) == 0.5
         assert await redis_client.get(key3) == "0.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -547,8 +547,8 @@ class TestCommands:
         assert await redis_client.hget(key, field2) == "value2"
         assert await redis_client.hget(key, "non_existing_field") is None
 
-        assert await redis_client.hgetall(key) == [field, "value", field2, "value2"]
-        assert await redis_client.hgetall("non_existing_field") == []
+        assert await redis_client.hgetall(key) == {field: "value", field2: "value2"}
+        assert await redis_client.hgetall("non_existing_field") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hdel(self, redis_client: TRedisClient):
@@ -597,7 +597,7 @@ class TestCommands:
         assert await redis_client.hset(key, field_value_map) == 1
         assert await redis_client.hincrby(key, field, 1) == 11
         assert await redis_client.hincrby(key, field, 4) == 15
-        assert await redis_client.hincrbyfloat(key, field, 1.5) == "16.5"
+        assert await redis_client.hincrbyfloat(key, field, 1.5) == 16.5
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hincrby_non_existing_key_field(self, redis_client: TRedisClient):
@@ -610,7 +610,7 @@ class TestCommands:
         assert await redis_client.hset(key, field_value_map) == 1
         assert await redis_client.hincrby(key, "nonExistingField", 2) == 2
         assert await redis_client.hset(key2, field_value_map) == 1
-        assert await redis_client.hincrbyfloat(key2, "nonExistingField", -0.5) == "-0.5"
+        assert await redis_client.hincrbyfloat(key2, "nonExistingField", -0.5) == -0.5
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_hincrby_invalid_value(self, redis_client: TRedisClient):
@@ -636,9 +636,9 @@ class TestCommands:
         field_value_map = {field: "value", field2: "value2"}
 
         assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hexists(key, field) == 1
-        assert await redis_client.hexists(key, "nonExistingField") == 0
-        assert await redis_client.hexists("nonExistingKey", field2) == 0
+        assert await redis_client.hexists(key, field) == True
+        assert await redis_client.hexists(key, "nonExistingField") == False
+        assert await redis_client.hexists("nonExistingKey", field2) == False
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
@@ -828,10 +828,12 @@ class TestCommands:
 
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
-        assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry) == 1
+        assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry) == True
         assert await redis_client.ttl(key) in range(11)
 
-        assert await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry) == 1
+        assert (
+            await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry) == True
+        )
         assert await redis_client.ttl(key) in range(16)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -860,7 +862,7 @@ class TestCommands:
             await redis_client.pexpireat(
                 key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
             )
-            == 0
+            == False
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -875,7 +877,7 @@ class TestCommands:
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.pexpire(key, -10000) == 1
+        assert await redis_client.pexpire(key, -10000) == True
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
@@ -883,7 +885,9 @@ class TestCommands:
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.pexpireat(key, int(time.time() * 1000) - 50000) == 1
+        assert (
+            await redis_client.pexpireat(key, int(time.time() * 1000) - 50000) == True
+        )
         assert await redis_client.ttl(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -893,9 +897,11 @@ class TestCommands:
         key = get_random_string(10)
 
         assert await redis_client.expire(key, 10) == 0
-        assert await redis_client.pexpire(key, 10000) == 0
+        assert await redis_client.pexpire(key, 10000) == False
         assert await redis_client.expireat(key, int(time.time()) + 50) == 0
-        assert await redis_client.pexpireat(key, int(time.time() * 1000) + 50000) == 0
+        assert (
+            await redis_client.pexpireat(key, int(time.time() * 1000) + 50000) == False
+        )
         assert await redis_client.ttl(key) == -2
 
 

@@ -9,7 +9,7 @@ DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)
 # Typing
 T = TypeVar("T")
 TOK = Literal["OK"]
-TResult = Union[TOK, str, List[str], List[List[str]], int, None, Dict[str, T]]
+TResult = Union[TOK, str, List[str], List[List[str]], int, None, Dict[str, T], float]
 TRequest = Union[RedisRequest, ConnectionRequest]
 # When routing to a single node, response will be T
 # Otherwise, response will be : {Address : response , ... } with type of Dict[str, T].
