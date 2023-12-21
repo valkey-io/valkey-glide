@@ -142,7 +142,7 @@ class BaseRedisClient(CoreCommands):
         response_future: asyncio.Future = self._get_future(0)
         await self._write_or_buffer_request(conn_request)
         await response_future
-        if response_future.result() is not None:
+        if response_future.result() is not OK:
             raise ClosingError(response_future.result())
 
     async def _write_or_buffer_request(self, request: TRequest):
