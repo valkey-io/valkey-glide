@@ -4,10 +4,16 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerDomainSocketChannel;
+import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.kqueue.KQueue;
 import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueEventLoopGroup;
+import io.netty.channel.kqueue.KQueueServerDomainSocketChannel;
+import io.netty.channel.kqueue.KQueueServerSocketChannel;
+import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.unix.DomainSocketChannel;
+import io.netty.channel.unix.ServerDomainSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -117,6 +123,36 @@ public class Platform {
     }
     if (capabilities.isEPollAvailable()) {
       return EpollDomainSocketChannel.class;
+    }
+    throw new RuntimeException("Current platform supports no known socket types");
+  }
+
+  /**
+   * Get a channel class required by Netty to open a server UDS channel.
+   *
+   * @return Return a class, supported by the current native platform.
+   */
+  public static Class<? extends ServerDomainSocketChannel> getServerUdsNettyChannelType() {
+    if (capabilities.isKQueueAvailable()) {
+      return KQueueServerDomainSocketChannel.class;
+    }
+    if (capabilities.isEPollAvailable()) {
+      return EpollServerDomainSocketChannel.class;
+    }
+    throw new RuntimeException("Current platform supports no known socket types");
+  }
+
+  /**
+   * Get a channel class required by Netty to open a server TCP channel.
+   *
+   * @return Return a class, supported by the current native platform.
+   */
+  public static Class<? extends ServerSocketChannel> getServerTcpNettyChannelType() {
+    if (capabilities.isKQueueAvailable()) {
+      return KQueueServerSocketChannel.class;
+    }
+    if (capabilities.isEPollAvailable()) {
+      return EpollServerSocketChannel.class;
     }
     throw new RuntimeException("Current platform supports no known socket types");
   }

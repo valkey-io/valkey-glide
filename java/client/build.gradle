@@ -28,6 +28,8 @@ dependencies {
     // junit
     testImplementation('org.junit.jupiter:junit-jupiter:5.6.2')
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+
+    testImplementation group: 'io.netty', name: 'netty-codec-redis', version: '4.1.100.Final'
 }
 
 tasks.register('protobuf', Exec) {
