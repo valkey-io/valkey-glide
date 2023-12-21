@@ -1,6 +1,6 @@
 package glide.utils;
 
-import babushka.connectors.resources.Platform;
+import glide.connectors.resources.Platform;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -15,6 +15,7 @@ import io.netty.handler.codec.protobuf.ProtobufEncoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 import java.nio.file.Files;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
@@ -78,7 +79,7 @@ public class RustCoreMock {
       channel =
           new ServerBootstrap()
               .group(
-                  group = Platform.createNettyThreadPool("BabushkaCoreMock", OptionalInt.empty()))
+                  group = Platform.createNettyThreadPool("BabushkaCoreMock", Optional.empty()))
               .channel(Platform.getServerUdsNettyChannelType())
               .childHandler(
                   new ChannelInitializer<DomainSocketChannel>() {

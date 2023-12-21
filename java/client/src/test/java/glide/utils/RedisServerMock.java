@@ -1,6 +1,6 @@
 package glide.utils;
 
-import babushka.connectors.resources.Platform;
+import glide.connectors.resources.Platform;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -22,6 +22,7 @@ import io.netty.handler.codec.redis.RedisMessage;
 import io.netty.handler.codec.redis.SimpleStringRedisMessage;
 import io.netty.util.CharsetUtil;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -122,7 +123,7 @@ public class RedisServerMock {
     try {
       channel =
           new ServerBootstrap()
-              .group(group = Platform.createNettyThreadPool("RedisMock", OptionalInt.empty()))
+              .group(group = Platform.createNettyThreadPool("RedisMock", Optional.empty()))
               .channel(Platform.getServerTcpNettyChannelType())
               .childHandler(
                   new ChannelInitializer<SocketChannel>() {
