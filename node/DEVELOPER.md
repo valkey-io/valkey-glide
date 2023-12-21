@@ -1,15 +1,15 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test the Babushka Node wrapper.
+This document describes how to set up your development environment to build and test the GLIDE for Redis Node wrapper.
 
 ### Development Overview
 
-The Babushka Node wrapper consists of both TypeScript and Rust code. Rust bindings for Node.js are implemented using [napi-rs](https://github.com/napi-rs/napi-rs). The Node and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings for Node.js are implemented using [napi-rs](https://github.com/napi-rs/napi-rs). The Node and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
 
 ### Build
 
-- Follow the building instructions for the Node wrapper in the [Build from source](https://github.com/aws/babushka/blob/main/node/README.md#build-from-source) section to clone the code and build the wrapper.
+- Follow the building instructions for the Node wrapper in the [Build from source](https://github.com/aws/glide-for-redis/blob/main/node/README.md#build-from-source) section to clone the code and build the wrapper.
 - For a fast build, execute `npm run build`. This will perform a full,  unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
 - If your modifications are limited to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
 - If your modifications are limited to the Rust code, execute `npm run build-internal` to build the internal package and generate TypeScript code.

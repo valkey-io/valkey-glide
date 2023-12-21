@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\csharp\lib\babushka.csproj" />
+    <ProjectReference Include="..\..\csharp\lib\glide.csproj" />
   </ItemGroup>
 
   <ItemGroup>

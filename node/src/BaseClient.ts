@@ -2,7 +2,7 @@ import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     StartSocketConnection,
     valueFromSplitPointer,
-} from "babushka-rs-internal";
+} from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
