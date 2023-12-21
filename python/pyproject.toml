@@ -2,6 +2,26 @@
 requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
 
+[project]
+name = "glide-for-redis"
+requires-python = ">=3.8"
+dependencies = [
+    "async-timeout>=4.0.2",
+    "typing-extensions>=4.8.0",
+    "google-api-python-client==2.85.0"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Topic :: Database",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
 [tool.isort]
 profile = "black"
 
@@ -11,19 +31,4 @@ max-line-length = 127
 extend-ignore = ['E203']
 
 [tool.black]
-target-version = ['py38', 'py39', 'py310', 'py311']
-
-[project.option-dependencies]
-test = [
-    "hypothesis",
-    "sympy"
-]
-
-[project]
-name = "babushka"
-requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-]
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']

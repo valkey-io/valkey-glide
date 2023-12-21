@@ -1,13 +1,13 @@
-use babushka::start_socket_listener;
+use glide_core::start_socket_listener;
 use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyDict, PyList};
 use pyo3::Python;
 
 use redis::Value;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
-    babushka::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+    glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 
 #[pyclass]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -29,7 +29,7 @@ impl Level {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
+fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add(
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
@@ -81,7 +81,13 @@ fn pybushka(_py: Python, m: &PyModule) -> PyResult<()> {
                 );
                 Ok(elements.into_py(py))
             }
-            Value::Map(_) => todo!(),
+            Value::Map(map) => {
+                let dict = PyDict::new(py);
+                for (key, value) in map {
+                    dict.set_item(redis_value_to_py(py, key)?, redis_value_to_py(py, value)?)?;
+                }
+                Ok(dict.into_py(py))
+            }
             Value::Attribute {
                 data: _,
                 attributes: _,

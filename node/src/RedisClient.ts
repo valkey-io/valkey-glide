@@ -81,7 +81,16 @@ export class RedisClient extends BaseClient {
         );
     }
 
-    public exec(transaction: Transaction): Promise<ReturnType[]> {
+    /** Execute a transaction by processing the queued commands.
+     *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+     *
+     * @param transaction - A Transaction object containing a list of commands to be executed.
+     * @returns A list of results corresponding to the execution of each command in the transaction.
+     *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
+     *      the list entry will be null.
+     *      If the transaction failed due to a WATCH command, `exec` will return `null`.
+     */
+    public exec(transaction: Transaction): Promise<ReturnType[] | null> {
         return this.createWritePromise(transaction.commands);
     }
 
@@ -174,10 +183,10 @@ export class RedisClient extends BaseClient {
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
-     * @returns A list of values corresponding to the configuration parameters.
+     * @returns A map of values corresponding to the configuration parameters.
      *
      */
-    public configGet(parameters: string[]): Promise<string[]> {
+    public configGet(parameters: string[]): Promise<Record<string, string>> {
         return this.createWritePromise(createConfigGet(parameters));
     }
 

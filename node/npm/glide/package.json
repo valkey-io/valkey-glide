@@ -1,0 +1,61 @@
+{
+    "type": "module",
+    "name": "${scope}${pkg_name}",
+    "version": "${package_version}",
+    "description": "An AWS-sponsored, open-source Redis client.",
+    "main": "build-ts/index.js",
+    "types": "build-ts/index.d.ts",
+    "scripts": {
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "clean": "rm -rf build-ts/",
+        "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/",
+        "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files"
+    },
+    "files": [
+        "/build-ts"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/aws/glide-for-redis.git"
+    },
+    "keywords": [
+        "redis",
+        "redisClient",
+        "client",
+        "AWS"
+    ],
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "bugs": {
+        "url": "https://github.com/aws/glide-for-redis/issues"
+    },
+    "homepage": "https://github.com/aws/glide-for-redis#readme",
+    "devDependencies": {
+        "@types/node": "^18.11.18",
+        "@typescript-eslint/eslint-plugin": "^5.48.0",
+        "@typescript-eslint/parser": "^5.48.0",
+        "eslint": "^8.31.0",
+        "typescript": "^4.9.4"
+    },
+    "optionalDependencies": {
+        "${scope}glide-for-redis-darwin-arm64": "^1.1.0",
+        "${scope}glide-for-redis-darwin-x64": "^1.1.0",
+        "${scope}glide-for-redis-linux-arm64": "^1.1.0",
+        "${scope}glide-for-redis-linux-x64": "^1.1.0"
+    },
+    "eslintConfig": {
+        "extends": [
+            "eslint:recommended",
+            "plugin:@typescript-eslint/recommended"
+        ],
+        "parser": "@typescript-eslint/parser",
+        "plugins": [
+            "@typescript-eslint"
+        ],
+        "ignorePatterns": [
+            "build-ts/*"
+        ],
+        "root": true
+    }
+}

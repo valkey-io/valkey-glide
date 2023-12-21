@@ -1,12 +1,13 @@
-# Babushka (Temporary Name)
-[The followig short description is place holder, copied from PRFAQ - should not be reviewed]
-Babushka is a Redis client. It’s free, open-sourced under a permissive license (Apache 2.0), sponsored by AWS and connects to any Redis datastore. Over the years, AWS has gained operational experience in managing ElastiCache for Redis and MemoryDB at a very large scale. We know that the client library is key for reliability, performance, and security. We brought this operational experience to Babushka, and we optimized it for open-source and managed Redis workloads running on AWS. Here are some examples: Babushka is configured by default with an exponential backoff retry strategy to prevent connection storms. To handle cluster topology changes better, Babushka proactively checks DNS endpoints validity, and auto-triggers DNS refreshes. Customers do not experience slowness originating from bad connections configuration, because Babushka uses a smart connection multiplexing algorithm. Babushka is built with a common core layer, written in Rust, which can be extended to support various programming languages. With this release, Babushka supports Python and TypeScript. Having a common core ensures consistency across all supported languages, and provides a unified client experience, which means similar behavior and functionality. 
+# GLIDE for Redis
+General Language Independent Driver for the Enterprise (GLIDE) for Redis, is an AWS-sponsored, open-source Redis client. GLIDE for Redis works with any Redis distribution that adheres to the Redis Serialization Protocol (RESP) specification, including open-source Redis, Amazon ElastiCache for Redis, and Amazon MemoryDB for Redis.
+Strategic, mission-critical Redis-based applications have requirements for security, optimized performance, minimal downtime, and observability.  GLIDE for Redis is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating Redis-compatible services used by hundreds of thousands of customers. To help ensure consistency in development and operations, GLIDE for Redis is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, GLIDE for Redis is available for Python and Javascript (Node.js), with support for Java actively under development.
 
 ## Supported Redis Versions
-Redis 6 and above
+GLIDE for Redis is API-compatible with open source Redis version 6 and 7.
 
 ## Current Status
-Babushka is currently a **beta release** and is recommended for testing purposes only. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/165/).
+We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders. 
+This preview release is recommended for testing purposes only. It is available in Python and Javascript (Node.js), with Java to follow. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/165/).
 
 
 ## Getting Started
@@ -15,12 +16,12 @@ Babushka is currently a **beta release** and is recommended for testing purposes
 -   [Python](./python/README.md)
 
 ## Getting Help
-If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/aws/babushka/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including: 
+If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/aws/glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including: 
 
 1. A clear and concise title
 2. Detailed description of the problem or question
 3. A reproducible test case or series of steps
-4. The Babushka version in use
+4. The GLIDE version in use
 5. Operating system
 6. Redis version
 7. Redis cluster information, cluster topology, number of shards, number of replicas, used data types

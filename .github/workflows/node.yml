@@ -4,7 +4,7 @@ on:
     push:
         branches: ["main"]
         paths:
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - node/**
             - utils/cluster_manager.py
@@ -13,7 +13,7 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
     pull_request:
         paths:
-            - babushka-core/src/**
+            - glide-core/src/**
             - submodules/**
             - node/**
             - utils/cluster_manager.py
@@ -45,11 +45,6 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install protoc
-              run: |
-                  sudo apt update
-                  sudo apt install protobuf-compiler
-
             - name: Use Node.js 16.x
               uses: actions/setup-node@v3
               with:
@@ -60,6 +55,7 @@ jobs:
               with:
                   os: "ubuntu-latest"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: test
               run: npm test
@@ -106,6 +102,7 @@ jobs:
                   os: "macos-latest"
                   named_os: "darwin"
                   target: "x86_64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"
@@ -140,6 +137,7 @@ jobs:
               with:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node

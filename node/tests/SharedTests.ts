@@ -4,88 +4,11 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ExpireOptions,
     InfoOptions,
-    ReturnType,
-    SetOptions,
+    RedisClient,
+    RedisClusterClient,
     parseInfoResponse,
 } from "../";
-import { ClusterResponse } from "../src/RedisClusterClient";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
-
-type BaseClient = {
-    set: (
-        key: string,
-        value: string,
-        options?: SetOptions
-    ) => Promise<string | "OK" | null>;
-    ping: (str?: string) => Promise<string>;
-    get: (key: string) => Promise<string | null>;
-    del: (keys: string[]) => Promise<number>;
-    clientGetName: () => Promise<ClusterResponse<string | null>>;
-    configRewrite: () => Promise<"OK">;
-    info(options?: InfoOptions[]): Promise<ClusterResponse<string>>;
-    configResetStat: () => Promise<"OK">;
-    mset: (keyValueMap: Record<string, string>) => Promise<"OK">;
-    mget: (keys: string[]) => Promise<(string | null)[]>;
-    incr: (key: string) => Promise<number>;
-    incrBy: (key: string, amount: number) => Promise<number>;
-    clientId: () => Promise<ClusterResponse<number>>;
-    decr: (key: string) => Promise<number>;
-    decrBy: (key: string, amount: number) => Promise<number>;
-    incrByFloat: (key: string, amount: number) => Promise<string>;
-    configGet: (parameters: string[]) => Promise<ClusterResponse<string[]>>;
-    configSet: (parameters: Record<string, string>) => Promise<"OK">;
-    hset: (
-        key: string,
-        fieldValueMap: Record<string, string>
-    ) => Promise<number>;
-    hget: (key: string, field: string) => Promise<string | null>;
-    hdel: (key: string, fields: string[]) => Promise<number>;
-    hmget: (key: string, fields: string[]) => Promise<(string | null)[]>;
-    hexists: (key: string, field: string) => Promise<number>;
-    hgetall: (key: string) => Promise<string[]>;
-    hincrBy: (key: string, field: string, amount: number) => Promise<number>;
-    hincrByFloat: (
-        key: string,
-        field: string,
-        amount: number
-    ) => Promise<string>;
-    lpush: (key: string, elements: string[]) => Promise<number>;
-    lpop: (key: string, count?: number) => Promise<string | string[] | null>;
-    lrange: (key: string, start: number, end: number) => Promise<string[]>;
-    llen: (key: string) => Promise<number>;
-    ltrim: (key: string, start: number, end: number) => Promise<"OK">;
-    lrem: (key: string, count: number, element: string) => Promise<number>;
-    rpush: (key: string, elements: string[]) => Promise<number>;
-    rpop: (key: string, count?: number) => Promise<string | string[] | null>;
-    sadd: (key: string, members: string[]) => Promise<number>;
-    srem: (key: string, members: string[]) => Promise<number>;
-    smembers: (key: string) => Promise<string[]>;
-    scard: (key: string) => Promise<number>;
-    exists: (keys: string[]) => Promise<number>;
-    unlink: (keys: string[]) => Promise<number>;
-    expire: (
-        key: string,
-        seconds: number,
-        option?: ExpireOptions
-    ) => Promise<number>;
-    expireAt: (
-        key: string,
-        unixSeconds: number,
-        option?: ExpireOptions
-    ) => Promise<number>;
-    pexpire: (
-        key: string,
-        milliseconds: number,
-        option?: ExpireOptions
-    ) => Promise<number>;
-    pexpireAt: (
-        key: string,
-        unixMilliseconds: number,
-        option?: ExpireOptions
-    ) => Promise<number>;
-    ttl: (key: string) => Promise<number>;
-    customCommand: (commandName: string, args: string[]) => Promise<ReturnType>;
-};
 
 async function getVersion(): Promise<[number, number, number]> {
     const versioString = await new Promise<string>((resolve, reject) => {
@@ -105,8 +28,13 @@ async function getVersion(): Promise<[number, number, number]> {
     return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
 }
 
+export type BaseClient = RedisClient | RedisClusterClient;
+
 export function runBaseTests<Context>(config: {
-    init: () => Promise<{ context: Context; client: BaseClient }>;
+    init: () => Promise<{
+        context: Context;
+        client: BaseClient;
+    }>;
     close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
 }) {
@@ -134,7 +62,7 @@ export function runBaseTests<Context>(config: {
 
                 const result = await client.customCommand("CLIENT", ["INFO"]);
 
-                expect(result).toContain("lib-name=BabushkaJS");
+                expect(result).toContain("lib-name=GlideJS");
                 expect(result).toContain("lib-ver=0.1.0");
             });
         },
@@ -513,17 +441,19 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
-                ])) as string[];
+                ])) as Record<string, string>;
                 expect(await client.configSet({ timeout: "1000" })).toEqual(
                     "OK"
                 );
                 const currTimeout = (await client.configGet([
                     "timeout",
-                ])) as string[];
-                expect(currTimeout).toEqual(["timeout", "1000"]);
+                ])) as Record<string, string>;
+                expect(currTimeout).toEqual({ timeout: "1000" });
                 /// Revert to the pervious configuration
                 expect(
-                    await client.configSet({ [prevTimeout[0]]: prevTimeout[1] })
+                    await client.configSet({
+                        timeout: prevTimeout["timeout"],
+                    })
                 ).toEqual("OK");
             });
         },
@@ -644,13 +574,11 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hgetall(key)).toEqual([
-                    field1,
-                    value,
-                    field2,
-                    value,
-                ]);
-                expect(await client.hgetall("nonExistingKey")).toEqual([]);
+                expect(await client.hgetall(key)).toEqual({
+                    [field1]: value,
+                    [field2]: value,
+                });
+                expect(await client.hgetall("nonExistingKey")).toEqual({});
             });
         },
         config.timeout

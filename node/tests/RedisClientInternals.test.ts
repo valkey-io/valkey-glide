@@ -1,6 +1,15 @@
 import { beforeAll, describe, expect, it } from "@jest/globals";
-import { MAX_REQUEST_ARGS_LEN, createLeakedValue } from "babushka-rs-internal";
 import fs from "fs";
+import {
+    MAX_REQUEST_ARGS_LEN,
+    createLeakedArray,
+    createLeakedAttribute,
+    createLeakedBigint,
+    createLeakedDouble,
+    createLeakedMap,
+    createLeakedString,
+} from "glide-rs";
+import Long from "long";
 import net from "net";
 import os from "os";
 import path from "path";
@@ -13,6 +22,7 @@ import {
     RedisClient,
     RedisClusterClient,
     RequestError,
+    ReturnType,
     Transaction,
 } from "../build-ts";
 import { RedisClientConfiguration } from "../build-ts/src/RedisClient";
@@ -45,25 +55,54 @@ enum ResponseType {
     OK,
 }
 
+function createLeakedValue(value: ReturnType): Long {
+    if (value == null) {
+        return new Long(0, 0);
+    }
+    let pair = [0, 0];
+    if (typeof value === "string") {
+        pair = createLeakedString(value);
+    } else if (value instanceof Array) {
+        pair = createLeakedArray(value as string[]);
+    } else if (typeof value === "object") {
+        if ("attributes" in value) {
+            pair = createLeakedAttribute(
+                value.value as string,
+                value.attributes as Record<string, string>
+            );
+        } else {
+            pair = createLeakedMap(value as Record<string, string>);
+        }
+    } else if (typeof value == "bigint") {
+        pair = createLeakedBigint(value);
+    } else if (typeof value == "number") {
+        pair = createLeakedDouble(value);
+    }
+
+    return new Long(pair[0], pair[1]);
+}
+
 function sendResponse(
     socket: net.Socket,
     responseType: ResponseType,
     callbackIndex: number,
-    message?: string,
-    requestErrorType?: response.RequestErrorType
+    response_data?: {
+        message?: string;
+        value?: ReturnType;
+        requestErrorType?: response.RequestErrorType;
+    }
 ) {
     const new_response = response.Response.create();
     new_response.callbackIdx = callbackIndex;
     if (responseType == ResponseType.Value) {
-        const pointer = createLeakedValue(message ?? "fake value");
-        const pointer_number = Number(pointer.toString());
-        new_response.respPointer = pointer_number;
+        const pointer = createLeakedValue(response_data?.value ?? "fake data");
+        new_response.respPointer = pointer;
     } else if (responseType == ResponseType.ClosingError) {
-        new_response.closingError = message;
+        new_response.closingError = response_data?.message;
     } else if (responseType == ResponseType.RequestError) {
         new_response.requestError = new response.RequestError({
-            type: requestErrorType,
-            message,
+            type: response_data?.requestErrorType,
+            message: response_data?.message,
         });
     } else if (responseType == ResponseType.Null) {
         // do nothing
@@ -207,28 +246,58 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should pass values received from socket", async () => {
-        await testWithResources(async (connection, socket) => {
-            const expected = "bar";
-            socket.once("data", (data) => {
-                const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
-                expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
-                );
-                expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1
-                );
+    describe("handling types", () => {
+        const test_receiving_value = async (expected: ReturnType) => {
+            await testWithResources(async (connection, socket) => {
+                socket.once("data", (data) => {
+                    const reader = Reader.create(data);
+                    const request = RedisRequest.decodeDelimited(reader);
+                    expect(request.singleCommand?.requestType).toEqual(
+                        RequestType.GetString
+                    );
+                    expect(
+                        request.singleCommand?.argsArray?.args?.length
+                    ).toEqual(1);
 
-                sendResponse(
-                    socket,
-                    ResponseType.Value,
-                    request.callbackIdx,
-                    expected
-                );
+                    sendResponse(
+                        socket,
+                        ResponseType.Value,
+                        request.callbackIdx,
+                        {
+                            value: expected,
+                        }
+                    );
+                });
+                const result = await connection.get("foo");
+                expect(result).toEqual(expected);
             });
-            const result = await connection.get("foo");
-            expect(result).toEqual(expected);
+        };
+
+        it("should pass strings received from socket", async () => {
+            await test_receiving_value("bar");
+        });
+
+        it("should pass maps received from socket", async () => {
+            await test_receiving_value({ foo: "bar", bar: "baz" });
+        });
+
+        it("should pass arrays received from socket", async () => {
+            await test_receiving_value(["foo", "bar", "baz"]);
+        });
+
+        it("should pass attributes received from socket", async () => {
+            await test_receiving_value({
+                value: "bar",
+                attributes: { foo: "baz" },
+            });
+        });
+
+        it("should pass bigints received from socket", async () => {
+            await test_receiving_value(BigInt("9007199254740991"));
+        });
+
+        it("should pass floats received from socket", async () => {
+            await test_receiving_value(0.75);
         });
     });
 
@@ -297,12 +366,9 @@ describe("SocketConnectionInternals", () => {
                     redis_request.SimpleRoutes.Random
                 );
 
-                sendResponse(
-                    socket,
-                    ResponseType.Value,
-                    request.callbackIdx,
-                    "# Server"
-                );
+                sendResponse(socket, ResponseType.Value, request.callbackIdx, {
+                    value: "# Server",
+                });
             });
             const transaction = new Transaction();
             transaction.info([InfoOptions.Server]);
@@ -346,7 +412,7 @@ describe("SocketConnectionInternals", () => {
                     socket,
                     ResponseType.RequestError,
                     request.callbackIdx,
-                    error
+                    { message: error }
                 );
             });
             const request = connection.get("foo");
@@ -371,7 +437,7 @@ describe("SocketConnectionInternals", () => {
                     socket,
                     ResponseType.ClosingError,
                     request.callbackIdx,
-                    error
+                    { message: error }
                 );
             });
             const request1 = connection.get("foo");
@@ -396,7 +462,7 @@ describe("SocketConnectionInternals", () => {
                     socket,
                     ResponseType.ClosingError,
                     Number.MAX_SAFE_INTEGER,
-                    error
+                    { message: error }
                 );
             });
             const request1 = connection.get("foo");

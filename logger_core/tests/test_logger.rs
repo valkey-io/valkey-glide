@@ -7,7 +7,7 @@ mod tests {
     use logger_core::{init, log_debug, log_trace};
     use rand::{distributions::Alphanumeric, Rng};
     use std::fs::{read_dir, read_to_string, remove_dir_all};
-    const FILE_DIRECTORY: &str = "babushka-logs";
+    const FILE_DIRECTORY: &str = "glide-logs";
 
     fn generate_random_string(length: usize) -> String {
         rand::thread_rng()

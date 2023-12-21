@@ -39,6 +39,10 @@ inputs:
         required: false
         type: string
         default: ""
+    github-token:
+        description: "GITHUB_TOKEN, GitHub App installation access token"
+        required: true
+        type: string
 
 env:
     CARGO_TERM_COLOR: always
@@ -51,13 +55,14 @@ runs:
           with:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
         - name: Create package.json file
           shell: bash
           working-directory: ./node
           run: |
               # set the package name
-              name="babushka"
+              name="glide-for-redis"
               # derive the OS and architecture from the inputs
               export node_os="${{ inputs.named_os }}"
               export node_arch="${{ inputs.arch }}"

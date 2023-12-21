@@ -5,23 +5,21 @@ import random
 import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Union
+from typing import Dict, List, TypeVar, Union
 
 import pytest
-from packaging import version
-from pybushka import ClosingError, RequestError, TimeoutError
-from pybushka.async_commands.cluster_commands import is_single_response
-from pybushka.async_commands.core import (
+from glide import ClosingError, RequestError, TimeoutError
+from glide.async_commands.core import (
     ConditionalSet,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
     InfoSection,
 )
-from pybushka.config import RedisCredentials
-from pybushka.constants import OK
-from pybushka.redis_client import RedisClient, RedisClusterClient, TRedisClient
-from pybushka.routes import (
+from glide.config import RedisCredentials
+from glide.constants import OK
+from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.routes import (
     AllNodes,
     AllPrimaries,
     RandomNode,
@@ -30,7 +28,34 @@ from pybushka.routes import (
     SlotKeyRoute,
     SlotType,
 )
+from packaging import version
 from tests.conftest import create_client
+
+T = TypeVar("T")
+
+
+def is_single_response(response: T, single_res: T) -> bool:
+    """
+    Recursively checks if a given response matches the type structure of single_res.
+
+    Args:
+        response (T): The response to check.
+        single_res (T): An object with the expected type structure as an example for the single node response.
+
+    Returns:
+        bool: True if response matches the structure of single_res, False otherwise.
+
+     Example:
+        >>> is_single_response(["value"], LIST_STR)
+        True
+        >>> is_single_response([["value"]], LIST_STR)
+        False
+    """
+    if isinstance(single_res, list) and isinstance(response, list):
+        return is_single_response(response[0], single_res[0])
+    elif isinstance(response, type(single_res)):
+        return True
+    return False
 
 
 def get_first_result(res: str | List[str] | List[List[str]] | Dict[str, str]) -> str:
@@ -84,7 +109,7 @@ class TestRedisClients:
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert type(info) is str
-        assert "lib-name=BabushkaPy" in info
+        assert "lib-name=GlidePy" in info
         assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -133,7 +158,7 @@ class TestRedisClients:
         credentials = RedisCredentials(password)
         # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
         #  init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-        # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+        # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
         primary_address = redis_client.config.addresses[0]
         try:
             await redis_client.custom_command(
@@ -196,7 +221,7 @@ class TestRedisClients:
 
             # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
             # init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-            # Remove it when https://github.com/aws/babushka/issues/633 is closed.
+            # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
             primary_address = redis_client.config.addresses[0]
             testuser_client = await create_client(
                 request,
@@ -440,12 +465,10 @@ class TestCommands:
     async def test_client_getname(self, redis_client: TRedisClient):
         assert await redis_client.client_getname() is None
         assert (
-            await redis_client.custom_command(
-                ["CLIENT", "SETNAME", "BabushkaConnection"]
-            )
+            await redis_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
             == OK
         )
-        assert await redis_client.client_getname() == "BabushkaConnection"
+        assert await redis_client.client_getname() == "GlideConnection"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_mset_mget(self, redis_client: TRedisClient):
@@ -944,12 +967,11 @@ class TestClusterRoutes:
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
-        assert isinstance(all_results, list)
+        assert isinstance(all_results, dict)
         assert len(all_results) == expected_num_of_results
         primary_count = 0
         replica_count = 0
-        for info_res in all_results:
-            info_res = info_res[1]
+        for _, info_res in all_results.items():
             assert "role:master" in info_res or "role:slave" in info_res
             if "role:master" in info_res:
                 primary_count += 1

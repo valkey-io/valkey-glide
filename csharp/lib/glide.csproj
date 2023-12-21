@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <RootNamespace>Glide</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="cargo build --release" />
+  </Target>
+
+  <ItemGroup Condition=" '$(OS)' == 'UNIX'">
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.so">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>%(FileName)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+</Project>

@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 
-from pybushka.config import NodeAddress
+from glide.config import NodeAddress
 
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.py")
 

@@ -11,9 +11,8 @@ import {
     BaseClientConfiguration,
     ClusterTransaction,
     InfoOptions,
-    RedisClusterClient
+    RedisClusterClient,
 } from "../";
-import { convertMultiNodeResponseToDict } from "../src/RedisClusterClient";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";
 
@@ -202,7 +201,7 @@ describe("RedisClusterClient", () => {
             transaction.configSet({ timeout: "1000" });
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(result).toEqual(["OK", ["timeout", "1000"]]);
+            expect(result).toEqual(["OK", { timeout: "1000" }]);
             client.dispose();
         },
         TIMEOUT
@@ -224,46 +223,27 @@ describe("RedisClusterClient", () => {
     );
 
     it(
-        "convertMultiNodeResponseToDict function test",
+        "can return null on WATCH transaction failures",
         async () => {
-            const param1 = "This is a string value";
-            const param2 = ["value", "value"];
-            const param3 = [
-                ["value1", ["value"]],
-                ["value2", ["value"]],
-            ] as [string, string[]][];
-            const result = { value1: ["value"], value2: ["value"] };
+            const client1 = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const client2 = await RedisClusterClient.createClient(
+                getOptions(cluster.ports())
+            );
+            const transaction = new ClusterTransaction();
+            transaction.get("key");
+            const result1 = await client1.customCommand("WATCH", ["key"]);
+            expect(result1).toEqual("OK");
 
-            const isString = (response: string | [string, string][]) =>
-                typeof response == "string";
+            const result2 = await client2.set("key", "foo");
+            expect(result2).toEqual("OK");
 
-            const isNull = (response: null | [string, null][]) =>
-                response == null;
+            const result3 = await client1.exec(transaction);
+            expect(result3).toBeNull();
 
-            const isStringArray = (
-                response: (string | [string, string[]])[]
-            ): boolean => {
-                return (
-                    Array.isArray(response) &&
-                    response.every((item) => typeof item === "string")
-                );
-            };
-
-            expect(
-                convertMultiNodeResponseToDict<string>(param1, isString)
-            ).toEqual(param1);
-
-            expect(
-                convertMultiNodeResponseToDict<string[]>(param2, isStringArray)
-            ).toEqual(param2);
-
-            expect(
-                convertMultiNodeResponseToDict<string[]>(param3, isStringArray)
-            ).toEqual(result);
-
-            expect(
-                convertMultiNodeResponseToDict<null>(null, isNull)
-            ).toBeNull();
+            client1.dispose();
+            client2.dispose();
         },
         TIMEOUT
     );

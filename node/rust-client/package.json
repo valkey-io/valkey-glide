@@ -1,5 +1,5 @@
 {
-  "name": "babushka-rs-internal",
+  "name": "glide-rs",
   "version": "0.1.0",
   "description": "Redis client",
   "main": "index.js",
@@ -7,10 +7,10 @@
   "files": [
     "index.d.ts",
     "index.js",
-    "babushka*.*.node"
+    "glide*.*.node"
   ],
   "napi": {
-    "name": "babushka-rs-internal",
+    "name": "glide-rs",
     "triples": {
       "defaults": true,
       "additional": [
@@ -34,9 +34,9 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "npm install && napi build --platform --pipe \"prettier -w\" $npm_config_build_flags",
+    "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
     "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
-    "build:benchmark": "npm install && napi build --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
+    "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
     "format": "run-p format:prettier format:rs",
     "format:prettier": "prettier . -w",
     "format:rs": "cargo fmt",

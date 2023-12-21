@@ -5,13 +5,13 @@ on:
         branches: ["main"]
         paths:
             - csharp/**
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - .github/workflows/csharp.yml
     pull_request:
         paths:
             - csharp/**
-            - babushka-core/src/**
+            - glide-core/src/**
             - submodules/**
             - .github/workflows/csharp.yml
 
@@ -39,10 +39,10 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install protoc
-              run: |
-                  sudo apt update
-                  sudo apt install protobuf-compiler
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v2.1.0
+              with:
+                  version: "25.1"
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v3
