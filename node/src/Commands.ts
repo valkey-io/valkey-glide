@@ -78,25 +78,25 @@ export type SetOptions = {
      * Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
-    | {
-        type: /**
+        | {
+              type: /**
                * Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
                */
-        | "seconds"
-        /**
-         * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-         */
-        | "milliseconds"
-        /**
-         * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
-         */
-        | "unixSeconds"
-        /**
-         * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
-         */
-        | "unixMilliseconds";
-        count: number;
-    };
+              | "seconds"
+                  /**
+                   * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+                   */
+                  | "milliseconds"
+                  /**
+                   * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+                   */
+                  | "unixSeconds"
+                  /**
+                   * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+                   */
+                  | "unixMilliseconds";
+              count: number;
+          };
 };
 
 /**

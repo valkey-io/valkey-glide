@@ -290,15 +290,15 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
-                callbackIdx,
-                transaction: redis_request.Transaction.create({
-                    commands: command,
-                }),
-            })
+                  callbackIdx,
+                  transaction: redis_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
             : redis_request.RedisRequest.create({
-                callbackIdx,
-                singleCommand: command,
-            });
+                  callbackIdx,
+                  singleCommand: command,
+              });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -875,11 +875,11 @@ export class BaseClient {
             : undefined;
         const authenticationInfo =
             options.credentials !== undefined &&
-                "password" in options.credentials
+            "password" in options.credentials
                 ? {
-                    password: options.credentials.password,
-                    username: options.credentials.username,
-                }
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
                 : undefined;
         return {
             useResp3: true,
