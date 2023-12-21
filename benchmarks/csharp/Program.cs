@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using glide;
+using Glide;
 using CommandLine;
 using LinqStatistics;
 using StackExchange.Redis;

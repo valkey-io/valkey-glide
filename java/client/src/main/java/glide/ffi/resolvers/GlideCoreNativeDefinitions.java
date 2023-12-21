@@ -1,12 +1,12 @@
-package babushka.ffi.resolvers;
+package glide.ffi.resolvers;
 
-public class BabushkaCoreNativeDefinitions {
+public class GlideCoreNativeDefinitions {
   public static native String startSocketListenerExternal() throws Exception;
 
   public static native Object valueFromPointer(long pointer);
 
   static {
-    System.loadLibrary("javababushka");
+    System.loadLibrary("glide-rs");
   }
 
   /**

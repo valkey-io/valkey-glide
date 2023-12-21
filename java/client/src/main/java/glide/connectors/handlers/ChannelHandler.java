@@ -1,6 +1,6 @@
-package babushka.connectors.handlers;
+package glide.connectors.handlers;
 
-import babushka.connectors.resources.Platform;
+import glide.connectors.resources.Platform;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -10,14 +10,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
-
 /**
  * Class responsible for handling calls to/from a netty.io {@link Channel}.<br>
  * Uses a {@link CallbackDispatcher} to record callbacks of every request sent.
  */
 public class ChannelHandler {
 
-  private static final String THREAD_POOL_NAME = "babushka-channel";
+  private static final String THREAD_POOL_NAME = "glide-channel";
 
   private final Channel channel;
   private final CallbackDispatcher callbackDispatcher;
