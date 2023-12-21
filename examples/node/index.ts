@@ -1,4 +1,4 @@
-import { Logger, RedisClient, RedisClusterClient } from "babushka-rs";
+import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
 
 async function sendPingToNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
@@ -48,7 +48,7 @@ async function sendPingToRandomNodeInCluster() {
 }
 
 function setFileLogger() {
-    Logger.setLoggerConfig("warn", "babushka.log");
+    Logger.setLoggerConfig("warn", "glide.log");
 }
 
 function setConsoleLogger() {

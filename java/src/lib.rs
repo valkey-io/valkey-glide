@@ -1,4 +1,4 @@
-use babushka::start_socket_listener;
+use glide_core::start_socket_listener;
 
 use jni::objects::{JClass, JObject, JThrowable};
 use jni::sys::jlong;
@@ -42,7 +42,7 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_babushka_ffi_resolvers_BabushkaCoreNativeDefinitions_valueFromPointer<
+pub extern "system" fn Java_glide_ffi_resolvers_GlideCoreNativeDefinitions_valueFromPointer<
     'local,
 >(
     env: JNIEnv<'local>,
@@ -54,7 +54,7 @@ pub extern "system" fn Java_babushka_ffi_resolvers_BabushkaCoreNativeDefinitions
 }
 
 #[no_mangle]
-pub extern "system" fn Java_babushka_ffi_resolvers_BabushkaCoreNativeDefinitions_startSocketListenerExternal<
+pub extern "system" fn Java_glide_ffi_resolvers_GlideCoreNativeDefinitions_startSocketListenerExternal<
     'local,
 >(
     env: JNIEnv<'local>,

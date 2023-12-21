@@ -11,7 +11,7 @@
     "dependencies": {
         "@types/command-line-args": "^5.2.0",
         "@types/stats-lite": "^2.2.0",
-        "babushka-rs": "file:../../node",
+        "glide-for-redis": "file:../../node",
         "command-line-args": "^5.2.1",
         "redis": "^4.6.2",
         "stats-lite": "^2.2.0",

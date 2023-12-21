@@ -1,9 +1,9 @@
-use babushka::{
+use clap::Parser;
+use futures::{self, future::join_all, stream, StreamExt};
+use glide_core::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
-use clap::Parser;
-use futures::{self, future::join_all, stream, StreamExt};
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 use std::{
@@ -123,7 +123,7 @@ async fn perform_benchmark(args: Args) {
             acc
         });
         let mut results_json = HashMap::new();
-        results_json.insert("client".to_string(), Value::String("babushka".to_string()));
+        results_json.insert("client".to_string(), Value::String("glide".to_string()));
         results_json.insert(
             "num_of_tasks".to_string(),
             Value::Number((*concurrent_tasks_count).into()),
@@ -218,7 +218,7 @@ async fn get_connection(args: &Args) -> Client {
     connection_request.request_timeout = 2000;
     connection_request.cluster_mode_enabled = args.cluster_mode_enabled;
 
-    babushka::client::Client::new(connection_request)
+    glide_core::client::Client::new(connection_request)
         .await
         .unwrap()
 }

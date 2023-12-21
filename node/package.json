@@ -1,21 +1,21 @@
 {
-    "name": "babushka",
+    "name": "glide-for-redis",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/aws/babushka.git"
+        "url": "git+https://github.com/aws/glide-for-redis.git"
     },
-    "homepage": "https://github.com/aws/babushka#readme",
+    "homepage": "https://github.com/aws/glide-for-redis#readme",
     "dependencies": {
-        "babushka-rs-internal": "file:rust-client",
+        "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
         "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
-        "babushka-rs-internal"
+        "glide-rs"
     ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
@@ -26,7 +26,7 @@
         "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
         "build-external": "rm -rf build-ts && npx tsc",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
-        "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../babushka-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
+        "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "jest --verbose --runInBand",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",

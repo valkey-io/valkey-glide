@@ -2,7 +2,7 @@
 
 ## System Requirements
 
-The beta release of Babushka was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
+The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## Python supported version
 Python 3.8 or higher.
@@ -11,17 +11,17 @@ Python 3.8 or higher.
 
 ### Installing via Package Manager (pip)
 
-To install babushka using `pip`, follow these steps:
+To install GLIDE for Redis using `pip`, follow these steps:
 
 1. Open your terminal.
 2. Execute the command below:
    ```bash
-   $ pip install babushka
+   $ pip install glide-for-redis
    ```
 3. After installation, confirm the client is accessible by running:
     ```bash
     $ python3
-    >>> import babushka
+    >>> import glide
     ```
 
 ### Build from source
@@ -70,8 +70,8 @@ Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/babushka.git
-    cd babushka
+    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    cd glide-for-redis
     ```
 2. Initialize git submodule:
     ```bash
@@ -79,8 +79,8 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 3. Generate protobuf files:
     ```bash
-    BABUSHKA_ROOT_FOLDER_PATH=.
-    protoc -Iprotobuf=${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/ --python_out=${BABUSHKA_ROOT_FOLDER_PATH}/python/python/pybushka ${BABUSHKA_ROOT_FOLDER_PATH}/babushka-core/src/protobuf/*.proto
+    GLIDE_ROOT_FOLDER_PATH=.
+    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
     ```
 4. Create a virtual environment:
     ```bash
@@ -113,7 +113,7 @@ Before starting this step, make sure you've installed all software requirments.
 #### Cluster Redis:
 
 ```python:
->>> from pybushka import (
+>>> from glide import (
 ...     NodeAddress,
 ...     ClusterClientConfiguration,
 ...     RedisClusterClient,
@@ -132,7 +132,7 @@ Before starting this step, make sure you've installed all software requirments.
 #### Standalone Redis:
 
 ```python:
->>> from pybushka import (
+>>> from glide import (
 ...     NodeAddress,
 ...     RedisClientConfiguration,
 ...     RedisClient,

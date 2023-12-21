@@ -1,7 +1,7 @@
 import {
     MAX_REQUEST_ARGS_LEN,
     createLeakedStringVec,
-} from "babushka-rs-internal";
+} from "glide-rs";
 import Long from "long";
 import { redis_request } from "./ProtobufMessage";
 import RequestType = redis_request.RequestType;

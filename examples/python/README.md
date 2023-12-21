@@ -11,7 +11,7 @@ Installation for ubuntu:
 `sudo apt install -y gcc pkg-config protobuf-compiler openssl libssl-dev python3 python3-venv`
 
 ## Build
-To build Babushka's Python client, run (on unix based systems):
+To build GLIDE's Python client, run (on unix based systems):
 ```
 cd examples/python
 sudo chmod +x build_client.sh
@@ -19,7 +19,7 @@ sudo chmod +x build_client.sh
 ```
 
 ## Run
-To run the example or any other Python application utilizing Babushka, activate the virtual environment that created by the 'Build' stage:
+To run the example or any other Python application utilizing GLIDE for Redis, activate the virtual environment that created by the 'Build' stage:
 ```
 cd examples/python
 source .env/bin/activate

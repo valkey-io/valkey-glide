@@ -10,7 +10,7 @@ to develop this Java wrapper.
 The Java client contains the following parts:
 
 1. A Java client (lib folder): wrapper to rust client.
-2. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of Babushka and other Java clients.
+2. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Redis and other Java clients.
 
 ## Installation and Setup
 
@@ -57,8 +57,8 @@ Before starting this step, make sure you've installed all software requirements.
 1. Clone the repository:
 ```bash
 VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-git clone --branch ${VERSION} https://github.com/aws/babushka.git
-cd babushka
+git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+cd glide-for-redis
 ```
 2. Initialize git submodule:
 ```bash
@@ -91,8 +91,8 @@ Other useful gradle developer commands:
 ### Standalone Redis:
 
 ```java
-import javababushka.Client;
-import javababushka.Client.SingleResponse;
+import glide.Client;
+import glide.Client.SingleResponse;
 
 Client client = new Client();
 
@@ -118,7 +118,7 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 The following arguments are accepted: 
 * `resultsFile`: the results output file
 * `concurrentTasks`: Number of concurrent tasks
-* `clients`: one of: all|jedis|lettuce|babushka
+* `clients`: one of: all|jedis|lettuce|glide
 * `clientCount`: Client count
 * `host`: redis server host url
 * `port`: redis server port number

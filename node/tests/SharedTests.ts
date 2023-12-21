@@ -245,7 +245,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     Number(
                         parseInfoResponse(getFirstResult(OldResult).toString())[
-                        "total_commands_processed"
+                            "total_commands_processed"
                         ]
                     )
                 ).toBeGreaterThan(1);
@@ -253,7 +253,7 @@ export function runBaseTests<Context>(config: {
                 const result = await client.info([InfoOptions.Stats]);
                 expect(
                     parseInfoResponse(getFirstResult(result).toString())[
-                    "total_commands_processed"
+                        "total_commands_processed"
                     ]
                 ).toEqual("1");
             });

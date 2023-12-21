@@ -1,5 +1,5 @@
-use babushka::connection_request;
-use babushka::{client::Client as BabushkaClient, connection_request::NodeAddress};
+use glide_core::connection_request;
+use glide_core::{client::Client as GlideClient, connection_request::NodeAddress};
 use redis::{Cmd, FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
@@ -17,7 +17,7 @@ pub enum Level {
 }
 
 pub struct Client {
-    client: BabushkaClient,
+    client: GlideClient,
     success_callback: unsafe extern "C" fn(usize, *const c_char) -> (),
     failure_callback: unsafe extern "C" fn(usize) -> (), // TODO - add specific error codes
     runtime: Runtime,
@@ -56,10 +56,10 @@ fn create_client_internal(
     let request = create_connection_request(host_string, port, use_tls);
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .thread_name("Babushka C# thread")
+        .thread_name("GLIDE for Redis C# thread")
         .build()?;
     let _runtime_handle = runtime.enter();
-    let client = runtime.block_on(BabushkaClient::new(request)).unwrap(); // TODO - handle errors.
+    let client = runtime.block_on(GlideClient::new(request)).unwrap(); // TODO - handle errors.
     Ok(Client {
         client,
         success_callback,

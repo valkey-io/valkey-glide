@@ -4,13 +4,13 @@ on:
     push:
         branches: ["main"]
         paths:
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - "java/**"
             - ".github/workflows/java.yml"
     pull_request:
         paths:
-            - babushka-core/**
+            - glide-core/**
             - submodules/**
             - "java/**"
             - ".github/workflows/java.yml"
@@ -73,16 +73,16 @@ jobs:
             # - uses: ./.github/workflows/test-benchmark
             #   with:
             #       language-flag: -java
-            
+
     lint-rust:
         timeout-minutes: 15
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - uses: ./.github/workflows/lint-rust
               with:
-                cargo-toml-folder: ./java
-              name: lint java rust                      
+                  cargo-toml-folder: ./java
+              name: lint java rust

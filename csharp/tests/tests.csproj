@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\lib\babushka.csproj" />
+    <ProjectReference Include="..\lib\glide.csproj" />
   </ItemGroup>
 
 </Project>

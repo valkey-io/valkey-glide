@@ -19,14 +19,14 @@ npm i -g npm@8
 ```
 
 ## Build
-To build Babushka's Node client, run (on unix based systems):
+To build GLIDE's Node client, run (on unix based systems):
 ```
-cd babushka/node
+cd glide-for-redis/node
 git submodule update --init --recursive
 npm install
 rm -rf build-ts
 npm run build:release
-cd babushka/examples/node
+cd glide-for-redis/examples/node
 npm install
 npx tsc
 ```
@@ -34,6 +34,6 @@ npx tsc
 ## Run
 To run the example:
 ```
-cd babushka/examples/node
+cd glide-for-redis/examples/node
 node index.js
 ```
