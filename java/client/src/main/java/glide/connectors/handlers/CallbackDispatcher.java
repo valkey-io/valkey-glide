@@ -4,6 +4,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
 import response.ResponseOuterClass.Response;
@@ -14,6 +15,9 @@ public class CallbackDispatcher {
 
   /** Client connection status needed to distinguish connection request. */
   private final AtomicBoolean connectionStatus;
+
+  /** Unique request ID (callback ID). Thread-safe and overflow-safe. */
+  private final AtomicInteger requestId = new AtomicInteger(0);
 
   /** Reserved callback ID for connection request. */
   private final Integer CONNECTION_PROMISE_ID = 0;
@@ -44,13 +48,14 @@ public class CallbackDispatcher {
   public Pair<Integer, CompletableFuture<Response>> registerRequest() {
     var future = new CompletableFuture<Response>();
     Integer callbackId = connectionStatus.get() ? freeRequestIds.poll() : CONNECTION_PROMISE_ID;
-    synchronized (responses) {
-      if (callbackId == null) {
-        long size = responses.mappingCount();
-        callbackId = (int) (size < Integer.MAX_VALUE ? size : -(size - Integer.MAX_VALUE));
+    if (callbackId == null) {
+      callbackId = requestId.incrementAndGet();
+      if (callbackId.equals(CONNECTION_PROMISE_ID)) {
+        throw new RuntimeException(
+            "Can't submit a new request, too many requests are pending already");
       }
-      responses.put(callbackId, future);
     }
+    responses.put(callbackId, future);
     return Pair.of(callbackId, future);
   }
 
@@ -74,9 +79,7 @@ public class CallbackDispatcher {
       // TODO: log an error.
       // probably a response was received after shutdown or `registerRequest` call was missing
     }
-    synchronized (responses) {
-      responses.remove(callbackId);
-    }
+    responses.remove(callbackId);
     freeRequestIds.add(callbackId);
   }
 
