@@ -2,7 +2,7 @@ package glide.ffi.resolvers;
 
 public class SocketListenerResolver {
 
-  /** Make an FFI call to Babushka to open a UDS socket to connect to. */
+  /** Make an FFI call to Glide to open a UDS socket to connect to. */
   private static native String startSocketListener() throws Exception;
 
   static {

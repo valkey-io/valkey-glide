@@ -36,7 +36,7 @@ public class ConnectionManager {
     return channel.connect(request).thenApplyAsync(this::checkGlideRsResponse);
   }
 
-  /** Check a response received from Babushka. */
+  /** Check a response received from Glide. */
   private boolean checkGlideRsResponse(Response response) {
     // TODO do we need to check callback value? It could be -1 or 0
     if (response.hasRequestError()) {

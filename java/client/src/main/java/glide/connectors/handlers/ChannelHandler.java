@@ -12,10 +12,13 @@ import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 /**
- * Class responsible for manipulations with Netty's {@link Channel}.<br>
+ * Class responsible for handling calls to/from a netty.io {@link Channel}.<br>
  * Uses a {@link CallbackDispatcher} to record callbacks of every request sent.
  */
 public class ChannelHandler {
+
+  private static final String THREAD_POOL_NAME = "glide-channel";
+
   private final Channel channel;
   private final CallbackDispatcher callbackDispatcher;
 
@@ -24,7 +27,7 @@ public class ChannelHandler {
     channel =
         new Bootstrap()
             // TODO let user specify the thread pool or pool size as an option
-            .group(ThreadPoolAllocator.createNettyThreadPool("babushka-channel", Optional.empty()))
+            .group(ThreadPoolAllocator.createNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
             .connect(new DomainSocketAddress(socketPath))

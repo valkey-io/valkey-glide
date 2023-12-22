@@ -12,7 +12,7 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
 
   private final CallbackDispatcher callbackDispatcher;
 
-  /** Submit responses from babushka to an instance {@link CallbackDispatcher} to handle them. */
+  /** Submit responses from glide to an instance {@link CallbackDispatcher} to handle them. */
   @Override
   public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg) {
     callbackDispatcher.completeRequest((Response) msg);
