@@ -49,7 +49,8 @@ public class CallbackDispatcher {
    */
   public void completeRequest(Response response) {
     int callbackId = response.getCallbackIdx();
-    if (callbackId == 0) {
+    // Should be fixed by #717 https://github.com/aws/babushka/pull/717
+    if (callbackId == 0 || callbackId == -1) {
       connectionPromise.completeAsync(() -> response);
     } else {
       responses.get(callbackId).completeAsync(() -> response);

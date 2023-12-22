@@ -23,7 +23,6 @@ import io.netty.handler.codec.redis.SimpleStringRedisMessage;
 import io.netty.util.CharsetUtil;
 import java.net.InetSocketAddress;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.Setter;
@@ -120,62 +119,55 @@ public class RedisServerMock {
   @Setter private static boolean debugLogging = false;
 
   private RedisServerMock() {
-    try {
-      channel =
-          new ServerBootstrap()
-              .group(group = Platform.createNettyThreadPool("RedisMock", Optional.empty()))
-              .channel(Platform.getServerTcpNettyChannelType())
-              .childHandler(
-                  new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(SocketChannel ch) throws Exception {
-                      ch.pipeline()
-                          // https://github.com/netty/netty/blob/4.1/example/src/main/java/io/netty/example/redis/RedisClient.java
-                          .addLast(new RedisDecoder())
-                          .addLast(new RedisBulkStringAggregator())
-                          .addLast(new RedisArrayAggregator())
-                          .addLast(new RedisEncoder())
-                          .addLast(
-                              new ChannelInboundHandlerAdapter() {
-                                @Override
-                                public void channelRead(ChannelHandlerContext ctx, Object msg)
-                                    throws Exception {
-                                  RedisMessage redisMessage = (RedisMessage) msg;
-                                  var str = RedisMessageToString(redisMessage);
+    channel =
+        new ServerBootstrap()
+            .group(group = Platform.createNettyThreadPool("RedisMock", Optional.empty()))
+            .channel(Platform.getServerTcpNettyChannelType())
+            .childHandler(
+                new ChannelInitializer<SocketChannel>() {
+                  @Override
+                  protected void initChannel(SocketChannel ch) throws Exception {
+                    ch.pipeline()
+                        // https://github.com/netty/netty/blob/4.1/example/src/main/java/io/netty/example/redis/RedisClient.java
+                        .addLast(new RedisDecoder())
+                        .addLast(new RedisBulkStringAggregator())
+                        .addLast(new RedisArrayAggregator())
+                        .addLast(new RedisEncoder())
+                        .addLast(
+                            new ChannelInboundHandlerAdapter() {
+                              @Override
+                              public void channelRead(ChannelHandlerContext ctx, Object msg)
+                                  throws Exception {
+                                RedisMessage redisMessage = (RedisMessage) msg;
+                                var str = RedisMessageToString(redisMessage);
+                                if (debugLogging) {
+                                  System.out.printf("-- Received%n  %s%n", str);
+                                }
+                                var response = messageProcessor.reply0(str);
+                                if (response != null) {
                                   if (debugLogging) {
-                                    System.out.printf("-- Received%n  %s%n", str);
+                                    System.out.printf(
+                                        "-- Replying with%n  %s%n", RedisMessageToString(response));
                                   }
-                                  var response = messageProcessor.reply0(str);
-                                  if (response != null) {
-                                    if (debugLogging) {
-                                      System.out.printf(
-                                          "-- Replying with%n  %s%n",
-                                          RedisMessageToString(response));
-                                    }
-                                    ctx.writeAndFlush(response);
-                                  } else if (debugLogging) {
-                                    System.out.printf("-- Ignoring%n");
-                                  }
+                                  ctx.writeAndFlush(response);
+                                } else if (debugLogging) {
+                                  System.out.printf("-- Ignoring%n");
                                 }
+                              }
 
-                                @Override
-                                public void exceptionCaught(
-                                    ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                                  cause.printStackTrace();
-                                  ctx.close();
-                                  failed.setPlain(true);
-                                }
-                              });
-                    }
-                  })
-              .bind(new InetSocketAddress(PORT))
-              // .sync()
-              .channel();
-    } catch (Exception e) {
-      System.err.printf(
-          "Failed to create a channel %s: %s%n", e.getClass().getSimpleName(), e.getMessage());
-      e.printStackTrace(System.err);
-    }
+                              @Override
+                              public void exceptionCaught(
+                                  ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                                cause.printStackTrace();
+                                ctx.close();
+                                failed.setPlain(true);
+                              }
+                            });
+                  }
+                })
+            .bind(new InetSocketAddress(PORT))
+            .syncUninterruptibly()
+            .channel();
   }
 
   public static void start(ServerMock messageProcessor) {

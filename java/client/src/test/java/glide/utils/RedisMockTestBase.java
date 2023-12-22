@@ -23,6 +23,7 @@ public class RedisMockTestBase {
     assert started
         : "You missed to call `startRustCoreLibMock` in a `@BeforeAll` method of your test class"
             + " inherited from `RedisMockTestBase`.";
+    RedisServerMock.setDebugLogging(false);
   }
 
   @AfterEach

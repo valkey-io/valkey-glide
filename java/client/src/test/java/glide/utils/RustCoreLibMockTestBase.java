@@ -16,7 +16,7 @@ public class RustCoreLibMockTestBase {
   protected static String socketPath = null;
 
   @SneakyThrows
-  public static void startRustCoreLibMock(RustCoreMock.BabushkaMock rustCoreLibMock) {
+  public static void startRustCoreLibMock(RustCoreMock.GlideMock rustCoreLibMock) {
     assert socketPath == null
         : "Previous `RustCoreMock` wasn't stopped. Ensure that your test class inherits"
             + " `RustCoreLibMockTestBase`.";

@@ -1,7 +1,7 @@
 package glide.utils;
 
-import glide.connectors.resources.Platform;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
+import glide.connectors.resources.Platform;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -16,15 +16,15 @@ import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 import java.nio.file.Files;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.SneakyThrows;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 public class RustCoreMock {
 
-  public abstract static class BabushkaMock {
+  public abstract static class GlideMock {
     /** Return `null` to do not reply. */
     public abstract Response connection(ConnectionRequest request);
 
@@ -43,10 +43,10 @@ public class RustCoreMock {
     }
   }
 
-  public abstract static class BabushkaMockConnectAll extends BabushkaMock {
+  public abstract static class GlideMockConnectAll extends GlideMock {
     @Override
     public Response connection(ConnectionRequest request) {
-      return OK().build();
+      return Response.newBuilder().build();
     }
   }
 
@@ -59,10 +59,10 @@ public class RustCoreMock {
 
   private static RustCoreMock instance;
 
-  private BabushkaMock messageProcessor;
+  private GlideMock messageProcessor;
 
-  /** Update {@link BabushkaMock} into a running {@link RustCoreMock}. */
-  public static void updateBabushkaMock(BabushkaMock newMock) {
+  /** Update {@link GlideMock} into a running {@link RustCoreMock}. */
+  public static void updateGlideMock(GlideMock newMock) {
     instance.messageProcessor = newMock;
   }
 
@@ -73,73 +73,67 @@ public class RustCoreMock {
     return instance.failed.compareAndSet(true, false);
   }
 
+  @SneakyThrows
   private RustCoreMock() {
-    try {
-      socketPath = Files.createTempFile("BabushkaCoreMock", null).toString();
-      channel =
-          new ServerBootstrap()
-              .group(
-                  group = Platform.createNettyThreadPool("BabushkaCoreMock", Optional.empty()))
-              .channel(Platform.getServerUdsNettyChannelType())
-              .childHandler(
-                  new ChannelInitializer<DomainSocketChannel>() {
+    socketPath = Files.createTempFile("GlideCoreMock", null).toString();
+    channel =
+        new ServerBootstrap()
+            .group(group = Platform.createNettyThreadPool("GlideCoreMock", Optional.empty()))
+            .channel(Platform.getServerUdsNettyChannelType())
+            .childHandler(
+                new ChannelInitializer<DomainSocketChannel>() {
 
-                    @Override
-                    protected void initChannel(DomainSocketChannel ch) throws Exception {
-                      ch.pipeline()
-                          // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
-                          .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
-                          .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
-                          .addLast("protobufEncoder", new ProtobufEncoder())
-                          .addLast(
-                              new ChannelInboundHandlerAdapter() {
+                  @Override
+                  protected void initChannel(DomainSocketChannel ch) throws Exception {
+                    ch.pipeline()
+                        // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
+                        .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
+                        .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
+                        .addLast("protobufEncoder", new ProtobufEncoder())
+                        .addLast(
+                            new ChannelInboundHandlerAdapter() {
 
-                                // This works with only one connected client.
-                                // TODO Rework with `channelActive` override.
-                                private AtomicBoolean anybodyConnected = new AtomicBoolean(false);
+                              // This works with only one connected client.
+                              // TODO Rework with `channelActive` override.
+                              private AtomicBoolean anybodyConnected = new AtomicBoolean(false);
 
-                                @Override
-                                public void channelRead(ChannelHandlerContext ctx, Object msg)
-                                    throws Exception {
-                                  var buf = (ByteBuf) msg;
-                                  var bytes = new byte[buf.readableBytes()];
-                                  buf.readBytes(bytes);
-                                  buf.release();
-                                  Response response = null;
-                                  if (!anybodyConnected.get()) {
-                                    var connection = ConnectionRequest.parseFrom(bytes);
-                                    response = messageProcessor.connection(connection);
-                                    anybodyConnected.setPlain(true);
-                                  } else {
-                                    var request = RedisRequest.parseFrom(bytes);
-                                    response = messageProcessor.redisRequestWithCallbackId(request);
-                                  }
-                                  if (response != null) {
-                                    ctx.writeAndFlush(response);
-                                  }
+                              @Override
+                              public void channelRead(ChannelHandlerContext ctx, Object msg)
+                                  throws Exception {
+                                var buf = (ByteBuf) msg;
+                                var bytes = new byte[buf.readableBytes()];
+                                buf.readBytes(bytes);
+                                buf.release();
+                                Response response = null;
+                                if (!anybodyConnected.get()) {
+                                  var connection = ConnectionRequest.parseFrom(bytes);
+                                  response = messageProcessor.connection(connection);
+                                  anybodyConnected.setPlain(true);
+                                } else {
+                                  var request = RedisRequest.parseFrom(bytes);
+                                  response = messageProcessor.redisRequestWithCallbackId(request);
                                 }
-
-                                @Override
-                                public void exceptionCaught(
-                                    ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                                  cause.printStackTrace();
-                                  ctx.close();
-                                  failed.setPlain(true);
+                                if (response != null) {
+                                  ctx.writeAndFlush(response);
                                 }
-                              });
-                    }
-                  })
-              .bind(new DomainSocketAddress(socketPath))
-              // .sync()
-              .channel();
-    } catch (Exception e) {
-      System.err.printf(
-          "Failed to create a channel %s: %s%n", e.getClass().getSimpleName(), e.getMessage());
-      e.printStackTrace(System.err);
-    }
+                              }
+
+                              @Override
+                              public void exceptionCaught(
+                                  ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                                cause.printStackTrace();
+                                ctx.close();
+                                failed.setPlain(true);
+                              }
+                            });
+                  }
+                })
+            .bind(new DomainSocketAddress(socketPath))
+            .syncUninterruptibly()
+            .channel();
   }
 
-  public static String start(BabushkaMock messageProcessor) {
+  public static String start(GlideMock messageProcessor) {
     if (instance != null) {
       stop();
     }

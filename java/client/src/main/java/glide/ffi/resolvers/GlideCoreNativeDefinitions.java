@@ -6,7 +6,7 @@ public class GlideCoreNativeDefinitions {
   public static native Object valueFromPointer(long pointer);
 
   static {
-    System.loadLibrary("glide-rs");
+    System.loadLibrary("glide_rs");
   }
 
   /**
