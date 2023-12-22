@@ -82,8 +82,8 @@ $ ./gradlew :client:test
 
 Other useful gradle developer commands:
 * `./gradlew :client:test` to run client unit tests
-* `./gradlew :client:spotlessCheck` to check for codestyle issues
-* `./gradlew :client:spotlessApply` to apply codestyle recommendations
+* `./gradlew spotlessCheck` to check for codestyle issues
+* `./gradlew spotlessApply` to apply codestyle recommendations
 * `./gradlew :benchmarks:run` to run performance benchmarks
 
 ## Basic Examples
