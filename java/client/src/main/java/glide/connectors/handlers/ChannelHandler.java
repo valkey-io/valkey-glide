@@ -36,7 +36,13 @@ public class ChannelHandler {
     this.callbackDispatcher = callbackDispatcher;
   }
 
-  /** Write a protobuf message to the socket. */
+  /**
+   * Complete a protobuf message and write it to the channel (to UDS).
+   *
+   * @param request Incomplete request, function completes it by setting callback ID
+   * @param flush True to flush immediately
+   * @return A response promise
+   */
   public CompletableFuture<Response> write(RedisRequest.Builder request, boolean flush) {
     var commandId = callbackDispatcher.registerRequest();
     request.setCallbackIdx(commandId.getKey());
@@ -49,7 +55,12 @@ public class ChannelHandler {
     return commandId.getValue();
   }
 
-  /** Write a protobuf message to the socket. */
+  /**
+   * Write a protobuf message to the channel (to UDS).
+   *
+   * @param request A connection request
+   * @return A connection promise
+   */
   public CompletableFuture<Response> connect(ConnectionRequest request) {
     channel.writeAndFlush(request);
     return callbackDispatcher.registerConnection();
