@@ -124,7 +124,8 @@ public class Platform {
     if (capabilities.isEPollAvailable()) {
       return EpollDomainSocketChannel.class;
     }
-    throw new RuntimeException("Current platform supports no known socket types");
+    throw new RuntimeException(
+        "Current platform does not have a supported Domain Client Socket Channel class");
   }
 
   /**
@@ -139,7 +140,8 @@ public class Platform {
     if (capabilities.isEPollAvailable()) {
       return EpollServerDomainSocketChannel.class;
     }
-    throw new RuntimeException("Current platform supports no known socket types");
+    throw new RuntimeException(
+        "Current platform does not have a supported Domain Server Socket Channel class");
   }
 
   /**
@@ -154,7 +156,8 @@ public class Platform {
     if (capabilities.isEPollAvailable()) {
       return EpollServerSocketChannel.class;
     }
-    throw new RuntimeException("Current platform supports no known socket types");
+    throw new RuntimeException(
+        "Current platform does not have a supported TCP Server Socket Channel class");
   }
 
   /**
