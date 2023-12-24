@@ -9,6 +9,7 @@ use serde_json::Value;
 use std::{
     cmp::max,
     collections::HashMap,
+    path::Path,
     sync::{atomic::AtomicUsize, Arc},
     time::Duration,
 };
@@ -62,9 +63,13 @@ enum ChosenAction {
 }
 
 fn main() {
-    logger_core::init(Some(logger_core::Level::Warn), None);
-
     let args = Args::parse();
+    logger_core::init(
+        Some(logger_core::Level::Warn),
+        Path::new(&args.results_file)
+            .file_stem()
+            .and_then(|os_str| os_str.to_str()),
+    );
 
     // We can test using single or multi threading, by changing the runtime.
     let runtime = tokio::runtime::Builder::new_multi_thread()

@@ -1,5 +1,6 @@
 import { writeFileSync } from "fs";
 import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
+import { parse } from "path";
 import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
@@ -19,8 +20,9 @@ enum ChosenAction {
     GET_EXISTING,
     SET,
 }
-// Demo - Setting the internal logger to log every log that has a level of info and above, and save the logs to the first.log file.
-Logger.setLoggerConfig("info", "first.log");
+// Setting the internal logger to log every log that has a level of info and above,
+// and save the logs to a file with the name of the results file.
+Logger.setLoggerConfig("info", parse(receivedOptions.resultsFile).name);
 
 let started_tasks_counter = 0;
 const running_tasks: Promise<void>[] = [];
@@ -127,7 +129,8 @@ async function run_clients(
 ) {
     const now = new Date();
     console.log(
-        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${clients.length
+        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${
+            clients.length
         } is_cluster: ${is_cluster} ${now.toLocaleTimeString()}`
     );
     const action_latencies = {
@@ -231,14 +234,14 @@ async function main(
             };
             const node_redis_client = clusterModeEnabled
                 ? createCluster({
-                    rootNodes: [{ socket: { host, port, tls: useTLS } }],
-                    defaults: {
-                        socket: {
-                            tls: useTLS,
-                        },
-                    },
-                    useReplicas: true,
-                })
+                      rootNodes: [{ socket: { host, port, tls: useTLS } }],
+                      defaults: {
+                          socket: {
+                              tls: useTLS,
+                          },
+                      },
+                      useReplicas: true,
+                  })
                 : createClient(node);
             await node_redis_client.connect();
             return node_redis_client;
