@@ -155,7 +155,8 @@ describe("RedisClusterClient", () => {
                 InfoOptions.Server,
                 InfoOptions.Replication,
             ])) as Record<string, string>;
-            const clusterNodes = await client.customCommand("CLUSTER", [
+            const clusterNodes = await client.customCommand([
+                "CLUSTER",
                 "NODES",
             ]);
             expect(
@@ -233,7 +234,7 @@ describe("RedisClusterClient", () => {
             );
             const transaction = new ClusterTransaction();
             transaction.get("key");
-            const result1 = await client1.customCommand("WATCH", ["key"]);
+            const result1 = await client1.customCommand(["WATCH", "key"]);
             expect(result1).toEqual("OK");
 
             const result2 = await client2.set("key", "foo");
