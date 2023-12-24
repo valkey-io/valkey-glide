@@ -512,7 +512,7 @@ async fn create_client(
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
-    write_result(Ok(Value::Nil), 0, writer).await?;
+    write_result(Ok(Value::Okay), 0, writer).await?;
     Ok(client)
 }
 
