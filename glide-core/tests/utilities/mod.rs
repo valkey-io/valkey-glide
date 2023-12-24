@@ -6,7 +6,10 @@ use glide_core::{
 };
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
-use redis::{ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
+use redis::{
+    cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
+    ConnectionAddr, RedisConnectionInfo, RedisResult, Value,
+};
 use socket2::{Domain, Socket, Type};
 use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, sync::Mutex,
@@ -687,4 +690,20 @@ pub async fn setup_test_basics(use_tls: bool) -> TestBasics {
 #[ctor::ctor]
 fn init() {
     logger_core::init(Some(logger_core::Level::Debug), None);
+}
+
+pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientForTests) {
+    let mut client_kill_cmd = redis::cmd("CLIENT");
+    client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+
+    let _ = client
+        .send_command(
+            &client_kill_cmd,
+            Some(RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllNodes,
+                None,
+            ))),
+        )
+        .await
+        .unwrap();
 }

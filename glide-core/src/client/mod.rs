@@ -5,10 +5,7 @@ use futures::FutureExt;
 use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
-use redis::{
-    aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
-    RedisResult,
-};
+use redis::RedisResult;
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::time::Duration;
@@ -16,12 +13,6 @@ mod reconnecting_connection;
 mod standalone_client;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
-
-pub trait GlideClient: ConnectionLike + Send + Clone {}
-
-impl GlideClient for MultiplexedConnection {}
-impl GlideClient for ConnectionManager {}
-impl GlideClient for ClusterConnection {}
 
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
@@ -287,5 +278,33 @@ impl Client {
         .await
         .map_err(|_| ConnectionError::Timeout)
         .and_then(|res| res)
+    }
+}
+
+pub trait GlideClientForTests {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, redis::Value>;
+}
+
+impl GlideClientForTests for Client {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a redis::Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, redis::Value> {
+        self.send_command(cmd, routing)
+    }
+}
+
+impl GlideClientForTests for StandaloneClient {
+    fn send_command<'a>(
+        &'a mut self,
+        cmd: &'a redis::Cmd,
+        _routing: Option<RoutingInfo>,
+    ) -> redis::RedisFuture<'a, redis::Value> {
+        self.send_command(cmd).boxed()
     }
 }

@@ -10,13 +10,6 @@ mod standalone_client_tests {
     use rstest::rstest;
     use utilities::*;
 
-    async fn kill_connection(client: &mut StandaloneClient) {
-        let mut client_kill_cmd = redis::cmd("CLIENT");
-        client_kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
-
-        let _ = client.send_command(&client_kill_cmd).await.unwrap();
-    }
-
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
