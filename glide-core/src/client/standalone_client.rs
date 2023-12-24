@@ -2,13 +2,14 @@ use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
 use crate::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
-use futures::{stream, StreamExt};
+use futures::{future, stream, StreamExt};
 #[cfg(standalone_heartbeat)]
 use logger_core::log_debug;
-use logger_core::{log_trace, log_warn};
+use logger_core::log_warn;
 use protobuf::EnumOrUnknown;
-use redis::cluster_routing::is_readonly;
+use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
 use redis::{RedisError, RedisResult, Value};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 #[cfg(standalone_heartbeat)]
 use tokio::task;
@@ -145,62 +146,140 @@ impl StandaloneClient {
         self.inner.nodes.get(self.inner.primary_index).unwrap()
     }
 
-    fn get_connection(&self, cmd: &redis::Cmd) -> &ReconnectingConnection {
-        if !is_readonly(cmd) || self.inner.nodes.len() == 1 {
-            return self.get_primary_connection();
-        }
-        match &self.inner.read_from {
-            ReadFrom::Primary => self.get_primary_connection(),
-            ReadFrom::PreferReplica {
-                latest_read_replica_index,
-            } => {
-                let initial_index =
-                    latest_read_replica_index.load(std::sync::atomic::Ordering::Relaxed);
-                let mut check_count = 0;
-                loop {
-                    check_count += 1;
+    fn round_robin_read_from_replica(
+        &self,
+        latest_read_replica_index: &Arc<AtomicUsize>,
+    ) -> &ReconnectingConnection {
+        let initial_index = latest_read_replica_index.load(std::sync::atomic::Ordering::Relaxed);
+        let mut check_count = 0;
+        loop {
+            check_count += 1;
 
-                    // Looped through all replicas, no connected replica was found.
-                    if check_count > self.inner.nodes.len() {
-                        return self.get_primary_connection();
-                    }
-                    let index = (initial_index + check_count) % self.inner.nodes.len();
-                    if index == self.inner.primary_index {
-                        continue;
-                    }
-                    let Some(connection) = self.inner.nodes.get(index) else {
-                        continue;
-                    };
-                    if connection.is_connected() {
-                        let _ = latest_read_replica_index.compare_exchange_weak(
-                            initial_index,
-                            index,
-                            std::sync::atomic::Ordering::Relaxed,
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
-                        return connection;
-                    }
-                }
+            // Looped through all replicas, no connected replica was found.
+            if check_count > self.inner.nodes.len() {
+                return self.get_primary_connection();
+            }
+            let index = (initial_index + check_count) % self.inner.nodes.len();
+            if index == self.inner.primary_index {
+                continue;
+            }
+            let Some(connection) = self.inner.nodes.get(index) else {
+                continue;
+            };
+            if connection.is_connected() {
+                let _ = latest_read_replica_index.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    std::sync::atomic::Ordering::Relaxed,
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+                return connection;
             }
         }
     }
 
-    pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
-        log_trace("StandaloneClient", "sending command");
-        let reconnecting_connection = self.get_connection(cmd);
+    fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
+        if self.inner.nodes.len() == 1 || !readonly {
+            return self.get_primary_connection();
+        }
+
+        match &self.inner.read_from {
+            ReadFrom::Primary => self.get_primary_connection(),
+            ReadFrom::PreferReplica {
+                latest_read_replica_index,
+            } => self.round_robin_read_from_replica(latest_read_replica_index),
+        }
+    }
+
+    async fn send_request(
+        cmd: &redis::Cmd,
+        reconnecting_connection: &ReconnectingConnection,
+    ) -> RedisResult<Value> {
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_connection_dropped() => {
-                log_warn(
-                    "single request",
-                    format!("received disconnect error `{err}`"),
-                );
+                log_warn("send request", format!("received disconnect error `{err}`"));
                 reconnecting_connection.reconnect();
                 Err(err)
             }
             _ => result,
         }
+    }
+
+    async fn send_request_to_all_nodes(
+        &mut self,
+        cmd: &redis::Cmd,
+        response_policy: Option<ResponsePolicy>,
+    ) -> RedisResult<Value> {
+        let requests = self
+            .inner
+            .nodes
+            .iter()
+            .map(|node| Self::send_request(cmd, node));
+
+        // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
+        match response_policy {
+            Some(ResponsePolicy::AllSucceeded) => {
+                future::try_join_all(requests)
+                    .await
+                    .map(|mut results| results.pop().unwrap()) // unwrap is safe, since at least one function succeeded
+            }
+            Some(ResponsePolicy::OneSucceeded) => future::select_ok(requests.map(Box::pin))
+                .await
+                .map(|(result, _)| result),
+            Some(ResponsePolicy::OneSucceededNonEmpty) => {
+                future::select_ok(requests.map(|request| {
+                    Box::pin(async move {
+                        let result = request.await?;
+                        match result {
+                            Value::Nil => {
+                                Err((redis::ErrorKind::ResponseError, "no value found").into())
+                            }
+                            _ => Ok(result),
+                        }
+                    })
+                }))
+                .await
+                .map(|(result, _)| result)
+            }
+            Some(ResponsePolicy::Aggregate(op)) => future::try_join_all(requests)
+                .await
+                .and_then(|results| cluster_routing::aggregate(results, op)),
+            Some(ResponsePolicy::AggregateLogical(op)) => future::try_join_all(requests)
+                .await
+                .and_then(|results| cluster_routing::logical_aggregate(results, op)),
+            Some(ResponsePolicy::CombineArrays) => future::try_join_all(requests)
+                .await
+                .and_then(cluster_routing::combine_array_results),
+            Some(ResponsePolicy::Special) | None => {
+                // This is our assumption - if there's no coherent way to aggregate the responses, we just collect them in an array, and pass it to the user.
+                // TODO - once Value::Error is merged, we can use join_all and report separate errors and also pass successes.
+                future::try_join_all(requests).await.map(Value::Array)
+            }
+        }
+    }
+
+    async fn send_request_to_single_node(
+        &mut self,
+        cmd: &redis::Cmd,
+        readonly: bool,
+    ) -> RedisResult<Value> {
+        let reconnecting_connection = self.get_connection(readonly);
+        Self::send_request(cmd, reconnecting_connection).await
+    }
+
+    pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
+        let Some(cmd_bytes) = Routable::command(cmd) else {
+            return self.send_request_to_single_node(cmd, false).await;
+        };
+
+        if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
+            let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
+            return self.send_request_to_all_nodes(cmd, response_policy).await;
+        }
+        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
+            .await
     }
 
     pub async fn send_pipeline(
