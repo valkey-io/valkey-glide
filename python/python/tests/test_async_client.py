@@ -899,6 +899,21 @@ class TestCommands:
         assert await redis_client.ttl(key) == -2
 
 
+@pytest.mark.asyncio
+class TestRedisModules:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.search
+    async def test_search_module_loaded(self, redis_client: TRedisClient):
+        res = parse_info_response(await redis_client.info([InfoSection.MODULES]))
+        assert "search" in res["module"]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.json
+    async def test_json_module_loadded(self, redis_client: TRedisClient):
+        res = parse_info_response(await redis_client.info([InfoSection.MODULES]))
+        assert "ReJSON" in res["module"]
+
+
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
         exp_sec = ExpirySet(ExpiryType.SEC, 5)
