@@ -604,15 +604,13 @@ describe("SocketConnectionInternals", () => {
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
             const result1 = await connection.customCommand(
-                "SET",
-                ["foo", "bar"],
+                ["SET", "foo", "bar"],
                 route1
             );
             expect(result1).toBeNull();
 
             const result2 = await connection.customCommand(
-                "GET",
-                ["foo"],
+                ["GET", "foo"],
                 route2
             );
             expect(result2).toBeNull();
