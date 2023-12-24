@@ -185,7 +185,7 @@ impl StandaloneClient {
         }
     }
 
-    pub async fn send_packed_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
+    pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
         log_trace("StandaloneClient", "sending command");
         let reconnecting_connection = self.get_connection(cmd);
         let mut connection = reconnecting_connection.get_connection().await?;
@@ -203,15 +203,17 @@ impl StandaloneClient {
         }
     }
 
-    pub async fn send_packed_commands(
+    pub async fn send_pipeline(
         &mut self,
-        cmd: &redis::Pipeline,
+        pipeline: &redis::Pipeline,
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
         let reconnecting_connection = self.get_primary_connection();
         let mut connection = reconnecting_connection.get_connection().await?;
-        let result = connection.send_packed_commands(cmd, offset, count).await;
+        let result = connection
+            .send_packed_commands(pipeline, offset, count)
+            .await;
         match result {
             Err(err) if err.is_connection_dropped() => {
                 log_warn(
