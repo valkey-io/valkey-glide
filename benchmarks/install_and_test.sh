@@ -239,10 +239,10 @@ done
 
 for currentDataSize in $dataSize
 do
-    if [ -z "$minimal" ];
+    if [ -n "$minimalFlag" ];
     then
-        flushDB
         echo "Minimal run, not filling database"
+        flushDB
     else 
         fillDB $currentDataSize
     fi
