@@ -1,8 +1,5 @@
 hiredis
 numpy
 
-# asyncio_redis
-asyncio_redis>=0.14.3
-
 # redis-py
-redis>=4.0.0
+redis>=5.0.1
