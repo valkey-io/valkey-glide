@@ -11,6 +11,7 @@ from glide.protobuf.redis_request_pb2 import RequestType
 class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[str]) -> TResult:
         """Executes a single command, without checking inputs.
+            @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
             @example - Return a list of all pub/sub clients:
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])

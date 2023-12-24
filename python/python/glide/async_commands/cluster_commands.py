@@ -14,6 +14,7 @@ class ClusterCommands(CoreCommands):
         self, command_args: List[str], route: Optional[Route] = None
     ) -> TResult:
         """Executes a single command, without checking inputs.
+            @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
             @example - Return a list of all pub/sub clients from all nodes:
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
