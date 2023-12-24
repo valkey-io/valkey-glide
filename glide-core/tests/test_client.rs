@@ -95,7 +95,7 @@ mod shared_client_tests {
             let hello: std::collections::HashMap<String, Value> = redis::from_redis_value(
                 &test_basics
                     .client
-                    .req_packed_command(&redis::cmd("HELLO"), None)
+                    .send_command(&redis::cmd("HELLO"), None)
                     .await
                     .unwrap(),
             )
@@ -104,26 +104,14 @@ mod shared_client_tests {
 
             let mut cmd = redis::cmd("HSET");
             cmd.arg("hash").arg("foo").arg("baz");
-            test_basics
-                .client
-                .req_packed_command(&cmd, None)
-                .await
-                .unwrap();
+            test_basics.client.send_command(&cmd, None).await.unwrap();
             let mut cmd = redis::cmd("HSET");
             cmd.arg("hash").arg("bar").arg("foobar");
-            test_basics
-                .client
-                .req_packed_command(&cmd, None)
-                .await
-                .unwrap();
+            test_basics.client.send_command(&cmd, None).await.unwrap();
 
             let mut cmd = redis::cmd("HGETALL");
             cmd.arg("hash");
-            let result = test_basics
-                .client
-                .req_packed_command(&cmd, None)
-                .await
-                .unwrap();
+            let result = test_basics.client.send_command(&cmd, None).await.unwrap();
 
             assert_eq!(
                 result,
@@ -251,7 +239,7 @@ mod shared_client_tests {
 
             let mut cmd = redis::Cmd::new();
             cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
-            let result = test_basics.client.req_packed_command(&cmd, None).await;
+            let result = test_basics.client.send_command(&cmd, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
@@ -276,7 +264,7 @@ mod shared_client_tests {
             pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
             let result = test_basics
                 .client
-                .req_packed_commands(&pipeline, 0, 1, None)
+                .send_pipeline(&pipeline, 0, 1, None)
                 .await;
             assert!(result.is_err());
             let err = result.unwrap_err();

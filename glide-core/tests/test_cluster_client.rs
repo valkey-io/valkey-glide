@@ -45,11 +45,7 @@ mod cluster_client_tests {
 
             let mut cmd = redis::cmd("INFO");
             cmd.arg("REPLICATION");
-            let info = test_basics
-                .client
-                .req_packed_command(&cmd, None)
-                .await
-                .unwrap();
+            let info = test_basics.client.send_command(&cmd, None).await.unwrap();
             let info = redis::from_redis_value::<HashMap<String, String>>(&info).unwrap();
             let (primaries, replicas) = count_primaries_and_replicas(info);
             assert_eq!(primaries, 3);
@@ -72,7 +68,7 @@ mod cluster_client_tests {
             cmd.arg("REPLICATION");
             let info = test_basics
                 .client
-                .req_packed_command(
+                .send_command(
                     &cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllMasters,
@@ -103,7 +99,7 @@ mod cluster_client_tests {
             cmd.arg("REPLICATION");
             let info = test_basics
                 .client
-                .req_packed_command(
+                .send_command(
                     &cmd,
                     Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllNodes,
@@ -134,7 +130,7 @@ mod cluster_client_tests {
             cmd.arg("REPLICATION");
             let info = test_basics
                 .client
-                .req_packed_command(
+                .send_command(
                     &cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(0, SlotAddr::Master)),
@@ -165,7 +161,7 @@ mod cluster_client_tests {
             cmd.arg("REPLICATION");
             let info = test_basics
                 .client
-                .req_packed_command(
+                .send_command(
                     &cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -199,7 +195,7 @@ mod cluster_client_tests {
             cmd.arg("REPLICATION");
             let info = test_basics
                 .client
-                .req_packed_command(
+                .send_command(
                     &cmd,
                     Some(RoutingInfo::SingleNode(
                         SingleNodeRoutingInfo::SpecificNode(Route::new(

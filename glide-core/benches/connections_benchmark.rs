@@ -1,12 +1,19 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::future::join_all;
-use glide_core::client::GlideClient;
 use redis::{
-    cluster::ClusterClientBuilder, AsyncCommands, ConnectionAddr, ConnectionInfo,
-    RedisConnectionInfo, RedisResult, Value,
+    aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
+    cluster::ClusterClientBuilder,
+    cluster_async::ClusterConnection,
+    AsyncCommands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult, Value,
 };
 use std::env;
 use tokio::runtime::{Builder, Runtime};
+
+trait GlideClient: ConnectionLike + Send + Clone {}
+
+impl GlideClient for MultiplexedConnection {}
+impl GlideClient for ConnectionManager {}
+impl GlideClient for ClusterConnection {}
 
 async fn run_get(mut connection: impl GlideClient) -> RedisResult<Value> {
     connection.get("foo").await

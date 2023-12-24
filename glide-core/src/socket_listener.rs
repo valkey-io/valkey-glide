@@ -370,7 +370,7 @@ async fn send_command(
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     client
-        .req_packed_command(&cmd, routing)
+        .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into())
 }
@@ -388,7 +388,7 @@ async fn send_transaction(
     }
 
     client
-        .req_packed_commands(&pipeline, offset, 1, routing)
+        .send_pipeline(&pipeline, offset, 1, routing)
         .await
         .map(|mut values| values.pop().unwrap_or(Value::Nil))
         .map_err(|err| err.into())

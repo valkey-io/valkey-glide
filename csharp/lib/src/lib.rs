@@ -110,7 +110,7 @@ pub extern "C" fn set(
         let value_bytes = value_cstring.to_bytes();
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg(key_bytes).arg(value_bytes);
-        let result = client_clone.req_packed_command(&cmd, None).await;
+        let result = client_clone.send_command(&cmd, None).await;
         unsafe {
             let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
             match result {
@@ -135,7 +135,7 @@ pub extern "C" fn get(client_ptr: *const c_void, callback_index: usize, key: *co
         let key_bytes = key_cstring.to_bytes();
         let mut cmd = Cmd::new();
         cmd.arg("GET").arg(key_bytes);
-        let result = client_clone.req_packed_command(&cmd, None).await;
+        let result = client_clone.send_command(&cmd, None).await;
         let client = unsafe { Box::leak(Box::from_raw(ptr_address as *mut Client)) };
         let value = match result {
             Ok(value) => value,
