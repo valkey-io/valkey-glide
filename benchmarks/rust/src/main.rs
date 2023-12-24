@@ -281,6 +281,6 @@ async fn perform_operation(
             .arg(generate_random_string(data_size));
         ChosenAction::Set
     };
-    connection.req_packed_command(&cmd, None).await.unwrap();
+    connection.send_command(&cmd, None).await.unwrap();
     action
 }
