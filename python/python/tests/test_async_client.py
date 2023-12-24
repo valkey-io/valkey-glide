@@ -156,10 +156,6 @@ class TestRedisClients:
         is_cluster = isinstance(redis_client, RedisClusterClient)
         password = "TEST_AUTH"
         credentials = RedisCredentials(password)
-        # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
-        #  init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-        # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
-        primary_address = redis_client.config.addresses[0]
         try:
             await redis_client.custom_command(
                 ["CONFIG", "SET", "requirepass", password]
@@ -167,14 +163,18 @@ class TestRedisClients:
 
             with pytest.raises(ClosingError) as e:
                 # Creation of a new client without password should fail
-                await create_client(request, is_cluster, addresses=[primary_address])
+                await create_client(
+                    request,
+                    is_cluster,
+                    addresses=redis_client.config.addresses,
+                )
             assert "NOAUTH" in str(e)
 
             auth_client = await create_client(
                 request,
                 is_cluster,
                 credentials,
-                addresses=[primary_address],
+                addresses=redis_client.config.addresses,
             )
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
@@ -185,7 +185,7 @@ class TestRedisClients:
                 request,
                 is_cluster,
                 credentials,
-                addresses=[primary_address],
+                addresses=redis_client.config.addresses,
             )
             await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
 
@@ -219,15 +219,11 @@ class TestRedisClients:
             assert await redis_client.set(key, key) == OK
             credentials = RedisCredentials(password, username)
 
-            # TODO: We create a new client only with the primary node (in CMD, in CME a single address is enough to
-            # init the client with all topology), as the ACL command in CMD is routed only to the primary ATM.
-            # Remove it when https://github.com/aws/glide-for-redis/issues/633 is closed.
-            primary_address = redis_client.config.addresses[0]
             testuser_client = await create_client(
                 request,
                 is_cluster,
                 credentials,
-                addresses=[primary_address],
+                addresses=redis_client.config.addresses,
             )
             assert await testuser_client.get(key) == key
             with pytest.raises(RequestError) as e:
