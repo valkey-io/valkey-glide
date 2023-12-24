@@ -409,12 +409,12 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of `key` after the increment as string.
+     * @returns the value of `key` after the increment.
      * An error is raised if `key` contains a value of the wrong type,
      * or the current key content is not parsable as a double precision floating point number.
      *
      */
-    public incrByFloat(key: string, amount: number): Promise<string> {
+    public incrByFloat(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
@@ -499,9 +499,9 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
-     * @returns 1 if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist, it returns 0.
+     * @returns `true` the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist, it returns `false`.
      */
-    public hexists(key: string, field: string): Promise<number> {
+    public hexists(key: string, field: string): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -513,7 +513,7 @@ export class BaseClient {
      * If `key` does not exist, it returns an empty list.
      * If `key` holds a value that is not a hash, an error is raised.
      */
-    public hgetall(key: string): Promise<string[]> {
+    public hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
@@ -545,7 +545,7 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
-     * @returns the value of `field` in the hash stored at `key` after the increment as string.
+     * @returns the value of `field` in the hash stored at `key` after the increment.
      *  An error is raised if `key` contains a value of the wrong type
      *  or the current field content is not parsable as a double precision floating point number.
      *
@@ -554,7 +554,7 @@ export class BaseClient {
         key: string,
         field: string,
         amount: number
-    ): Promise<string> {
+    ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
     }
 
@@ -769,14 +769,14 @@ export class BaseClient {
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
      * @param option - The expire option.
-     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public expire(
         key: string,
         seconds: number,
         option?: ExpireOptions
-    ): Promise<number> {
+    ): Promise<boolean> {
         return this.createWritePromise(createExpire(key, seconds, option));
     }
 
@@ -789,14 +789,14 @@ export class BaseClient {
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
      * @param option - The expire option.
-     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public expireAt(
         key: string,
         unixSeconds: number,
         option?: ExpireOptions
-    ): Promise<number> {
+    ): Promise<boolean> {
         return this.createWritePromise(
             createExpireAt(key, unixSeconds, option)
         );
@@ -811,14 +811,14 @@ export class BaseClient {
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
      * @param option - The expire option.
-     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public pexpire(
         key: string,
         milliseconds: number,
         option?: ExpireOptions
-    ): Promise<number> {
+    ): Promise<boolean> {
         return this.createWritePromise(
             createPExpire(key, milliseconds, option)
         );
@@ -833,7 +833,7 @@ export class BaseClient {
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
      * @param option - The expire option.
-     * @returns 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public pexpireAt(
