@@ -160,6 +160,8 @@ export class RedisClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
+     *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+     *
      * @example
      * Returns a list of all pub/sub clients on all primary nodes
      * ```ts
