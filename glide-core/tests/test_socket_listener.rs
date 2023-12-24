@@ -292,7 +292,7 @@ mod socket_listener {
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
         let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_null_response(&buffer, CALLBACK_INDEX);
+        assert_ok_response(&buffer, CALLBACK_INDEX);
     }
 
     fn setup_socket(
