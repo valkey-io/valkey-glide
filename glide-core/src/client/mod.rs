@@ -109,14 +109,14 @@ async fn run_with_timeout<T>(
 }
 
 impl Client {
-    pub fn req_packed_command<'a>(
+    pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a redis::Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         run_with_timeout(self.request_timeout, async {
             match self.internal_client {
-                ClientWrapper::Standalone(ref mut client) => client.send_packed_command(cmd).await,
+                ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
 
                 ClientWrapper::Cluster { ref mut client } => {
                     let routing = routing
@@ -129,9 +129,9 @@ impl Client {
         .boxed()
     }
 
-    pub fn req_packed_commands<'a>(
+    pub fn send_pipeline<'a>(
         &'a mut self,
-        cmd: &'a redis::Pipeline,
+        pipeline: &'a redis::Pipeline,
         offset: usize,
         count: usize,
         routing: Option<RoutingInfo>,
@@ -139,7 +139,7 @@ impl Client {
         run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
-                    client.send_packed_commands(cmd, offset, count).await
+                    client.send_pipeline(pipeline, offset, count).await
                 }
 
                 ClientWrapper::Cluster { ref mut client } => {
@@ -148,7 +148,7 @@ impl Client {
                         _ => SingleNodeRoutingInfo::Random,
                     };
 
-                    client.route_pipeline(cmd, offset, count, route).await
+                    client.route_pipeline(pipeline, offset, count, route).await
                 }
             }
         })

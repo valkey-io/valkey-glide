@@ -6,7 +6,7 @@ use glide_core::{
 };
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
-use redis::{aio::ConnectionLike, ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
+use redis::{ConnectionAddr, RedisConnectionInfo, RedisResult, Value};
 use socket2::{Domain, Socket, Type};
 use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, sync::Mutex,
@@ -521,7 +521,7 @@ pub fn generate_random_string(length: usize) -> String {
 pub async fn send_get(client: &mut Client, key: &str) -> RedisResult<Value> {
     let mut get_command = redis::Cmd::new();
     get_command.arg("GET").arg(key);
-    client.req_packed_command(&get_command, None).await
+    client.send_command(&get_command, None).await
 }
 
 pub async fn send_set_and_get(mut client: Client, key: String) {
@@ -530,10 +530,10 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
 
     let mut set_command = redis::Cmd::new();
     set_command.arg("SET").arg(key.as_str()).arg(value.clone());
-    let set_result = client.req_packed_command(&set_command, None).await.unwrap();
+    let set_result = client.send_command(&set_command, None).await.unwrap();
     let mut get_command = redis::Cmd::new();
     get_command.arg("GET").arg(key);
-    let get_result = client.req_packed_command(&get_command, None).await.unwrap();
+    let get_result = client.send_command(&get_command, None).await.unwrap();
 
     assert_eq!(set_result, Value::Okay);
     assert_eq!(get_result, Value::BulkString(value.into_bytes()));
@@ -593,7 +593,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         .arg("allkeys")
         .arg("+@all")
         .arg(format!(">{password}"));
-    connection.req_packed_command(&cmd).await.unwrap();
+    connection.send_packed_command(&cmd).await.unwrap();
 }
 
 #[derive(Eq, PartialEq, Default)]
