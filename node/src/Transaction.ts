@@ -704,11 +704,11 @@ export class BaseTransaction {
      * @example
      * Returns a list of all pub/sub clients:
      * ```ts
-     * connection.customCommand("CLIENT", ["LIST","TYPE", "PUBSUB"])
+     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
      * ```
      */
-    public customCommand(commandName: string, args: string[]) {
-        return this.commands.push(createCustomCommand(commandName, args));
+    public customCommand(args: string[]) {
+        return this.commands.push(createCustomCommand(args));
     }
 }
 

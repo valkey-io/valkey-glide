@@ -149,7 +149,7 @@ describe("RedisClient", () => {
         const client2 = await RedisClient.createClient(getOptions(port));
         const transaction = new Transaction();
         transaction.get("key");
-        const result1 = await client1.customCommand("WATCH", ["key"]);
+        const result1 = await client1.customCommand(["WATCH","key"]);
         expect(result1).toEqual("OK");
 
         const result2 = await client2.set("key", "foo");

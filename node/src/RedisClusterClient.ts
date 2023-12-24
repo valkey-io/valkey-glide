@@ -165,15 +165,11 @@ export class RedisClusterClient extends BaseClient {
      * @example
      * Returns a list of all pub/sub clients on all primary nodes
      * ```ts
-     * connection.customCommand("CLIENT", ["LIST","TYPE", "PUBSUB"], "allPrimaries")
+     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], "allPrimaries")
      * ```
      */
-    public customCommand(
-        commandName: string,
-        args: string[],
-        route?: Routes
-    ): Promise<ReturnType> {
-        const command = createCustomCommand(commandName, args);
+    public customCommand(args: string[], route?: Routes): Promise<ReturnType> {
+        const command = createCustomCommand(args);
         return super.createWritePromise(command, toProtobufRoute(route));
     }
 

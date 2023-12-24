@@ -63,7 +63,7 @@ export function transactionTest(
         conditionalSet: "onlyIfDoesNotExist",
         returnOldValue: true,
     });
-    baseTransaction.customCommand("MGET", [key1, key2]);
+    baseTransaction.customCommand(["MGET", key1, key2]);
     baseTransaction.mset({ [key3]: value });
     baseTransaction.mget([key1, key2]);
     baseTransaction.del([key1]);

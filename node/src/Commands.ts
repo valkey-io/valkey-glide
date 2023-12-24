@@ -533,8 +533,8 @@ export function createSCard(key: string): redis_request.Command {
 /**
  * @internal
  */
-export function createCustomCommand(commandName: string, args: string[]) {
-    return createCommand(RequestType.CustomCommand, [commandName, ...args]);
+export function createCustomCommand(args: string[]) {
+    return createCommand(RequestType.CustomCommand, args);
 }
 
 /**

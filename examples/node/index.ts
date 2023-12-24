@@ -14,7 +14,7 @@ async function sendPingToNode() {
         // useTLS: true,
     });
     // The empty array signifies that there are no additional arguments.
-    const pong = await client.customCommand("PING", []);
+    const pong = await client.customCommand(["PING"]);
     console.log(pong);
     await send_set_and_get(client);
     client.dispose();
@@ -41,7 +41,7 @@ async function sendPingToRandomNodeInCluster() {
         useTLS: true,
     });
     // The empty array signifies that there are no additional arguments.
-    const pong = await client.customCommand("PING", [], "randomNode");
+    const pong = await client.customCommand(["PING"], "randomNode");
     console.log(pong);
     await send_set_and_get(client);
     client.dispose();
