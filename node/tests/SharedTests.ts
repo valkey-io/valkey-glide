@@ -297,7 +297,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("11");
                 expect(await client.incrBy(key, 4)).toEqual(15);
                 expect(await client.get(key)).toEqual("15");
-                expect(await client.incrByFloat(key, 1.5)).toEqual("16.5");
+                expect(await client.incrByFloat(key, 1.5)).toEqual(16.5);
                 expect(await client.get(key)).toEqual("16.5");
             });
         },
@@ -316,7 +316,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key1)).toEqual("1");
                 expect(await client.incrBy(key2, 2)).toEqual(2);
                 expect(await client.get(key2)).toEqual("2");
-                expect(await client.incrByFloat(key3, -0.5)).toEqual("-0.5");
+                expect(await client.incrByFloat(key3, -0.5)).toEqual(-0.5);
                 expect(await client.get(key3)).toEqual("-0.5");
             });
         },
@@ -553,12 +553,12 @@ export function runBaseTests<Context>(config: {
                     [field2]: "value2",
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hexists(key, field1)).toEqual(1);
+                expect(await client.hexists(key, field1)).toEqual(true);
                 expect(await client.hexists(key, "nonExistingField")).toEqual(
-                    0
+                    false
                 );
                 expect(await client.hexists("nonExistingKey", field2)).toEqual(
-                    0
+                    false
                 );
             });
         },
@@ -601,7 +601,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hincrBy(key, field, 1)).toEqual(11);
                 expect(await client.hincrBy(key, field, 4)).toEqual(15);
                 expect(await client.hincrByFloat(key, field, 1.5)).toEqual(
-                    "16.5"
+                    16.5
                 );
             });
         },
@@ -628,7 +628,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hset(key2, fieldValueMap)).toEqual(1);
                 expect(
                     await client.hincrByFloat(key2, "nonExistingField", -0.5)
-                ).toEqual("-0.5");
+                ).toEqual(-0.5);
             });
         },
         config.timeout
@@ -979,13 +979,13 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
-                expect(await client.expire(key, 10)).toEqual(1);
+                expect(await client.expire(key, 10)).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// set command clears the timeout.
                 expect(await client.set(key, "bar")).toEqual("OK");
                 expect(
                     await client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// TTL will be updated to the new value = 15
                 expect(
@@ -994,7 +994,7 @@ export function runBaseTests<Context>(config: {
                         15,
                         ExpireOptions.HasExistingExpiry
                     )
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
             });
         },
@@ -1012,7 +1012,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         Math.floor(Date.now() / 1000) + 10
                     )
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 expect(
                     await client.expireAt(
@@ -1020,7 +1020,7 @@ export function runBaseTests<Context>(config: {
                         Math.floor(Date.now() / 1000) + 50,
                         ExpireOptions.NewExpiryGreaterThanCurrent
                     )
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(50);
 
                 /// set command clears the timeout.
@@ -1031,7 +1031,7 @@ export function runBaseTests<Context>(config: {
                         Date.now() + 50000,
                         ExpireOptions.HasExistingExpiry
                     )
-                ).toEqual(0);
+                ).toEqual(false);
             });
         },
         config.timeout
@@ -1044,10 +1044,10 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.ttl(key)).toEqual(-1);
-                expect(await client.expire(key, -10)).toEqual(1);
+                expect(await client.expire(key, -10)).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
                 expect(await client.set(key, "foo")).toEqual("OK");
-                expect(await client.pexpire(key, -10000)).toEqual(1);
+                expect(await client.pexpire(key, -10000)).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
@@ -1055,7 +1055,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         Math.floor(Date.now() / 1000) - 50 /// timeout in the past
                     )
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
@@ -1063,7 +1063,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         Date.now() - 50000 /// timeout in the past
                     )
-                ).toEqual(1);
+                ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
             });
         },
@@ -1075,20 +1075,20 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                expect(await client.expire(key, 10)).toEqual(0);
-                expect(await client.pexpire(key, 10000)).toEqual(0);
+                expect(await client.expire(key, 10)).toEqual(false);
+                expect(await client.pexpire(key, 10000)).toEqual(false);
                 expect(
                     await client.expireAt(
                         key,
                         Math.floor(Date.now() / 1000) + 50 /// timeout in the past
                     )
-                ).toEqual(0);
+                ).toEqual(false);
                 expect(
                     await client.pexpireAt(
                         key,
                         Date.now() + 50000 /// timeout in the past
                     )
-                ).toEqual(0);
+                ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
             });
         },

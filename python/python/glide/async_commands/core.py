@@ -1,6 +1,17 @@
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Mapping, Optional, Protocol, Tuple, Type, Union, cast, get_args
+from typing import (
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+    cast,
+    get_args,
+)
 
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -261,7 +272,7 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.IncrBy, [key, str(amount)])
         )
 
-    async def incrbyfloat(self, key: str, amount: float) -> str:
+    async def incrbyfloat(self, key: str, amount: float) -> float:
         """Increment the string representing a floating point number stored at `key` by `amount`.
            By using a negative increment value, the value stored at the `key` is decremented.
            If the key does not exist, it is set to 0 before performing the operation.
@@ -272,11 +283,11 @@ class CoreCommands(Protocol):
           amount (float) : The amount to increment.
 
           Returns:
-              str: The value of key after the increment. An error is returned if the key contains a value
+              float: The value of key after the increment. An error is returned if the key contains a value
               of the wrong type.
         """
         return cast(
-            str,
+            float,
             await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
         )
 
@@ -415,7 +426,7 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def hincrbyfloat(self, key: str, field: str, amount: float) -> str:
+    async def hincrbyfloat(self, key: str, field: str, amount: float) -> float:
         """Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
         amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
@@ -429,7 +440,7 @@ class CoreCommands(Protocol):
                 Use a negative value to decrement.
 
         Returns:
-            str: The value of the specified field in the hash stored at `key` after the increment as a string.
+            float: The value of the specified field in the hash stored at `key` after the increment as a string.
                 An error is returned if `key` contains a value of the wrong type or the current field content is not
                 parsable as a double precision floating point number.
 
@@ -438,13 +449,13 @@ class CoreCommands(Protocol):
                 "2.5"
         """
         return cast(
-            str,
+            float,
             await self._execute_command(
                 RequestType.HashIncrByFloat, [key, field, str(amount)]
             ),
         )
 
-    async def hexists(self, key: str, field: str) -> int:
+    async def hexists(self, key: str, field: str) -> bool:
         """Check if a field exists in the hash stored at `key`.
         See https://redis.io/commands/hexists/ for more details.
 
@@ -453,8 +464,8 @@ class CoreCommands(Protocol):
             field (str): The field to check in the hash stored at `key`.
 
         Returns:
-            int: Returns 1 if the hash contains the specified field. If the hash does not contain the field,
-                or if the key does not exist, it returns 0.
+            bool: Returns 'True' if the hash contains the specified field. If the hash does not contain the field,
+                or if the key does not exist, it returns 'False'.
                 If `key` holds a value that is not a hash, an error is returned.
 
         Examples:
@@ -464,10 +475,10 @@ class CoreCommands(Protocol):
                 0
         """
         return cast(
-            int, await self._execute_command(RequestType.HashExists, [key, field])
+            bool, await self._execute_command(RequestType.HashExists, [key, field])
         )
 
-    async def hgetall(self, key: str) -> List[str]:
+    async def hgetall(self, key: str) -> Dict[str, str]:
         """Returns all fields and values of the hash stored at `key`.
         See https://redis.io/commands/hgetall/ for details.
 
@@ -475,16 +486,16 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
 
         Returns:
-            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
-            its value. If `key` does not exist, it returns an empty list.
+            Dict[str, str]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty dictionary.
             If `key` holds a value that is not a hash, an error is returned.
 
         Examples:
             >>> await client.hgetall("my_hash")
-                ["field1", "value1", "field2", "value2"]
+                {"field1": "value1", "field2": "value2"}
         """
         return cast(
-            List[str], await self._execute_command(RequestType.HashGetAll, [key])
+            Dict[str, str], await self._execute_command(RequestType.HashGetAll, [key])
         )
 
     async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
@@ -869,7 +880,7 @@ class CoreCommands(Protocol):
 
     async def expire(
         self, key: str, seconds: int, option: Optional[ExpireOptions] = None
-    ) -> int:
+    ) -> bool:
         """
         Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
@@ -883,7 +894,7 @@ class CoreCommands(Protocol):
             option (ExpireOptions, optional): The expire option.
 
         Returns:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         Examples:
@@ -893,11 +904,11 @@ class CoreCommands(Protocol):
         args: List[str] = (
             [key, str(seconds)] if option is None else [key, str(seconds), option.value]
         )
-        return cast(int, await self._execute_command(RequestType.Expire, args))
+        return cast(bool, await self._execute_command(RequestType.Expire, args))
 
     async def expireat(
         self, key: str, unix_seconds: int, option: Optional[ExpireOptions] = None
-    ) -> int:
+    ) -> bool:
         """
         Sets a timeout on `key` using an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the
         number of seconds.
@@ -913,7 +924,7 @@ class CoreCommands(Protocol):
             option (Optional[ExpireOptions]): The expire option.
 
         Returns:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         Examples:
@@ -925,11 +936,11 @@ class CoreCommands(Protocol):
             if option is None
             else [key, str(unix_seconds), option.value]
         )
-        return cast(int, await self._execute_command(RequestType.ExpireAt, args))
+        return cast(bool, await self._execute_command(RequestType.ExpireAt, args))
 
     async def pexpire(
         self, key: str, milliseconds: int, option: Optional[ExpireOptions] = None
-    ) -> int:
+    ) -> bool:
         """
         Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
@@ -943,7 +954,7 @@ class CoreCommands(Protocol):
             option (Optional[ExpireOptions]): The expire option.
 
         Returns:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         Examples:
@@ -955,11 +966,11 @@ class CoreCommands(Protocol):
             if option is None
             else [key, str(milliseconds), option.value]
         )
-        return cast(int, await self._execute_command(RequestType.PExpire, args))
+        return cast(bool, await self._execute_command(RequestType.PExpire, args))
 
     async def pexpireat(
         self, key: str, unix_milliseconds: int, option: Optional[ExpireOptions] = None
-    ) -> int:
+    ) -> bool:
         """
         Sets a timeout on `key` using an absolute Unix timestamp in milliseconds (milliseconds since January 1, 1970) instead
         of specifying the number of milliseconds.
@@ -975,7 +986,7 @@ class CoreCommands(Protocol):
             option (Optional[ExpireOptions]): The expire option.
 
         Returns:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         Examples:
@@ -987,7 +998,7 @@ class CoreCommands(Protocol):
             if option is None
             else [key, str(unix_milliseconds), option.value]
         )
-        return cast(int, await self._execute_command(RequestType.PExpireAt, args))
+        return cast(bool, await self._execute_command(RequestType.PExpireAt, args))
 
     async def ttl(self, key: str) -> int:
         """
