@@ -1,7 +1,7 @@
 use glide_core::start_socket_listener;
 use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyList};
 use pyo3::Python;
 
 use redis::Value;
@@ -93,8 +93,8 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
                 attributes: _,
             } => todo!(),
             Value::Set(_) => todo!(),
-            Value::Double(_) => todo!(),
-            Value::Boolean(_) => todo!(),
+            Value::Double(double) => Ok(PyFloat::new(py, double.into()).into_py(py)),
+            Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
             Value::VerbatimString { format: _, text: _ } => todo!(),
             Value::BigNumber(_) => todo!(),
             Value::Push { kind: _, data: _ } => todo!(),

@@ -4,8 +4,9 @@ use crate::connection_request::{
 use futures::FutureExt;
 use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
-use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
+use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
 use redis::RedisResult;
+use redis::{from_redis_value, ErrorKind, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::time::Duration;
@@ -99,12 +100,71 @@ async fn run_with_timeout<T>(
         .and_then(|res| res)
 }
 
+enum ExpectedReturnType {
+    Map,
+    Double,
+    Boolean,
+}
+
+fn convert_to_expected_type(
+    value: Value,
+    expected: Option<ExpectedReturnType>,
+) -> RedisResult<Value> {
+    let Some(expected) = expected else {
+        return Ok(value);
+    };
+
+    match expected {
+        ExpectedReturnType::Map => match value {
+            Value::Nil => Ok(value),
+            Value::Map(_) => Ok(value),
+            Value::Array(array) => {
+                let mut map = Vec::with_capacity(array.len() / 2);
+                let mut iterator = array.into_iter();
+                while let Some(key) = iterator.next() {
+                    let Some(value) = iterator.next() else {
+                        return Err((
+                            ErrorKind::TypeError,
+                            "Response has odd number of items, and cannot be entered into a map",
+                        )
+                            .into());
+                    };
+                    map.push((key, value));
+                }
+
+                Ok(Value::Map(map))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to map",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::Double => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
+        ExpectedReturnType::Boolean => Ok(Value::Boolean(from_redis_value::<bool>(&value)?)),
+    }
+}
+
+fn expected_type_for_cmd(cmd: &redis::Cmd) -> Option<ExpectedReturnType> {
+    let command = cmd.arg_idx(0)?;
+    match command {
+        b"HGETALL" | b"XREAD" => Some(ExpectedReturnType::Map),
+        b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
+        b"HEXISTS" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT" => {
+            Some(ExpectedReturnType::Boolean)
+        }
+        _ => None,
+    }
+}
+
 impl Client {
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a redis::Cmd,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, redis::Value> {
+    ) -> redis::RedisFuture<'a, Value> {
+        let expected_type = expected_type_for_cmd(cmd);
         run_with_timeout(self.request_timeout, async {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
@@ -116,6 +176,7 @@ impl Client {
                     client.route_command(cmd, routing).await
                 }
             }
+            .and_then(|value| convert_to_expected_type(value, expected_type))
         })
         .boxed()
     }
@@ -126,7 +187,7 @@ impl Client {
         offset: usize,
         count: usize,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, Vec<redis::Value>> {
+    ) -> redis::RedisFuture<'a, Vec<Value>> {
         run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
@@ -142,6 +203,15 @@ impl Client {
                     client.route_pipeline(pipeline, offset, count, route).await
                 }
             }
+            .and_then(|values| {
+                values
+                    .into_iter()
+                    .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
+                    .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .collect()
+            })
         })
         .boxed()
     }
