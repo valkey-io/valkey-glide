@@ -111,7 +111,7 @@ class BaseRedisClient(CoreCommands):
             self._reader = reader
             self._writer = writer
         except Exception as e:
-            self.close(f"Failed to create UDS connection: {e}")
+            await self.close(f"Failed to create UDS connection: {e}")
             raise
 
     def __del__(self) -> None:
@@ -123,10 +123,21 @@ class BaseRedisClient(CoreCommands):
                 # event loop already closed
                 pass
 
-    def close(self, err: str = "") -> None:
+    async def close(self, err_message: Optional[str] = None) -> None:
+        """
+        Terminate the client by closing all associated resources, including the socket and any active futures.
+        All open futures will be closed with an exception.
+
+        Args:
+            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when closing all open futures.
+            Defaults to None.
+        """
         for response_future in self._available_futures.values():
             if not response_future.done():
-                response_future.set_exception(ClosingError(err))
+                err_message = "" if err_message is None else err_message
+                response_future.set_exception(ClosingError(err_message))
+        self._writer.close()
+        await self._writer.wait_closed()
         self.__del__()
 
     def _get_future(self, callback_idx: int) -> asyncio.Future:
@@ -219,7 +230,7 @@ class BaseRedisClient(CoreCommands):
             read_bytes = await self._reader.read(DEFAULT_READ_BYTES_SIZE)
             if len(read_bytes) == 0:
                 err_msg = "The communication layer was unexpectedly closed."
-                self.close(err_msg)
+                await self.close(err_msg)
                 raise ClosingError(err_msg)
             read_bytes = remaining_read_bytes + bytearray(read_bytes)
             read_bytes_view = memoryview(read_bytes)
@@ -241,8 +252,8 @@ class BaseRedisClient(CoreCommands):
                         if response.HasField("closing_error")
                         else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
                     )
-                    self.close(err_msg)
-
+                    await self.close(err_msg)
+                    raise ClosingError(err_msg)
                 else:
                     self._available_callback_indexes.add(response.callback_idx)
                     if response.HasField("request_error"):

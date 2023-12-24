@@ -230,7 +230,7 @@ class TestTransaction:
         result3 = await redis_client.exec(transaction)
         assert result3 is None
 
-        client2.close()
+        await client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_standalone_transaction(self, redis_client: RedisClient):

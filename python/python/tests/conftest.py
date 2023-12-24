@@ -87,7 +87,7 @@ async def redis_client(
     "Get async socket client for tests"
     client = await create_client(request, cluster_mode)
     yield client
-    client.close()
+    await client.close()
 
 
 async def create_client(
