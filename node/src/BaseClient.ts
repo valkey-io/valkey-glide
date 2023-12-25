@@ -192,12 +192,12 @@ export class BaseClient {
                     // Unhandled error
                     const err_message = `Failed to decode the response: ${err}`;
                     Logger.log("error", "connection", err_message);
-                    this.dispose(err_message);
+                    this.close(err_message);
                     return;
                 }
             }
             if (message.closingError != null) {
-                this.dispose(message.closingError);
+                this.close(message.closingError);
                 return;
             }
             const [resolve, reject] =
@@ -244,7 +244,7 @@ export class BaseClient {
             .on("data", (data) => this.handleReadData(data))
             .on("error", (err) => {
                 console.error(`Server closed: ${err}`);
-                this.dispose();
+                this.close();
             });
     }
 
@@ -920,7 +920,12 @@ export class BaseClient {
         });
     }
 
-    public dispose(errorMessage?: string): void {
+    /**
+     *  Terminate the client by closing all associated resources, including the socket and any active promises.
+     *  All open promises will be closed with an exception.
+     * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
+     */
+    public close(errorMessage?: string): void {
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
         });

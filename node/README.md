@@ -131,7 +131,7 @@ const client = await RedisClusterClient.createClient({
 });
 await client.set("foo", "bar");
 const value = await client.get("foo");
-client.dispose();
+client.close();
 ```
 
 
@@ -155,5 +155,5 @@ const client = await RedisClient.createClient({
 });
 await client.set("foo", "bar");
 const value = await client.get("foo");
-client.dispose();
+client.close();
 ```

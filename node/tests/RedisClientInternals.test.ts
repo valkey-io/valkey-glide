@@ -180,7 +180,7 @@ function closeTestResources(
     server: net.Server,
     socket: net.Socket
 ) {
-    connection.dispose();
+    connection.close();
     server.close();
     socket.end();
 }
@@ -235,12 +235,12 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should close socket on dispose", async () => {
+    it("should close socket on close", async () => {
         await testWithResources(async (connection, socket) => {
             const endReceived = new Promise((resolve) => {
                 socket.once("end", () => resolve(true));
             });
-            connection.dispose();
+            connection.close();
 
             expect(await endReceived).toBeTruthy();
         });
