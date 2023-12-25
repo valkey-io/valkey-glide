@@ -110,7 +110,7 @@ describe("RedisClient", () => {
         expect(result).toEqual(expect.stringContaining("# Server"));
         expect(result).toEqual(expect.stringContaining("# Replication"));
         expect(result).toEqual(expect.not.stringContaining("# Latencystats"));
-        client.dispose();
+        client.close();
     });
 
     it("simple select test", async () => {
@@ -130,7 +130,7 @@ describe("RedisClient", () => {
         selectResult = await client.select(0);
         expect(selectResult).toEqual("OK");
         expect(await client.get(key)).toEqual(value);
-        client.dispose();
+        client.close();
     });
 
     it("can send transactions", async () => {
@@ -141,7 +141,7 @@ describe("RedisClient", () => {
         const result = await client.exec(transaction);
         expectedRes.push("OK");
         expect(result).toEqual(expectedRes);
-        client.dispose();
+        client.close();
     });
 
     it("can return null on WATCH transaction failures", async () => {
@@ -158,8 +158,8 @@ describe("RedisClient", () => {
         const result3 = await client1.exec(transaction);
         expect(result3).toBeNull();
 
-        client1.dispose();
-        client2.dispose();
+        client1.close();
+        client2.close();
     });
 
     runBaseTests<Context>({
@@ -169,7 +169,7 @@ describe("RedisClient", () => {
             return { client, context: { client } };
         },
         close: async (context: Context) => {
-            context.client.dispose();
+            context.client.close();
         },
     });
 });
