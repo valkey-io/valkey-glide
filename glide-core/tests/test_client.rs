@@ -276,6 +276,53 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_client_name_after_reconnection(#[values(false, true)] use_cluster: bool) {
+        const CLIENT_NAME: &str = "TEST_CLIENT_NAME";
+        let mut client_info_cmd = redis::Cmd::new();
+        client_info_cmd.arg("CLIENT").arg("INFO");
+        block_on_all(async move {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_name: Some(CLIENT_NAME.to_string()),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut client = test_basics.client;
+            let client_info: String = redis::from_redis_value(
+                &client.send_command(&client_info_cmd, None).await.unwrap(),
+            )
+            .unwrap();
+            assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
+
+            kill_connection(&mut client).await;
+
+            let error = client.send_command(&client_info_cmd, None).await;
+            // In Standalone mode the error is passed back to the client,
+            // while in Cluster mode the request is retried with reconnect
+            if !use_cluster {
+                assert!(error.is_err(), "{error:?}",);
+                let error = error.unwrap_err();
+                assert!(
+                    error.is_connection_dropped() || error.is_timeout(),
+                    "{error:?}",
+                );
+            }
+            let client_info: String = repeat_try_create(|| async {
+                let mut client = client.clone();
+                redis::from_redis_value(&client.send_command(&client_info_cmd, None).await.unwrap())
+                    .ok()
+            })
+            .await;
+
+            assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_and_convert_all_values(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(

@@ -83,6 +83,7 @@ class BaseClientConfiguration:
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        client_name: Optional[str] = None,
     ):
         """
         Represents the configuration settings for a Redis client.
@@ -106,12 +107,14 @@ class BaseClientConfiguration:
             request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
+            client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
         """
         self.addresses = addresses or [NodeAddress()]
         self.use_tls = use_tls
         self.credentials = credentials
         self.read_from = read_from
         self.request_timeout = request_timeout
+        self.client_name = client_name
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -139,6 +142,8 @@ class BaseClientConfiguration:
             if self.credentials.username:
                 request.authentication_info.username = self.credentials.username
             request.authentication_info.password = self.credentials.password
+        if self.client_name:
+            request.client_name = self.client_name
         request.protocol = SentProtocolVersion.RESP2
 
         return request
@@ -169,6 +174,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[Int]): index of the logical database to connect to.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
     """
 
     def __init__(
@@ -180,6 +186,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
+        client_name: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -187,6 +194,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            client_name=client_name,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -229,6 +237,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
+        client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
@@ -242,6 +251,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        client_name: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -249,4 +259,5 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            client_name=client_name,
         )

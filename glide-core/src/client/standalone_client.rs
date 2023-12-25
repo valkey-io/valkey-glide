@@ -71,11 +71,7 @@ impl StandaloneClient {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
         let retry_strategy = RetryStrategy::new(&connection_request.connection_retry_strategy.0);
-        let redis_connection_info = get_redis_connection_info(
-            connection_request.authentication_info.0,
-            connection_request.database_id,
-            connection_request.protocol.enum_value_or_default(),
-        );
+        let redis_connection_info = get_redis_connection_info(&connection_request);
 
         let tls_mode = connection_request.tls_mode.enum_value_or_default();
         let node_count = connection_request.addresses.len();

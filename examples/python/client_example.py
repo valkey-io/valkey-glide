@@ -40,6 +40,7 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
     # Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
+        client_name = 'test_standalone_client'
         # use_tls=True
     )
     client = await RedisClient.create(config)
@@ -57,6 +58,7 @@ async def test_cluster_client(host: str = "localhost", port: int = 6379):
     # Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
+        client_name = 'test_cluster_client'
         # use_tls=True
     )
     client = await RedisClusterClient.create(config)

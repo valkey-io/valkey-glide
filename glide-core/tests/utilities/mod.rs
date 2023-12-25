@@ -12,8 +12,8 @@ use redis::{
 };
 use socket2::{Domain, Socket, Type};
 use std::{
-    env, fs, io, net::SocketAddr, net::TcpListener, path::PathBuf, process, sync::Mutex,
-    time::Duration,
+    env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
+    sync::Mutex, time::Duration,
 };
 use tempfile::TempDir;
 
@@ -643,6 +643,11 @@ pub fn create_connection_request(
         configuration.connection_info.clone().unwrap_or_default(),
         &mut connection_request,
     );
+
+    if let Some(client_name) = &configuration.client_name {
+        connection_request.client_name = client_name.deref().into();
+    }
+
     connection_request
 }
 
@@ -656,6 +661,7 @@ pub struct TestConfiguration {
     pub shared_server: bool,
     pub read_from: Option<connection_request::ReadFrom>,
     pub database_id: u32,
+    pub client_name: Option<String>,
     pub protocol: ProtocolVersion,
 }
 
