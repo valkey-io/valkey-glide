@@ -335,11 +335,11 @@ public static class MainClass
 
     public static async Task Main(string[] args)
     {
-        Logger.SetLoggerConfig(Level.Info, null);
         CommandLineOptions options = new CommandLineOptions();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
+        Logger.SetLoggerConfig(Level.Info, Path.GetFileNameWithoutExtension(options.resultsFile));
         var product = options.concurrentTasks.SelectMany(concurrentTasks =>
             options.clientCount.Select(clientCount => (concurrentTasks: concurrentTasks, dataSize: options.dataSize, clientCount: clientCount))).Where(tuple => tuple.concurrentTasks >= tuple.clientCount);
         foreach (var (concurrentTasks, dataSize, clientCount) in product)
