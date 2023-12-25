@@ -104,6 +104,7 @@ enum ExpectedReturnType {
     Map,
     Double,
     Boolean,
+    Set,
 }
 
 fn convert_to_expected_type(
@@ -141,19 +142,32 @@ fn convert_to_expected_type(
             )
                 .into()),
         },
+        ExpectedReturnType::Set => match value {
+            Value::Nil => Ok(value),
+            Value::Set(_) => Ok(value),
+            Value::Array(array) => Ok(Value::Set(array)),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to set",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
         ExpectedReturnType::Double => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
         ExpectedReturnType::Boolean => Ok(Value::Boolean(from_redis_value::<bool>(&value)?)),
     }
 }
 
 fn expected_type_for_cmd(cmd: &redis::Cmd) -> Option<ExpectedReturnType> {
-    let command = cmd.arg_idx(0)?;
-    match command {
-        b"HGETALL" | b"XREAD" => Some(ExpectedReturnType::Map),
+    let command = cmd.command()?;
+
+    match command.as_slice() {
+        b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT" => {
             Some(ExpectedReturnType::Boolean)
         }
+        b"SMEMBERS" => Some(ExpectedReturnType::Set),
         _ => None,
     }
 }
