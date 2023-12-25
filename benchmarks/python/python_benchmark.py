@@ -6,6 +6,7 @@ import random
 import time
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from statistics import mean
 from typing import List
 
@@ -251,10 +252,6 @@ async def main(
     use_tls,
     is_cluster,
 ):
-    # Demo - Setting the internal logger to log every log that has a level of info and above,
-    # and save the logs to the first log file.
-    Logger.set_logger_config(LogLevel.INFO, "first.log")
-
     if clients_to_run == "all":
         client_class = redispy.RedisCluster if is_cluster else redispy.Redis
         clients = await create_clients(
@@ -311,6 +308,10 @@ if __name__ == "__main__":
     use_tls = args.tls
     port = args.port
     is_cluster = args.clusterModeEnabled
+
+    # Setting the internal logger to log every log that has a level of info and above,
+    # and save the logs to a file with the name of the results file.
+    Logger.set_logger_config(LogLevel.INFO, Path(args.resultsFile).stem)
 
     product_of_arguments = [
         (data_size, int(num_of_concurrent_tasks), int(number_of_clients))
