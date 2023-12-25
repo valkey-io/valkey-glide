@@ -217,7 +217,7 @@ async function main(
             data_size,
             data,
             (client) => {
-                (client as RedisClient).dispose();
+                (client as RedisClient).close();
             },
             clusterModeEnabled
         );

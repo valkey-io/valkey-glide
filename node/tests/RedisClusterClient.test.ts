@@ -80,7 +80,7 @@ class RedisCluster {
         return [...this.usedPorts];
     }
 
-    public async dispose() {
+    public async close() {
         await new Promise<void>((resolve, reject) =>
             exec(
                 `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
@@ -110,7 +110,7 @@ describe("RedisClusterClient", () => {
 
     afterAll(async () => {
         if (testsFailed === 0) {
-            await cluster.dispose();
+            await cluster.close();
         }
     });
 
@@ -140,7 +140,7 @@ describe("RedisClusterClient", () => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }
-            context.client.dispose();
+            context.client.close();
         },
         timeout: TIMEOUT,
     });
@@ -168,7 +168,7 @@ describe("RedisClusterClient", () => {
                     expect.not.stringContaining("# Errorstats")
                 );
             });
-            client.dispose();
+            client.close();
         },
         TIMEOUT
     );
@@ -186,7 +186,7 @@ describe("RedisClusterClient", () => {
             expect(typeof result).toEqual("string");
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
-            client.dispose();
+            client.close();
         },
         TIMEOUT
     );
@@ -202,7 +202,7 @@ describe("RedisClusterClient", () => {
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
             expect(result).toEqual(["OK", { timeout: "1000" }]);
-            client.dispose();
+            client.close();
         },
         TIMEOUT
     );
@@ -217,7 +217,7 @@ describe("RedisClusterClient", () => {
             const expectedRes = transactionTest(transaction);
             const result = await client.exec(transaction);
             expect(result).toEqual(expectedRes);
-            client.dispose();
+            client.close();
         },
         TIMEOUT
     );
@@ -242,8 +242,8 @@ describe("RedisClusterClient", () => {
             const result3 = await client1.exec(transaction);
             expect(result3).toBeNull();
 
-            client1.dispose();
-            client2.dispose();
+            client1.close();
+            client2.close();
         },
         TIMEOUT
     );
