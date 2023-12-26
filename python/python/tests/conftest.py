@@ -49,6 +49,16 @@ def pytest_addoption(parser):
         help="TLS disabled, defaults to `%(default)s`",
     )
 
+    parser.addoption(
+        "--load-module",
+        action="append",
+        help="""Load additional Redis modules (provide full path for the module's shared library).
+            Use multiple times for multiple modules.
+            Example:
+            pytest --load-module=/path/to/module1.so --load-module=/path/to/module2.so""",
+        default=[],
+    )
+
 
 @pytest.fixture(autouse=True, scope="session")
 def call_before_all_pytests(request):
@@ -57,8 +67,9 @@ def call_before_all_pytests(request):
     before performing collection and entering the run test loop.
     """
     tls = request.config.getoption("--tls")
-    pytest.redis_cluster = RedisCluster(tls, True)
-    pytest.standalone_cluster = RedisCluster(tls, False, 1, 1)
+    load_module = request.config.getoption("--load-module")
+    pytest.redis_cluster = RedisCluster(tls, True, load_module=load_module)
+    pytest.standalone_cluster = RedisCluster(tls, False, 1, 1, load_module=load_module)
 
 
 def pytest_sessionfinish(session, exitstatus):
