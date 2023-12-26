@@ -272,6 +272,7 @@ def start_redis_server(
     tls: bool,
     tls_args: List[str],
     cluster_mode: bool,
+    load_module: Optional[List[str]] = None,
 ) -> Tuple[RedisServer, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
@@ -291,6 +292,14 @@ def start_redis_server(
         "--logfile",
         f"{node_folder}/redis.log",
     ]
+    if load_module:
+        if len(load_module) == 0:
+            raise ValueError(
+                "Please provide the path(s) to the module(s) you want to load."
+            )
+        cmd_args.extend(["--enable-module-command", "yes"])
+        for module_path in load_module:
+            cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,
@@ -315,6 +324,7 @@ def create_servers(
     cluster_folder: str,
     tls: bool,
     cluster_mode: bool,
+    load_module: Optional[List[str]] = None,
 ) -> List[RedisServer]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -348,7 +358,9 @@ def create_servers(
     for i in range(nodes_count):
         port = ports[i] if ports else None
         servers_to_check.add(
-            start_redis_server(host, port, cluster_folder, tls, tls_args, cluster_mode)
+            start_redis_server(
+                host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
+            )
         )
     # Check all servers
     while len(servers_to_check) > 0:
@@ -364,7 +376,13 @@ def create_servers(
             # The port was already taken, try to find a new free one
             servers_to_check.add(
                 start_redis_server(
-                    server.host, None, cluster_folder, tls, tls_args, cluster_mode
+                    server.host,
+                    None,
+                    cluster_folder,
+                    tls,
+                    tls_args,
+                    cluster_mode,
+                    load_module,
                 )
             )
             continue
@@ -878,6 +896,13 @@ def main():
         required=False,
     )
 
+    parser_start.add_argument(
+        "--load-module",
+        action="append",
+        help="The paths of the redis modules to load.",
+        required=False,
+    )
+
     # Stop parser
     parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
@@ -950,6 +975,7 @@ def main():
             cluster_folder,
             args.tls,
             args.cluster_mode,
+            args.load_module,
         )
         if args.cluster_mode:
             create_cluster(
