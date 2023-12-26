@@ -90,7 +90,7 @@ runs:
         - name: Build RedisJSON
           if: steps.cache-dependencies-redisjson.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'json')
           shell: bash 
-          working-directory: ./ redisjson
+          working-directory: ./redisjson
           run: |
             set -x
             echo "Building RedisJSON..."
