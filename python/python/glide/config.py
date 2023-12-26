@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Optional
 
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
+from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide.protobuf.connection_request_pb2 import TlsMode
 
@@ -138,6 +139,7 @@ class BaseClientConfiguration:
             if self.credentials.username:
                 request.authentication_info.username = self.credentials.username
             request.authentication_info.password = self.credentials.password
+        request.protocol = SentProtocolVersion.RESP2
 
         return request
 

@@ -547,11 +547,20 @@ pub struct TestBasics {
     pub client: StandaloneClient,
 }
 
+fn convert_to_protobuf_protocol(
+    protocol: redis::ProtocolVersion,
+) -> connection_request::ProtocolVersion {
+    match protocol {
+        redis::ProtocolVersion::RESP2 => connection_request::ProtocolVersion::RESP2,
+        redis::ProtocolVersion::RESP3 => connection_request::ProtocolVersion::RESP3,
+    }
+}
+
 fn set_connection_info_to_connection_request(
     connection_info: RedisConnectionInfo,
     connection_request: &mut connection_request::ConnectionRequest,
 ) {
-    connection_request.use_resp3 = connection_info.use_resp3;
+    connection_request.protocol = convert_to_protobuf_protocol(connection_info.protocol).into();
     if connection_info.password.is_some() {
         connection_request.authentication_info =
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {

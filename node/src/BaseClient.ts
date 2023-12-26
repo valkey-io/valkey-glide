@@ -882,7 +882,7 @@ export class BaseClient {
                   }
                 : undefined;
         return {
-            useResp3: true,
+            protocol: connection_request.ProtocolVersion.RESP3,
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls

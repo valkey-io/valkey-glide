@@ -78,14 +78,19 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_resp3_support(#[values(false, true)] use_cluster: bool) {
+    fn test_resp_support(#[values(false, true)] use_cluster: bool, #[values(2, 3)] protocol: i64) {
+        let protocol_enum = match protocol {
+            2 => redis::ProtocolVersion::RESP2,
+            3 => redis::ProtocolVersion::RESP3,
+            _ => panic!(),
+        };
         block_on_all(async {
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
                     shared_server: true,
                     connection_info: Some(RedisConnectionInfo {
-                        use_resp3: true,
+                        protocol: protocol_enum,
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -100,7 +105,7 @@ mod shared_client_tests {
                     .unwrap(),
             )
             .unwrap();
-            assert_eq!(hello.get("proto").unwrap(), &Value::Int(3));
+            assert_eq!(hello.get("proto").unwrap(), &Value::Int(protocol));
 
             let mut cmd = redis::cmd("HSET");
             cmd.arg("hash").arg("foo").arg("baz");
