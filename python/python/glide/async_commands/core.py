@@ -6,6 +6,7 @@ from typing import (
     Mapping,
     Optional,
     Protocol,
+    Set,
     Tuple,
     Type,
     Union,
@@ -732,7 +733,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
 
-    async def smembers(self, key: str) -> List[str]:
+    async def smembers(self, key: str) -> Set[str]:
         """Retrieve all the members of the set value stored at `key`.
         See https://redis.io/commands/smembers/ for details.
 
@@ -740,15 +741,15 @@ class CoreCommands(Protocol):
             key (str): The key from which to retrieve the set members.
 
         Returns:
-            List[str]: A list of all members of the set.
+            Set[str]: A set of all members of the set.
                 If `key` does not exist an empty list will be returned.
                 If `key` holds a value that is not a set, an error is returned.
 
         Examples:
             >>> await client.smembers("my_set")
-                ["member1", "member2", "member3"]
+                {"member1", "member2", "member3"}
         """
-        return cast(List[str], await self._execute_command(RequestType.SMembers, [key]))
+        return cast(Set[str], await self._execute_command(RequestType.SMembers, [key]))
 
     async def scard(self, key: str) -> int:
         """Retrieve the set cardinality (number of elements) of the set stored at `key`.

@@ -1,7 +1,7 @@
 use glide_core::start_socket_listener;
 use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyList};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PySet};
 use pyo3::Python;
 
 use redis::Value;
@@ -63,6 +63,22 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
         Ok(Python::with_gil(|py| "OK".into_py(py)))
     }
 
+    fn iter_to_value<TIterator>(
+        py: Python,
+        iter: impl IntoIterator<Item = Value, IntoIter = TIterator>,
+    ) -> PyResult<Vec<PyObject>>
+    where
+        TIterator: ExactSizeIterator<Item = Value>,
+    {
+        let mut iterator = iter.into_iter();
+        let len = iterator.len();
+
+        iterator.try_fold(Vec::with_capacity(len), |mut acc, val| {
+            acc.push(redis_value_to_py(py, val)?);
+            Ok(acc)
+        })
+    }
+
     fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
@@ -74,11 +90,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
                 Err(_err) => Err(PyUnicodeDecodeError::new_err(data)),
             },
             Value::Array(bulk) => {
-                let elements: &PyList = PyList::new(
-                    py,
-                    bulk.into_iter()
-                        .map(|item| redis_value_to_py(py, item).unwrap()),
-                );
+                let elements: &PyList = PyList::new(py, iter_to_value(py, bulk)?);
                 Ok(elements.into_py(py))
             }
             Value::Map(map) => {
@@ -92,10 +104,14 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
                 data: _,
                 attributes: _,
             } => todo!(),
-            Value::Set(_) => todo!(),
+            Value::Set(set) => {
+                let set = iter_to_value(py, set)?;
+                let set = PySet::new(py, set.iter())?;
+                Ok(set.into_py(py))
+            }
             Value::Double(double) => Ok(PyFloat::new(py, double.into()).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
-            Value::VerbatimString { format: _, text: _ } => todo!(),
+            Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
             Value::BigNumber(_) => todo!(),
             Value::Push { kind: _, data: _ } => todo!(),
         }

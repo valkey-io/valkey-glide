@@ -36,6 +36,21 @@ class ReadFrom(Enum):
     """
 
 
+class ProtocolVersion(Enum):
+    """
+    Represents the communication protocol with the server.
+    """
+
+    RESP2 = SentProtocolVersion.RESP2
+    """
+    Communicate using Redis RESP2.
+    """
+    RESP3 = SentProtocolVersion.RESP3
+    """
+    Communicate using Redis RESP3.
+    """
+
+
 class BackoffStrategy:
     def __init__(self, num_of_retries: int, factor: int, exponent_base: int):
         """
@@ -84,6 +99,7 @@ class BaseClientConfiguration:
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
+        protocol: ProtocolVersion = ProtocolVersion.RESP3,
     ):
         """
         Represents the configuration settings for a Redis client.
@@ -115,6 +131,7 @@ class BaseClientConfiguration:
         self.read_from = read_from
         self.request_timeout = request_timeout
         self.client_name = client_name
+        self.protocol = protocol
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -144,7 +161,7 @@ class BaseClientConfiguration:
             request.authentication_info.password = self.credentials.password
         if self.client_name:
             request.client_name = self.client_name
-        request.protocol = SentProtocolVersion.RESP2
+        request.protocol = self.protocol.value
 
         return request
 
@@ -175,6 +192,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
             If not set, a default backoff strategy will be used.
         database_id (Optional[Int]): index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
     """
 
     def __init__(
@@ -187,6 +205,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
+        protocol: ProtocolVersion = ProtocolVersion.RESP3,
     ):
         super().__init__(
             addresses=addresses,
@@ -195,6 +214,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
             read_from=read_from,
             request_timeout=request_timeout,
             client_name=client_name,
+            protocol=protocol,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -238,6 +258,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
@@ -252,6 +273,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
+        protocol: ProtocolVersion = ProtocolVersion.RESP3,
     ):
         super().__init__(
             addresses=addresses,
@@ -260,4 +282,5 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             read_from=read_from,
             request_timeout=request_timeout,
             client_name=client_name,
+            protocol=protocol,
         )
