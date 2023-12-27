@@ -253,7 +253,7 @@ mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_request_pipeline_timeout(#[values(false, true)] use_cluster: bool) {
+    fn test_request_transaction_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
                 use_cluster,
@@ -267,13 +267,54 @@ mod shared_client_tests {
 
             let mut pipeline = redis::pipe();
             pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
-            let result = test_basics
-                .client
-                .send_pipeline(&pipeline, 0, 1, None)
-                .await;
+            let result = test_basics.client.send_transaction(&pipeline, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_request_transaction_and_convert_all_values(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: glide_core::connection_request::ProtocolVersion::RESP2,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let key = generate_random_string(10);
+            let mut pipeline = redis::pipe();
+            pipeline.atomic();
+            pipeline.hset(&key, "bar", "vaz");
+            pipeline.hgetall(&key);
+            pipeline.hexists(&key, "bar");
+            pipeline.del(&key);
+            pipeline.set(&key, "0");
+            pipeline.cmd("INCRBYFLOAT").arg(&key).arg("0.5");
+            pipeline.del(&key);
+
+            let result = test_basics.client.send_transaction(&pipeline, None).await;
+            assert_eq!(
+                result,
+                Ok(Value::Array(vec![
+                    Value::Int(1),
+                    Value::Map(vec![(
+                        Value::BulkString(b"bar".to_vec()),
+                        Value::BulkString(b"vaz".to_vec()),
+                    )]),
+                    Value::Boolean(true),
+                    Value::Int(1),
+                    Value::Okay,
+                    Value::Double(0.5.into()),
+                    Value::Int(1),
+                ]),)
+            );
         });
     }
 }

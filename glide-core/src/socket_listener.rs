@@ -381,16 +381,14 @@ async fn send_transaction(
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
-    let offset = request.commands.len() + 1;
     pipeline.atomic();
     for command in request.commands {
         pipeline.add_command(get_redis_command(&command)?);
     }
 
     client
-        .send_pipeline(&pipeline, offset, 1, routing)
+        .send_transaction(&pipeline, routing)
         .await
-        .map(|mut values| values.pop().unwrap_or(Value::Nil))
         .map_err(|err| err.into())
 }
 
