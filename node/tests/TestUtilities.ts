@@ -96,7 +96,7 @@ export function transactionTest(
         { [field]: value },
         1,
         [null],
-        0,
+        false,
         3,
         field + "3",
         2,

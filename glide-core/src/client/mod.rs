@@ -189,17 +189,17 @@ impl Client {
         .boxed()
     }
 
-    pub fn send_pipeline<'a>(
+    pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
-        offset: usize,
-        count: usize,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, Vec<Value>> {
+    ) -> redis::RedisFuture<'a, Value> {
+        let command_count = pipeline.cmd_iter().count();
+        let offset = command_count + 1;
         run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
-                    client.send_pipeline(pipeline, offset, count).await
+                    client.send_pipeline(pipeline, offset, 1).await
                 }
 
                 ClientWrapper::Cluster { ref mut client } => {
@@ -208,17 +208,50 @@ impl Client {
                         _ => SingleNodeRoutingInfo::Random,
                     };
 
-                    client.route_pipeline(pipeline, offset, count, route).await
+                    client.route_pipeline(pipeline, offset, 1, route).await
                 }
             }
-            .and_then(|values| {
-                values
+            .and_then(|mut values| {
+                assert_eq!(values.len(), 1);
+                let values = values.pop();
+                let values = match values {
+                    Some(Value::Array(values)) => values,
+                    Some(Value::Nil) => {
+                        return Ok(Value::Nil);
+                    }
+                    Some(value) => {
+                        if offset == 2 {
+                            vec![value]
+                        } else {
+                            return Err((
+                                ErrorKind::ResponseError,
+                                "Received non-array response for transaction",
+                                format!("Response: `{value:?}`"),
+                            )
+                                .into());
+                        }
+                    }
+                    _ => {
+                        return Err((
+                            ErrorKind::ResponseError,
+                            "Received empty response for transaction",
+                        )
+                            .into());
+                    }
+                };
+
+                let results = values
                     .into_iter()
                     .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
                     .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .collect()
+                    .try_fold(
+                        Vec::with_capacity(command_count),
+                        |mut acc, result| -> RedisResult<_> {
+                            acc.push(result?);
+                            Ok(acc)
+                        },
+                    )?;
+                Ok(Value::Array(results))
             })
         })
         .boxed()

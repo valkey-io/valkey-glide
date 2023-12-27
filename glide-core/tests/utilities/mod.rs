@@ -2,7 +2,7 @@
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
-    connection_request::{self, AuthenticationInfo, NodeAddress},
+    connection_request::{self, AuthenticationInfo, NodeAddress, ProtocolVersion},
 };
 use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
@@ -656,6 +656,7 @@ pub struct TestConfiguration {
     pub shared_server: bool,
     pub read_from: Option<connection_request::ReadFrom>,
     pub database_id: u32,
+    pub protocol: ProtocolVersion,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -680,6 +681,7 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     }
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;
+    connection_request.protocol = configuration.protocol.into();
     let client = StandaloneClient::create_client(connection_request)
         .await
         .unwrap();
