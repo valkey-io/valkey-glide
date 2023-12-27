@@ -65,6 +65,8 @@ export type ReturnTypeAttribute = {
     value: ReturnType;
     attributes: ReturnTypeMap;
 };
+export type ProtocolVersion = connection_request.ProtocolVersion;
+export const ProtocolVersion = connection_request.ProtocolVersion;
 export type ReturnType =
     | "OK"
     | string
@@ -139,6 +141,11 @@ export type BaseClientConfiguration = {
      * If not set, `Primary` will be used.
      */
     readFrom?: ReadFrom;
+    /**
+     * Choose the Redis protocol to be used with the server.
+     * If not set, `RESP3` will be used.
+     */
+    server_protocol?: ProtocolVersion;
 };
 
 function getRequestErrorClass(
@@ -882,7 +889,7 @@ export class BaseClient {
                   }
                 : undefined;
         return {
-            protocol: connection_request.ProtocolVersion.RESP3,
+            protocol: options.server_protocol,
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls

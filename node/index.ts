@@ -1,4 +1,8 @@
-export { BaseClientConfiguration, ReturnType } from "./src/BaseClient";
+export {
+    BaseClientConfiguration,
+    ProtocolVersion,
+    ReturnType,
+} from "./src/BaseClient";
 export {
     ExpireOptions,
     InfoOptions,
