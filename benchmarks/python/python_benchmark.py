@@ -4,7 +4,7 @@ import functools
 import json
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from statistics import mean
@@ -196,7 +196,7 @@ async def run_clients(
     data_size,
     is_cluster,
 ):
-    now = datetime.now().strftime("%H:%M:%S")
+    now = datetime.now(timezone.utc).strftime("%H:%M:%S")
     print(
         f"Starting {client_name} data size: {data_size} concurrency:"
         f"{num_of_concurrent_tasks} client count: {len(clients)} {now}"
