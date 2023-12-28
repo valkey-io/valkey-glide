@@ -239,6 +239,14 @@ class TestRedisClients:
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert "db=4" in client_info
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_client_name(self, request, cluster_mode):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, client_name="TEST_CLIENT_NAME"
+        )
+        client_info = await redis_client.custom_command(["CLIENT", "INFO"])
+        assert "name=TEST_CLIENT_NAME" in client_info
+
 
 @pytest.mark.asyncio
 class TestCommands:
