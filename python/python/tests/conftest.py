@@ -107,6 +107,7 @@ async def create_client(
     credentials: Optional[RedisCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
+    client_name: Optional[str] = None,
 ) -> Union[RedisClient, RedisClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -118,6 +119,7 @@ async def create_client(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
+            client_name=client_name,
         )
         return await RedisClusterClient.create(cluster_config)
     else:
@@ -129,5 +131,6 @@ async def create_client(
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
+            client_name=client_name,
         )
         return await RedisClient.create(config)
