@@ -44,11 +44,8 @@ public class CommandManager {
    * @return A result promise
    */
   private CompletableFuture<String> submitNewRequest(RequestType command, List<String> args) {
-    // TODO this explicitly uses ForkJoin thread pool. May be we should use another one.
-    return CompletableFuture.supplyAsync(
-            () -> channel.write(RequestBuilder.prepareRedisRequest(command, args), true))
-        // TODO: is there a better way to execute this?
-        .thenComposeAsync(f -> f)
+    return channel
+        .write(RequestBuilder.prepareRedisRequest(command, args), true)
         .thenApplyAsync(this::extractValueFromGlideRsResponse);
   }
 
@@ -73,9 +70,6 @@ public class CommandManager {
     } else if (response.hasRespPointer()) {
       return RedisValueResolver.valueFromPointer(response.getRespPointer()).toString();
     }
-    // TODO commented out due to #710 https://github.com/aws/babushka/issues/710
-    //      empty response means a successful command
-    // throw new IllegalStateException("A malformed response received: " + response.toString());
     return "OK";
   }
 }

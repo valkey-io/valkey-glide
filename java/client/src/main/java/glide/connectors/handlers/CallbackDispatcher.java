@@ -13,14 +13,15 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CallbackDispatcher {
 
-  /** Client connection status needed to distinguish connection request. */
-  private final AtomicBoolean connectionStatus;
+  /**
+   * Client connection status needed to distinguish connection request. The callback dispatcher only
+   * submits connection requests until a successful connection response is returned and the status
+   * changes to true. The callback dispatcher then submits command requests.
+   */
+  private final AtomicBoolean isConnectedStatus;
 
   /** Unique request ID (callback ID). Thread-safe and overflow-safe. */
-  private final AtomicInteger requestId = new AtomicInteger(0);
-
-  /** Reserved callback ID for connection request. */
-  private final Integer CONNECTION_PROMISE_ID = 0;
+  private final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);
 
   /**
    * Storage of Futures to handle responses. Map key is callback id, which starts from 1.<br>
@@ -47,13 +48,11 @@ public class CallbackDispatcher {
    */
   public Pair<Integer, CompletableFuture<Response>> registerRequest() {
     var future = new CompletableFuture<Response>();
-    Integer callbackId = connectionStatus.get() ? freeRequestIds.poll() : CONNECTION_PROMISE_ID;
+    Integer callbackId = freeRequestIds.poll();
     if (callbackId == null) {
-      callbackId = requestId.incrementAndGet();
-      if (callbackId.equals(CONNECTION_PROMISE_ID)) {
-        throw new RuntimeException(
-            "Can't submit a new request, too many requests are pending already");
-      }
+      // on null, we have no available request ids available
+      // we can add
+      callbackId = nextAvailableRequestId.incrementAndGet();
     }
     responses.put(callbackId, future);
     return Pair.of(callbackId, future);
@@ -70,17 +69,17 @@ public class CallbackDispatcher {
    * @param response A response received
    */
   public void completeRequest(Response response) {
-    // A connection response doesn't contain a callback id
-    int callbackId = connectionStatus.get() ? response.getCallbackIdx() : CONNECTION_PROMISE_ID;
-    CompletableFuture<Response> future = responses.get(callbackId);
+    // Complete and return the response at callbackId
+    // free up the callback ID in the freeRequestIds list
+    int callbackId = response.getCallbackIdx();
+    CompletableFuture<Response> future = responses.remove(callbackId);
+    freeRequestIds.add(callbackId);
     if (future != null) {
       future.completeAsync(() -> response);
     } else {
       // TODO: log an error.
       // probably a response was received after shutdown or `registerRequest` call was missing
     }
-    responses.remove(callbackId);
-    freeRequestIds.add(callbackId);
   }
 
   public void shutdownGracefully() {
