@@ -40,6 +40,7 @@ message ConnectionRequest {
     AuthenticationInfo authentication_info = 7;
     uint32 database_id = 8;
     ProtocolVersion protocol = 9;
+    string client_name = 10;
 }
 
 message ConnectionRetryStrategy {

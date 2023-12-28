@@ -1,5 +1,5 @@
 use crate::connection_request::{
-    AuthenticationInfo, ConnectionRequest, NodeAddress, ProtocolVersion, ReadFrom, TlsMode,
+    ConnectionRequest, NodeAddress, ProtocolVersion, ReadFrom, TlsMode,
 };
 use futures::FutureExt;
 use logger_core::log_info;
@@ -44,22 +44,21 @@ pub fn convert_to_redis_protocol(protocol: ProtocolVersion) -> redis::ProtocolVe
 }
 
 pub(super) fn get_redis_connection_info(
-    authentication_info: Option<Box<AuthenticationInfo>>,
-    database_id: u32,
-    protocol: ProtocolVersion,
+    connection_request: &ConnectionRequest,
 ) -> redis::RedisConnectionInfo {
-    let protocol = convert_to_redis_protocol(protocol);
-    match authentication_info {
+    let protocol = convert_to_redis_protocol(connection_request.protocol.enum_value_or_default());
+    match connection_request.authentication_info.0.as_ref() {
         Some(info) => redis::RedisConnectionInfo {
-            db: database_id as i64,
+            db: connection_request.database_id as i64,
             username: chars_to_string_option(&info.username),
             password: chars_to_string_option(&info.password),
             protocol,
-            client_name: None,
+            client_name: chars_to_string_option(&connection_request.client_name),
         },
         None => redis::RedisConnectionInfo {
-            db: database_id as i64,
+            db: connection_request.database_id as i64,
             protocol,
+            client_name: chars_to_string_option(&connection_request.client_name),
             ..Default::default()
         },
     }
@@ -271,9 +270,7 @@ async fn create_cluster_client(
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.enum_value_or_default();
-    let protocol = request.protocol.enum_value_or_default();
-    let redis_connection_info =
-        get_redis_connection_info(request.authentication_info.0, 0, protocol);
+    let redis_connection_info = get_redis_connection_info(&request);
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -286,7 +283,12 @@ async fn create_cluster_client(
     if read_from_replicas {
         builder = builder.read_from_replicas();
     }
-    builder = builder.use_protocol(convert_to_redis_protocol(protocol));
+    builder = builder.use_protocol(convert_to_redis_protocol(
+        request.protocol.enum_value_or_default(),
+    ));
+    if let Some(client_name) = redis_connection_info.client_name {
+        builder = builder.client_name(client_name);
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure
@@ -353,9 +355,11 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         }
         None => String::new(),
     };
+    let protocol = request.protocol.enum_value_or_default();
+    let client_name = chars_to_string_option(&request.client_name);
 
     format!(
-        "\naddresses: {addresses}\nTLS mode: {tls_mode:?}\ncluster mode: {cluster_mode}{request_timeout}\nRead from replica strategy: {rfr_strategy:?}{database_id}{connection_retry_strategy}",
+        "\nAddresses: {addresses}\nTLS mode: {tls_mode:?}\nCluster mode: {cluster_mode}\nRequest timeout: {request_timeout}\nRead from replica strategy: {rfr_strategy:?}\nConnection retry strategy: {connection_retry_strategy}\nDatabase id: {database_id}\nProtocol: {protocol:?}\nClient name: {client_name:?}",
     )
 }
 

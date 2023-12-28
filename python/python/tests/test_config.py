@@ -10,6 +10,7 @@ def test_default_client_config():
     assert config.addresses[0].port == 6379
     assert config.read_from.value == ProtobufReadFrom.Primary
     assert config.use_tls is False
+    assert config.client_name is None
 
 
 def test_convert_to_protobuf():
@@ -17,6 +18,7 @@ def test_convert_to_protobuf():
         [NodeAddress("127.0.0.1")],
         use_tls=True,
         read_from=ReadFrom.PREFER_REPLICA,
+        client_name="TEST_CLIENT_NAME",
     )
     request = config._create_a_protobuf_conn_request()
     assert isinstance(request, ConnectionRequest)
@@ -24,3 +26,4 @@ def test_convert_to_protobuf():
     assert request.addresses[0].port == 6379
     assert request.tls_mode is TlsMode.SecureTls
     assert request.read_from == ProtobufReadFrom.PreferReplica
+    assert request.client_name == "TEST_CLIENT_NAME"
