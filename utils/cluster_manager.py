@@ -960,7 +960,7 @@ def main():
         tic = time.perf_counter()
         cluster_prefix = f"tls-{args.prefix}" if args.tls else args.prefix
         cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
-        logging.info(f"{datetime.now()} Starting script for cluster {cluster_folder}")
+        logging.info(f"{datetime.now(timezone.utc)} Starting script for cluster {cluster_folder}")
         logfile = (
             f"{cluster_folder}/cluster_manager.log"
             if not args.logfile
@@ -1010,7 +1010,7 @@ def main():
             )
         tic = time.perf_counter()
         logging.info(
-            f"{datetime.now()} Stopping script for cluster/s {args.cluster_folder or f'{args.prefix}*'} in {args.folder_path}"
+            f"{datetime.now(timezone.utc)} Stopping script for cluster/s {args.cluster_folder or f'{args.prefix}*'} in {args.folder_path}"
         )
 
         stop_clusters(

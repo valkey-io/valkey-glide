@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Union
 
 import pytest
@@ -25,7 +25,7 @@ def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
-    value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+    value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
 
     transaction.set(key, value)
