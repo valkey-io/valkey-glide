@@ -56,5 +56,6 @@
     "isort.args": [
         "--profile",
         "black"
-    ]
+    ],
+    "rust-analyzer.cargo.features": "all"
 }
