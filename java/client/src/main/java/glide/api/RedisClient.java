@@ -4,8 +4,6 @@ import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
-import glide.api.models.exceptions.ConnectionException;
-import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
@@ -54,22 +52,17 @@ public class RedisClient extends BaseClient {
     return CreateClient(config, connectionManager, commandManager);
   }
 
-  private static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config,
-                                                             ConnectionManager connectionManager,
-                                                             CommandManager commandManager) {
+  private static CompletableFuture<RedisClient> CreateClient(
+      RedisClientConfiguration config,
+      ConnectionManager connectionManager,
+      CommandManager commandManager) {
     return connectionManager
         .connectToRedis(
             config.getAddresses().get(0).getHost(),
             config.getAddresses().get(0).getPort(),
             config.isUseTLS(),
             false)
-        .thenApplyAsync(
-            b -> {
-              if (b) {
-                return new RedisClient(connectionManager, commandManager);
-              }
-              throw new ConnectionException("Unable to connect to Redis");
-            });
+        .thenApplyAsync(ignore -> new RedisClient(connectionManager, commandManager));
   }
 
   protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
