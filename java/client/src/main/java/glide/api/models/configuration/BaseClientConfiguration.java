@@ -3,6 +3,7 @@ package glide.api.models.configuration;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
@@ -24,7 +25,7 @@ public abstract class BaseClientConfiguration {
   @Builder.Default private final boolean useTLS = false;
 
   /** If not set, `PRIMARY` will be used. */
-  @Builder.Default private final ReadFrom readFrom = ReadFrom.PRIMARY;
+  @NonNull @Builder.Default private final ReadFrom readFrom = ReadFrom.PRIMARY;
 
   /**
    * Credentials for authentication process. If none are set, the client will not authenticate

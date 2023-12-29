@@ -16,20 +16,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RedisClient extends BaseClient {
 
   public static CompletableFuture<RedisClient> CreateClient() {
-    RedisClientConfiguration config =
-        RedisClientConfiguration.builder()
-            .address(NodeAddress.builder().build())
-            .useTLS(false)
-            .build();
-
-    return CreateClient(config);
+    return CreateClient(RedisClientConfiguration.builder().build());
   }
 
   public static CompletableFuture<RedisClient> CreateClient(String host, Integer port) {
     RedisClientConfiguration config =
         RedisClientConfiguration.builder()
             .address(NodeAddress.builder().host(host).port(port).build())
-            .useTLS(false)
             .build();
 
     return CreateClient(config);
@@ -46,7 +39,7 @@ public class RedisClient extends BaseClient {
 
     CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
     ChannelHandler channelHandler = new ChannelHandler(callbackDispatcher, getSocket());
-    var connectionManager = new ConnectionManager();
+    var connectionManager = new ConnectionManager(channelHandler);
     var commandManager = new CommandManager(new CompletableFuture<>());
     // TODO: send request with configuration to connection Manager as part of a follow-up PR
     return CreateClient(config, connectionManager, commandManager);
@@ -57,11 +50,7 @@ public class RedisClient extends BaseClient {
       ConnectionManager connectionManager,
       CommandManager commandManager) {
     return connectionManager
-        .connectToRedis(
-            config.getAddresses().get(0).getHost(),
-            config.getAddresses().get(0).getPort(),
-            config.isUseTLS(),
-            false)
+        .connectToRedis(config)
         .thenApplyAsync(ignore -> new RedisClient(connectionManager, commandManager));
   }
 
