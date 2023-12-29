@@ -9,6 +9,10 @@ import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass.RequestType;
 import response.ResponseOuterClass.Response;
 
+/**
+ * Service responsible for submitting command requests to a socket channel handler
+ * and unpack responses from the same socket channel handler.
+ */
 @RequiredArgsConstructor
 public class CommandManager {
 
@@ -53,7 +57,7 @@ public class CommandManager {
    * Check response and extract data from it.
    *
    * @param response A response received from rust core lib
-   * @return A String from the Redis RESP2 response, or Ok. Otherwise, returns null
+   * @return A String from the Redis response, or Ok. Otherwise, returns null
    */
   private String extractValueFromGlideRsResponse(Response response) {
     if (response.hasRequestError()) {

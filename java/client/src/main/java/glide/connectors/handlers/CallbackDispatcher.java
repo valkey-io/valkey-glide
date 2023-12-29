@@ -50,9 +50,9 @@ public class CallbackDispatcher {
     var future = new CompletableFuture<Response>();
     Integer callbackId = freeRequestIds.poll();
     if (callbackId == null) {
-      // on null, we have no available request ids available
-      // we can add
-      callbackId = nextAvailableRequestId.incrementAndGet();
+      // on null, we have no available request ids available in freeRequestIds
+      // instead, get the next available request from counter
+      callbackId = nextAvailableRequestId.getAndIncrement();
     }
     responses.put(callbackId, future);
     return Pair.of(callbackId, future);

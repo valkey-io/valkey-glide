@@ -10,6 +10,10 @@ import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
+/**
+ * Service responsible for submitting connection requests to a socket channel handler
+ * and unpack responses from the same socket channel handler.
+ */
 @RequiredArgsConstructor
 public class ConnectionManager {
 
