@@ -1,6 +1,6 @@
 import asyncio
 import threading
-from typing import List, Optional, Tuple, Union, cast
+from typing import List, Optional, Set, Tuple, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
@@ -52,7 +52,7 @@ class BaseRedisClient(CoreCommands):
         """
         self.config: BaseClientConfiguration = config
         self._available_futures: dict[int, asyncio.Future] = {}
-        self._available_callback_indexes: set[int] = set()
+        self._available_callback_indexes: Set[int] = set()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
@@ -156,6 +156,9 @@ class BaseRedisClient(CoreCommands):
         if response_future.result() is not OK:
             raise ClosingError(response_future.result())
 
+    def _create_write_task(self, request: TRequest):
+        asyncio.create_task(self._write_or_buffer_request(request))
+
     async def _write_or_buffer_request(self, request: TRequest):
         self._buffered_requests.append(request)
         if self._writer_lock.acquire(False):
@@ -189,7 +192,7 @@ class BaseRedisClient(CoreCommands):
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
-        await self._write_or_buffer_request(request)
+        self._create_write_task(request)
         await response_future
         return response_future.result()
 
@@ -211,7 +214,7 @@ class BaseRedisClient(CoreCommands):
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
-        await self._write_or_buffer_request(request)
+        self._create_write_task(request)
         await response_future
         return response_future.result()
 
