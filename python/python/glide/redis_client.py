@@ -160,7 +160,9 @@ class BaseRedisClient(CoreCommands):
         self._buffered_requests.append(request)
         if self._writer_lock.acquire(False):
             try:
-                await self._write_buffered_requests_to_socket()
+                while len(self._buffered_requests) > 0:
+                    await self._write_buffered_requests_to_socket()
+
             finally:
                 self._writer_lock.release()
 
@@ -172,9 +174,6 @@ class BaseRedisClient(CoreCommands):
             ProtobufCodec.encode_delimited(b_arr, request)
         self._writer.write(b_arr)
         await self._writer.drain()
-        if len(self._buffered_requests) > 0:
-            # might not be threadsafe, we should consider adding a lock
-            await self._write_buffered_requests_to_socket()
 
     async def _execute_command(
         self,
