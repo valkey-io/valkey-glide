@@ -163,9 +163,7 @@ impl RedisServer {
 
         redis_cmd
             .stdout(process::Stdio::null())
-            .stderr(process::Stdio::null())
-            .arg("--enable-debug-command")
-            .arg("local");
+            .stderr(process::Stdio::null());
         let tempdir = tempfile::Builder::new()
             .prefix("redis")
             .tempdir()
