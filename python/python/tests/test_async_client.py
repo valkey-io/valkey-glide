@@ -5,7 +5,7 @@ import random
 import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, TypeVar, Union
+from typing import Dict, List, TypeVar, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, TimeoutError
@@ -16,7 +16,7 @@ from glide.async_commands.core import (
     ExpiryType,
     InfoSection,
 )
-from glide.config import RedisCredentials
+from glide.config import ProtocolVersion, RedisCredentials
 from glide.constants import OK
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
@@ -259,6 +259,24 @@ class TestCommands:
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_use_resp3_protocol(self, redis_client: TRedisClient):
+        result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
+
+        assert int(result["proto"]) == 3
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_allow_opt_in_to_resp2_protocol(self, cluster_mode, request):
+        redis_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=ProtocolVersion.RESP2,
+        )
+
+        result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
+
+        assert int(result["proto"]) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_conditional_set(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value = get_random_string(10)
@@ -334,7 +352,7 @@ class TestCommands:
             await redis_client.custom_command(["HSET", key, "1", "bar"])
         assert "WRONGTYPE" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_info_server_replication(self, redis_client: TRedisClient):
         sections = [InfoSection.SERVER, InfoSection.REPLICATION]
         info = get_first_result(await redis_client.info(sections))
@@ -497,11 +515,14 @@ class TestCommands:
     async def test_config_get_set(self, redis_client: TRedisClient):
         previous_timeout = await redis_client.config_get(["timeout"])
         assert await redis_client.config_set({"timeout": "1000"}) == OK
-        assert await redis_client.config_get(["timeout"]) == ["timeout", "1000"]
+        assert await redis_client.config_get(["timeout"]) == {"timeout": "1000"}
         # revert changes to previous timeout
-        assert isinstance(previous_timeout, list)
-        assert isinstance(previous_timeout[-1], str)
-        assert await redis_client.config_set({"timeout": previous_timeout[-1]}) == OK
+        assert isinstance(previous_timeout, dict)
+        assert isinstance(previous_timeout["timeout"], str)
+        assert (
+            await redis_client.config_set({"timeout": previous_timeout["timeout"]})
+            == OK
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_decr_decrby_existing_key(self, redis_client: TRedisClient):
@@ -719,7 +740,7 @@ class TestCommands:
         non_existing_key = get_random_string(10)
         assert await redis_client.srem(non_existing_key, ["member"]) == 0
         assert await redis_client.scard(non_existing_key) == 0
-        assert await redis_client.smembers(non_existing_key) == []
+        assert await redis_client.smembers(non_existing_key) == set()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_sadd_srem_smembers_scard_wrong_type_raise_error(

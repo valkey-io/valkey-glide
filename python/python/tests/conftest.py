@@ -5,6 +5,7 @@ import pytest
 from glide.config import (
     ClusterClientConfiguration,
     NodeAddress,
+    ProtocolVersion,
     RedisClientConfiguration,
     RedisCredentials,
 )
@@ -92,8 +93,7 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.fixture()
 async def redis_client(
-    request,
-    cluster_mode: bool,
+    request, cluster_mode: bool
 ) -> AsyncGenerator[TRedisClient, None]:
     "Get async socket client for tests"
     client = await create_client(request, cluster_mode)
@@ -108,6 +108,7 @@ async def create_client(
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
 ) -> Union[RedisClient, RedisClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -120,6 +121,7 @@ async def create_client(
             use_tls=use_tls,
             credentials=credentials,
             client_name=client_name,
+            protocol=protocol,
         )
         return await RedisClusterClient.create(cluster_config)
     else:
@@ -132,5 +134,6 @@ async def create_client(
             credentials=credentials,
             database_id=database_id,
             client_name=client_name,
+            protocol=protocol,
         )
         return await RedisClient.create(config)

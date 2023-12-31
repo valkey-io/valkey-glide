@@ -8,6 +8,7 @@ from glide.async_commands.transaction import (
     ClusterTransaction,
     Transaction,
 )
+from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
@@ -98,7 +99,7 @@ def transaction_test(
         1,
         "PONG",
         OK,
-        ["timeout", "1000"],
+        {"timeout": "1000"},
         2,
         value2,
         5,
@@ -118,7 +119,7 @@ def transaction_test(
         value2,
         2,
         1,
-        ["bar"],
+        {"bar"},
         1,
     ]
 
@@ -234,6 +235,33 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_standalone_transaction(self, redis_client: RedisClient):
+        keyslot = get_random_string(3)
+        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        value = get_random_string(5)
+        transaction = Transaction()
+        transaction.info()
+        transaction.select(1)
+        transaction.set(key, value)
+        transaction.get(key)
+        transaction.select(0)
+        transaction.get(key)
+        expected = transaction_test(transaction, keyslot)
+        result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
+        assert isinstance(result[0], str)
+        assert "# Memory" in result[0]
+        assert result[1:6] == [OK, OK, value, OK, None]
+        assert result[6:] == expected
+
+    # this test ensures that all types in RESP2 are converted to their RESP3 equivalent.
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_standalone_transaction_on_resp2(self, cluster_mode, request):
+        redis_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=ProtocolVersion.RESP2,
+        )
+
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         value = get_random_string(5)
