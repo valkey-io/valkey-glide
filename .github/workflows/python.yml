@@ -94,7 +94,7 @@ jobs:
                   pip install mypy types-protobuf
                   # Install the benchmark requirements 
                   pip install -r ../benchmarks/python/requirements.txt
-                  python -m mypy ..
+                  python -m mypy .. --exclude ../redis-${{ matrix.redis }} 
 
             - name: Install Redis Modules
               uses: ./.github/workflows/install-redis-modules

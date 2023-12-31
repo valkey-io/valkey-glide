@@ -40,7 +40,7 @@ runs:
             path: |
               ./cmake
               ./redisjson/bin 
-            key: ${{ runner.os }}-${{ inputs.redis-version }}-redisjson
+            key: ${{ runner.os }}--${{ inputs.redis-version }}-redisjson
 
         - name: Checkout RediSearch Repository
           if: steps.cache-dependencies-redisearch.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'search')
@@ -84,7 +84,7 @@ runs:
           with: 
               repository: "RedisJSON/RedisJSON"
               path: "./redisjson" 
-              ref: ${{ startsWith(inputs.redis-version, '6') && '2.6' || '' }}
+              ref: ${{ startsWith(inputs.redis-version, '6') && 'v2.6.0' || '' }}
               submodules: recursive
 
         - name: Build RedisJSON

@@ -988,14 +988,26 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// TTL will be updated to the new value = 15
-                expect(
-                    await client.expire(
-                        key,
-                        15,
-                        ExpireOptions.HasExistingExpiry
-                    )
-                ).toEqual(true);
-                expect(await client.ttl(key)).toBeLessThanOrEqual(15);
+                const version = await getVersion();
+                if (version[0] < 7 ) {
+                    expect(
+                        await client.expire(
+                            key,
+                            15
+                        )
+                    ).toEqual(true);
+                }
+                else {
+                    expect(
+                        await client.expire(
+                            key,
+                            15,
+                            ExpireOptions.HasExistingExpiry
+                        )
+                    ).toEqual(true);
+                    expect(await client.ttl(key)).toBeLessThanOrEqual(15);
+                }
+                
             });
         },
         config.timeout

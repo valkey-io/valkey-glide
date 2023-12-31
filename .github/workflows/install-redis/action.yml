@@ -13,7 +13,7 @@ runs:
     using: "composite"
 
     steps:
-        - run: mkdir ~/redis-binaries
+        - run: mkdir -p ~/redis-binaries/${{ inputs.redis-version }}
           shell: bash
 
         - uses: actions/checkout@v4
@@ -24,9 +24,9 @@ runs:
           id: cache-redis
           with:
               path: |
-                  ~/redis-binaries/redis-cli
-                  ~/redis-binaries/redis-server
-              key: ${{ runner.os }}-install-redis
+                  ~/redis-binaries/${{ inputs.redis-version }}/redis-cli
+                  ~/redis-binaries/${{ inputs.redis-version }}/redis-server
+              key: ${{ runner.os }}-${{ inputs.redis-version }}-install-redis
 
         - name: Install redis
           shell: bash
@@ -35,8 +35,8 @@ runs:
               sudo apt-get update
               wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
               tar -xzvf ${{ inputs.redis-version }}.tar.gz;
-              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries && popd;
+              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries/${{ inputs.redis-version }} && popd;
 
         - name: Copy executable to place
           shell: bash
-          run: sudo cp ~/redis-binaries/redis-server ~/redis-binaries/redis-cli /usr/bin/
+          run: sudo cp ~/redis-binaries/${{ inputs.redis-version }}/redis-server ~/redis-binaries/${{ inputs.redis-version }}/redis-cli /usr/bin/
