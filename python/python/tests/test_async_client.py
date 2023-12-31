@@ -355,6 +355,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_info_server_replication(self, redis_client: TRedisClient):
         info = get_first_result(await redis_client.info([InfoSection.SERVER]))
+        print(info)
         assert "# Server" in info
         cluster_mode = parse_info_response(info)["redis_mode"]
         expected_cluster_mode = isinstance(redis_client, RedisClusterClient)
