@@ -40,7 +40,7 @@ runs:
             path: |
               ./cmake
               ./redisjson/bin 
-            key: ${{ runner.os }}--${{ inputs.redis-version }}-redisjson
+            key: ${{ runner.os }}-${{ inputs.redis-version }}-redisjson
 
         - name: Checkout RediSearch Repository
           if: steps.cache-dependencies-redisearch.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'search')

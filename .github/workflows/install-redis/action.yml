@@ -36,6 +36,11 @@ runs:
               wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
               tar -xzvf ${{ inputs.redis-version }}.tar.gz;
               pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries/${{ inputs.redis-version }} && popd;
+        
+        - name: Remove the source package
+          shell: bash
+          if: steps.cache-redis.outputs.cache-hit != 'true'
+          run: sudo rm -r redis-${{ inputs.redis-version }}
 
         - name: Copy executable to place
           shell: bash

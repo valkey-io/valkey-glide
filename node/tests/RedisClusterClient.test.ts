@@ -14,7 +14,7 @@ import {
     RedisClusterClient,
 } from "../";
 import { runBaseTests } from "./SharedTests";
-import { flushallOnPort, transactionTest } from "./TestUtilities";
+import { flushallOnPort, getFirstResult, transactionTest } from "./TestUtilities";
 
 type Context = {
     client: RedisClusterClient;
@@ -151,8 +151,12 @@ describe("RedisClusterClient", () => {
             const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports())
             );
-            const result = (await client.info([
+            const info_server = getFirstResult(await client.info([
                 InfoOptions.Server,
+            ]));
+            expect(info_server).toEqual(expect.stringContaining("# Server"));
+
+            const result = (await client.info([
                 InfoOptions.Replication,
             ])) as Record<string, string>;
             const clusterNodes = await client.customCommand([
@@ -163,7 +167,6 @@ describe("RedisClusterClient", () => {
                 (clusterNodes as string)?.split("master").length - 1
             ).toEqual(Object.keys(result).length);
             Object.values(result).every((item) => {
-                expect(item).toEqual(expect.stringContaining("# Server"));
                 expect(item).toEqual(expect.stringContaining("# Replication"));
                 expect(item).toEqual(
                     expect.not.stringContaining("# Errorstats")
@@ -216,7 +219,7 @@ describe("RedisClusterClient", () => {
             );
             const transaction = new ClusterTransaction();
             const expectedRes = transactionTest(transaction);
-            const result = await client.exec(transaction);
+            const result = await client.exec(transaction)
             expect(result).toEqual(expectedRes);
             client.close();
         },

@@ -60,9 +60,8 @@ export function transactionTest(
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
     baseTransaction.set(key2, "baz", {
-        conditionalSet: "onlyIfDoesNotExist",
-        returnOldValue: true,
-    });
+        returnOldValue:true
+    }); 
     baseTransaction.customCommand(["MGET", key1, key2]);
     baseTransaction.mset({ [key3]: value });
     baseTransaction.mget([key1, key2]);
