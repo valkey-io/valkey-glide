@@ -11,6 +11,7 @@ import {
     BaseClientConfiguration,
     ClusterTransaction,
     InfoOptions,
+    ProtocolVersion,
     RedisClusterClient,
 } from "../";
 import { runBaseTests } from "./SharedTests";
@@ -124,11 +125,11 @@ describe("RedisClusterClient", () => {
     };
 
     runBaseTests<Context>({
-        init: async () => {
+        init: async (protocol) => {
+            const options = getOptions(cluster.ports());
+            options.server_protocol = protocol;
             testsFailed += 1;
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
-            );
+            const client = await RedisClusterClient.createClient(options);
             return {
                 context: {
                     client,
@@ -208,8 +209,8 @@ describe("RedisClusterClient", () => {
         TIMEOUT
     );
 
-    it(
-        "can send transactions",
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transactions_%p`,
         async () => {
             const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports())
