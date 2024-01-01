@@ -59,7 +59,9 @@ function createLeakedValue(value: ReturnType): Long {
     if (value == null) {
         return new Long(0, 0);
     }
+
     let pair = [0, 0];
+
     if (typeof value === "string") {
         pair = createLeakedString(value);
     } else if (value instanceof Array) {
@@ -94,6 +96,7 @@ function sendResponse(
 ) {
     const new_response = response.Response.create();
     new_response.callbackIdx = callbackIndex;
+
     if (responseType == ResponseType.Value) {
         const pointer = createLeakedValue(response_data?.value ?? "fake data");
         new_response.respPointer = pointer;
@@ -111,6 +114,7 @@ function sendResponse(
     } else {
         throw new Error("Got unknown response type: " + responseType);
     }
+
     const response_bytes =
         response.Response.encodeDelimited(new_response).finish();
     socket.write(response_bytes);
@@ -139,11 +143,13 @@ function getConnectionAndSocket(
                         connection_request.ConnectionRequest.decodeDelimited(
                             reader
                         );
+
                     if (checkRequest && !checkRequest(request)) {
                         reject(
                             `${JSON.stringify(request)}  did not pass condition`
                         );
                     }
+
                     sendResponse(socket, ResponseType.Null, 0);
                 });
 
@@ -482,9 +488,11 @@ describe("SocketConnectionInternals", () => {
                     RequestType.SetString
                 );
                 const args = request.singleCommand?.argsArray?.args;
+
                 if (!args) {
                     throw new Error("no args");
                 }
+
                 expect(args.length).toEqual(5);
                 expect(args[0]).toEqual("foo");
                 expect(args[1]).toEqual("bar");
@@ -586,6 +594,7 @@ describe("SocketConnectionInternals", () => {
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.CustomCommand
                 );
+
                 if (request.singleCommand?.argsArray?.args?.at(0) === "SET") {
                     expect(request.route?.simpleRoutes).toEqual(
                         redis_request.SimpleRoutes.AllPrimaries

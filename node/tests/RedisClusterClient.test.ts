@@ -4,17 +4,22 @@ import {
     beforeAll,
     describe,
     expect,
-    it
+    it,
 } from "@jest/globals";
 import {
     BaseClientConfiguration,
     ClusterTransaction,
     InfoOptions,
     ProtocolVersion,
-    RedisClusterClient
+    RedisClusterClient,
 } from "../";
 import { runBaseTests } from "./SharedTests";
-import { RedisCluster, flushallOnPort, getFirstResult, transactionTest } from "./TestUtilities";
+import {
+    RedisCluster,
+    flushallOnPort,
+    getFirstResult,
+    transactionTest,
+} from "./TestUtilities";
 
 type Context = {
     client: RedisClusterClient;
@@ -66,6 +71,7 @@ describe("RedisClusterClient", () => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }
+
             context.client.close();
         },
         timeout: TIMEOUT,
@@ -77,9 +83,9 @@ describe("RedisClusterClient", () => {
             const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports())
             );
-            const info_server = getFirstResult(await client.info([
-                InfoOptions.Server,
-            ]));
+            const info_server = getFirstResult(
+                await client.info([InfoOptions.Server])
+            );
             expect(info_server).toEqual(expect.stringContaining("# Server"));
 
             const result = (await client.info([
@@ -145,7 +151,7 @@ describe("RedisClusterClient", () => {
             );
             const transaction = new ClusterTransaction();
             const expectedRes = transactionTest(transaction);
-            const result = await client.exec(transaction)
+            const result = await client.exec(transaction);
             expect(result).toEqual(expectedRes);
             client.close();
         },

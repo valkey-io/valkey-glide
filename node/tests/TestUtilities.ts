@@ -43,6 +43,7 @@ export function getFirstResult(
     if (typeof res == "string" || typeof res == "number") {
         return res;
     }
+
     return Object.values(res).at(0);
 }
 
@@ -60,7 +61,7 @@ export function transactionTest(
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
     baseTransaction.set(key2, "baz", {
-        returnOldValue: true
+        returnOldValue: true,
     });
     baseTransaction.customCommand(["MGET", key1, key2]);
     baseTransaction.mset({ [key3]: value });
@@ -133,6 +134,7 @@ export class RedisCluster {
             .split(",")
             .map((address) => address.split(":")[1])
             .map((port) => Number(port));
+
         if (clusterFolder === undefined || ports === undefined) {
             throw new Error(`Insufficient data in input: ${input}`);
         }
@@ -150,28 +152,29 @@ export class RedisCluster {
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
             let command = `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`;
+
             if (loadModule) {
                 if (loadModule.length === 0) {
-                    throw new Error("Please provide the path(s) to the module(s) you want to load.");
+                    throw new Error(
+                        "Please provide the path(s) to the module(s) you want to load."
+                    );
                 }
+
                 for (const module of loadModule) {
                     command += ` --load-module ${module}`;
                 }
             }
+
             console.log(command);
-            exec(
-                command,
-                (error, stdout, stderr) => {
-                    if (error) {
-                        console.error(stderr);
-                        reject(error);
-                    } else {
-                        const { clusterFolder, ports } =
-                            this.parseOutput(stdout);
-                        resolve(new RedisCluster(ports, clusterFolder));
-                    }
+            exec(command, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(stderr);
+                    reject(error);
+                } else {
+                    const { clusterFolder, ports } = this.parseOutput(stdout);
+                    resolve(new RedisCluster(ports, clusterFolder));
                 }
-            );
+            });
         });
     }
 
