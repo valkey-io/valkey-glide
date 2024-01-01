@@ -202,6 +202,61 @@ impl Client {
         .boxed()
     }
 
+    fn get_transaction_values(
+        pipeline: &redis::Pipeline,
+        mut values: Vec<Value>,
+        command_count: usize,
+        offset: usize,
+    ) -> RedisResult<Value> {
+        assert_eq!(values.len(), 1);
+        let value = values.pop();
+        let values = match value {
+            Some(Value::Array(values)) => values,
+            Some(Value::Nil) => {
+                return Ok(Value::Nil);
+            }
+            Some(value) => {
+                if offset == 2 {
+                    vec![value]
+                } else {
+                    return Err((
+                        ErrorKind::ResponseError,
+                        "Received non-array response for transaction",
+                        format!("Response: `{value:?}`"),
+                    )
+                        .into());
+                }
+            }
+            _ => {
+                return Err((
+                    ErrorKind::ResponseError,
+                    "Received empty response for transaction",
+                )
+                    .into());
+            }
+        };
+        Self::convert_transaction_values_to_expected_types(pipeline, values, command_count)
+    }
+
+    fn convert_transaction_values_to_expected_types(
+        pipeline: &redis::Pipeline,
+        values: Vec<Value>,
+        command_count: usize,
+    ) -> RedisResult<Value> {
+        let values = values
+            .into_iter()
+            .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
+            .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
+            .try_fold(
+                Vec::with_capacity(command_count),
+                |mut acc, result| -> RedisResult<_> {
+                    acc.push(result?);
+                    Ok(acc)
+                },
+            )?;
+        Ok(Value::Array(values))
+    }
+
     pub fn send_transaction<'a>(
         &'a mut self,
         pipeline: &'a redis::Pipeline,
@@ -210,7 +265,7 @@ impl Client {
         let command_count = pipeline.cmd_iter().count();
         let offset = command_count + 1;
         run_with_timeout(self.request_timeout, async move {
-            match self.internal_client {
+            let values = match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => {
                     client.send_pipeline(pipeline, offset, 1).await
                 }
@@ -223,49 +278,9 @@ impl Client {
 
                     client.route_pipeline(pipeline, offset, 1, route).await
                 }
-            }
-            .and_then(|mut values| {
-                assert_eq!(values.len(), 1);
-                let values = values.pop();
-                let values = match values {
-                    Some(Value::Array(values)) => values,
-                    Some(Value::Nil) => {
-                        return Ok(Value::Nil);
-                    }
-                    Some(value) => {
-                        if offset == 2 {
-                            vec![value]
-                        } else {
-                            return Err((
-                                ErrorKind::ResponseError,
-                                "Received non-array response for transaction",
-                                format!("Response: `{value:?}`"),
-                            )
-                                .into());
-                        }
-                    }
-                    _ => {
-                        return Err((
-                            ErrorKind::ResponseError,
-                            "Received empty response for transaction",
-                        )
-                            .into());
-                    }
-                };
+            }?;
 
-                let results = values
-                    .into_iter()
-                    .zip(pipeline.cmd_iter().map(expected_type_for_cmd))
-                    .map(|(value, expected_type)| convert_to_expected_type(value, expected_type))
-                    .try_fold(
-                        Vec::with_capacity(command_count),
-                        |mut acc, result| -> RedisResult<_> {
-                            acc.push(result?);
-                            Ok(acc)
-                        },
-                    )?;
-                Ok(Value::Array(results))
-            })
+            Self::get_transaction_values(pipeline, values, command_count, offset)
         })
         .boxed()
     }
