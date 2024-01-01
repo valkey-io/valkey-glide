@@ -84,7 +84,7 @@ runs:
           with: 
               repository: "RedisJSON/RedisJSON"
               path: "./redisjson" 
-              ref: ${{ startsWith(inputs.redis-version, '6') && '2.6' || '' }}
+              ref: ${{ startsWith(inputs.redis-version, '6') && 'v2.6.0' || '' }}
               submodules: recursive
 
         - name: Build RedisJSON

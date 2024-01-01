@@ -1013,18 +1013,37 @@ export function runBaseTests<Context>(config: {
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// set command clears the timeout.
                 expect(await client.set(key, "bar")).toEqual("OK");
-                expect(
-                    await client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
-                ).toEqual(true);
+                const version = await getVersion();
+                if (version[0] < 7 ) {
+                    expect(
+                        await client.pexpire(key, 10000)
+                    ).toEqual(true);
+                 }
+                else {
+                    expect(
+                        await client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
+                    ).toEqual(true);
+                }
+                
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// TTL will be updated to the new value = 15
-                expect(
-                    await client.expire(
-                        key,
-                        15,
-                        ExpireOptions.HasExistingExpiry
-                    )
-                ).toEqual(true);
+                if (version[0] < 7 ) {
+                    expect(
+                        await client.expire(
+                            key,
+                            15
+                        )
+                    ).toEqual(true);
+                }
+                else {
+                    expect(
+                        await client.expire(
+                            key,
+                            15,
+                            ExpireOptions.HasExistingExpiry
+                        )
+                    ).toEqual(true);
+                }
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
             });
         },
@@ -1044,24 +1063,37 @@ export function runBaseTests<Context>(config: {
                     )
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
-                expect(
-                    await client.expireAt(
-                        key,
-                        Math.floor(Date.now() / 1000) + 50,
-                        ExpireOptions.NewExpiryGreaterThanCurrent
-                    )
-                ).toEqual(true);
+                const version = await getVersion();
+                if (version[0] < 7 ) {
+                    expect(
+                        await client.expireAt(
+                            key,
+                            Math.floor(Date.now() / 1000) + 50
+                        )
+                    ).toEqual(true);
+                }
+                else{
+                    expect(
+                        await client.expireAt(
+                            key,
+                            Math.floor(Date.now() / 1000) + 50,
+                            ExpireOptions.NewExpiryGreaterThanCurrent
+                        )
+                    ).toEqual(true);
+                }
                 expect(await client.ttl(key)).toBeLessThanOrEqual(50);
 
                 /// set command clears the timeout.
                 expect(await client.set(key, "bar")).toEqual("OK");
-                expect(
-                    await client.pexpireAt(
-                        key,
-                        Date.now() + 50000,
-                        ExpireOptions.HasExistingExpiry
-                    )
-                ).toEqual(false);
+                if (version[0] >= 7) {
+                    expect(
+                        await client.pexpireAt(
+                            key,
+                            Date.now() + 50000,
+                            ExpireOptions.HasExistingExpiry
+                        )
+                    ).toEqual(false);
+                }
             });
         },
         config.timeout

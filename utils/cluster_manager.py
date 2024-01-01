@@ -297,7 +297,6 @@ def start_redis_server(
             raise ValueError(
                 "Please provide the path(s) to the module(s) you want to load."
             )
-        cmd_args.extend(["--enable-module-command", "yes"])
         for module_path in load_module:
             cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
