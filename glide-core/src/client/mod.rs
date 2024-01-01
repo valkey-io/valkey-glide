@@ -1,14 +1,16 @@
 use crate::connection_request::{
     ConnectionRequest, NodeAddress, ProtocolVersion, ReadFrom, TlsMode,
 };
+use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
 use redis::RedisResult;
-use redis::{from_redis_value, ErrorKind, Value};
+use redis::{from_redis_value, Cmd, ErrorKind, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
+use std::ops::Deref;
 use std::time::Duration;
 mod reconnecting_connection;
 mod standalone_client;
@@ -165,7 +167,7 @@ fn convert_to_expected_type(
     }
 }
 
-fn expected_type_for_cmd(cmd: &redis::Cmd) -> Option<ExpectedReturnType> {
+fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
     match command.as_slice() {
@@ -182,7 +184,7 @@ fn expected_type_for_cmd(cmd: &redis::Cmd) -> Option<ExpectedReturnType> {
 impl Client {
     pub fn send_command<'a>(
         &'a mut self,
-        cmd: &'a redis::Cmd,
+        cmd: &'a Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         let expected_type = expected_type_for_cmd(cmd);
@@ -284,6 +286,49 @@ impl Client {
         })
         .boxed()
     }
+
+    pub async fn invoke_script<'a, T: Deref<Target = str>>(
+        &'a mut self,
+        hash: &'a str,
+        keys: Vec<T>,
+        args: Vec<T>,
+        routing: Option<RoutingInfo>,
+    ) -> redis::RedisResult<Value> {
+        let eval = eval_cmd(hash, keys, args);
+        let result = self.send_command(&eval, routing.clone()).await;
+        let Err(err) = result else {
+            return result;
+        };
+        if err.kind() == ErrorKind::NoScriptError {
+            let Some(code) = get_script(hash) else {
+                return Err(err);
+            };
+            // we use a pipeline to ensure that the commands are routed together.
+            let load = load_cmd(code.as_str());
+            self.send_command(&load, None).await?;
+            self.send_command(&eval, routing).await
+        } else {
+            Err(err)
+        }
+    }
+}
+
+fn load_cmd(code: &str) -> Cmd {
+    let mut cmd = redis::cmd("SCRIPT");
+    cmd.arg("LOAD").arg(code);
+    cmd
+}
+
+fn eval_cmd<T: Deref<Target = str>>(hash: &str, keys: Vec<T>, args: Vec<T>) -> Cmd {
+    let mut cmd = redis::cmd("EVALSHA");
+    cmd.arg(hash).arg(keys.len());
+    for key in keys {
+        cmd.arg(&*key);
+    }
+    for arg in args {
+        cmd.arg(&*arg);
+    }
+    cmd
 }
 
 fn to_duration(time_in_millis: u32, default: Duration) -> Duration {
@@ -429,7 +474,7 @@ impl Client {
 pub trait GlideClientForTests {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a redis::Cmd,
+        cmd: &'a Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value>;
 }
@@ -437,7 +482,7 @@ pub trait GlideClientForTests {
 impl GlideClientForTests for Client {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a redis::Cmd,
+        cmd: &'a Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd, routing)
@@ -447,7 +492,7 @@ impl GlideClientForTests for Client {
 impl GlideClientForTests for StandaloneClient {
     fn send_command<'a>(
         &'a mut self,
-        cmd: &'a redis::Cmd,
+        cmd: &'a Cmd,
         _routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         self.send_command(cmd).boxed()

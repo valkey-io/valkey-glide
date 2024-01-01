@@ -110,6 +110,12 @@ message Command {
     }
 }
 
+message ScriptInvocation {
+    string hash = 1;
+    repeated string keys = 2;
+    repeated string args = 3;
+}
+
 message Transaction {
     repeated Command commands = 1;
 }
@@ -120,6 +126,7 @@ message RedisRequest {
     oneof command {
         Command single_command = 2;
         Transaction transaction = 3;
+        ScriptInvocation script_invocation = 4;
     }
-    Routes route = 4;
+    Routes route = 5;
 }
