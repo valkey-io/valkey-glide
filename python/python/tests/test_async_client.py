@@ -254,7 +254,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_socket_set_get(self, redis_client: TRedisClient):
         key = get_random_string(10)
-        value = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
         assert await redis_client.get(key) == value
 
@@ -966,7 +966,8 @@ class TestCommandsUnitTests:
         assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
 
         exp_unix_sec_datetime = ExpirySet(
-            ExpiryType.UNIX_SEC, datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc)
+            ExpiryType.UNIX_SEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
         )
         assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
 
@@ -974,7 +975,8 @@ class TestCommandsUnitTests:
         assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
 
         exp_unix_millisec_datetime = ExpirySet(
-            ExpiryType.UNIX_MILLSEC, datetime(2023, 4, 27, 23, 55, 59, 342380)
+            ExpiryType.UNIX_MILLSEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
         )
         assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
 
