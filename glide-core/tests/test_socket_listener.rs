@@ -56,6 +56,11 @@ mod socket_listener {
         socket: UnixStream,
     }
 
+    struct TestBasics {
+        server: BackingServer,
+        socket: UnixStream,
+    }
+
     struct CommandComponents {
         args: Vec<String>,
         request_type: EnumOrUnknown<RequestType>,
@@ -344,7 +349,7 @@ mod socket_listener {
         }
     }
 
-    fn setup_test_basics_with_server_and_socket_path(
+    fn setup_server_test_basics_with_server_and_socket_path(
         use_tls: bool,
         socket_path: Option<String>,
         server: Option<RedisServer>,
@@ -367,11 +372,27 @@ mod socket_listener {
         } else {
             None
         };
-        setup_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
+        setup_server_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
 
-    fn setup_test_basics(use_tls: bool, shared_server: bool) -> ServerTestBasics {
+    fn setup_server_test_basics(use_tls: bool, shared_server: bool) -> ServerTestBasics {
         setup_test_basics_with_socket_path(use_tls, None, shared_server)
+    }
+
+    fn setup_test_basics(use_tls: bool, shared_server: bool, use_cluster: bool) -> TestBasics {
+        if use_cluster {
+            let cluster = setup_cluster_test_basics(use_tls, shared_server);
+            TestBasics {
+                server: BackingServer::Cluster(cluster._cluster),
+                socket: cluster.socket,
+            }
+        } else {
+            let server = setup_server_test_basics(use_tls, shared_server);
+            TestBasics {
+                server: BackingServer::Standalone(server.server),
+                socket: server.socket,
+            }
+        }
     }
 
     fn setup_cluster_test_basics(use_tls: bool, shared_cluster: bool) -> ClusterTestBasics {
@@ -461,7 +482,19 @@ mod socket_listener {
         close_socket(&socket_path);
     }
 
-    fn test_set_and_get(socket: &mut UnixStream, args_pointer: bool) {
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socket_set_and_get(
+        #[values((false, false), (true, false), (false,true,))] use_arg_pointer_and_tls: (
+            bool,
+            bool,
+        ),
+        #[values(true, false)] use_cluster: bool,
+    ) {
+        let args_pointer = use_arg_pointer_and_tls.0;
+        let use_tls = use_arg_pointer_and_tls.1;
+        let mut test_basics = setup_test_basics(use_tls, true, use_cluster);
+
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -477,16 +510,16 @@ mod socket_listener {
             value.clone(),
             args_pointer,
         );
-        socket.write_all(&buffer).unwrap();
+        test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, socket);
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
-        socket.write_all(&buffer).unwrap();
+        test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, socket);
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
             &buffer,
             0,
@@ -497,20 +530,13 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_socket_set_and_get(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socket_handle_custom_command(
+        #[values(false, true)] args_pointer: bool,
+        #[values(true, false)] use_cluster: bool,
     ) {
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls, true);
-        test_set_and_get(&mut test_basics.socket, args_pointer);
-    }
+        let mut test_basics = setup_test_basics(false, true, use_cluster);
 
-    fn handle_custom_command(socket: &mut UnixStream, args_pointer: bool) {
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
         const VALUE_LENGTH: usize = 10;
@@ -526,9 +552,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        socket.write_all(&buffer).unwrap();
+        test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, socket);
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_ok_response(&buffer, CALLBACK1_INDEX);
 
         buffer.clear();
@@ -539,9 +565,9 @@ mod socket_listener {
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        socket.write_all(&buffer).unwrap();
+        test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, socket);
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
             &buffer,
             0,
@@ -549,43 +575,6 @@ mod socket_listener {
             Some(Value::BulkString(value.into_bytes())),
             ResponseType::Value,
         );
-    }
-
-    #[rstest]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_socket_handle_custom_command(#[values(false, true)] args_pointer: bool) {
-        let mut test_basics = setup_test_basics(false, true);
-        handle_custom_command(&mut test_basics.socket, args_pointer);
-    }
-
-    #[rstest]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_socket_set_and_get_from_cluster(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-    ) {
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-
-        let mut test_basics = setup_cluster_test_basics(use_tls, true);
-        test_set_and_get(&mut test_basics.socket, args_pointer);
-    }
-
-    #[rstest]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_socke_handlet_custom_command_to_cluster(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-    ) {
-        let args_pointer = use_arg_pointer_and_tls.0;
-        let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_cluster_test_basics(use_tls, true);
-
-        handle_custom_command(&mut test_basics.socket, args_pointer);
     }
 
     #[rstest]
@@ -676,16 +665,17 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_handle_long_input(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
             bool,
         ),
+        #[values(true, false)] use_cluster: bool,
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls, true);
+        let mut test_basics = setup_test_basics(use_tls, true, use_cluster);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -737,12 +727,13 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
-    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_handle_multiple_long_inputs(
         #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
             bool,
             bool,
         ),
+        #[values(true, false)] use_cluster: bool,
     ) {
         #[derive(Clone, PartialEq, Eq, Debug)]
         enum State {
@@ -752,7 +743,7 @@ mod socket_listener {
         }
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let test_basics = setup_test_basics(use_tls, true);
+        let test_basics = setup_test_basics(use_tls, true, use_cluster);
         const VALUE_LENGTH: usize = 1000000;
         const NUMBER_OF_THREADS: usize = 10;
         let values = Arc::new(Mutex::new(vec![Vec::<u8>::new(); NUMBER_OF_THREADS]));
@@ -864,7 +855,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
-        let mut test_basics = setup_test_basics(false, false);
+        let mut test_basics = setup_test_basics(false, false, false);
         let server = test_basics.server;
 
         drop(server);
@@ -882,7 +873,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
-        let test_basics = setup_test_basics(false, false);
+        let test_basics = setup_server_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
         let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
@@ -913,7 +904,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
-        let test_basics = setup_test_basics(false, false);
+        let test_basics = setup_server_test_basics(false, false);
         let mut socket = test_basics.socket.try_clone().unwrap();
         let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
@@ -941,9 +932,9 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_send_transaction_and_get_array_of_results() {
-        let test_basics = setup_test_basics(false, true);
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_transaction_and_get_array_of_results(#[values(true, false)] use_cluster: bool) {
+        let test_basics = setup_test_basics(false, true, use_cluster);
         let mut socket = test_basics.socket;
 
         const CALLBACK_INDEX: u32 = 0;
@@ -990,9 +981,9 @@ mod socket_listener {
     }
 
     #[rstest]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_send_script() {
-        let mut test_basics = setup_test_basics(false, true);
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_script(#[values(true, false)] use_cluster: bool) {
+        let mut test_basics = setup_test_basics(false, true, use_cluster);
         let socket = &mut test_basics.socket;
         const CALLBACK_INDEX: u32 = 100;
         const VALUE_LENGTH: usize = 10;
