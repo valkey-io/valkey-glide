@@ -52,7 +52,7 @@ class BaseRedisClient(CoreCommands):
         """
         self.config: BaseClientConfiguration = config
         self._available_futures: dict[int, asyncio.Future] = {}
-        self._available_callback_indexes: Set[int] = set()
+        self._available_callback_indexes: List[int] = list()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
@@ -221,8 +221,8 @@ class BaseRedisClient(CoreCommands):
     def _get_callback_index(self) -> int:
         try:
             return self._available_callback_indexes.pop()
-        except KeyError:
-            # The set is empty
+        except IndexError:
+            # The list is empty
             return len(self._available_futures)
 
     async def _reader_loop(self) -> None:
@@ -257,7 +257,7 @@ class BaseRedisClient(CoreCommands):
                     await self.close(err_msg)
                     raise ClosingError(err_msg)
                 else:
-                    self._available_callback_indexes.add(response.callback_idx)
+                    self._available_callback_indexes.append(response.callback_idx)
                     if response.HasField("request_error"):
                         error_type = get_request_error_class(
                             response.request_error.type
