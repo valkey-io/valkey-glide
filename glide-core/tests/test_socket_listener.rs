@@ -41,12 +41,12 @@ mod socket_listener {
         ClosingError = 3,
     }
 
-    struct TestBasics {
+    struct ServerTestBasics {
         server: Option<RedisServer>,
         socket: UnixStream,
     }
 
-    struct TestBasicsWithMock {
+    struct ServerTestBasicsWithMock {
         server_mock: ServerMock,
         socket: UnixStream,
     }
@@ -324,7 +324,7 @@ mod socket_listener {
         socket
     }
 
-    fn setup_mocked_test_basics(socket_path: Option<String>) -> TestBasicsWithMock {
+    fn setup_mocked_test_basics(socket_path: Option<String>) -> ServerTestBasicsWithMock {
         let mut responses = std::collections::HashMap::new();
         responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
@@ -338,7 +338,7 @@ mod socket_listener {
             addresses.as_slice(),
             ClusterMode::Disabled,
         );
-        TestBasicsWithMock {
+        ServerTestBasicsWithMock {
             server_mock,
             socket,
         }
@@ -348,20 +348,20 @@ mod socket_listener {
         use_tls: bool,
         socket_path: Option<String>,
         server: Option<RedisServer>,
-    ) -> TestBasics {
+    ) -> ServerTestBasics {
         let address = server
             .as_ref()
             .map(|server| server.get_client_addr())
             .unwrap_or(get_shared_server_address(use_tls));
         let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
-        TestBasics { server, socket }
+        ServerTestBasics { server, socket }
     }
 
     fn setup_test_basics_with_socket_path(
         use_tls: bool,
         socket_path: Option<String>,
         shared_server: bool,
-    ) -> TestBasics {
+    ) -> ServerTestBasics {
         let server = if !shared_server {
             Some(RedisServer::new(ServerType::Tcp { tls: use_tls }))
         } else {
@@ -370,7 +370,7 @@ mod socket_listener {
         setup_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
 
-    fn setup_test_basics(use_tls: bool, shared_server: bool) -> TestBasics {
+    fn setup_test_basics(use_tls: bool, shared_server: bool) -> ServerTestBasics {
         setup_test_basics_with_socket_path(use_tls, None, shared_server)
     }
 
