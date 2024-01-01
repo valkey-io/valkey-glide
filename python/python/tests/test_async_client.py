@@ -354,14 +354,14 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_info_server_replication(self, redis_client: TRedisClient):
-        sections = [InfoSection.SERVER, InfoSection.REPLICATION]
-        info = get_first_result(await redis_client.info(sections))
+        info = get_first_result(await redis_client.info([InfoSection.SERVER]))
         assert "# Server" in info
-        assert "# Replication" in info
-        assert "# Errorstats" not in info
         cluster_mode = parse_info_response(info)["redis_mode"]
         expected_cluster_mode = isinstance(redis_client, RedisClusterClient)
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
+        info = get_first_result(await redis_client.info([InfoSection.REPLICATION]))
+        assert "# Replication" in info
+        assert "# Errorstats" not in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_info_default(self, redis_client: TRedisClient):
@@ -853,12 +853,22 @@ class TestCommands:
 
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
-        assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry) == True
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.pexpire(key, 10000) == True
+        else:
+            assert (
+                await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
+                == True
+            )
         assert await redis_client.ttl(key) in range(11)
 
-        assert (
-            await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry) == True
-        )
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expire(key, 15) == True
+        else:
+            assert (
+                await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
+                == True
+            )
         assert await redis_client.ttl(key) in range(16)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -871,24 +881,27 @@ class TestCommands:
 
         assert await redis_client.expireat(key, current_time + 10) == 1
         assert await redis_client.ttl(key) in range(11)
-
-        assert (
-            await redis_client.expireat(
-                key, current_time + 50, ExpireOptions.NewExpiryGreaterThanCurrent
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expireat(key, current_time + 50) == 1
+        else:
+            assert (
+                await redis_client.expireat(
+                    key, current_time + 50, ExpireOptions.NewExpiryGreaterThanCurrent
+                )
+                == 1
             )
-            == 1
-        )
         assert await redis_client.ttl(key) in range(51)
 
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
-        assert (
-            await redis_client.pexpireat(
-                key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
+        if not check_if_server_version_lt(redis_client, "7.0.0"):
+            assert (
+                await redis_client.pexpireat(
+                    key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
+                )
+                == False
             )
-            == False
-        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_expire_pexpire_expireat_pexpireat_past_or_negative_timeout(
