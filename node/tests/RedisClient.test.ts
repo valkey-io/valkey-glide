@@ -9,7 +9,12 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import RedisServer from "redis-server";
 import { v4 as uuidv4 } from "uuid";
-import { BaseClientConfiguration, RedisClient, Transaction } from "../build-ts";
+import {
+    BaseClientConfiguration,
+    ProtocolVersion,
+    RedisClient,
+    Transaction,
+} from "../build-ts";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";
@@ -133,23 +138,26 @@ describe("RedisClient", () => {
         client.close();
     });
 
-    it("can send transactions", async () => {
-        const client = await RedisClient.createClient(getOptions(port));
-        const transaction = new Transaction();
-        const expectedRes = transactionTest(transaction);
-        transaction.select(0);
-        const result = await client.exec(transaction);
-        expectedRes.push("OK");
-        expect(result).toEqual(expectedRes);
-        client.close();
-    });
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transactions_%p`,
+        async () => {
+            const client = await RedisClient.createClient(getOptions(port));
+            const transaction = new Transaction();
+            const expectedRes = transactionTest(transaction);
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push("OK");
+            expect(result).toEqual(expectedRes);
+            client.close();
+        }
+    );
 
     it("can return null on WATCH transaction failures", async () => {
         const client1 = await RedisClient.createClient(getOptions(port));
         const client2 = await RedisClient.createClient(getOptions(port));
         const transaction = new Transaction();
         transaction.get("key");
-        const result1 = await client1.customCommand(["WATCH","key"]);
+        const result1 = await client1.customCommand(["WATCH", "key"]);
         expect(result1).toEqual("OK");
 
         const result2 = await client2.set("key", "foo");
@@ -163,8 +171,10 @@ describe("RedisClient", () => {
     });
 
     runBaseTests<Context>({
-        init: async () => {
-            const client = await RedisClient.createClient(getOptions(port));
+        init: async (protocol?) => {
+            const options = getOptions(port);
+            options.server_protocol = protocol;
+            const client = await RedisClient.createClient(options);
 
             return { client, context: { client } };
         },

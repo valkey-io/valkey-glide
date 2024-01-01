@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ExpireOptions,
     InfoOptions,
+    ProtocolVersion,
     RedisClient,
     RedisClusterClient,
     parseInfoResponse,
@@ -31,7 +32,7 @@ async function getVersion(): Promise<[number, number, number]> {
 export type BaseClient = RedisClient | RedisClusterClient;
 
 export function runBaseTests<Context>(config: {
-    init: () => Promise<{
+    init: (protocol?: ProtocolVersion) => Promise<{
         context: Context;
         client: BaseClient;
     }>;
@@ -40,8 +41,11 @@ export function runBaseTests<Context>(config: {
 }) {
     runCommonTests(config);
 
-    const runTest = async (test: (client: BaseClient) => Promise<void>) => {
-        const { context, client } = await config.init();
+    const runTest = async (
+        test: (client: BaseClient) => Promise<void>,
+        protocol?: ProtocolVersion
+    ) => {
+        const { context, client } = await config.init(protocol);
         let testSucceeded = false;
         try {
             await test(client);
@@ -65,6 +69,32 @@ export function runBaseTests<Context>(config: {
                 expect(result).toContain("lib-name=GlideJS");
                 expect(result).toContain("lib-ver=0.1.0");
             });
+        },
+        config.timeout
+    );
+
+    it(
+        "Check protocol version is RESP3",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const result = (await client.customCommand(["HELLO"])) as {
+                    proto: number;
+                };
+                expect(result?.proto).toEqual(3);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "Check possible to opt-in to RESP2",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const result = (await client.customCommand(["HELLO"])) as {
+                    proto: number;
+                };
+                expect(result?.proto).toEqual(2);
+            }, ProtocolVersion.RESP2);
         },
         config.timeout
     );
