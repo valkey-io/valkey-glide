@@ -182,6 +182,7 @@ export class BaseClient {
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
+    private isClosed = false;
 
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
@@ -287,6 +288,9 @@ export class BaseClient {
         command: redis_request.Command | redis_request.Command[],
         route?: redis_request.Routes
     ): Promise<T> {
+        if (this.isClosed) {
+            throw new ClosingError("Unable to execute requests; the client is closed. Please create a new client.");
+        }
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
@@ -938,6 +942,7 @@ export class BaseClient {
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
      */
     public close(errorMessage?: string): void {
+        this.isClosed = true;
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
         });

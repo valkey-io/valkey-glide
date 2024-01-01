@@ -247,6 +247,13 @@ class TestRedisClients:
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert "name=TEST_CLIENT_NAME" in client_info
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_closed_client_raises_error(self, redis_client: TRedisClient):
+        await redis_client.close()
+        with pytest.raises(ClosingError) as e:
+            await redis_client.set("foo", "bar")
+        assert "the client is closed" in str(e)
+
 
 @pytest.mark.asyncio
 class TestCommands:
