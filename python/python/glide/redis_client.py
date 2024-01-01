@@ -57,6 +57,7 @@ class BaseRedisClient(CoreCommands):
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
         self._reader_task: Optional[asyncio.Task] = None
+        self._is_closed: bool = False
 
     @classmethod
     async def create(cls, config: Optional[BaseClientConfiguration] = None) -> Self:
@@ -132,6 +133,7 @@ class BaseRedisClient(CoreCommands):
             err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when closing all open futures.
             Defaults to None.
         """
+        self._is_closed = True
         for response_future in self._available_futures.values():
             if not response_future.done():
                 err_message = "" if err_message is None else err_message
@@ -184,6 +186,10 @@ class BaseRedisClient(CoreCommands):
         args: List[str],
         route: Optional[Route] = None,
     ) -> TResult:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
@@ -201,6 +207,10 @@ class BaseRedisClient(CoreCommands):
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
     ) -> List[TResult]:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         transaction_commands = []

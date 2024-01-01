@@ -2,6 +2,7 @@ import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import {
+    ClosingError,
     ExpireOptions,
     InfoOptions,
     ProtocolVersion,
@@ -69,6 +70,23 @@ export function runBaseTests<Context>(config: {
 
                 expect(result).toContain("lib-name=GlideJS");
                 expect(result).toContain("lib-ver=0.1.0");
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "closed client raises error",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                client.close();
+                try {
+                    expect(await client.set("foo", "bar")).toThrow();
+                } catch (e) {
+                    expect((e as ClosingError).message).toMatch(
+                        "Unable to execute requests; the client is closed. Please create a new client."
+                    );
+                }
             });
         },
         config.timeout
