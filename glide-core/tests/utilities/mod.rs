@@ -722,3 +722,8 @@ pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientFo
         .await
         .unwrap();
 }
+
+pub enum BackingServer {
+    Standalone(Option<RedisServer>),
+    Cluster(Option<cluster::RedisCluster>),
+}
