@@ -20,6 +20,7 @@ mod socket_listener {
     use glide_core::redis_request::command::{Args, ArgsArray};
     use glide_core::redis_request::{Command, Transaction};
     use glide_core::response::{response, ConstantResponse, Response};
+    use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, Value};
     use redis_request::{RedisRequest, RequestType};
@@ -984,6 +985,47 @@ mod socket_listener {
                 Value::Okay,
                 Value::Nil,
             ])),
+            ResponseType::Value,
+        );
+    }
+
+    #[rstest]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_send_script() {
+        let mut test_basics = setup_test_basics(false, true);
+        let socket = &mut test_basics.socket;
+        const CALLBACK_INDEX: u32 = 100;
+        const VALUE_LENGTH: usize = 10;
+        let key = generate_random_string(KEY_LENGTH);
+        let value = generate_random_string(VALUE_LENGTH);
+        let script = r#"redis.call("SET", KEYS[1], ARGV[1]); return redis.call("GET", KEYS[1])"#;
+        let hash = add_script(script);
+
+        let approx_message_length = hash.len() + value.len() + key.len() + APPROX_RESP_HEADER_LEN;
+        let mut buffer = Vec::with_capacity(approx_message_length);
+
+        let mut request = RedisRequest::new();
+        request.callback_idx = CALLBACK_INDEX;
+        request.command = Some(redis_request::redis_request::Command::ScriptInvocation(
+            redis_request::ScriptInvocation {
+                hash: hash.into(),
+                keys: vec![key.into()],
+                args: vec![value.clone().into()],
+                ..Default::default()
+            },
+        ));
+
+        write_header(&mut buffer, request.compute_size() as u32);
+        let _res = buffer.write_all(&request.write_to_bytes().unwrap());
+
+        socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, socket);
+        assert_response(
+            &buffer,
+            0,
+            CALLBACK_INDEX,
+            Some(Value::BulkString(value.into_bytes())),
             ResponseType::Value,
         );
     }

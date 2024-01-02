@@ -323,3 +323,33 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
     let pointer = Box::leak(Box::new(Value::Double(float.into()))) as *mut Value;
     split_pointer(pointer)
 }
+
+#[napi]
+/// A wrapper for a script object. As long as this object is alive, the script's code is saved in memory, and can be resent to the server.
+struct Script {
+    hash: String,
+}
+
+#[napi]
+impl Script {
+    /// Construct with the script's code.
+    #[napi(constructor)]
+    #[allow(dead_code)]
+    pub fn new(code: String) -> Self {
+        let hash = glide_core::scripts_container::add_script(&code);
+        Self { hash }
+    }
+
+    /// Returns the hash of the script.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn get_hash(&self) -> String {
+        self.hash.clone()
+    }
+}
+
+impl Drop for Script {
+    fn drop(&mut self) {
+        glide_core::scripts_container::remove_script(&self.hash);
+    }
+}
