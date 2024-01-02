@@ -37,9 +37,11 @@ function choose_action(): ChosenAction {
     if (Math.random() > PROB_GET) {
         return ChosenAction.SET;
     }
+
     if (Math.random() > PROB_GET_EXISTING_KEY) {
         return ChosenAction.GET_NON_EXISTING;
     }
+
     return ChosenAction.GET_EXISTING;
 }
 
@@ -66,6 +68,7 @@ async function redis_benchmark(
         const chosen_action = choose_action();
         const tic = process.hrtime();
         const client = clients[started_tasks_counter % clients.length];
+
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
                 await client.get(generate_key_set());
@@ -77,6 +80,7 @@ async function redis_benchmark(
                 await client.set(generate_key_set(), data);
                 break;
         }
+
         const toc = process.hrtime(tic);
         const latency_list = action_latencies[chosen_action];
         latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
@@ -92,11 +96,13 @@ async function create_bench_tasks(
 ) {
     started_tasks_counter = 0;
     const tic = process.hrtime();
+
     for (let i = 0; i < num_of_concurrent_tasks; i++) {
         running_tasks.push(
             redis_benchmark(clients, total_commands, data, action_latencies)
         );
     }
+
     await Promise.all(running_tasks);
     const toc = process.hrtime(tic);
     return toc[0] + toc[1] / 1000000000;
@@ -202,6 +208,7 @@ async function main(
     port: number
 ) {
     const data = generate_value(data_size);
+
     if (clients_to_run == "all" || clients_to_run == "glide") {
         const clientClass = clusterModeEnabled
             ? RedisClusterClient

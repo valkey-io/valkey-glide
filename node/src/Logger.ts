@@ -41,6 +41,7 @@ export class Logger {
         if (!Logger._instance) {
             new Logger();
         }
+
         const level = LEVEL.get(logLevel) || 0;
         if (!(level <= Logger.logger_level)) return;
         log(level, logIdentifier, message);
