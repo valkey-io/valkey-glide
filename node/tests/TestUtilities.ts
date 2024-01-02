@@ -60,8 +60,8 @@ export function transactionTest(
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
     baseTransaction.set(key2, "baz", {
-        returnOldValue:true
-    }); 
+        returnOldValue: true
+    });
     baseTransaction.customCommand(["MGET", key1, key2]);
     baseTransaction.mset({ [key3]: value });
     baseTransaction.mget([key1, key2]);
@@ -108,4 +108,90 @@ export function transactionTest(
         1,
         ["bar"],
     ];
+}
+
+export class RedisCluster {
+    private usedPorts: number[];
+    private clusterFolder: string;
+
+    private constructor(ports: number[], clusterFolder: string) {
+        this.usedPorts = ports;
+        this.clusterFolder = clusterFolder;
+    }
+
+    private static parseOutput(input: string): {
+        clusterFolder: string;
+        ports: number[];
+    } {
+        const lines = input.split(/\r\n|\r|\n/);
+        const clusterFolder = lines
+            .find((line) => line.startsWith("CLUSTER_FOLDER"))
+            ?.split("=")[1];
+        const ports = lines
+            .find((line) => line.startsWith("CLUSTER_NODES"))
+            ?.split("=")[1]
+            .split(",")
+            .map((address) => address.split(":")[1])
+            .map((port) => Number(port));
+        if (clusterFolder === undefined || ports === undefined) {
+            throw new Error(`Insufficient data in input: ${input}`);
+        }
+
+        return {
+            clusterFolder,
+            ports,
+        };
+    }
+
+    public static createCluster(
+        shardCount: number,
+        replicaCount: number,
+        loadModule?: string[]
+    ): Promise<RedisCluster> {
+        return new Promise<RedisCluster>((resolve, reject) => {
+            let command = `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`;
+            if (loadModule) {
+                if (loadModule.length === 0) {
+                    throw new Error("Please provide the path(s) to the module(s) you want to load.");
+                }
+                for (const module of loadModule) {
+                    command += ` --load-module ${module}`;
+                }
+            }
+            console.log(command);
+            exec(
+                command,
+                (error, stdout, stderr) => {
+                    if (error) {
+                        console.error(stderr);
+                        reject(error);
+                    } else {
+                        const { clusterFolder, ports } =
+                            this.parseOutput(stdout);
+                        resolve(new RedisCluster(ports, clusterFolder));
+                    }
+                }
+            );
+        });
+    }
+
+    public ports(): number[] {
+        return [...this.usedPorts];
+    }
+
+    public async close() {
+        await new Promise<void>((resolve, reject) =>
+            exec(
+                `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
+                (error, _, stderr) => {
+                    if (error) {
+                        console.error(stderr);
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                }
+            )
+        );
+    }
 }
