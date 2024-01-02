@@ -12,6 +12,7 @@ async function sendPingToNode() {
     const client = await RedisClient.createClient({
         addresses: addresses,
         // useTLS: true,
+        clientName: "test_standalone_client",
     });
     // The empty array signifies that there are no additional arguments.
     const pong = await client.customCommand(["PING"]);
@@ -39,6 +40,7 @@ async function sendPingToRandomNodeInCluster() {
     const client = await RedisClusterClient.createClient({
         addresses: addresses,
         useTLS: true,
+        clientName: "test_cluster_client",
     });
     // The empty array signifies that there are no additional arguments.
     const pong = await client.customCommand(["PING"], "randomNode");
