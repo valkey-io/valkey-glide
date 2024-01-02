@@ -107,6 +107,7 @@ Before starting this step, make sure you've installed all software requirments.
         ```bash
         pytest --asyncio-mode=auto
         ```
+        > **Note:** To run redis modules tests, add -k "test_redis_modules.py".
 
 ## Basic Examples
 
