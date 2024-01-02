@@ -303,7 +303,6 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            // we use a pipeline to ensure that the commands are routed together.
             let load = load_cmd(code.as_str());
             self.send_command(&load, None).await?;
             self.send_command(&eval, routing).await
