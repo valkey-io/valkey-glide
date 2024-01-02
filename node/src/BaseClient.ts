@@ -145,7 +145,11 @@ export type BaseClientConfiguration = {
      * Choose the Redis protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
-    server_protocol?: ProtocolVersion;
+    serverProtocol?: ProtocolVersion;
+    /**
+     * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+     */
+    clientName?: string;
 };
 
 function getRequestErrorClass(
@@ -889,7 +893,8 @@ export class BaseClient {
                   }
                 : undefined;
         return {
-            protocol: options.server_protocol,
+            protocol: options.serverProtocol,
+            clientName: options.clientName,
             addresses: options.addresses,
             tlsMode: options.useTLS
                 ? connection_request.TlsMode.SecureTls
