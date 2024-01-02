@@ -4,99 +4,23 @@ import {
     beforeAll,
     describe,
     expect,
-    it,
+    it
 } from "@jest/globals";
-import { exec } from "child_process";
 import {
     BaseClientConfiguration,
     ClusterTransaction,
     InfoOptions,
     ProtocolVersion,
-    RedisClusterClient,
+    RedisClusterClient
 } from "../";
 import { runBaseTests } from "./SharedTests";
-import { flushallOnPort, getFirstResult, transactionTest } from "./TestUtilities";
+import { RedisCluster, flushallOnPort, getFirstResult, transactionTest } from "./TestUtilities";
 
 type Context = {
     client: RedisClusterClient;
 };
 
 const TIMEOUT = 10000;
-
-class RedisCluster {
-    private usedPorts: number[];
-    private clusterFolder: string;
-
-    private constructor(ports: number[], clusterFolder: string) {
-        this.usedPorts = ports;
-        this.clusterFolder = clusterFolder;
-    }
-
-    private static parseOutput(input: string): {
-        clusterFolder: string;
-        ports: number[];
-    } {
-        const lines = input.split(/\r\n|\r|\n/);
-        const clusterFolder = lines
-            .find((line) => line.startsWith("CLUSTER_FOLDER"))
-            ?.split("=")[1];
-        const ports = lines
-            .find((line) => line.startsWith("CLUSTER_NODES"))
-            ?.split("=")[1]
-            .split(",")
-            .map((address) => address.split(":")[1])
-            .map((port) => Number(port));
-        if (clusterFolder === undefined || ports === undefined) {
-            throw new Error(`Insufficient data in input: ${input}`);
-        }
-
-        return {
-            clusterFolder,
-            ports,
-        };
-    }
-
-    public static createCluster(
-        shardCount: number,
-        replicaCount: number
-    ): Promise<RedisCluster> {
-        return new Promise<RedisCluster>((resolve, reject) => {
-            exec(
-                `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`,
-                (error, stdout, stderr) => {
-                    if (error) {
-                        console.error(stderr);
-                        reject(error);
-                    } else {
-                        const { clusterFolder, ports } =
-                            this.parseOutput(stdout);
-                        resolve(new RedisCluster(ports, clusterFolder));
-                    }
-                }
-            );
-        });
-    }
-
-    public ports(): number[] {
-        return [...this.usedPorts];
-    }
-
-    public async close() {
-        await new Promise<void>((resolve, reject) =>
-            exec(
-                `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
-                (error, _, stderr) => {
-                    if (error) {
-                        console.error(stderr);
-                        reject(error);
-                    } else {
-                        resolve();
-                    }
-                }
-            )
-        );
-    }
-}
 
 describe("RedisClusterClient", () => {
     let testsFailed = 0;
