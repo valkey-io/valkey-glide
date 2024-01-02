@@ -1,9 +1,10 @@
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
-use crate::redis_request::{command, redis_request};
-use crate::redis_request::{Command, RedisRequest, RequestType, Transaction};
-use crate::redis_request::{Routes, SlotTypes};
+use crate::redis_request::{
+    command, redis_request, Command, RedisRequest, RequestType, Routes, ScriptInvocation,
+    SlotTypes, Transaction,
+};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
@@ -375,6 +376,17 @@ async fn send_command(
         .map_err(|err| err.into())
 }
 
+async fn invoke_script(
+    script: ScriptInvocation,
+    mut client: Client,
+    routing: Option<RoutingInfo>,
+) -> ClientUsageResult<Value> {
+    client
+        .invoke_script(&script.hash, script.keys, script.args, routing)
+        .await
+        .map_err(|err| err.into())
+}
+
 async fn send_transaction(
     request: Transaction,
     mut client: Client,
@@ -472,6 +484,12 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                 redis_request::Command::Transaction(transaction) => {
                     match get_route(request.route.0, None) {
                         Ok(routes) => send_transaction(transaction, client, routes).await,
+                        Err(e) => Err(e),
+                    }
+                }
+                redis_request::Command::ScriptInvocation(script) => {
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => invoke_script(script, client, routes).await,
                         Err(e) => Err(e),
                     }
                 }
