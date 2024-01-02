@@ -32,7 +32,7 @@ async function getVersion(): Promise<[number, number, number]> {
 export type BaseClient = RedisClient | RedisClusterClient;
 
 export function runBaseTests<Context>(config: {
-    init: (protocol?: ProtocolVersion) => Promise<{
+    init: (protocol?: ProtocolVersion, clientName?: string) => Promise<{
         context: Context;
         client: BaseClient;
     }>;
@@ -43,9 +43,10 @@ export function runBaseTests<Context>(config: {
 
     const runTest = async (
         test: (client: BaseClient) => Promise<void>,
-        protocol?: ProtocolVersion
+        protocol?: ProtocolVersion,
+        clientName?: string
     ) => {
-        const { context, client } = await config.init(protocol);
+        const { context, client } = await config.init(protocol, clientName);
         let testSucceeded = false;
         try {
             await test(client);
@@ -56,7 +57,7 @@ export function runBaseTests<Context>(config: {
     };
 
     it(
-        "should register client name and version",
+        "should register client library name and version",
         async () => {
             await runTest(async (client: BaseClient) => {
                 const version = await getVersion();
@@ -95,6 +96,18 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(result?.proto).toEqual(2);
             }, ProtocolVersion.RESP2);
+        },
+        config.timeout
+    );
+
+    it(
+        "Check client name is configured correctly",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.clientGetName()).toBe("TEST_CLIENT");
+            },
+            undefined,
+            "TEST_CLIENT");
         },
         config.timeout
     );
