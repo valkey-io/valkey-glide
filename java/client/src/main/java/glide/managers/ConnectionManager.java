@@ -155,9 +155,8 @@ public class ConnectionManager {
 
   /** Check a response received from Glide. */
   private Void checkGlideRsResponse(Response response) {
-    // TODO do we need to check callback value? It could be -1 or 0
     if (response.hasRequestError()) {
-      // TODO do we need to support different types of exceptions and distinguish them by type?
+      // TODO support different types of exceptions and distinguish them by type:
       throw new RuntimeException(
           String.format(
               "%s: %s",
@@ -169,8 +168,6 @@ public class ConnectionManager {
     } else if (response.hasRespPointer()) {
       throw new RuntimeException("Unexpected data in response");
     }
-    // TODO commented out due to #710 https://github.com/aws/babushka/issues/710
-    //      empty response means a successful connection
     // throw new IllegalStateException("A malformed response received: " + response.toString());
     return null;
   }

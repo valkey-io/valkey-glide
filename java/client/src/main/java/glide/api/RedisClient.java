@@ -12,7 +12,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Factory class for creating Glide/Redis-client connections */
+/** Async (non-blocking) client for Redis in Standalone mode.  Use {@link #CreateClient()} to
+ * request a client to Redis. */
 public class RedisClient extends BaseClient {
 
   public static CompletableFuture<RedisClient> CreateClient() {
@@ -29,14 +30,12 @@ public class RedisClient extends BaseClient {
   }
 
   /**
-   * Async (non-blocking) connection to Redis.
+   * Request an async (non-blocking) Redis client in Standalone mode.
    *
    * @param config - Redis Client Configuration
    * @return a promise to connect and return a RedisClient
    */
   public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
-    AtomicBoolean connectionStatus = new AtomicBoolean(false);
-
     CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
     ChannelHandler channelHandler = new ChannelHandler(callbackDispatcher, getSocket());
     var connectionManager = new ConnectionManager(channelHandler);

@@ -14,7 +14,7 @@ public class CallbackManager {
   private final AtomicInteger requestId = new AtomicInteger(0);
 
   /**
-   * Storage of Futures to handle responses. Map key is callback id, which starts from 1.<br>
+   * Storage of Futures to handle responses. Map key is callback id, which starts from 0.
    * Each future is a promise for every submitted by user request.
    */
   private final Map<Integer, CompletableFuture<Response>> responses = new ConcurrentHashMap<>();

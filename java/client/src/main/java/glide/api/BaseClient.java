@@ -4,7 +4,7 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import lombok.AllArgsConstructor;
 
-/** Base Client class for connecting to Redis */
+/** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient implements AutoCloseable {
 

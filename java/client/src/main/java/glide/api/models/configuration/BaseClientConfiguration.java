@@ -7,7 +7,7 @@ import lombok.NonNull;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
-/** Represents the configuration settings for a Redis client. */
+/** Configuration settings class for creating a Redis Client.  Shared settings for both a standalone and cluster clients. */
 @Getter
 @SuperBuilder
 public abstract class BaseClientConfiguration {
