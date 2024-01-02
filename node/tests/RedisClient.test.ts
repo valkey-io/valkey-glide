@@ -171,9 +171,10 @@ describe("RedisClient", () => {
     });
 
     runBaseTests<Context>({
-        init: async (protocol?) => {
+        init: async (protocol?, clientName?) => {
             const options = getOptions(port);
-            options.server_protocol = protocol;
+            options.serverProtocol = protocol;
+            options.clientName = clientName;
             const client = await RedisClient.createClient(options);
 
             return { client, context: { client } };
