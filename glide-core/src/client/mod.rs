@@ -3,7 +3,7 @@ use crate::connection_request::{
 };
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::log_info;
+use logger_core::{log_info, log_warn};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
 use redis::RedisResult;
@@ -120,6 +120,15 @@ fn convert_to_expected_type(
     value: Value,
     expected: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
+    if let Value::Attribute { data, .. } = value {
+        log_warn(
+            "Value conversion",
+            "Encountered attribute value, which isn't supported.
+             Dropping attributes and passing the core value.",
+        );
+        return convert_to_expected_type(*data, expected);
+    };
+
     let Some(expected) = expected else {
         return Ok(value);
     };
