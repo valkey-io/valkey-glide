@@ -28,15 +28,15 @@ public class ConnectionManager {
    *
    * @param host Server address
    * @param port Server port
-   * @param useSsl true if communication with the server or cluster should use Transport Level
+   * @param useTls true if communication with the server or cluster should use Transport Level
    *     Security
-   * @param clusterMode true if REDIS instance runs in the cluster mode
+   * @param clusterMode true if the client is used for connecting to a Redis Cluster
    */
   // TODO support more parameters and/or configuration object
   public CompletableFuture<Boolean> connectToRedis(
-      String host, int port, boolean useSsl, boolean clusterMode) {
+      String host, int port, boolean useTls, boolean clusterMode) {
     ConnectionRequest request =
-        RequestBuilder.createConnectionRequest(host, port, useSsl, clusterMode);
+        RequestBuilder.createConnectionRequest(host, port, useTls, clusterMode);
     return channel.connect(request).thenApplyAsync(this::checkGlideRsResponse);
   }
 
