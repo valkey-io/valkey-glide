@@ -57,8 +57,17 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Install Redis Modules
+              uses: ./.github/workflows/install-redis-modules
+              with:
+                  redis-version: ${{ matrix.redis }} 
+
             - name: test
               run: npm test
+              working-directory: ./node
+            
+            - name: test redis modules
+              run: npm run test-modules -- --load-module=$GITHUB_WORKSPACE/redisearch.so --load-module=$GITHUB_WORKSPACE/redisjson.so
               working-directory: ./node
 
             - uses: ./.github/workflows/test-benchmark
