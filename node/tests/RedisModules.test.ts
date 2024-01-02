@@ -4,13 +4,13 @@ import {
     beforeAll,
     describe,
     expect,
-    it
+    it,
 } from "@jest/globals";
 import {
     BaseClientConfiguration,
     InfoOptions,
     RedisClusterClient,
-    parseInfoResponse
+    parseInfoResponse,
 } from "../";
 import { runBaseTests } from "./SharedTests";
 import { RedisCluster, flushallOnPort, getFirstResult } from "./TestUtilities";
@@ -26,8 +26,10 @@ describe("RedisModules", () => {
     let cluster: RedisCluster;
     beforeAll(async () => {
         const args = process.argv.slice(2);
-        const loadModuleArgs = args.filter(arg => arg.startsWith('--load-module='));
-        const loadModuleValues = loadModuleArgs.map(arg => arg.split('=')[1]);
+        const loadModuleArgs = args.filter((arg) =>
+            arg.startsWith("--load-module=")
+        );
+        const loadModuleValues = loadModuleArgs.map((arg) => arg.split("=")[1]);
         cluster = await RedisCluster.createCluster(3, 0, loadModuleValues);
     }, 20000);
 
@@ -51,9 +53,10 @@ describe("RedisModules", () => {
     };
 
     runBaseTests<Context>({
-        init: async (protocol) => {
+        init: async (protocol, clientName) => {
             const options = getOptions(cluster.ports());
-            options.server_protocol = protocol;
+            options.serverProtocol = protocol;
+            options.clientName = clientName;
             testsFailed += 1;
             const client = await RedisClusterClient.createClient(options);
             return {
@@ -67,6 +70,7 @@ describe("RedisModules", () => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }
+
             context.client.close();
         },
         timeout: TIMEOUT,
@@ -76,7 +80,9 @@ describe("RedisModules", () => {
         const client = await RedisClusterClient.createClient(
             getOptions(cluster.ports())
         );
-        const info = parseInfoResponse(getFirstResult((await client.info([InfoOptions.Modules]))).toString())["module"];
+        const info = parseInfoResponse(
+            getFirstResult(await client.info([InfoOptions.Modules])).toString()
+        )["module"];
         expect(info).toEqual(expect.stringContaining("search"));
         client.close();
     });
@@ -85,7 +91,9 @@ describe("RedisModules", () => {
         const client = await RedisClusterClient.createClient(
             getOptions(cluster.ports())
         );
-        const info = parseInfoResponse(getFirstResult((await client.info([InfoOptions.Modules]))).toString())["module"];
+        const info = parseInfoResponse(
+            getFirstResult(await client.info([InfoOptions.Modules])).toString()
+        )["module"];
         expect(info).toEqual(expect.stringContaining("ReJSON"));
         client.close();
     });

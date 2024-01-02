@@ -8,18 +8,22 @@ import RequestType = redis_request.RequestType;
 
 function isLargeCommand(args: string[]) {
     let lenSum = 0;
+
     for (const arg of args) {
         lenSum += arg.length;
+
         if (lenSum >= MAX_REQUEST_ARGS_LEN) {
             return true;
         }
     }
+
     return false;
 }
 
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
     const parsedResponse: Record<string, string> = {};
+
     for (const line of lines) {
         // Ignore lines that start with '#'
         if (!line.startsWith("#")) {
@@ -27,6 +31,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
             parsedResponse[key] = value;
         }
     }
+
     return parsedResponse;
 }
 
@@ -48,6 +53,7 @@ function createCommand(
             args: args,
         });
     }
+
     return singleCommand;
 }
 
@@ -108,15 +114,18 @@ export function createSet(
     options?: SetOptions
 ): redis_request.Command {
     const args = [key, value];
+
     if (options) {
         if (options.conditionalSet === "onlyIfExists") {
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
         }
+
         if (options.returnOldValue) {
             args.push("GET");
         }
+
         if (
             options.expiry &&
             options.expiry !== "keepExisting" &&
@@ -128,6 +137,7 @@ export function createSet(
                 )}'. Count must be an integer`
             );
         }
+
         if (options.expiry === "keepExisting") {
             args.push("KEEPTTL");
         } else if (options.expiry?.type === "seconds") {
@@ -140,6 +150,7 @@ export function createSet(
             args.push("PXAT " + options.expiry.count);
         }
     }
+
     return createCommand(RequestType.SetString, args);
 }
 

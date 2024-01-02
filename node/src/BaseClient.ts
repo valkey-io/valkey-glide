@@ -158,12 +158,15 @@ function getRequestErrorClass(
     if (type === response.RequestErrorType.Disconnect) {
         return ConnectionError;
     }
+
     if (type === response.RequestErrorType.ExecAbort) {
         return ExecAbortError;
     }
+
     if (type === response.RequestErrorType.Timeout) {
         return TimeoutError;
     }
+
     if (type === response.RequestErrorType.Unspecified) {
         return RequestError;
     }
@@ -190,9 +193,11 @@ export class BaseClient {
             : data;
         let lastPos = 0;
         const reader = Reader.create(buf);
+
         while (reader.pos < reader.len) {
             lastPos = reader.pos;
             let message = undefined;
+
             try {
                 message = response.Response.decodeDelimited(reader);
             } catch (err) {
@@ -208,13 +213,16 @@ export class BaseClient {
                     return;
                 }
             }
+
             if (message.closingError != null) {
                 this.close(message.closingError);
                 return;
             }
+
             const [resolve, reject] =
                 this.promiseCallbackFunctions[message.callbackIdx];
             this.availableCallbackSlots.push(message.callbackIdx);
+
             if (message.requestError != null) {
                 const errorType = getRequestErrorClass(
                     message.requestError.type
@@ -224,6 +232,7 @@ export class BaseClient {
                 );
             } else if (message.respPointer != null) {
                 const pointer = message.respPointer;
+
                 if (typeof pointer === "number") {
                     resolve(valueFromSplitPointer(0, pointer));
                 } else {
@@ -237,6 +246,7 @@ export class BaseClient {
                 resolve(null);
             }
         }
+
         this.remainingReadData = undefined;
     }
 
@@ -289,8 +299,11 @@ export class BaseClient {
         route?: redis_request.Routes
     ): Promise<T> {
         if (this.isClosed) {
-            throw new ClosingError("Unable to execute requests; the client is closed. Please create a new client.");
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            );
         }
+
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
@@ -329,9 +342,11 @@ export class BaseClient {
         encodeDelimited: (message: TRequest, writer: Writer) => void
     ) {
         encodeDelimited(message, this.requestWriter);
+
         if (this.writeInProgress) {
             return;
         }
+
         this.writeBufferedRequestsToSocket();
     }
 
