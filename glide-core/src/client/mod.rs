@@ -372,23 +372,57 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .map(|address| format!("{}:{}", address.host, address.port))
         .collect::<Vec<_>>()
         .join(", ");
-    let tls_mode = request.tls_mode.enum_value_or_default();
-    let cluster_mode = request.cluster_mode_enabled;
-    let request_timeout = format_non_zero_value("response timeout", request.request_timeout);
-    let database_id = format_non_zero_value("database ID", request.database_id);
-    let rfr_strategy = request.read_from.enum_value_or_default();
-    let connection_retry_strategy = match &request.connection_retry_strategy.0 {
-        Some(strategy) => {
-            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}",
-        strategy.number_of_retries, strategy.exponent_base, strategy.factor)
-        }
-        None => String::new(),
+    let tls_mode = request
+        .tls_mode
+        .enum_value()
+        .map(|tls_mode| {
+            format!(
+                "\nTLS mode: {}",
+                match tls_mode {
+                    TlsMode::NoTls => "No TLS",
+                    TlsMode::SecureTls => "Secure",
+                    TlsMode::InsecureTls => "Insecure",
+                }
+            )
+        })
+        .unwrap_or_default();
+    let cluster_mode = if request.cluster_mode_enabled {
+        "\nCluster mode"
+    } else {
+        "\nStandalone mode"
     };
-    let protocol = request.protocol.enum_value_or_default();
-    let client_name = chars_to_string_option(&request.client_name);
+    let request_timeout = format_non_zero_value("Request timeout", request.request_timeout);
+    let database_id = format_non_zero_value("database ID", request.database_id);
+    let rfr_strategy = request
+        .read_from
+        .enum_value()
+        .map(|rfr| {
+            format!(
+                "\nRead from Replica mode: {}",
+                match rfr {
+                    ReadFrom::Primary => "Only primary",
+                    ReadFrom::PreferReplica => "Prefer replica",
+                    ReadFrom::LowestLatency => "Lowest latency",
+                    ReadFrom::AZAffinity => "Availability zone affinity",
+                }
+            )
+        })
+        .unwrap_or_default();
+    let connection_retry_strategy = request.connection_retry_strategy.0.as_ref().map(|strategy|
+            format!("\nreconnect backoff strategy: number of increasing duration retries: {}, base: {}, factor: {}",
+        strategy.number_of_retries, strategy.exponent_base, strategy.factor)).unwrap_or_default();
+
+    let protocol = request
+        .protocol
+        .enum_value()
+        .map(|protocol| format!("\nProtocol: {protocol:?}"))
+        .unwrap_or_default();
+    let client_name = chars_to_string_option(&request.client_name)
+        .map(|client_name| format!("\nClient name: {client_name}"))
+        .unwrap_or_default();
 
     format!(
-        "\nAddresses: {addresses}\nTLS mode: {tls_mode:?}\nCluster mode: {cluster_mode}\nRequest timeout: {request_timeout}\nRead from replica strategy: {rfr_strategy:?}\nConnection retry strategy: {connection_retry_strategy}\nDatabase id: {database_id}\nProtocol: {protocol:?}\nClient name: {client_name:?}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}",
     )
 }
 
