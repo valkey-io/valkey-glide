@@ -79,6 +79,7 @@ function toProtobufRoute(
     if (route === undefined) {
         return undefined;
     }
+
     if (route === "allPrimaries") {
         return redis_request.Routes.create({
             simpleRoutes: redis_request.SimpleRoutes.AllPrimaries,

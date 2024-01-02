@@ -24,16 +24,21 @@ async function getVersion(): Promise<[number, number, number]> {
     });
     const version = versioString.split("v=")[1].split(" ")[0];
     const numbers = version?.split(".");
+
     if (numbers.length != 3) {
         return [0, 0, 0];
     }
+
     return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
 }
 
 export type BaseClient = RedisClient | RedisClusterClient;
 
 export function runBaseTests<Context>(config: {
-    init: (protocol?: ProtocolVersion, clientName?: string) => Promise<{
+    init: (
+        protocol?: ProtocolVersion,
+        clientName?: string
+    ) => Promise<{
         context: Context;
         client: BaseClient;
     }>;
@@ -49,6 +54,7 @@ export function runBaseTests<Context>(config: {
     ) => {
         const { context, client } = await config.init(protocol, clientName);
         let testSucceeded = false;
+
         try {
             await test(client);
             testSucceeded = true;
@@ -62,6 +68,7 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 const version = await getVersion();
+
                 if (version[0] < 7 || (version[0] === 7 && version[1] < 2)) {
                     return;
                 }
@@ -80,6 +87,7 @@ export function runBaseTests<Context>(config: {
         async () => {
             await runTest(async (client: BaseClient) => {
                 client.close();
+
                 try {
                     expect(await client.set("foo", "bar")).toThrow();
                 } catch (e) {
@@ -121,11 +129,13 @@ export function runBaseTests<Context>(config: {
     it(
         "Check client name is configured correctly",
         async () => {
-            await runTest(async (client: BaseClient) => {
-                expect(await client.clientGetName()).toBe("TEST_CLIENT");
-            },
-            undefined,
-            "TEST_CLIENT");
+            await runTest(
+                async (client: BaseClient) => {
+                    expect(await client.clientGetName()).toBe("TEST_CLIENT");
+                },
+                undefined,
+                "TEST_CLIENT"
+            );
         },
         config.timeout
     );
@@ -282,6 +292,7 @@ export function runBaseTests<Context>(config: {
                 const conf_file = parseInfoResponse(
                     getFirstResult(serverInfo).toString()
                 )["config_file"];
+
                 if (conf_file.length > 0) {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
@@ -390,6 +401,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
+
                 try {
                     expect(await client.incr(key)).toThrow();
                 } catch (e) {
@@ -480,6 +492,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
+
                 try {
                     expect(await client.decr(key)).toThrow();
                 } catch (e) {
@@ -705,6 +718,7 @@ export function runBaseTests<Context>(config: {
                     [field]: "foo",
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(1);
+
                 try {
                     expect(await client.hincrBy(key, field, 2)).toThrow();
                 } catch (e) {
@@ -798,6 +812,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.llen("nonExistingKey")).toEqual(0);
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
+
                 try {
                     expect(await client.llen(key2)).toThrow();
                 } catch (e) {
@@ -828,6 +843,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lrange(key, 0, -1)).toEqual([]);
 
                 expect(await client.set(key, "foo")).toEqual("OK");
+
                 try {
                     expect(await client.ltrim(key, 0, 1)).toThrow();
                 } catch (e) {
@@ -1045,28 +1061,25 @@ export function runBaseTests<Context>(config: {
                 /// set command clears the timeout.
                 expect(await client.set(key, "bar")).toEqual("OK");
                 const version = await getVersion();
-                if (version[0] < 7 ) {
+
+                if (version[0] < 7) {
+                    expect(await client.pexpire(key, 10000)).toEqual(true);
+                } else {
                     expect(
-                        await client.pexpire(key, 10000)
-                    ).toEqual(true);
-                 }
-                else {
-                    expect(
-                        await client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
-                    ).toEqual(true);
-                }
-                
-                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
-                /// TTL will be updated to the new value = 15
-                if (version[0] < 7 ) {
-                    expect(
-                        await client.expire(
+                        await client.pexpire(
                             key,
-                            15
+                            10000,
+                            ExpireOptions.HasNoExpiry
                         )
                     ).toEqual(true);
                 }
-                else {
+
+                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
+
+                /// TTL will be updated to the new value = 15
+                if (version[0] < 7) {
+                    expect(await client.expire(key, 15)).toEqual(true);
+                } else {
                     expect(
                         await client.expire(
                             key,
@@ -1075,6 +1088,7 @@ export function runBaseTests<Context>(config: {
                         )
                     ).toEqual(true);
                 }
+
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
             });
         },
@@ -1095,15 +1109,15 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 const version = await getVersion();
-                if (version[0] < 7 ) {
+
+                if (version[0] < 7) {
                     expect(
                         await client.expireAt(
                             key,
                             Math.floor(Date.now() / 1000) + 50
                         )
                     ).toEqual(true);
-                }
-                else{
+                } else {
                     expect(
                         await client.expireAt(
                             key,
@@ -1112,10 +1126,12 @@ export function runBaseTests<Context>(config: {
                         )
                     ).toEqual(true);
                 }
+
                 expect(await client.ttl(key)).toBeLessThanOrEqual(50);
 
                 /// set command clears the timeout.
                 expect(await client.set(key, "bar")).toEqual("OK");
+
                 if (version[0] >= 7) {
                     expect(
                         await client.pexpireAt(
@@ -1259,13 +1275,17 @@ export function runCommonTests<Context>(config: {
         async () => {
             await runTest(async (client: Client) => {
                 const WANTED_LENGTH = Math.pow(2, 16);
+
                 const getLongUUID = () => {
                     let id = uuidv4();
+
                     while (id.length < WANTED_LENGTH) {
                         id += uuidv4();
                     }
+
                     return id;
                 };
+
                 const key = getLongUUID();
                 const value = getLongUUID();
                 await client.set(key, value);
