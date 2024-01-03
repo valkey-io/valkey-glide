@@ -167,15 +167,17 @@ public class ConnectionManager {
           String.format(
               "%s: %s",
               response.getRequestError().getType(), response.getRequestError().getMessage()));
-    } else if (response.hasClosingError()) {
+    }
+    if (response.hasClosingError()) {
       throw new RuntimeException("Connection closed: " + response.getClosingError());
-    } else if (response.hasConstantResponse()) {
-      return null;
-    } else if (response.hasRespPointer()) {
+    }
+    if (response.hasRespPointer()) {
       throw new RuntimeException("Unexpected data in response");
     }
-    // throw new IllegalStateException("A malformed response received: " + response.toString());
-    return null;
+    if (response.hasConstantResponse()) {
+      return null;
+    }
+    throw new RuntimeException("Connection response expects an OK response");
   }
 
   /** Close the connection and the corresponding channel. */

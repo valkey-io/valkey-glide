@@ -17,10 +17,22 @@ import java.util.concurrent.ExecutionException;
  */
 public class RedisClient extends BaseClient {
 
+  /**
+   * Request an async (non-blocking) Redis client in Standalone mode to a Redis service on localhost.
+   *
+   * @return a promise to connect and return a RedisClient
+   */
   public static CompletableFuture<RedisClient> CreateClient() {
     return CreateClient(RedisClientConfiguration.builder().build());
   }
 
+  /**
+   * Request an async (non-blocking) Redis client in Standalone mode.
+   *
+   * @param host - host address of the Redis service
+   * @param port - port of the Redis service
+   * @return a promise to connect and return a RedisClient
+   */
   public static CompletableFuture<RedisClient> CreateClient(String host, Integer port) {
     RedisClientConfiguration config =
         RedisClientConfiguration.builder()
@@ -47,6 +59,7 @@ public class RedisClient extends BaseClient {
       RedisClientConfiguration config,
       ConnectionManager connectionManager,
       CommandManager commandManager) {
+    // TODO: Support exception throwing, including interrupted exceptions
     return connectionManager
         .connectToRedis(config)
         .thenApplyAsync(ignore -> new RedisClient(connectionManager, commandManager));
@@ -58,7 +71,9 @@ public class RedisClient extends BaseClient {
 
   /**
    * Closes this resource, relinquishing any underlying resources. This method is invoked
-   * automatically on objects managed by the try-with-resources statement. see: <a
+   * automatically on objects managed by the try-with-resources statement.
+   *
+   * <p>see: <a
    * href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
    */
   @Override
