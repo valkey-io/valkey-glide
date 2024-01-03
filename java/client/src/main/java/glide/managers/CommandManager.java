@@ -61,12 +61,13 @@ public class CommandManager {
    */
   private String extractValueFromGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      // TODO do we need to support different types of exceptions and distinguish them by type?
+      // TODO we need to support different types of exceptions and distinguish them by type
       throw new RuntimeException(
           String.format(
               "%s: %s",
               response.getRequestError().getType(), response.getRequestError().getMessage()));
     } else if (response.hasClosingError()) {
+      // TODO: close the channel on closingError
       CompletableFuture.runAsync(channel::close);
       throw new RuntimeException("Connection closed: " + response.getClosingError());
     } else if (response.hasConstantResponse()) {
@@ -74,6 +75,6 @@ public class CommandManager {
     } else if (response.hasRespPointer()) {
       return RedisValueResolver.valueFromPointer(response.getRespPointer()).toString();
     }
-    return "OK";
+    return null;
   }
 }

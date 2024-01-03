@@ -24,10 +24,12 @@ public class ChannelHandler {
 
   /** Open a new channel for a new client. */
   public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath) {
+    // TODO: add the ability to pass in group and channel from user
     channel =
         new Bootstrap()
             // TODO let user specify the thread pool or pool size as an option
-            .group(ThreadPoolAllocator.createNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
+            .group(
+                ThreadPoolAllocator.createOrGetNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
             .connect(new DomainSocketAddress(socketPath))

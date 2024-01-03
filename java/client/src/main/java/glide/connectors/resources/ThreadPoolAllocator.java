@@ -24,7 +24,8 @@ public class ThreadPoolAllocator {
    *
    * @return A new thread pool.
    */
-  public static EventLoopGroup createNettyThreadPool(String prefix, Optional<Integer> threadLimit) {
+  public static EventLoopGroup createOrGetNettyThreadPool(
+      String prefix, Optional<Integer> threadLimit) {
     int threadCount = threadLimit.orElse(Runtime.getRuntime().availableProcessors());
     if (Platform.getCapabilities().isKQueueAvailable()) {
       String name = prefix + "-kqueue-elg";

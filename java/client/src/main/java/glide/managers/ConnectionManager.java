@@ -38,7 +38,7 @@ public class ConnectionManager {
   /** Check a response received from Glide. */
   private Void checkGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      // TODO do we need to support different types of exceptions and distinguish them by type?
+      // TODO unexpected when establishing a connection
       throw new RuntimeException(
           String.format(
               "%s: %s",
