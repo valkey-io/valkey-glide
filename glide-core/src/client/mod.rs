@@ -171,7 +171,9 @@ fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
     match command.as_slice() {
-        b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map),
+        b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
+            Some(ExpectedReturnType::Map)
+        }
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT" => {
             Some(ExpectedReturnType::Boolean)
