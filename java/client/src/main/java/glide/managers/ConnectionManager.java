@@ -1,10 +1,16 @@
 package glide.managers;
 
+import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
+import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
+
+import connection_request.ConnectionRequestOuterClass;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.connectors.handlers.ChannelHandler;
-import glide.ffi.resolvers.RedisValueResolver;
-import glide.models.RequestBuilder;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
@@ -25,13 +31,13 @@ public class ConnectionManager {
    * @param configuration Connection Request Configuration
    */
   public CompletableFuture<Void> connectToRedis(BaseClientConfiguration configuration) {
-    ConnectionRequestOuterClass.ConnectionRequest request = createConnectionRequest(configuration);
+    ConnectionRequest request = createConnectionRequest(configuration);
     return channel.connect(request).thenApplyAsync(this::checkGlideRsResponse);
   }
 
   /**
-   * Close the connection and the corresponding channel.
-   * Creates a ConnectionRequest protobuf message based on the type of client Standalone/Cluster.
+   * Close the connection and the corresponding channel. Creates a ConnectionRequest protobuf
+   * message based on the type of client Standalone/Cluster.
    *
    * @param configuration Connection Request Configuration
    * @return ConnectionRequest protobuf message
@@ -59,7 +65,7 @@ public class ConnectionManager {
     if (!configuration.getAddresses().isEmpty()) {
       for (NodeAddress nodeAddress : configuration.getAddresses()) {
         connectionRequestBuilder.addAddresses(
-            ConnectionRequestOuterClass.NodeAddress.newBuilder()
+            connection_request.ConnectionRequestOuterClass.NodeAddress.newBuilder()
                 .setHost(nodeAddress.getHost())
                 .setPort(nodeAddress.getPort())
                 .build());
@@ -76,12 +82,12 @@ public class ConnectionManager {
         .setTlsMode(
             configuration.isUseTLS()
                 ? ConnectionRequestOuterClass.TlsMode.SecureTls
-                : ConnectionRequestOuterClass.TlsMode.NoTls)
+                : connection_request.ConnectionRequestOuterClass.TlsMode.NoTls)
         .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
 
     if (configuration.getCredentials() != null) {
-      ConnectionRequestOuterClass.AuthenticationInfo.Builder authenticationInfoBuilder =
-          ConnectionRequestOuterClass.AuthenticationInfo.newBuilder();
+      connection_request.ConnectionRequestOuterClass.AuthenticationInfo.Builder
+          authenticationInfoBuilder = ConnectionRequestOuterClass.AuthenticationInfo.newBuilder();
       if (configuration.getCredentials().getUsername() != null) {
         authenticationInfoBuilder.setUsername(configuration.getCredentials().getUsername());
       }
@@ -129,7 +135,7 @@ public class ConnectionManager {
    *
    * @param configuration
    */
-  private ConnectionRequestOuterClass.ConnectionRequest.Builder
+  private connection_request.ConnectionRequestOuterClass.ConnectionRequest.Builder
       setupConnectionRequestBuilderRedisClusterClient(
           RedisClusterClientConfiguration configuration) {
     ConnectionRequest.Builder connectionRequestBuilder =

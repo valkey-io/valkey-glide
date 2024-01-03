@@ -39,7 +39,7 @@ public class RedisClient extends BaseClient {
     CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
     ChannelHandler channelHandler = new ChannelHandler(callbackDispatcher, getSocket());
     var connectionManager = new ConnectionManager(channelHandler);
-    var commandManager = new CommandManager(new CompletableFuture<>());
+    var commandManager = new CommandManager(channelHandler);
     return CreateClient(config, connectionManager, commandManager);
   }
 
@@ -64,11 +64,7 @@ public class RedisClient extends BaseClient {
   @Override
   public void close() throws ExecutionException {
     try {
-      connectionManager
-          .closeConnection()
-          .thenComposeAsync(ignore -> commandManager.closeConnection())
-          .thenApplyAsync(ignore -> this)
-          .get();
+      connectionManager.closeConnection().get();
     } catch (InterruptedException interruptedException) {
       // AutoCloseable functions are strongly advised to avoid throwing InterruptedExceptions
       // TODO: marking resources as closed:
