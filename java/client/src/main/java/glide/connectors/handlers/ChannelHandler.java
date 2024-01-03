@@ -2,12 +2,12 @@ package glide.connectors.handlers;
 
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import glide.connectors.resources.Platform;
+import glide.connectors.resources.ThreadPoolAllocator;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.unix.DomainSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
@@ -24,10 +24,12 @@ public class ChannelHandler {
 
   /** Open a new channel for a new client. */
   public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath) {
+    // TODO: add the ability to pass in group and channel from user
     channel =
         new Bootstrap()
             // TODO let user specify the thread pool or pool size as an option
-            .group(Platform.createNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
+            .group(
+                ThreadPoolAllocator.createOrGetNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
             .channel(Platform.getClientUdsNettyChannelType())
             .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
             .connect(new DomainSocketAddress(socketPath))
@@ -66,13 +68,9 @@ public class ChannelHandler {
     return callbackDispatcher.registerConnection();
   }
 
-  private final AtomicBoolean closed = new AtomicBoolean(false);
-
   /** Closes the UDS connection and frees corresponding resources. */
   public void close() {
-    if (closed.compareAndSet(false, true)) {
-      channel.close();
-      callbackDispatcher.shutdownGracefully();
-    }
+    channel.close();
+    callbackDispatcher.shutdownGracefully();
   }
 }
