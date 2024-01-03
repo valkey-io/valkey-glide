@@ -47,14 +47,8 @@ public class RequestBuilder {
     }
 
     return RedisRequest.newBuilder()
-        .setSingleCommand( // set command
-            Command.newBuilder()
-                .setRequestType(command) // set command name
-                .setArgsArray(commandArgs.build()) // set arguments
-                .build())
-        .setRoute( // set route
-            Routes.newBuilder()
-                .setSimpleRoutes(SimpleRoutes.AllNodes) // set route type
-                .build());
+        .setSingleCommand(
+            Command.newBuilder().setRequestType(command).setArgsArray(commandArgs.build()).build())
+        .setRoute(Routes.newBuilder().setSimpleRoutes(SimpleRoutes.AllNodes).build());
   }
 }

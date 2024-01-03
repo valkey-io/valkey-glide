@@ -3,7 +3,6 @@ package glide.connectors.handlers;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
@@ -12,13 +11,6 @@ import response.ResponseOuterClass.Response;
 /** Holder for resources required to dispatch responses and used by {@link ReadHandler}. */
 @RequiredArgsConstructor
 public class CallbackDispatcher {
-
-  /**
-   * Client connection status needed to distinguish connection request. The callback dispatcher only
-   * submits connection requests until a successful connection response is returned and the status
-   * changes to true. The callback dispatcher then submits command requests.
-   */
-  private final AtomicBoolean isConnectedStatus;
 
   /** Unique request ID (callback ID). Thread-safe and overflow-safe. */
   private final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);

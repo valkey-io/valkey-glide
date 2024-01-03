@@ -10,8 +10,8 @@ import redis_request.RedisRequestOuterClass.RequestType;
 import response.ResponseOuterClass.Response;
 
 /**
- * Service responsible for submitting command requests to a socket channel handler
- * and unpack responses from the same socket channel handler.
+ * Service responsible for submitting command requests to a socket channel handler and unpack
+ * responses from the same socket channel handler.
  */
 @RequiredArgsConstructor
 public class CommandManager {
