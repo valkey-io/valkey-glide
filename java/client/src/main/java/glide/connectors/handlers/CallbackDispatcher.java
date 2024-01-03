@@ -16,18 +16,19 @@ public class CallbackDispatcher {
   private final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);
 
   /**
-   * Storage of Futures to handle responses. Map key is callback id, which starts from 1.<br>
-   * Each future is a promise for every submitted by user request.<br>
-   * Note: Protobuf packet contains callback ID as uint32, but it stores data as a bit field.<br>
-   * Negative java values would be shown as positive on rust side. Meanwhile, no data loss happen,
-   * because callback ID remains unique.
+   * Storage of Futures to handle responses. Map key is callback id, which starts from 0. The value
+   * is a CompletableFuture that is returned to the user and completed when the request is done.
+   *
+   * <p>Note: Protobuf packet contains callback ID as uint32, but it stores data as a bit field.
+   * Negative Java values would be shown as positive on Rust side. There is no data loss, because
+   * callback ID remains unique.
    */
   private final ConcurrentHashMap<Integer, CompletableFuture<Response>> responses =
       new ConcurrentHashMap<>();
 
   /**
    * Storage of freed callback IDs. It is needed to avoid occupying an ID being used and to speed up
-   * search for a next free ID.<br>
+   * search for a next free ID.
    */
   // TODO: Optimize to avoid growing up to 2e32 (16 Gb) https://github.com/aws/babushka/issues/704
   private final ConcurrentLinkedQueue<Integer> freeRequestIds = new ConcurrentLinkedQueue<>();
