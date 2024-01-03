@@ -12,8 +12,8 @@ import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 /**
- * Class responsible for handling calls to/from a netty.io {@link Channel}.
- * Uses a {@link CallbackDispatcher} to record callbacks of every request sent.
+ * Class responsible for handling calls to/from a netty.io {@link Channel}. Uses a {@link
+ * CallbackDispatcher} to record callbacks of every request sent.
  */
 public class ChannelHandler {
 

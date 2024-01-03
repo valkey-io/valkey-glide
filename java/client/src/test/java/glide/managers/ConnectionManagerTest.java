@@ -1,4 +1,4 @@
-package glide.api;
+package glide.managers;
 
 import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
@@ -22,7 +22,6 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RedisCredentials;
 import glide.connectors.handlers.ChannelHandler;
-import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;

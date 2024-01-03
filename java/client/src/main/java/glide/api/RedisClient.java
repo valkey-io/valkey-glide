@@ -10,10 +10,11 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Async (non-blocking) client for Redis in Standalone mode.  Use {@link #CreateClient()} to
- * request a client to Redis. */
+/**
+ * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient()} to request
+ * a client to Redis.
+ */
 public class RedisClient extends BaseClient {
 
   public static CompletableFuture<RedisClient> CreateClient() {
@@ -25,7 +26,6 @@ public class RedisClient extends BaseClient {
         RedisClientConfiguration.builder()
             .address(NodeAddress.builder().host(host).port(port).build())
             .build();
-
     return CreateClient(config);
   }
 
@@ -40,11 +40,10 @@ public class RedisClient extends BaseClient {
     ChannelHandler channelHandler = new ChannelHandler(callbackDispatcher, getSocket());
     var connectionManager = new ConnectionManager(channelHandler);
     var commandManager = new CommandManager(new CompletableFuture<>());
-    // TODO: send request with configuration to connection Manager as part of a follow-up PR
     return CreateClient(config, connectionManager, commandManager);
   }
 
-  private static CompletableFuture<RedisClient> CreateClient(
+  protected static CompletableFuture<RedisClient> CreateClient(
       RedisClientConfiguration config,
       ConnectionManager connectionManager,
       CommandManager commandManager) {

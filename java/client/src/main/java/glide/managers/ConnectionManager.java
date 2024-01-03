@@ -25,12 +25,12 @@ public class ConnectionManager {
    * @param configuration Connection Request Configuration
    */
   public CompletableFuture<Void> connectToRedis(BaseClientConfiguration configuration) {
-    connection_request.ConnectionRequestOuterClass.ConnectionRequest request = createConnectionRequest(configuration);
+    ConnectionRequestOuterClass.ConnectionRequest request = createConnectionRequest(configuration);
     return channel.connect(request).thenApplyAsync(this::checkGlideRsResponse);
   }
 
-  /** Close the connection and the corresponding channel. */
   /**
+   * Close the connection and the corresponding channel.
    * Creates a ConnectionRequest protobuf message based on the type of client Standalone/Cluster.
    *
    * @param configuration Connection Request Configuration
