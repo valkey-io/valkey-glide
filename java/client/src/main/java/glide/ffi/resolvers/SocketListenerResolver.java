@@ -1,12 +1,12 @@
 package glide.ffi.resolvers;
 
-public class GlideCoreNativeDefinitions {
-  public static native String startSocketListenerExternal() throws Exception;
+public class SocketListenerResolver {
 
-  public static native Object valueFromPointer(long pointer);
+  /** Make an FFI call to Glide to open a UDS socket to connect to. */
+  private static native String startSocketListener() throws Exception;
 
   static {
-    System.loadLibrary("glide-rs");
+    System.loadLibrary("glide_rs");
   }
 
   /**
@@ -16,7 +16,7 @@ public class GlideCoreNativeDefinitions {
    */
   public static String getSocket() {
     try {
-      return startSocketListenerExternal();
+      return startSocketListener();
     } catch (Exception | UnsatisfiedLinkError e) {
       System.err.printf("Failed to create a UDS connection: %s%n%n", e);
       throw new RuntimeException(e);

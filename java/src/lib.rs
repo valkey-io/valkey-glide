@@ -42,9 +42,7 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideCoreNativeDefinitions_valueFromPointer<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointer<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong,
@@ -54,7 +52,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideCoreNativeDefinitions_value
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideCoreNativeDefinitions_startSocketListenerExternal<
+pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSocketListener<
     'local,
 >(
     env: JNIEnv<'local>,
