@@ -27,7 +27,7 @@ public abstract class BaseClientConfiguration {
   /** True if communication with the cluster should use Transport Level Security. */
   @Builder.Default private final boolean useTLS = false;
 
-  /** If not set, `PRIMARY` will be used. */
+  /** Represents the client's read from strategy. */
   @NonNull @Builder.Default private final ReadFrom readFrom = ReadFrom.PRIMARY;
 
   /**

@@ -30,62 +30,33 @@ public class RedisClient extends BaseClient {
   /**
    * Request an async (non-blocking) Redis client in Standalone mode.
    *
-   * @param host - host address of the Redis service
-   * @param port - port of the Redis service
-   * @return a promise to connect and return a RedisClient
-   */
-  public static CompletableFuture<RedisClient> CreateClient(String host, Integer port) {
-    RedisClientConfiguration config =
-        RedisClientConfiguration.builder()
-            .address(NodeAddress.builder().host(host).port(port).build())
-            .build();
-    return CreateClient(config);
-  }
-
-  /**
-   * Request an async (non-blocking) Redis client in Standalone mode.
-   *
    * @param config - Redis Client Configuration
    * @return a promise to connect and return a RedisClient
    */
   public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
-    CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
-    ChannelHandler channelHandler = new ChannelHandler(callbackDispatcher, getSocket());
-    var connectionManager = new ConnectionManager(channelHandler);
-    var commandManager = new CommandManager(channelHandler);
-    return CreateClient(config, connectionManager, commandManager);
-  }
-
-  protected static CompletableFuture<RedisClient> CreateClient(
-      RedisClientConfiguration config,
-      ConnectionManager connectionManager,
-      CommandManager commandManager) {
+    ChannelHandler channelHandler = buildChannelHandler();
+    ConnectionManager connectionManager = buildConnectionManager(channelHandler);
+    CommandManager commandManager = buildCommandManager(channelHandler);
     // TODO: Support exception throwing, including interrupted exceptions
     return connectionManager
         .connectToRedis(config)
-        .thenApplyAsync(ignore -> new RedisClient(connectionManager, commandManager));
+        .thenApply(ignore -> new RedisClient(connectionManager, commandManager));
+  }
+
+  protected static ChannelHandler buildChannelHandler() {
+    CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
+    return new ChannelHandler(callbackDispatcher, getSocket());
+  }
+
+  protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
+    return new ConnectionManager(channelHandler);
+  }
+
+  protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
+    return new CommandManager(channelHandler);
   }
 
   protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
     super(connectionManager, commandManager);
-  }
-
-  /**
-   * Closes this resource, relinquishing any underlying resources. This method is invoked
-   * automatically on objects managed by the try-with-resources statement.
-   *
-   * <p>see: <a
-   * href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
-   */
-  @Override
-  public void close() throws ExecutionException {
-    try {
-      connectionManager.closeConnection().get();
-    } catch (InterruptedException interruptedException) {
-      // AutoCloseable functions are strongly advised to avoid throwing InterruptedExceptions
-      // TODO: marking resources as closed:
-      // https://github.com/orgs/Bit-Quill/projects/4/views/6?pane=issue&itemId=48063887
-      throw new RuntimeException(interruptedException);
-    }
   }
 }
