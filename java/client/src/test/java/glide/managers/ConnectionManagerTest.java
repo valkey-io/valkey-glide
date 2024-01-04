@@ -2,6 +2,7 @@ package glide.managers;
 
 import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -179,7 +180,7 @@ public class ConnectionManagerTest {
   }
 
   @Test
-  public void DoubleConnection_successfullyReturns()
+  public void onConnection_emptyResponse_throwsRuntimeException()
       throws ExecutionException, InterruptedException {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
@@ -189,20 +190,14 @@ public class ConnectionManagerTest {
 
     // execute
     when(channel.connect(any())).thenReturn(completedFuture);
-    CompletableFuture<Void> result1 = connectionManager.connectToRedis(redisClientConfiguration);
+    ExecutionException executionException = assertThrows(
+        ExecutionException.class,
+        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
-    // verify
-    assertNull(result1.get());
-    verify(channel).connect(any());
-
-    // TODO: what is the expected behaviour if we send a different configuration on the second call
-
-    // execute
-    CompletableFuture<Void> result2 = connectionManager.connectToRedis(redisClientConfiguration);
-
-    // verify
-    assertNull(result2.get());
-    verify(channel, new Times(2)).connect(any());
+    assertTrue(executionException.getCause() instanceof RuntimeException);
+    assertEquals(
+        "Connection response expects an OK response",
+        executionException.getCause().getMessage());
   }
 
   @Test

@@ -175,6 +175,7 @@ public class ConnectionManager {
       throw new RuntimeException("Unexpected data in response");
     }
     if (response.hasConstantResponse()) {
+      // successful connection response has an "OK"
       return null;
     }
     throw new RuntimeException("Connection response expects an OK response");
