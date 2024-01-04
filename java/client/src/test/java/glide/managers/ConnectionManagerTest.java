@@ -27,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.internal.verification.Times;
 import response.ResponseOuterClass;
 import response.ResponseOuterClass.Response;
 
@@ -190,14 +189,14 @@ public class ConnectionManagerTest {
 
     // execute
     when(channel.connect(any())).thenReturn(completedFuture);
-    ExecutionException executionException = assertThrows(
-        ExecutionException.class,
-        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
+    ExecutionException executionException =
+        assertThrows(
+            ExecutionException.class,
+            () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
     assertTrue(executionException.getCause() instanceof RuntimeException);
     assertEquals(
-        "Connection response expects an OK response",
-        executionException.getCause().getMessage());
+        "Connection response expects an OK response", executionException.getCause().getMessage());
   }
 
   @Test
