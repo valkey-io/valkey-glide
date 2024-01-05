@@ -56,9 +56,9 @@ public class ConnectionManagerTest {
     connectionManager = new ConnectionManager(channel);
   }
 
+  @SneakyThrows
   @Test
-  public void ConnectionRequestProtobufGeneration_DefaultRedisClientConfiguration_returns()
-      throws ExecutionException, InterruptedException {
+  public void ConnectionRequestProtobufGeneration_DefaultRedisClientConfiguration_returns() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     ConnectionRequest expectedProtobufConnectionRequest =
@@ -87,9 +87,9 @@ public class ConnectionManagerTest {
     verify(channel).connect(eq(expectedProtobufConnectionRequest));
   }
 
+  @SneakyThrows
   @Test
-  public void ConnectionRequestProtobufGeneration_DefaultRedisClusterClientConfiguration_returns()
-      throws ExecutionException, InterruptedException {
+  public void ConnectionRequestProtobufGeneration_DefaultRedisClusterClientConfiguration_returns() {
     // setup
     RedisClusterClientConfiguration redisClusterClientConfiguration =
         RedisClusterClientConfiguration.builder().build();
@@ -119,9 +119,9 @@ public class ConnectionManagerTest {
     verify(channel).connect(eq(expectedProtobufConnectionRequest));
   }
 
+  @SneakyThrows
   @Test
-  public void ConnectionRequestProtobufGeneration_RedisClientAllFieldsSet_returns()
-      throws ExecutionException, InterruptedException {
+  public void ConnectionRequestProtobufGeneration_RedisClientAllFieldsSet_returns() {
     // setup
     RedisClientConfiguration redisClientConfiguration =
         RedisClientConfiguration.builder()
@@ -180,8 +180,7 @@ public class ConnectionManagerTest {
   }
 
   @Test
-  public void onConnection_emptyResponse_throwsRuntimeException()
-      throws ExecutionException, InterruptedException {
+  public void onConnection_emptyResponse_throwsRuntimeException() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     CompletableFuture<Response> completedFuture = new CompletableFuture<>();

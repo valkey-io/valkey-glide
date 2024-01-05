@@ -19,7 +19,7 @@ public class RedisClient extends BaseClient {
    * Request an async (non-blocking) Redis client in Standalone mode to a Redis service on
    * localhost.
    *
-   * @return a promise to connect and return a RedisClient
+   * @return a Future to connect and return a RedisClient
    */
   public static CompletableFuture<RedisClient> CreateClient() {
     return CreateClient(RedisClientConfiguration.builder().build());
@@ -29,7 +29,7 @@ public class RedisClient extends BaseClient {
    * Request an async (non-blocking) Redis client in Standalone mode.
    *
    * @param config - Redis Client Configuration
-   * @return a promise to connect and return a RedisClient
+   * @return a Future to connect and return a RedisClient
    */
   public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
     ChannelHandler channelHandler = buildChannelHandler();

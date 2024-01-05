@@ -94,6 +94,7 @@ public class RedisClientCreateTest {
   public void createClient_errorOnConnectionThrowsExecutionException() {
     // setup
     CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
+    // TODO: return a RedisException, not a RuntimeException
     RuntimeException exception = new RuntimeException("disconnected");
     connectToRedisFuture.completeExceptionally(exception);
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
