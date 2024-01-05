@@ -1,6 +1,6 @@
 use glide_core::start_socket_listener;
 
-use jni::objects::{JClass, JObject, JThrowable};
+use jni::objects::{JClass, JObject, JObjectArray, JThrowable};
 use jni::sys::jlong;
 use jni::JNIEnv;
 use log::error;
@@ -14,7 +14,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::Okay => JObject::from(env.new_string("OK").unwrap()),
         // TODO use primitive integer
         Value::Int(num) => env
-            .new_object("java/lang/Integer", "(I)V", &[num.into()])
+            .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
         Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
             Ok(val) => JObject::from(env.new_string(val).unwrap()),
@@ -37,12 +37,50 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
 
             items.into()
         }
-        Value::Map(_map) => todo!(),
-        Value::Double(_float) => todo!(),
-        Value::Boolean(_bool) => todo!(),
+        Value::Map(map) => {
+            let hashmap = env.new_object("java/util/HashMap", "()V", &[]).unwrap();
+
+            for (key, value) in map {
+                let java_key = redis_value_to_java(env, key);
+                let java_value = redis_value_to_java(env, value);
+                env.call_method(
+                    &hashmap,
+                    "insert",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    &[(&java_key).into(), (&java_value).into()],
+                )
+                .unwrap();
+            }
+
+            hashmap
+        }
+        Value::Double(float) => env
+            .new_object("java/lang/Double", "(D)V", &[float.into_inner().into()])
+            .unwrap(),
+        Value::Boolean(bool) => env
+            .new_object("java/lang/Boolean", "(Z)V", &[bool.into()])
+            .unwrap(),
         Value::VerbatimString { format: _, text: _ } => todo!(),
         Value::BigNumber(_num) => todo!(),
-        Value::Set(_array) => todo!(),
+        Value::Set(array) => {
+            // TODO: Consider caching the method ID here in a static variable (might need RwLock to mutate)
+            let items: JObjectArray = env
+                .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
+                .unwrap();
+
+            for (i, item) in array.into_iter().enumerate() {
+                let java_value = redis_value_to_java(env, item);
+                env.set_object_array_element(&items, i as i32, java_value)
+                    .unwrap();
+            }
+
+            env.new_object(
+                "java/util/HashSet",
+                "([Ljava/lang/Object;)V",
+                &[(&items).into()],
+            )
+            .unwrap()
+        }
         Value::Attribute {
             data: _,
             attributes: _,
