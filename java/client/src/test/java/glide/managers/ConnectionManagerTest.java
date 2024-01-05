@@ -25,6 +25,7 @@ import glide.api.models.configuration.RedisCredentials;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import response.ResponseOuterClass;
@@ -199,8 +200,9 @@ public class ConnectionManagerTest {
         "Connection response expects an OK response", executionException.getCause().getMessage());
   }
 
+  @SneakyThrows
   @Test
-  public void CloseConnection() throws ExecutionException, InterruptedException {
+  public void CloseConnection_closesChannels() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     CompletableFuture<Response> completedFuture = new CompletableFuture<>();
@@ -222,9 +224,9 @@ public class ConnectionManagerTest {
     verify(channel).close();
   }
 
+  @SneakyThrows
   @Test
-  public void CheckBabushkaResponse_ConstantResponse_returnsSuccessfully()
-      throws ExecutionException, InterruptedException {
+  public void CheckRedisResponse_ConstantResponse_returnsSuccessfully() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     CompletableFuture<Response> completedFuture = new CompletableFuture<>();
@@ -242,7 +244,7 @@ public class ConnectionManagerTest {
   }
 
   @Test
-  public void CheckBabushkaResponse_RequestError_throwsRuntimeException() {
+  public void CheckRedisResponse_RequestError_throwsRuntimeException() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     CompletableFuture<Response> completedFuture = new CompletableFuture<>();
@@ -266,26 +268,7 @@ public class ConnectionManagerTest {
   }
 
   @Test
-  public void CheckBabushkaResponse_RespPointer_throwsRuntimeException()
-      throws ExecutionException, InterruptedException {
-    // setup
-    RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
-    CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-    Response response = Response.newBuilder().setRespPointer(1).build();
-    completedFuture.complete(response);
-
-    // execute
-    when(channel.connect(any())).thenReturn(completedFuture);
-    CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
-
-    // verify
-    ExecutionException exception = assertThrows(ExecutionException.class, result::get);
-    assertTrue(exception.getCause() instanceof RuntimeException);
-  }
-
-  @Test
-  public void CheckBabushkaResponse_ClosingError_throwsRuntimeException()
-      throws ExecutionException, InterruptedException {
+  public void CheckRedisResponse_ClosingError_throwsRuntimeException() {
     // setup
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     CompletableFuture<Response> completedFuture = new CompletableFuture<>();

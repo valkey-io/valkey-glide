@@ -1,25 +1,22 @@
 package glide.api;
 
 import static glide.api.RedisClient.CreateClient;
-import static glide.api.RedisClient.buildChannelHandler;
 import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.connectors.handlers.ChannelHandler;
-import glide.ffi.resolvers.SocketListenerResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -45,8 +42,9 @@ public class RedisClientCreateTest {
     mockedClient.when(() -> buildCommandManager(channelHandler)).thenReturn(commandManager);
   }
 
+  @AfterEach
   public void teardown() {
-    mockedClient.clearInvocations();
+    mockedClient.close();
   }
 
   @Test
@@ -59,9 +57,9 @@ public class RedisClientCreateTest {
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
 
     when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
+    mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
 
     // exercise
-    mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
     CompletableFuture<RedisClient> result = CreateClient(config);
     RedisClient client = result.get();
 
@@ -79,10 +77,10 @@ public class RedisClientCreateTest {
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
 
     when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
-
-    // exercise
     mockedClient.when(() -> CreateClient()).thenCallRealMethod();
     mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
+
+    // exercise
     CompletableFuture<RedisClient> result = CreateClient(config);
     RedisClient client = result.get();
 
@@ -101,10 +99,10 @@ public class RedisClientCreateTest {
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
 
     when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
-
-    // exercise
     mockedClient.when(() -> CreateClient()).thenCallRealMethod();
     mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
+
+    // exercise
     CompletableFuture<RedisClient> result = CreateClient(config);
 
     ExecutionException executionException =

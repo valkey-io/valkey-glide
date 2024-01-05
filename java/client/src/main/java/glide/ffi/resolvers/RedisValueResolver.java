@@ -4,6 +4,7 @@ import response.ResponseOuterClass.Response;
 
 public class RedisValueResolver {
 
+  // TODO: consider lazy loading the glide_rs library
   static {
     System.loadLibrary("glide_rs");
   }
