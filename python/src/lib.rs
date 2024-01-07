@@ -100,10 +100,14 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
                 }
                 Ok(dict.into_py(py))
             }
-            Value::Attribute {
-                data: _,
-                attributes: _,
-            } => todo!(),
+            Value::Attribute { data, attributes } => {
+                let dict = PyDict::new(py);
+                let value = redis_value_to_py(py, *data)?;
+                let attributes = redis_value_to_py(py, Value::Map(attributes))?;
+                dict.set_item("value", value)?;
+                dict.set_item("attributes", attributes)?;
+                Ok(dict.into_py(py))
+            }
             Value::Set(set) => {
                 let set = iter_to_value(py, set)?;
                 let set = PySet::new(py, set.iter())?;
@@ -112,7 +116,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::Double(double) => Ok(PyFloat::new(py, double.into()).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
             Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
-            Value::BigNumber(_) => todo!(),
+            Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
             Value::Push { kind: _, data: _ } => todo!(),
         }
     }
