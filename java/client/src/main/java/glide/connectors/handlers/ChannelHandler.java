@@ -5,7 +5,11 @@ import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolAllocator;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import io.netty.channel.unix.DomainSocketChannel;
+import io.netty.channel.unix.UnixChannel;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import redis_request.RedisRequestOuterClass.RedisRequest;
@@ -24,17 +28,27 @@ public class ChannelHandler {
 
   /** Open a new channel for a new client. */
   public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath) {
-    // TODO: add the ability to pass in group and channel from user
-    channel =
-        new Bootstrap()
-            // TODO let user specify the thread pool or pool size as an option
-            .group(
-                ThreadPoolAllocator.createOrGetNettyThreadPool(THREAD_POOL_NAME, Optional.empty()))
-            .channel(Platform.getClientUdsNettyChannelType())
-            .handler(new ProtobufSocketChannelInitializer(callbackDispatcher))
-            .connect(new DomainSocketAddress(socketPath))
-            // TODO call here .sync() if needed or remove this comment
-            .channel();
+    this(
+        ThreadPoolAllocator.createOrGetNettyThreadPool(THREAD_POOL_NAME, Optional.empty()),
+        Platform.getClientUdsNettyChannelType(),
+        new ProtobufSocketChannelInitializer(callbackDispatcher),
+        new DomainSocketAddress(socketPath),
+        callbackDispatcher
+    );
+  }
+
+  public ChannelHandler(EventLoopGroup eventLoopGroup,
+                        Class<? extends DomainSocketChannel> domainSocketChannelClass,
+                        ChannelInitializer<UnixChannel> channelInitializer,
+                        DomainSocketAddress domainSocketAddress,
+                        CallbackDispatcher callbackDispatcher) {
+    channel = new Bootstrap()
+        .group(eventLoopGroup)
+        .channel(domainSocketChannelClass)
+        .handler(channelInitializer)
+        .connect(domainSocketAddress)
+        // TODO call here .sync() if needed or remove this comment
+        .channel();
     this.callbackDispatcher = callbackDispatcher;
   }
 

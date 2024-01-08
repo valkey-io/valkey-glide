@@ -4,7 +4,9 @@ import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
 
 import connection_request.ConnectionRequestOuterClass;
+import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
+import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
@@ -29,7 +31,7 @@ public class ConnectionManager {
   private final ChannelHandler channel;
 
   /**
-   * Connect to Redis using a ProtoBuf connection request.
+   * Make a connection request to Redis Rust-core client.
    *
    * @param configuration Connection Request Configuration
    */
@@ -68,7 +70,7 @@ public class ConnectionManager {
     if (!configuration.getAddresses().isEmpty()) {
       for (NodeAddress nodeAddress : configuration.getAddresses()) {
         connectionRequestBuilder.addAddresses(
-            connection_request.ConnectionRequestOuterClass.NodeAddress.newBuilder()
+            ConnectionRequestOuterClass.NodeAddress.newBuilder()
                 .setHost(nodeAddress.getHost())
                 .setPort(nodeAddress.getPort())
                 .build());
@@ -84,13 +86,13 @@ public class ConnectionManager {
     connectionRequestBuilder
         .setTlsMode(
             configuration.isUseTLS()
-                ? ConnectionRequestOuterClass.TlsMode.SecureTls
-                : connection_request.ConnectionRequestOuterClass.TlsMode.NoTls)
+                ? TlsMode.SecureTls
+                : TlsMode.NoTls)
         .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
 
     if (configuration.getCredentials() != null) {
-      connection_request.ConnectionRequestOuterClass.AuthenticationInfo.Builder
-          authenticationInfoBuilder = ConnectionRequestOuterClass.AuthenticationInfo.newBuilder();
+      AuthenticationInfo.Builder
+          authenticationInfoBuilder = AuthenticationInfo.newBuilder();
       if (configuration.getCredentials().getUsername() != null) {
         authenticationInfoBuilder.setUsername(configuration.getCredentials().getUsername());
       }
@@ -138,7 +140,7 @@ public class ConnectionManager {
    *
    * @param configuration
    */
-  private connection_request.ConnectionRequestOuterClass.ConnectionRequest.Builder
+  private ConnectionRequestOuterClass.ConnectionRequest.Builder
       setupConnectionRequestBuilderRedisClusterClient(
           RedisClusterClientConfiguration configuration) {
     ConnectionRequest.Builder connectionRequestBuilder =

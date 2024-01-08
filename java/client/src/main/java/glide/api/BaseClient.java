@@ -24,7 +24,7 @@ public abstract class BaseClient implements AutoCloseable {
     try {
       connectionManager.closeConnection().get();
     } catch (InterruptedException interruptedException) {
-      // AutoCloseable functions are strongly advised to avoid throwing InterruptedExceptions
+      // AutoCloseable classes are strongly advised to avoid throwing InterruptedExceptions
       // TODO: marking resources as closed:
       // https://github.com/orgs/Bit-Quill/projects/4/views/6?pane=issue&itemId=48063887
       throw new RuntimeException(interruptedException);

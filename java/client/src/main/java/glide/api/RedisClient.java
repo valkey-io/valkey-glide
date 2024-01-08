@@ -16,8 +16,7 @@ import java.util.concurrent.CompletableFuture;
 public class RedisClient extends BaseClient {
 
   /**
-   * Request an async (non-blocking) Redis client in Standalone mode to a Redis service on
-   * localhost.
+   * Request an async (non-blocking) Redis client in Standalone mode to a Redis service.
    *
    * @return a Future to connect and return a RedisClient
    */
