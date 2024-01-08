@@ -22,6 +22,8 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
+  // TODO: consider making connection manager static, and moving the ChannelHandler to the RedisClient.
+
   /** UDS connection representation. */
   private final ChannelHandler channel;
 
@@ -172,6 +174,7 @@ public class ConnectionManager {
       throw new RuntimeException("Connection closed: " + response.getClosingError());
     }
     if (response.hasRespPointer()) {
+      // TODO: throw ClosingException and close/cancel all existing responses
       throw new RuntimeException("Unexpected data in response");
     }
     if (response.hasConstantResponse()) {
