@@ -149,3 +149,57 @@ fn throw_java_exception(mut env: JNIEnv, message: String) {
         }
     };
 }
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_valueFromPointerTest<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    let value = unsafe { Box::from_raw(pointer as *mut Value) };
+    redis_value_to_java(&mut env, *value)
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jlong {
+    let redis_value = Value::Nil;
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedSimpleString<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::objects::JString<'local>,
+) -> jlong {
+    let value: String = env.get_string(&value).unwrap().into();
+    let redis_value = Value::SimpleString(value);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedOkay<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jlong {
+    let redis_value = Value::Okay;
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedInt<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jlong,
+) -> jlong {
+    let redis_value = Value::Int(value);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}

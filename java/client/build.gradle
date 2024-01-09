@@ -52,19 +52,19 @@ tasks.register('cleanProtobuf') {
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
 }
 
 tasks.register('buildRustReleaseStrip', Exec) {
     commandLine 'cargo', 'build', '--release', '--strip'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
 }
 
 tasks.register('buildRust', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
 }
 
 tasks.register('buildWithRust') {
