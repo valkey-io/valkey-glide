@@ -60,7 +60,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::Boolean(bool) => env
             .new_object("java/lang/Boolean", "(Z)V", &[bool.into()])
             .unwrap(),
-        Value::VerbatimString { format: _, text: _ } => todo!(),
+        Value::VerbatimString { format: _, text } => JObject::from(env.new_string(text).unwrap()),
         Value::BigNumber(_num) => todo!(),
         Value::Set(array) => {
             // TODO: Consider caching the method ID here in a static variable (might need RwLock to mutate)
@@ -152,17 +152,6 @@ fn throw_java_exception(mut env: JNIEnv, message: String) {
 
 #[cfg(ffi_test)]
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_FfiTest_valueFromPointerTest<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    pointer: jlong,
-) -> JObject<'local> {
-    let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_java(&mut env, *value)
-}
-
-#[cfg(ffi_test)]
-#[no_mangle]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedNil<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -201,5 +190,77 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedInt<'local>(
     value: jlong,
 ) -> jlong {
     let redis_value = Value::Int(value);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBulkString<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::objects::JByteArray<'local>,
+) -> jlong {
+    let value = env.convert_byte_array(&value).unwrap();
+    let value = value.into_iter().collect::<Vec<u8>>();
+    let redis_value = Value::BulkString(value);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongArray<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::objects::JLongArray<'local>,
+) -> jlong {
+    use jni::objects::ReleaseMode;
+    let value = unsafe {
+        env.get_array_elements(&value, ReleaseMode::NoCopyBack)
+            .unwrap()
+    };
+    let array = value
+        .iter()
+        .map(|val| Value::Int(*val))
+        .collect::<Vec<Value>>();
+    let redis_value = Value::Array(array);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::sys::jdouble,
+) -> jlong {
+    use ordered_float::OrderedFloat;
+    let redis_value = Value::Double(OrderedFloat(value));
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedBoolean<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::sys::jboolean,
+) -> jlong {
+    let redis_value = Value::Boolean(value != 0);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedVerbatimString<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::objects::JString<'local>,
+) -> jlong {
+    use redis::VerbatimFormat;
+    let value: String = env.get_string(&value).unwrap().into();
+    let redis_value = Value::VerbatimString {
+        format: VerbatimFormat::Text,
+        text: value,
+    };
     Box::leak(Box::new(redis_value)) as *mut Value as jlong
 }
