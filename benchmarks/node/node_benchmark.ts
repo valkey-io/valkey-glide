@@ -1,5 +1,6 @@
 import { writeFileSync } from "fs";
 import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
+import { Cluster, Redis } from "ioredis";
 import { parse } from "path";
 import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
@@ -235,26 +236,29 @@ async function main(
     }
 
     if (clients_to_run == "all") {
-        const clients = await createClients(clientCount, async () => {
-            const node = {
-                url: getAddress(host, useTLS, port),
-            };
-            const node_redis_client = clusterModeEnabled
-                ? createCluster({
-                      rootNodes: [{ socket: { host, port, tls: useTLS } }],
-                      defaults: {
-                          socket: {
-                              tls: useTLS,
+        const node_redis_clients = await createClients(
+            clientCount,
+            async () => {
+                const node = {
+                    url: getAddress(host, useTLS, port),
+                };
+                const node_redis_client = clusterModeEnabled
+                    ? createCluster({
+                          rootNodes: [{ socket: { host, port, tls: useTLS } }],
+                          defaults: {
+                              socket: {
+                                  tls: useTLS,
+                              },
                           },
-                      },
-                      useReplicas: true,
-                  })
-                : createClient(node);
-            await node_redis_client.connect();
-            return node_redis_client;
-        });
+                          useReplicas: true,
+                      })
+                    : createClient(node);
+                await node_redis_client.connect();
+                return node_redis_client;
+            }
+        );
         await run_clients(
-            clients,
+            node_redis_clients,
             "node_redis",
             total_commands,
             num_of_concurrent_tasks,
@@ -266,6 +270,34 @@ async function main(
             clusterModeEnabled
         );
         await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const tls = useTLS ? {} : undefined;
+        const ioredis_clients = await createClients(clientCount, async () => {
+            const ioredis_client = clusterModeEnabled
+                ? new Cluster([{ host, port }], {
+                      dnsLookup: (address, callback) => callback(null, address),
+                      scaleReads: "all",
+                      redisOptions: {
+                          tls: {},
+                      },
+                  })
+                : new Redis(port, host, {
+                      tls,
+                  });
+            return ioredis_client;
+        });
+        await run_clients(
+            ioredis_clients,
+            "ioredis",
+            total_commands,
+            num_of_concurrent_tasks,
+            data_size,
+            data,
+            (client) => {
+                (client as RedisClientType).disconnect();
+            },
+            clusterModeEnabled
+        );
     }
 }
 
