@@ -19,14 +19,15 @@ from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
 
-class ConditionalSet(Enum):
-    """SET option: A condition to the "SET" command.
-    - ONLY_IF_EXISTS - Only set the key if it already exist. Equivalent to `XX` in the Redis API
-    - ONLY_IF_DOES_NOT_EXIST - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API
+class ConditionalChange(Enum):
+    """
+    A condition to the "SET" and "ZADD" commands.
+    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
+    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
 
-    ONLY_IF_EXISTS = 0  # Equivalent to `XX` in the Redis API
-    ONLY_IF_DOES_NOT_EXIST = 1  # Equivalent to `NX` in the Redis API
+    ONLY_IF_EXISTS = "XX"
+    ONLY_IF_DOES_NOT_EXIST = "NX"
 
 
 class ExpiryType(Enum):
@@ -106,6 +107,18 @@ class ExpireOptions(Enum):
     NewExpiryLessThanCurrent = "LT"
 
 
+class UpdateOptions(Enum):
+    """
+    Options for updating elements of a sorted set key.
+
+    - LESS_THAN: Only update existing elements if the new score is less than the current score.
+    - GREATER_THAN: Only update existing elements if the new score is greater than the current score.
+    """
+
+    LESS_THAN = "LT"
+    GREATER_THAN = "GT"
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -179,7 +192,7 @@ class CoreCommands(Protocol):
         self,
         key: str,
         value: str,
-        conditional_set: Union[ConditionalSet, None] = None,
+        conditional_set: Union[ConditionalChange, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
     ) -> TResult:
@@ -188,11 +201,11 @@ class CoreCommands(Protocol):
 
             @example - Set "foo" to "bar" only if "foo" already exists, and set the key expiration to 5 seconds:
 
-                connection.set("foo", "bar", conditional_set=ConditionalSet.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+                connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
         Args:
             key (str): the key to store.
             value (str): the value to store with the given key.
-            conditional_set (Union[ConditionalSet, None], optional): set the key only if the given condition is met.
+            conditional_set (Union[ConditionalChange, None], optional): set the key only if the given condition is met.
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
             expiry (Union[Expiry, None], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
@@ -207,10 +220,7 @@ class CoreCommands(Protocol):
         """
         args = [key, value]
         if conditional_set:
-            if conditional_set == ConditionalSet.ONLY_IF_EXISTS:
-                args.append("XX")
-            if conditional_set == ConditionalSet.ONLY_IF_DOES_NOT_EXIST:
-                args.append("NX")
+            args.append(conditional_set.value)
         if return_old_value:
             args.append("GET")
         if expiry is not None:
@@ -1019,3 +1029,122 @@ class CoreCommands(Protocol):
                 -2  # Returns -2 for a non-existing key.
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
+
+    async def zadd(
+        self,
+        key: str,
+        members_scores: Mapping[str, float],
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds members with their scores to the sorted set stored at `key`.
+        If a member is already a part of the sorted set, its score is updated.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_scores (Mapping[str, float]): A mapping of members to their corresponding scores.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            update_condition (Optional[UpdateOptions]): Options for updating scores.
+                - GT: Only update scores greater than the current values.
+                - LT: Only update scores less than the current values.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
+                2  # Indicates that two elements have been added or updated in the sorted set "my_sorted_set."
+            >>> await zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
+                2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        if changed:
+            args.append("CH")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        members_scores_list = [
+            str(item) for pair in members_scores.items() for item in pair[::-1]
+        ]
+        args += members_scores_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.Zadd, args),
+        )
+
+    async def zaddIncr(
+        self,
+        key: str,
+        member: str,
+        increment: float,
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+    ) -> Optional[float]:
+        """
+        Increments the score of member in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+        If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): A member in the sorted set to increment.
+            increment (float): The score to increment the member.
+            existing_options (Optional[ConditionalChange]): Options for handling the member's existence.
+                - NX: Only increment a member that doesn't exist.
+                - XX: Only increment an existing member.
+            update_condition (Optional[UpdateOptions]): Options for updating the score.
+                - GT: Only increment the score of the member if the new score will be greater than the current score.
+                - LT: Only increment (decrement) the score of the member if the new score will be less than the current score.
+
+        Returns:
+            Optional[float]: The score of the member.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and null is returned.
+        Examples:
+            >>> await zaddIncr("my_sorted_set", member , 5.0)
+                5.0
+            >>> await zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
+                None
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        args.append("INCR")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        args += [str(increment), member]
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.Zadd, args),
+        )

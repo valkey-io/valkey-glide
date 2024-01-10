@@ -1,8 +1,9 @@
 from glide.async_commands.core import (
-    ConditionalSet,
+    ConditionalChange,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    UpdateOptions,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
@@ -37,10 +38,11 @@ __all__ = [
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
     "RedisClientConfiguration",
-    "ConditionalSet",
+    "ConditionalChange",
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
+    "UpdateOptions",
     "Logger",
     "LogLevel",
     "OK",
