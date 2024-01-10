@@ -7,6 +7,7 @@ use log::error;
 use redis::Value;
 use std::sync::mpsc;
 
+// TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
 fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
@@ -24,7 +25,6 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             }
         },
         Value::Array(array) => {
-            // TODO: Consider caching the method ID here in a static variable (might need RwLock to mutate)
             let items: JObjectArray = env
                 .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
                 .unwrap();
@@ -45,7 +45,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 let java_value = redis_value_to_java(env, value);
                 env.call_method(
                     &hashmap,
-                    "insert",
+                    "put",
                     "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
                     &[(&java_key).into(), (&java_value).into()],
                 )
@@ -63,23 +63,20 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::VerbatimString { format: _, text } => JObject::from(env.new_string(text).unwrap()),
         Value::BigNumber(_num) => todo!(),
         Value::Set(array) => {
-            // TODO: Consider caching the method ID here in a static variable (might need RwLock to mutate)
-            let items: JObjectArray = env
-                .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
-                .unwrap();
+            let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();
 
-            for (i, item) in array.into_iter().enumerate() {
-                let java_value = redis_value_to_java(env, item);
-                env.set_object_array_element(&items, i as i32, java_value)
-                    .unwrap();
+            for elem in array {
+                let java_value = redis_value_to_java(env, elem);
+                env.call_method(
+                    &set,
+                    "add",
+                    "(Ljava/lang/Object;)Z",
+                    &[(&java_value).into()],
+                )
+                .unwrap();
             }
 
-            env.new_object(
-                "java/util/HashSet",
-                "([Ljava/lang/Object;)V",
-                &[(&items).into()],
-            )
-            .unwrap()
+            set
         }
         Value::Attribute {
             data: _,
@@ -228,6 +225,19 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongArray<'local>(
 
 #[cfg(ffi_test)]
 #[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedMap<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jlong {
+    let mut map: Vec<(Value, Value)> = Vec::new();
+    map.push((Value::Int(1i64), Value::Int(2i64)));
+    map.push((Value::Int(3i64), Value::SimpleString("hi".to_string())));
+    let redis_value = Value::Map(map);
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
 pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -262,5 +272,25 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedVerbatimString<'local>
         format: VerbatimFormat::Text,
         text: value,
     };
+    Box::leak(Box::new(redis_value)) as *mut Value as jlong
+}
+
+#[cfg(ffi_test)]
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedLongSet<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    value: jni::objects::JLongArray<'local>,
+) -> jlong {
+    use jni::objects::ReleaseMode;
+    let value = unsafe {
+        env.get_array_elements(&value, ReleaseMode::NoCopyBack)
+            .unwrap()
+    };
+    let set = value
+        .iter()
+        .map(|val| Value::Int(*val))
+        .collect::<Vec<Value>>();
+    let redis_value = Value::Set(set);
     Box::leak(Box::new(redis_value)) as *mut Value as jlong
 }
