@@ -30,7 +30,8 @@ public class CallbackDispatcher {
    * Storage of freed callback IDs. It is needed to avoid occupying an ID being used and to speed up
    * search for a next free ID.
    */
-  // TODO: Optimize to avoid growing up to 2e32 (16 Gb) https://github.com/aws/babushka/issues/704
+  // TODO: Optimize to avoid growing up to 2e32 (16 Gb)
+  // https://github.com/aws/glide-for-redis/issues/704
   private final ConcurrentLinkedQueue<Integer> freeRequestIds = new ConcurrentLinkedQueue<>();
 
   /**

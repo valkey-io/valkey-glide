@@ -33,7 +33,7 @@ runs:
         - run: |
               cargo update
               cargo install cargo-deny
-              cargo deny check licenses --config ${GITHUB_WORKSPACE}/deny.toml
+              cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 

@@ -121,6 +121,8 @@ export type BaseClientConfiguration = {
     }[];
     /**
      * True if communication with the cluster should use Transport Level Security.
+     * Should match the TLS configuration of the server/cluster,
+     * otherwise the connection attempt will fail.
      */
     useTLS?: boolean;
     /**
