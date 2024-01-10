@@ -332,6 +332,12 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Exists => Some(cmd("EXISTS")),
         RequestType::Unlink => Some(cmd("UNLINK")),
         RequestType::TTL => Some(cmd("TTL")),
+        RequestType::Zadd => Some(cmd("ZADD")),
+        RequestType::Zrem => Some(cmd("ZREM")),
+        RequestType::Zrange => Some(cmd("ZRANGE")),
+        RequestType::Zcard => Some(cmd("ZCARD")),
+        RequestType::Zcount => Some(cmd("ZCOUNT")),
+        RequestType::ZIncrBy => Some(cmd("ZINCRBY")),
     }
 }
 
