@@ -14,7 +14,8 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
 
   /** Submit responses from glide to an instance {@link CallbackDispatcher} to handle them. */
   @Override
-  public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg) throws RuntimeException {
+  public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg)
+      throws RuntimeException {
     if (msg instanceof Response) {
       Response response = (Response) msg;
       callbackDispatcher.completeRequest(response);

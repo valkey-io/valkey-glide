@@ -59,7 +59,7 @@ public class ConnectionManager {
   }
 
   /**
-   * Modifies ConnectionRequestBuilder, so it has appropriate fields for the BaseClientConfiguration
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the BaseClientConfiguration
    * where the Standalone/Cluster inherit from.
    *
    * @param configuration
@@ -84,15 +84,11 @@ public class ConnectionManager {
     }
 
     connectionRequestBuilder
-        .setTlsMode(
-            configuration.isUseTLS()
-                ? TlsMode.SecureTls
-                : TlsMode.NoTls)
+        .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
         .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
 
     if (configuration.getCredentials() != null) {
-      AuthenticationInfo.Builder
-          authenticationInfoBuilder = AuthenticationInfo.newBuilder();
+      AuthenticationInfo.Builder authenticationInfoBuilder = AuthenticationInfo.newBuilder();
       if (configuration.getCredentials().getUsername() != null) {
         authenticationInfoBuilder.setUsername(configuration.getCredentials().getUsername());
       }
@@ -109,8 +105,7 @@ public class ConnectionManager {
   }
 
   /**
-   * Modifies ConnectionRequestBuilder, so it has appropriate fields for the Redis Standalone
-   * Client.
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Standalone Client.
    *
    * @param configuration Connection Request Configuration
    */
@@ -136,7 +131,7 @@ public class ConnectionManager {
   }
 
   /**
-   * Modifies ConnectionRequestBuilder, so it has appropriate fields for the Redis Cluster Client.
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Cluster Client.
    *
    * @param configuration
    */

@@ -27,9 +27,11 @@ public abstract class BaseClientConfiguration {
   /**
    * True if communication with the cluster should use Transport Level Security.
    *
-   * <p> If the server/cluster requires TLS, not setting this will cause the connection attempt to fail.
+   * <p>If the server/cluster requires TLS, not setting this will cause the connection attempt to
+   * fail.
    *
-   * <p>If the server/cluster doesn't require TLS, setting this will also cause the connection attempt to fail.
+   * <p>If the server/cluster doesn't require TLS, setting this will also cause the connection
+   * attempt to fail.
    */
   @Builder.Default private final boolean useTLS = false;
 

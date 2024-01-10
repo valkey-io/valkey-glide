@@ -33,22 +33,23 @@ public class ChannelHandler {
         Platform.getClientUdsNettyChannelType(),
         new ProtobufSocketChannelInitializer(callbackDispatcher),
         new DomainSocketAddress(socketPath),
-        callbackDispatcher
-    );
+        callbackDispatcher);
   }
 
-  public ChannelHandler(EventLoopGroup eventLoopGroup,
-                        Class<? extends DomainSocketChannel> domainSocketChannelClass,
-                        ChannelInitializer<UnixChannel> channelInitializer,
-                        DomainSocketAddress domainSocketAddress,
-                        CallbackDispatcher callbackDispatcher) {
-    channel = new Bootstrap()
-        .group(eventLoopGroup)
-        .channel(domainSocketChannelClass)
-        .handler(channelInitializer)
-        .connect(domainSocketAddress)
-        // TODO call here .sync() if needed or remove this comment
-        .channel();
+  public ChannelHandler(
+      EventLoopGroup eventLoopGroup,
+      Class<? extends DomainSocketChannel> domainSocketChannelClass,
+      ChannelInitializer<UnixChannel> channelInitializer,
+      DomainSocketAddress domainSocketAddress,
+      CallbackDispatcher callbackDispatcher) {
+    channel =
+        new Bootstrap()
+            .group(eventLoopGroup)
+            .channel(domainSocketChannelClass)
+            .handler(channelInitializer)
+            .connect(domainSocketAddress)
+            // TODO call here .sync() if needed or remove this comment
+            .channel();
     this.callbackDispatcher = callbackDispatcher;
   }
 
