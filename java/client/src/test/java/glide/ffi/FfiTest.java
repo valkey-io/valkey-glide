@@ -38,12 +38,6 @@ public class FfiTest {
 
   public static native long createLeakedLongSet(long[] value);
 
-  @BeforeEach
-  public void init() {}
-
-  @AfterEach
-  public void teardown() {}
-
   @Test
   public void redisValueToJavaValue_Nil() {
     long ptr = FfiTest.createLeakedNil();
