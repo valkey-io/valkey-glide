@@ -96,6 +96,12 @@ enum RequestType {
     Exists = 58;
     Unlink = 59;
     TTL = 60;
+    Zadd = 61;
+    Zrem = 62;
+    Zrange = 63;
+    Zcard = 64;
+    Zcount = 65;
+    ZIncrBy = 66;
 }
 
 message Command {
