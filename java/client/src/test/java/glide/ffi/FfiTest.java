@@ -48,7 +48,7 @@ public class FfiTest {
   public void redisValueToJavaValue_Nil() {
     long ptr = FfiTest.createLeakedNil();
     Object nilValue = RedisValueResolver.valueFromPointer(ptr);
-    assertTrue(nilValue == null);
+    assertNull(nilValue);
   }
 
   @Test
