@@ -22,7 +22,8 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
-  // TODO: consider making connection manager static, and moving the ChannelHandler to the RedisClient.
+  // TODO: consider making connection manager static, and moving the ChannelHandler to the
+  // RedisClient.
 
   /** UDS connection representation. */
   private final ChannelHandler channel;
