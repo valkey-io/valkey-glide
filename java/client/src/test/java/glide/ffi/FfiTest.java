@@ -1,15 +1,14 @@
 package glide.ffi;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.ffi.resolvers.RedisValueResolver;
+import java.util.HashMap;
+import java.util.HashSet;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import java.util.HashMap;
-import java.util.HashSet;
 
 public class FfiTest {
 
@@ -18,15 +17,25 @@ public class FfiTest {
   }
 
   public static native long createLeakedNil();
+
   public static native long createLeakedSimpleString(String value);
+
   public static native long createLeakedOkay();
+
   public static native long createLeakedInt(long value);
+
   public static native long createLeakedBulkString(byte[] value);
+
   public static native long createLeakedLongArray(long[] value);
+
   public static native long createLeakedMap();
+
   public static native long createLeakedDouble(double value);
+
   public static native long createLeakedBoolean(boolean value);
+
   public static native long createLeakedVerbatimString(String value);
+
   public static native long createLeakedLongSet(long[] value);
 
   @BeforeEach
@@ -77,7 +86,7 @@ public class FfiTest {
 
   @Test
   public void redisValueToJavaValue_Array() {
-    long[] array = { 1L, 2L, 3L };
+    long[] array = {1L, 2L, 3L};
     long ptr = FfiTest.createLeakedLongArray(array);
     Object longArrayValue = RedisValueResolver.valueFromPointer(ptr);
     assertTrue(longArrayValue instanceof Object[]);
@@ -123,7 +132,7 @@ public class FfiTest {
 
   @Test
   public void redisValueToJavaValue_Set() {
-    long[] array = { 1L, 2L, 2L };
+    long[] array = {1L, 2L, 2L};
     long ptr = FfiTest.createLeakedLongSet(array);
     Object longSetValue = RedisValueResolver.valueFromPointer(ptr);
     assertTrue(longSetValue instanceof HashSet);
