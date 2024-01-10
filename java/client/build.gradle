@@ -49,11 +49,17 @@ tasks.register('cleanProtobuf') {
     }
 }
 
+tasks.register('cleanRust') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, '../target').toString())
+    }
+}
+
 // TODO: Create a separte task for testing and move conditional compilation Rust flag there
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRustReleaseStrip', Exec) {
@@ -93,8 +99,9 @@ tasks.register('buildAll') {
     finalizedBy 'build'
 }
 
-compileJava.dependsOn('protobuf')
-clean.dependsOn('cleanProtobuf')
+compileJava.dependsOn('protobuf', 'buildRustRelease')
+clean.dependsOn('cleanProtobuf', 'cleanRust')
+test.dependsOn('buildRust')
 
 tasks.withType(Test) {
     testLogging {
@@ -102,5 +109,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/debug"
+    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
+
