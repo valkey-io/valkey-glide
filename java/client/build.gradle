@@ -49,6 +49,7 @@ tasks.register('cleanProtobuf') {
     }
 }
 
+// TODO: Create a separte task for testing and move conditional compilation Rust flag there
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
