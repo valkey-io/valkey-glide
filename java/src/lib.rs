@@ -243,8 +243,7 @@ pub extern "system" fn Java_glide_ffi_FfiTest_createLeakedDouble<'local>(
     _class: JClass<'local>,
     value: jni::sys::jdouble,
 ) -> jlong {
-    use ordered_float::OrderedFloat;
-    let redis_value = Value::Double(OrderedFloat(value));
+    let redis_value = Value::Double(value.into());
     Box::leak(Box::new(redis_value)) as *mut Value as jlong
 }
 

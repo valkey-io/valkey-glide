@@ -17,7 +17,6 @@ logger_core = {path = "../logger_core"}
 tracing-subscriber = "0.3.16"
 jni = "0.21.1"
 log = "0.4.20"
-ordered-float = "4.2.0"
 
 [profile.release]
 lto = true
