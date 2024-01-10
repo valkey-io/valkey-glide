@@ -70,7 +70,7 @@ tasks.register('buildRust', Exec) {
 
 tasks.register('buildWithRust') {
     dependsOn 'buildRust'
-    finalizedBy 'build'
+    finalizedBy 'build', 'test'
 }
 
 tasks.register('buildWithRustRelease') {
