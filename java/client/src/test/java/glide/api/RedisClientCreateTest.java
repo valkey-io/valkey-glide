@@ -68,27 +68,6 @@ public class RedisClientCreateTest {
     assertEquals(commandManager, client.commandManager);
   }
 
-  @Test
-  @SneakyThrows
-  public void createClient_noArgs_successfullyReturnsRedisClient() {
-    // setup
-    CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
-    connectToRedisFuture.complete(null);
-    RedisClientConfiguration config = RedisClientConfiguration.builder().build();
-
-    when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
-    mockedClient.when(() -> CreateClient()).thenCallRealMethod();
-    mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
-
-    // exercise
-    CompletableFuture<RedisClient> result = CreateClient(config);
-    RedisClient client = result.get();
-
-    // verify
-    assertEquals(connectionManager, client.connectionManager);
-    assertEquals(commandManager, client.commandManager);
-  }
-
   @SneakyThrows
   @Test
   public void createClient_errorOnConnectionThrowsExecutionException() {
@@ -100,7 +79,6 @@ public class RedisClientCreateTest {
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
 
     when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
-    mockedClient.when(() -> CreateClient()).thenCallRealMethod();
     mockedClient.when(() -> CreateClient(config)).thenCallRealMethod();
 
     // exercise
