@@ -1,7 +1,9 @@
+export { Script } from "glide-rs";
 export {
     BaseClientConfiguration,
     ProtocolVersion,
     ReturnType,
+    ScriptOptions,
 } from "./src/BaseClient";
 export {
     ExpireOptions,
