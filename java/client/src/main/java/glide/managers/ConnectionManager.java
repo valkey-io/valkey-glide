@@ -1,9 +1,18 @@
 package glide.managers;
 
+import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
+import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
+
+import connection_request.ConnectionRequestOuterClass;
+import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
+import connection_request.ConnectionRequestOuterClass.TlsMode;
+import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.connectors.handlers.ChannelHandler;
-import glide.ffi.resolvers.RedisValueResolver;
-import glide.models.RequestBuilder;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
@@ -15,30 +24,145 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
+  // TODO: consider making connection manager static, and moving the ChannelHandler to the
+  // RedisClient.
+
   /** UDS connection representation. */
   private final ChannelHandler channel;
 
   /**
-   * Connect to Redis using a ProtoBuf connection request.
+   * Make a connection request to Redis Rust-core client.
    *
-   * @param host Server address
-   * @param port Server port
-   * @param useTls true if communication with the server or cluster should use Transport Level
-   *     Security
-   * @param clusterMode true if the client is used for connecting to a Redis Cluster
+   * @param configuration Connection Request Configuration
    */
-  // TODO support more parameters and/or configuration object
-  public CompletableFuture<Void> connectToRedis(
-      String host, int port, boolean useTls, boolean clusterMode) {
-    ConnectionRequest request =
-        RequestBuilder.createConnectionRequest(host, port, useTls, clusterMode);
-    return channel.connect(request).thenApply(this::checkGlideRsResponse);
+  public CompletableFuture<Void> connectToRedis(BaseClientConfiguration configuration) {
+    ConnectionRequest request = createConnectionRequest(configuration);
+    return channel.connect(request).thenApplyAsync(this::checkGlideRsResponse);
+  }
+
+  /**
+   * Close the connection and the corresponding channel. Creates a ConnectionRequest protobuf
+   * message based on the type of client Standalone/Cluster.
+   *
+   * @param configuration Connection Request Configuration
+   * @return ConnectionRequest protobuf message
+   */
+  private ConnectionRequest createConnectionRequest(BaseClientConfiguration configuration) {
+    if (configuration instanceof RedisClusterClientConfiguration) {
+      return setupConnectionRequestBuilderRedisClusterClient(
+              (RedisClusterClientConfiguration) configuration)
+          .build();
+    }
+
+    return setupConnectionRequestBuilderRedisClient((RedisClientConfiguration) configuration)
+        .build();
+  }
+
+  /**
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the BaseClientConfiguration
+   * where the Standalone/Cluster inherit from.
+   *
+   * @param configuration
+   */
+  private ConnectionRequest.Builder setupConnectionRequestBuilderBaseConfiguration(
+      BaseClientConfiguration configuration) {
+    ConnectionRequest.Builder connectionRequestBuilder = ConnectionRequest.newBuilder();
+    if (!configuration.getAddresses().isEmpty()) {
+      for (NodeAddress nodeAddress : configuration.getAddresses()) {
+        connectionRequestBuilder.addAddresses(
+            ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                .setHost(nodeAddress.getHost())
+                .setPort(nodeAddress.getPort())
+                .build());
+      }
+    } else {
+      connectionRequestBuilder.addAddresses(
+          ConnectionRequestOuterClass.NodeAddress.newBuilder()
+              .setHost(DEFAULT_HOST)
+              .setPort(DEFAULT_PORT)
+              .build());
+    }
+
+    connectionRequestBuilder
+        .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
+        .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
+
+    if (configuration.getCredentials() != null) {
+      AuthenticationInfo.Builder authenticationInfoBuilder = AuthenticationInfo.newBuilder();
+      if (configuration.getCredentials().getUsername() != null) {
+        authenticationInfoBuilder.setUsername(configuration.getCredentials().getUsername());
+      }
+      authenticationInfoBuilder.setPassword(configuration.getCredentials().getPassword());
+
+      connectionRequestBuilder.setAuthenticationInfo(authenticationInfoBuilder.build());
+    }
+
+    if (configuration.getRequestTimeout() != null) {
+      connectionRequestBuilder.setRequestTimeout(configuration.getRequestTimeout());
+    }
+
+    return connectionRequestBuilder;
+  }
+
+  /**
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Standalone Client.
+   *
+   * @param configuration Connection Request Configuration
+   */
+  private ConnectionRequest.Builder setupConnectionRequestBuilderRedisClient(
+      RedisClientConfiguration configuration) {
+    ConnectionRequest.Builder connectionRequestBuilder =
+        setupConnectionRequestBuilderBaseConfiguration(configuration);
+    connectionRequestBuilder.setClusterModeEnabled(false);
+    if (configuration.getReconnectStrategy() != null) {
+      connectionRequestBuilder.setConnectionRetryStrategy(
+          ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
+              .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+              .setFactor(configuration.getReconnectStrategy().getFactor())
+              .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
+              .build());
+    }
+
+    if (configuration.getDatabaseId() != null) {
+      connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
+    }
+
+    return connectionRequestBuilder;
+  }
+
+  /**
+   * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Cluster Client.
+   *
+   * @param configuration
+   */
+  private ConnectionRequestOuterClass.ConnectionRequest.Builder
+      setupConnectionRequestBuilderRedisClusterClient(
+          RedisClusterClientConfiguration configuration) {
+    ConnectionRequest.Builder connectionRequestBuilder =
+        setupConnectionRequestBuilderBaseConfiguration(configuration);
+    connectionRequestBuilder.setClusterModeEnabled(true);
+
+    return connectionRequestBuilder;
+  }
+
+  /**
+   * Look up for java ReadFrom enum to protobuf defined ReadFrom enum.
+   *
+   * @param readFrom
+   * @return Protobuf defined ReadFrom enum
+   */
+  private ConnectionRequestOuterClass.ReadFrom mapReadFromEnum(ReadFrom readFrom) {
+    if (readFrom == ReadFrom.PREFER_REPLICA) {
+      return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
+    }
+
+    return ConnectionRequestOuterClass.ReadFrom.Primary;
   }
 
   /** Check a response received from Glide. */
   private Void checkGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      // TODO unexpected when establishing a connection
+      // TODO support different types of exceptions and distinguish them by type:
       throw new RuntimeException(
           String.format(
               "%s: %s",
@@ -48,11 +172,14 @@ public class ConnectionManager {
       throw new RuntimeException("Connection closed: " + response.getClosingError());
     }
     if (response.hasRespPointer()) {
-      throw new RuntimeException(
-          "Unexpected response data: "
-              + RedisValueResolver.valueFromPointer(response.getRespPointer()));
+      // TODO: throw ClosingException and close/cancel all existing responses
+      throw new RuntimeException("Unexpected data in response");
     }
-    return null;
+    if (response.hasConstantResponse()) {
+      // successful connection response has an "OK"
+      return null;
+    }
+    throw new RuntimeException("Connection response expects an OK response");
   }
 
   /** Close the connection and the corresponding channel. */
