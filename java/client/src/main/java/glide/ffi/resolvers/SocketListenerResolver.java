@@ -5,6 +5,7 @@ public class SocketListenerResolver {
   /** Make an FFI call to Glide to open a UDS socket to connect to. */
   private static native String startSocketListener() throws Exception;
 
+  // TODO: consider lazy loading the glide_rs library
   static {
     System.loadLibrary("glide_rs");
   }
