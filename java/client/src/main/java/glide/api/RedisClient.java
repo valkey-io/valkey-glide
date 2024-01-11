@@ -10,8 +10,8 @@ import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient(RedisClientConfiguration)} to request
- * a client to Redis.
+ * Async (non-blocking) client for Redis in Standalone mode. Use {@link
+ * #CreateClient(RedisClientConfiguration)} to request a client to Redis.
  */
 public class RedisClient extends BaseClient {
 

@@ -8,8 +8,8 @@ import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Configuration settings class for creating a Redis Client. Shared settings for standalone
- * and cluster clients.
+ * Configuration settings class for creating a Redis Client. Shared settings for standalone and
+ * cluster clients.
  */
 @Getter
 @SuperBuilder
