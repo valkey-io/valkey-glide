@@ -44,6 +44,5 @@ utils/clusters/
 utils/tls_crts/
 
 # OSS Review Toolkit (ORT) files
-**/ort/**
+**/ort*/**
 **/ort_results/**
-**/.ort.yml
