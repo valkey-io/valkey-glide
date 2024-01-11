@@ -8,6 +8,7 @@ import {
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
+    Script,
     parseInfoResponse,
 } from "../";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
@@ -1199,6 +1200,47 @@ export function runBaseTests<Context>(config: {
                     )
                 ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "script test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+
+                let script = new Script("return 'Hello'");
+                expect(await client.invokeScript(script)).toEqual("Hello");
+
+                script = new Script(
+                    "return redis.call('SET', KEYS[1], ARGV[1])"
+                );
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        args: ["value1"],
+                    })
+                ).toEqual("OK");
+
+                /// Reuse the same script with different parameters.
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        args: ["value2"],
+                    })
+                ).toEqual("OK");
+
+                script = new Script("return redis.call('GET', KEYS[1])");
+                expect(
+                    await client.invokeScript(script, { keys: [key1] })
+                ).toEqual("value1");
+
+                expect(
+                    await client.invokeScript(script, { keys: [key2] })
+                ).toEqual("value2");
             });
         },
         config.timeout

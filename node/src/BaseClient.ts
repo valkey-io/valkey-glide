@@ -1,5 +1,6 @@
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    Script,
     StartSocketConnection,
     valueFromSplitPointer,
 } from "glide-rs";
@@ -154,6 +155,17 @@ export type BaseClientConfiguration = {
     clientName?: string;
 };
 
+export type ScriptOptions = {
+    /**
+     * The keys that are used in the script.
+     */
+    keys?: string[];
+    /**
+     * The arguments for the script.
+     */
+    args?: string[];
+};
+
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined
 ): typeof RequestError {
@@ -297,7 +309,10 @@ export class BaseClient {
      * @internal
      */
     protected createWritePromise<T>(
-        command: redis_request.Command | redis_request.Command[],
+        command:
+            | redis_request.Command
+            | redis_request.Command[]
+            | redis_request.ScriptInvocation,
         route?: redis_request.Routes
     ): Promise<T> {
         if (this.isClosed) {
@@ -315,7 +330,10 @@ export class BaseClient {
 
     private writeOrBufferRedisRequest(
         callbackIdx: number,
-        command: redis_request.Command | redis_request.Command[],
+        command:
+            | redis_request.Command
+            | redis_request.Command[]
+            | redis_request.ScriptInvocation,
         route?: redis_request.Routes
     ) {
         const message = Array.isArray(command)
@@ -325,9 +343,14 @@ export class BaseClient {
                       commands: command,
                   }),
               })
-            : redis_request.RedisRequest.create({
+            : command instanceof redis_request.Command
+            ? redis_request.RedisRequest.create({
                   callbackIdx,
                   singleCommand: command,
+              })
+            : redis_request.RedisRequest.create({
+                  callbackIdx,
+                  scriptInvocation: command,
               });
         message.route = route;
 
@@ -886,6 +909,36 @@ export class BaseClient {
      */
     public ttl(key: string): Promise<number> {
         return this.createWritePromise(createTTL(key));
+    }
+
+    /** Invokes a Lua script with its keys and arguments.
+     * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+     * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
+     * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
+     *
+     * @param script - The Lua script to execute.
+     * @param options - The script option that contains keys and arguments for the script.
+     * @returns a value that depends on the script that was executed.
+     *
+     * @example
+     *       const luaScript = "return \{ KEYS[1], ARGV[1] \}";
+     *       const scriptOptions = \{
+     *            keys: ["foo"],
+     *            args: ["bar"],
+     *       \};
+     *       await invokeScript(luaScript, scriptOptions);
+     *       ["foo", "bar"]
+     */
+    public invokeScript(
+        script: Script,
+        option?: ScriptOptions
+    ): Promise<ReturnType> {
+        const scriptInvocation = redis_request.ScriptInvocation.create({
+            hash: script.getHash(),
+            keys: option?.keys,
+            args: option?.args,
+        });
+        return this.createWritePromise(scriptInvocation);
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
