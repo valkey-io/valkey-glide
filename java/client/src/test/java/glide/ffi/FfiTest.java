@@ -3,7 +3,9 @@ package glide.ffi;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static java.lang.Math.toIntExact;
 
 import glide.ffi.resolvers.RedisValueResolver;
 import java.util.HashMap;
@@ -68,6 +70,34 @@ public class FfiTest {
     long ptr = FfiTest.createLeakedInt(input);
     Object longValue = RedisValueResolver.valueFromPointer(ptr);
     assertEquals(input, longValue);
+  }
+
+  @Test
+  public void redisValueToJavaValue_CastToIntegerMax() {
+    long ptr = FfiTest.createLeakedInt(Integer.MAX_VALUE);
+    Object longValue = RedisValueResolver.valueFromPointer(ptr);
+    toIntExact((Long) longValue);
+  }
+
+  @Test
+  public void redisValueToJavaValue_CastToIntegerTooLarge() {
+    long ptr = FfiTest.createLeakedInt(((long) Integer.MAX_VALUE) + 1);
+    Object longValue = RedisValueResolver.valueFromPointer(ptr);
+    assertThrows(ArithmeticException.class, () -> toIntExact((Long) longValue));
+  }
+
+  @Test
+  public void redisValueToJavaValue_CastToIntegerMin() {
+    long ptr = FfiTest.createLeakedInt(Integer.MIN_VALUE);
+    Object longValue = RedisValueResolver.valueFromPointer(ptr);
+    toIntExact((Long) longValue);
+  }
+
+  @Test
+  public void redisValueToJavaValue_CastToIntegerTooSmall() {
+    long ptr = FfiTest.createLeakedInt(((long) Integer.MIN_VALUE) - 1);
+    Object longValue = RedisValueResolver.valueFromPointer(ptr);
+    assertThrows(ArithmeticException.class, () -> toIntExact((Long) longValue));
   }
 
   @ParameterizedTest
