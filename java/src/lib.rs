@@ -13,7 +13,6 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::Nil => JObject::null(),
         Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
         Value::Okay => JObject::from(env.new_string("OK").unwrap()),
-        // TODO use primitive integer
         Value::Int(num) => env
             .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
