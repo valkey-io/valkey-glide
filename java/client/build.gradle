@@ -55,7 +55,6 @@ tasks.register('cleanRust') {
     }
 }
 
-// TODO: Create a separte task for testing and move conditional compilation Rust flag there
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
@@ -76,7 +75,7 @@ tasks.register('buildRust', Exec) {
 
 tasks.register('buildWithRust') {
     dependsOn 'buildRust'
-    finalizedBy 'build', 'test'
+    finalizedBy 'build'
 }
 
 tasks.register('buildWithRustRelease') {
