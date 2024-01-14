@@ -93,7 +93,7 @@ class RedisCredentials:
 class BaseClientConfiguration:
     def __init__(
         self,
-        addresses: Optional[List[NodeAddress]] = None,
+        addresses: List[NodeAddress],
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
@@ -105,7 +105,7 @@ class BaseClientConfiguration:
         Represents the configuration settings for a Redis client.
 
         Args:
-            addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
+            addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
                     If the server is in cluster mode the list can be partial, as the client will attempt to map out
                     the cluster and find all nodes.
                     If the server is in standalone mode, only nodes whose addresses were provided will be used by the
@@ -115,7 +115,6 @@ class BaseClientConfiguration:
                         {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
                         {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
                     ].
-                    If none are set, a default address localhost:6379 will be used.
             use_tls (bool): True if communication with the cluster should use Transport Level Security.
                 Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
             credentials (RedisCredentials): Credentials for authentication process.
@@ -126,7 +125,7 @@ class BaseClientConfiguration:
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
             client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
         """
-        self.addresses = addresses or [NodeAddress()]
+        self.addresses = addresses
         self.use_tls = use_tls
         self.credentials = credentials
         self.read_from = read_from
@@ -172,14 +171,13 @@ class RedisClientConfiguration(BaseClientConfiguration):
     Represents the configuration settings for a Standalone Redis client.
 
     Args:
-        addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
+        addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
                 Only nodes whose addresses were provided will be used by the client.
                 For example:
                 [
                     {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
                     {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
                 ].
-                If none are set, a default address localhost:6379 will be used.
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
         credentials (RedisCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
@@ -198,7 +196,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
 
     def __init__(
         self,
-        addresses: Optional[List[NodeAddress]] = None,
+        addresses: List[NodeAddress],
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
@@ -244,13 +242,12 @@ class ClusterClientConfiguration(BaseClientConfiguration):
     Represents the configuration settings for a Cluster Redis client.
 
     Args:
-        addresses (Optional[List[NodeAddress]]): DNS Addresses and ports of known nodes in the cluster.
+        addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
                 The list can be partial, as the client will attempt to map out the cluster and find all nodes.
                 For example:
                 [
                     {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
                 ].
-                If none are set, a default address localhost:6379 will be used.
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
         credentials (RedisCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
@@ -268,7 +265,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
 
     def __init__(
         self,
-        addresses: Optional[List[NodeAddress]] = None,
+        addresses: List[NodeAddress],
         use_tls: bool = False,
         credentials: Optional[RedisCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,

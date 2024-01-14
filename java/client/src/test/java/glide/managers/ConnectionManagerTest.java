@@ -68,11 +68,6 @@ public class ConnectionManagerTest {
     RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
     ConnectionRequest expectedProtobufConnectionRequest =
         ConnectionRequest.newBuilder()
-            .addAddresses(
-                ConnectionRequestOuterClass.NodeAddress.newBuilder()
-                    .setHost(DEFAULT_HOST)
-                    .setPort(DEFAULT_PORT)
-                    .build())
             .setTlsMode(ConnectionRequestOuterClass.TlsMode.NoTls)
             .setClusterModeEnabled(false)
             .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
@@ -99,11 +94,6 @@ public class ConnectionManagerTest {
         RedisClusterClientConfiguration.builder().build();
     ConnectionRequest expectedProtobufConnectionRequest =
         ConnectionRequest.newBuilder()
-            .addAddresses(
-                ConnectionRequestOuterClass.NodeAddress.newBuilder()
-                    .setHost(DEFAULT_HOST)
-                    .setPort(DEFAULT_PORT)
-                    .build())
             .setTlsMode(ConnectionRequestOuterClass.TlsMode.NoTls)
             .setClusterModeEnabled(true)
             .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
