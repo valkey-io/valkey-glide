@@ -1,11 +1,11 @@
 package glide.ffi;
 
+import static java.lang.Math.toIntExact;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static java.lang.Math.toIntExact;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.ffi.resolvers.RedisValueResolver;
 import java.util.HashMap;
@@ -117,10 +117,9 @@ public class FfiTest {
     assertTrue(longArrayValue instanceof Object[]);
     Object[] result = (Object[]) longArrayValue;
     assertAll(
-      () -> assertEquals(1L, result[0]),
-      () -> assertEquals(2L, result[1]),
-      () -> assertEquals(3L, result[2])
-    );
+        () -> assertEquals(1L, result[0]),
+        () -> assertEquals(2L, result[1]),
+        () -> assertEquals(3L, result[2]));
   }
 
   @Test
@@ -129,10 +128,7 @@ public class FfiTest {
     Object mapValue = RedisValueResolver.valueFromPointer(ptr);
     assertTrue(mapValue instanceof HashMap);
     HashMap<Object, Object> result = (HashMap<Object, Object>) mapValue;
-    assertAll(
-      () -> assertEquals(2L, result.get(1L)),
-      () -> assertEquals("hi", result.get(3L))
-    );
+    assertAll(() -> assertEquals(2L, result.get(1L)), () -> assertEquals("hi", result.get(3L)));
   }
 
   @ParameterizedTest
@@ -166,9 +162,8 @@ public class FfiTest {
     assertTrue(longSetValue instanceof HashSet);
     HashSet<Long> result = (HashSet<Long>) longSetValue;
     assertAll(
-      () -> assertTrue(result.contains(1L)),
-      () -> assertTrue(result.contains(2L)),
-      () -> assertEquals(result.size(), 2)
-    );
+        () -> assertTrue(result.contains(1L)),
+        () -> assertTrue(result.contains(2L)),
+        () -> assertEquals(result.size(), 2));
   }
 }
