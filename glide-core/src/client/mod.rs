@@ -5,15 +5,18 @@ use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::log_info;
 use redis::cluster_async::ClusterConnection;
-use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
+use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
 use redis::RedisResult;
-use redis::{from_redis_value, Cmd, ErrorKind, Value};
+use redis::{Cmd, ErrorKind, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::ops::Deref;
 use std::time::Duration;
+
+use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd};
 mod reconnecting_connection;
 mod standalone_client;
+mod value_conversion;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 
@@ -107,80 +110,6 @@ async fn run_with_timeout<T>(
         .await
         .map_err(|_| io::Error::from(io::ErrorKind::TimedOut).into())
         .and_then(|res| res)
-}
-
-enum ExpectedReturnType {
-    Map,
-    Double,
-    Boolean,
-    Set,
-}
-
-fn convert_to_expected_type(
-    value: Value,
-    expected: Option<ExpectedReturnType>,
-) -> RedisResult<Value> {
-    let Some(expected) = expected else {
-        return Ok(value);
-    };
-
-    match expected {
-        ExpectedReturnType::Map => match value {
-            Value::Nil => Ok(value),
-            Value::Map(_) => Ok(value),
-            Value::Array(array) => {
-                let mut map = Vec::with_capacity(array.len() / 2);
-                let mut iterator = array.into_iter();
-                while let Some(key) = iterator.next() {
-                    let Some(value) = iterator.next() else {
-                        return Err((
-                            ErrorKind::TypeError,
-                            "Response has odd number of items, and cannot be entered into a map",
-                        )
-                            .into());
-                    };
-                    map.push((key, value));
-                }
-
-                Ok(Value::Map(map))
-            }
-            _ => Err((
-                ErrorKind::TypeError,
-                "Response couldn't be converted to map",
-                format!("(response was {:?})", value),
-            )
-                .into()),
-        },
-        ExpectedReturnType::Set => match value {
-            Value::Nil => Ok(value),
-            Value::Set(_) => Ok(value),
-            Value::Array(array) => Ok(Value::Set(array)),
-            _ => Err((
-                ErrorKind::TypeError,
-                "Response couldn't be converted to set",
-                format!("(response was {:?})", value),
-            )
-                .into()),
-        },
-        ExpectedReturnType::Double => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
-        ExpectedReturnType::Boolean => Ok(Value::Boolean(from_redis_value::<bool>(&value)?)),
-    }
-}
-
-fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
-    let command = cmd.command()?;
-
-    match command.as_slice() {
-        b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
-            Some(ExpectedReturnType::Map)
-        }
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
-        b"HEXISTS" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT" => {
-            Some(ExpectedReturnType::Boolean)
-        }
-        b"SMEMBERS" => Some(ExpectedReturnType::Set),
-        _ => None,
-    }
 }
 
 impl Client {
