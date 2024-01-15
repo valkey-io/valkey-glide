@@ -64,10 +64,16 @@ tasks.register('buildRustRelease', Exec) {
 tasks.register('buildRustReleaseStrip', Exec) {
     commandLine 'cargo', 'build', '--release', '--strip'
     workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRust', Exec) {
+    commandLine 'cargo', 'build'
+    workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always'
+}
+
+tasks.register('buildRustFfi', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
@@ -93,14 +99,24 @@ tasks.register('buildWithProto') {
     finalizedBy 'build'
 }
 
+tasks.register('testFfi', Test) {
+    dependsOn 'buildRustFfi'
+    include "glide/ffi/FfiTest.class"
+}
+
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust'
+    dependsOn 'protobuf', 'buildRust', 'testFfi'
     finalizedBy 'build'
 }
 
 compileJava.dependsOn('protobuf', 'buildRustRelease')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 test.dependsOn('buildRust')
+testFfi.dependsOn('buildRust')
+
+test {
+    exclude "glide/ffi/FfiTest.class"
+}
 
 tasks.withType(Test) {
     testLogging {
