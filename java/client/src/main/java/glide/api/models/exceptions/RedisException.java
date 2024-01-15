@@ -1,6 +1,6 @@
 package glide.api.models.exceptions;
 
-/** Encapsulated an error returned from the Redis or during processing of a Redis request */
+/** Redis client error: Base class for errors. */
 public class RedisException extends RuntimeException {
   public RedisException(String message) {
     super(message);

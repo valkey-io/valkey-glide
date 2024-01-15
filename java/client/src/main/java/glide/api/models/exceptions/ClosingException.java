@@ -1,6 +1,6 @@
 package glide.api.models.exceptions;
 
-/** Error returned from Redis client: Redis is closing or unavailable to the client */
+/** Redis client error: Errors that report that the client has closed and is no longer usable. */
 public class ClosingException extends RedisException {
   public ClosingException(String message) {
     super(message);

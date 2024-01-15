@@ -1,6 +1,6 @@
 package glide.api.models.exceptions;
 
-/** Error returned from Redis client: request has timed out */
+/** Redis client error: Errors that are thrown when a request times out. */
 public class TimeoutException extends RedisException {
   public TimeoutException(String message) {
     super(message);

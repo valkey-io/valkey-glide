@@ -166,29 +166,28 @@ public class ConnectionManager {
   /** Check a response received from Glide. */
   private Void checkGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      closeConnection();
       RequestError error = response.getRequestError();
-      throw new ClosingException("Unexpected request error in response: " + error.getMessage());
+      throwClosingError("Unexpected request error in response: " + error.getMessage());
     }
     if (response.hasClosingError()) {
       // A closing error is thrown when Rust-core is not connected to Redis
       // We want to close shop and throw a ClosingException
-      closeConnection();
-      throw new ClosingException(response.getClosingError());
+      throwClosingError(response.getClosingError());
     }
     if (response.hasRespPointer()) {
-      closeConnection();
-      throw new ClosingException("Unexpected data in response");
+      throwClosingError("Unexpected data in response");
     }
     if (!response.hasConstantResponse()) {
-      closeConnection();
-      throw new ClosingException("Unexpected empty data in response");
+      throwClosingError("Unexpected empty data in response");
     }
-    // successful connection response has an "OK"
+    // Expect a constant "OK" response and return Void/null
     return null;
   }
 
-  /** Close the connection to the channel. */
+  private void throwClosingError(String msg) throws ClosingException {
+    closeConnection();
+    throw new ClosingException(msg);
+  }
 
   /**
    * Close the connection to the channel.

@@ -1,6 +1,6 @@
 package glide.api.models.exceptions;
 
-/** Error returned from Redis client: due to transaction execution abort */
+/** Redis client error: Errors that are thrown when a transaction is aborted. */
 public class ExecAbortException extends RedisException {
   public ExecAbortException(String message) {
     super(message);
