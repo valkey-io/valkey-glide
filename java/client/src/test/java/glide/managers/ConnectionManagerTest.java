@@ -61,8 +61,6 @@ public class ConnectionManagerTest {
     connectionManager = new ConnectionManager(channel);
   }
 
-  public void teardown() {}
-
   @SneakyThrows
   @Test
   public void ConnectionRequestProtobufGeneration_DefaultRedisClientConfiguration_returns() {
@@ -265,5 +263,6 @@ public class ConnectionManagerTest {
     // verify
     ExecutionException exception = assertThrows(ExecutionException.class, result::get);
     assertTrue(exception.getCause() instanceof ClosingException);
+    assertEquals(response.getClosingError(), exception.getCause().getMessage());
   }
 }
