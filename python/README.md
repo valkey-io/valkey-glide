@@ -148,3 +148,8 @@ Before starting this step, make sure you've installed all software requirments.
 >>> await client.get("foo")
 'bar'
 ```
+
+## Documenation
+
+Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+
