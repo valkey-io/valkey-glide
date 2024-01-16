@@ -14,7 +14,7 @@ import {
     ProtocolVersion,
     RedisClient,
     Transaction,
-} from "../build-ts";
+} from "..";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, transactionTest } from "./TestUtilities";

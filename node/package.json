@@ -19,19 +19,20 @@
     ],
     "scripts": {
         "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
-        "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external",
+        "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external:release",
         "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
         "build-internal:release": "cd rust-client && npm run build:release",
         "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
         "build-external": "rm -rf build-ts && npx tsc",
+        "build-external:release": "rm -rf build-ts && npx tsc --stripInternal",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
-        "test": "jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'" ,
+        "test": "jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
         "prepack": "npmignore --auto",
-        "test-modules":  "jest --verbose --runInBand 'tests/RedisModules.test.ts'"
+        "test-modules": "jest --verbose --runInBand 'tests/RedisModules.test.ts'"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
@@ -69,8 +70,12 @@
     "//": [
         "The fields below have been commented out and are only necessary for publishing the package."
     ],
-    "///cpu": ["${node_arch}"],
-    "///os": ["${node_os}"],
+    "///cpu": [
+        "${node_arch}"
+    ],
+    "///os": [
+        "${node_os}"
+    ],
     "///name": "${scope}${pkg_name}",
     "///version": "${package_version}"
 }

@@ -17,24 +17,22 @@ import { Reader } from "protobufjs";
 import {
     BaseClientConfiguration,
     ClosingError,
+    ClusterClientConfiguration,
     InfoOptions,
     Logger,
     RedisClient,
+    RedisClientConfiguration,
     RedisClusterClient,
     RequestError,
     ReturnType,
+    SlotKeyTypes,
     Transaction,
-} from "../build-ts";
-import { RedisClientConfiguration } from "../build-ts/src/RedisClient";
+} from "..";
 import {
     connection_request,
     redis_request,
     response,
 } from "../src/ProtobufMessage";
-import {
-    ClusterClientConfiguration,
-    SlotKeyTypes,
-} from "../src/RedisClusterClient";
 
 const { RequestType, RedisRequest } = redis_request;
 
