@@ -92,7 +92,7 @@ jobs:
               shell: bash
               working-directory: ./node
               run: |
-                  npm set "@aws//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN"
+                  npm set "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN"
                   npm publish --access public
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
