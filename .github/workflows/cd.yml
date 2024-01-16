@@ -92,6 +92,7 @@ jobs:
               shell: bash
               working-directory: ./node
               run: |
+                  npm login --scope=@aws
                   npm publish --access public
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
