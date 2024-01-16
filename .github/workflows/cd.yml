@@ -209,8 +209,8 @@ jobs:
             - name: Publish to PyPI
               uses: PyO3/maturin-action@v1
               env:
-                  MATURIN_PYPI_TOKEN: ${{ secrets.TESTPYPI_API_TOKEN }}
-                  MATURIN_REPOSITORY: testpypi
+                  MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
+                  MATURIN_REPOSITORY: pypi
               with:
                   command: upload
                   args: --skip-existing python/wheels/*
@@ -292,4 +292,4 @@ jobs:
                   npm run build
                   npm publish
               env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
