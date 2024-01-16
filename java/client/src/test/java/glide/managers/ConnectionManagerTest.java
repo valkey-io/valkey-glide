@@ -209,8 +209,7 @@ public class ConnectionManagerTest {
 
     assertTrue(executionException.getCause() instanceof ClosingException);
     assertEquals("Unexpected empty data in response", executionException.getCause().getMessage());
-    // TODO: channel may not be completed since we don't wait for the close to complete
-    // verify(channel).close();
+    verify(channel).close();
   }
 
   @Test
