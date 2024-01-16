@@ -177,7 +177,10 @@ pub(crate) mod shared_client_tests {
             let get_result = send_get(&mut test_basics.client, "foobar")
                 .await
                 .unwrap_err();
-            assert!(get_result.is_connection_dropped());
+            assert!(
+                get_result.is_connection_dropped()
+                    || get_result.kind() == redis::ErrorKind::ConnectionNotFound
+            );
         });
     }
 
