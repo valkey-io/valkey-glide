@@ -284,11 +284,23 @@ class BaseRedisClient(CoreCommands):
 
 
 class RedisClusterClient(BaseRedisClient, ClusterCommands):
+    """
+    Client used for connection to cluster Redis servers.
+    For full documentation, see
+    https://github.com/aws/babushka/wiki/Python-wrapper#redis-cluster
+    """
+
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
         return self.config._create_a_protobuf_conn_request(cluster_mode=True)
 
 
 class RedisClient(BaseRedisClient, StandaloneCommands):
+    """
+    Client used for connection to standalone Redis servers.
+    For full documentation, see
+    https://github.com/aws/babushka/wiki/Python-wrapper#redis-standalone
+    """
+
     pass
 
 
