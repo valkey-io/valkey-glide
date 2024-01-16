@@ -1,8 +1,5 @@
 package glide.managers;
 
-import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
-import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
-
 import connection_request.ConnectionRequestOuterClass;
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
@@ -71,19 +68,11 @@ public class ConnectionManager {
   private ConnectionRequest.Builder setupConnectionRequestBuilderBaseConfiguration(
       BaseClientConfiguration configuration) {
     ConnectionRequest.Builder connectionRequestBuilder = ConnectionRequest.newBuilder();
-    if (!configuration.getAddresses().isEmpty()) {
-      for (NodeAddress nodeAddress : configuration.getAddresses()) {
-        connectionRequestBuilder.addAddresses(
-            ConnectionRequestOuterClass.NodeAddress.newBuilder()
-                .setHost(nodeAddress.getHost())
-                .setPort(nodeAddress.getPort())
-                .build());
-      }
-    } else {
+    for (NodeAddress nodeAddress : configuration.getAddresses()) {
       connectionRequestBuilder.addAddresses(
           ConnectionRequestOuterClass.NodeAddress.newBuilder()
-              .setHost(DEFAULT_HOST)
-              .setPort(DEFAULT_PORT)
+              .setHost(nodeAddress.getHost())
+              .setPort(nodeAddress.getPort())
               .build());
     }
 

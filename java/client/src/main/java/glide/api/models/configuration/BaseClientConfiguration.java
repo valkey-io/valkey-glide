@@ -19,8 +19,7 @@ public abstract class BaseClientConfiguration {
    * list can be partial, as the client will attempt to map out the cluster and find all nodes. If
    * the server is in standalone mode, only nodes whose addresses were provided will be used by the
    * client. For example: <code>[ {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-   * {address: sample-address-0002.use2.cache.amazonaws.com, port:6379} ]</code>. If none are set, a
-   * default address localhost:6379 will be used.
+   * {address: sample-address-0002.use2.cache.amazonaws.com, port:6379} ]</code>.
    */
   @Singular private final List<NodeAddress> addresses;
 
