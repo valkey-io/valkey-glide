@@ -8,7 +8,7 @@ on:
             - "v*.*"
 jobs:
     publish-binaries:
-        name: Publish packages
+        name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         strategy:
             fail-fast: false
@@ -142,7 +142,7 @@ jobs:
                   if-no-files-found: error
 
     publish-to-pypi:
-        name: Publish PyPI package
+        name: Publish the base PyPi package
         runs-on: ubuntu-latest
         needs: publish-binaries
         steps:
