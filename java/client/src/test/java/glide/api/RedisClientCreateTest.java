@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -73,8 +74,7 @@ public class RedisClientCreateTest {
   public void createClient_errorOnConnectionThrowsExecutionException() {
     // setup
     CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
-    // TODO: return a RedisException, not a RuntimeException
-    RuntimeException exception = new RuntimeException("disconnected");
+    ClosingException exception = new ClosingException("disconnected");
     connectToRedisFuture.completeExceptionally(exception);
     RedisClientConfiguration config = RedisClientConfiguration.builder().build();
 
