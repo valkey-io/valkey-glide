@@ -1,5 +1,5 @@
 {
-    "name": "glide-for-redis",
+    "name": "@aws/glide-for-redis",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "types": "build-ts/index.d.ts",
