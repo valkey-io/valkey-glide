@@ -1,5 +1,11 @@
 package glide.managers;
 
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.ExecAbortException;
+import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.RedisValueResolver;
 import glide.models.RequestBuilder;
@@ -7,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass.RequestType;
+import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -61,20 +68,41 @@ public class CommandManager {
    */
   private String extractValueFromGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      // TODO we need to support different types of exceptions and distinguish them by type
-      throw new RuntimeException(
-          String.format(
-              "%s: %s",
-              response.getRequestError().getType(), response.getRequestError().getMessage()));
-    } else if (response.hasClosingError()) {
-      // TODO: close the channel on closingError
-      CompletableFuture.runAsync(channel::close);
-      throw new RuntimeException("Connection closed: " + response.getClosingError());
-    } else if (response.hasConstantResponse()) {
+      RequestError error = response.getRequestError();
+      String msg = error.getMessage();
+      switch (error.getType()) {
+        case Unspecified:
+          // Unspecified error on Redis service-side
+          throw new RequestException(msg);
+        case ExecAbort:
+          // Transactional error on Redis service-side
+          throw new ExecAbortException(msg);
+        case Timeout:
+          // Timeout from Glide to Redis service
+          throw new TimeoutException(msg);
+        case Disconnect:
+          // Connection problem between Glide and Redis
+          throw new ConnectionException(msg);
+        default:
+          // Request or command error from Redis
+          throw new RedisException(msg);
+      }
+    }
+    if (response.hasClosingError()) {
+      // A closing error is thrown when Rust-core is not connected to Redis
+      // We want to close shop and throw a ClosingException
+      channel.close();
+      throw new ClosingException(response.getClosingError());
+    }
+    if (response.hasConstantResponse()) {
+      // Return "OK"
       return response.getConstantResponse().toString();
-    } else if (response.hasRespPointer()) {
+    }
+    if (response.hasRespPointer()) {
+      // Return the shared value - which may be a null value
       return RedisValueResolver.valueFromPointer(response.getRespPointer()).toString();
     }
+    // if no response payload is provided, assume null
     return null;
   }
 }

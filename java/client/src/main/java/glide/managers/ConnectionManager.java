@@ -12,9 +12,13 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import lombok.RequiredArgsConstructor;
+import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -162,28 +166,39 @@ public class ConnectionManager {
   /** Check a response received from Glide. */
   private Void checkGlideRsResponse(Response response) {
     if (response.hasRequestError()) {
-      // TODO support different types of exceptions and distinguish them by type:
-      throw new RuntimeException(
-          String.format(
-              "%s: %s",
-              response.getRequestError().getType(), response.getRequestError().getMessage()));
+      RequestError error = response.getRequestError();
+      throwClosingError("Unexpected request error in response: " + error.getMessage());
     }
     if (response.hasClosingError()) {
-      throw new RuntimeException("Connection closed: " + response.getClosingError());
+      // A closing error is thrown when Rust-core is not connected to Redis
+      // We want to close shop and throw a ClosingException
+      throwClosingError(response.getClosingError());
     }
     if (response.hasRespPointer()) {
-      // TODO: throw ClosingException and close/cancel all existing responses
-      throw new RuntimeException("Unexpected data in response");
+      throwClosingError("Unexpected data in response");
     }
-    if (response.hasConstantResponse()) {
-      // successful connection response has an "OK"
-      return null;
+    if (!response.hasConstantResponse()) {
+      throwClosingError("Unexpected empty data in response");
     }
-    throw new RuntimeException("Connection response expects an OK response");
+    // Expect a constant "OK" response and return Void/null
+    return null;
   }
 
-  /** Close the connection and the corresponding channel. */
-  public CompletableFuture<Void> closeConnection() {
-    return CompletableFuture.runAsync(channel::close);
+  private void throwClosingError(String msg) throws ClosingException {
+    try {
+      closeConnection().get();
+    } catch (InterruptedException | ExecutionException exception) {
+      throw new RuntimeException(exception);
+    }
+    throw new ClosingException(msg);
+  }
+
+  /**
+   * Close the connection to the channel.
+   *
+   * @return a CompletableFuture to indicate the channel is closed
+   */
+  public Future<Void> closeConnection() {
+    return channel.close().syncUninterruptibly();
   }
 }

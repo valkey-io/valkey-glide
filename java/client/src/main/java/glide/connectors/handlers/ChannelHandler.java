@@ -5,6 +5,7 @@ import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolAllocator;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
@@ -93,8 +94,8 @@ public class ChannelHandler {
   }
 
   /** Closes the UDS connection and frees corresponding resources. */
-  public void close() {
-    channel.close();
+  public ChannelFuture close() {
     callbackDispatcher.shutdownGracefully();
+    return channel.close();
   }
 }
