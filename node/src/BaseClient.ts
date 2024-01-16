@@ -66,8 +66,12 @@ export type ReturnTypeAttribute = {
     value: ReturnType;
     attributes: ReturnTypeMap;
 };
-export type ProtocolVersion = connection_request.ProtocolVersion;
-export const ProtocolVersion = connection_request.ProtocolVersion;
+export enum ProtocolVersion {
+    /** Use RESP2 to communicate with the server nodes. */
+    RESP2 = connection_request.ProtocolVersion.RESP2,
+    /** Use RESP3 to communicate with the server nodes. */
+    RESP3 = connection_request.ProtocolVersion.RESP3,
+}
 export type ReturnType =
     | "OK"
     | string
@@ -966,8 +970,11 @@ export class BaseClient {
                       username: options.credentials.username,
                   }
                 : undefined;
+        const protocol = options.serverProtocol as
+            | connection_request.ProtocolVersion
+            | undefined;
         return {
-            protocol: options.serverProtocol,
+            protocol,
             clientName: options.clientName,
             addresses: options.addresses,
             tlsMode: options.useTLS

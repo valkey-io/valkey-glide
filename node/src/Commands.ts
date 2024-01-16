@@ -20,6 +20,9 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
+/**
+ * @internal
+ */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
     const parsedResponse: Record<string, string> = {};
