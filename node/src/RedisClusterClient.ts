@@ -123,6 +123,11 @@ function toProtobufRoute(
     }
 }
 
+/**
+ * Client used for connection to cluster Redis servers.
+ * For full documentation, see
+ * https://github.com/aws/babushka/wiki/NodeJS-wrapper#redis-cluster
+ */
 export class RedisClusterClient extends BaseClient {
     /**
      * @internal

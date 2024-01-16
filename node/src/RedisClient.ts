@@ -48,6 +48,11 @@ export type RedisClientConfiguration = BaseClientConfiguration & {
     };
 };
 
+/**
+ * Client used for connection to standalone Redis servers.
+ * For full documentation, see
+ * https://github.com/aws/babushka/wiki/NodeJS-wrapper#redis-standalone
+ */
 export class RedisClient extends BaseClient {
     /**
      * @internal
