@@ -632,20 +632,33 @@ export class BaseClient {
     }
 
     /** Removes and returns the first elements of the list stored at `key`.
-     * By default, the command pops a single element from the beginning of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the beginning of the list.
      * See https://redis.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
-     * @param count - The count of the elements to pop from the list.
-     * @returns The value of the first element if `count` is not provided. If `count` is provided, a list of the popped elements will be returned depending on the list's length.
+     * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(
         key: string,
-        count?: number
-    ): Promise<string | string[] | null> {
+    ): Promise<string | null> {
+        return this.createWritePromise(createLPop(key));
+    }
+
+    /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
+     * See https://redis.io/commands/lpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     * @returns A list of the popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public lpopCount(
+        key: string,
+        count: number
+    ): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
     }
 
@@ -730,20 +743,33 @@ export class BaseClient {
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
-     * By default, the command pops a single element from the end of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the end of the list.
      * See https://redis.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
-     * @param count - The count of the elements to pop from the list.
-     * @returns The value of the last element if `count` is not provided. If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
     public rpop(
         key: string,
-        count?: number
-    ): Promise<string | string[] | null> {
+    ): Promise<string | null> {
+        return this.createWritePromise(createRPop(key));
+    }
+
+    /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
+     * See https://redis.io/commands/rpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     * @returns A list of popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public rpopCount(
+        key: string,
+        count: number
+    ): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
     }
 
