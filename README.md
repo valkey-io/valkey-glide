@@ -7,7 +7,7 @@ GLIDE for Redis is API-compatible with open source Redis version 6 and 7.
 
 ## Current Status
 We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders. 
-This preview release is recommended for testing purposes only. It is available in Python and Javascript (Node.js), with Java to follow. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/165/).
+This preview release is recommended for testing purposes only. It is available in Python and Javascript (Node.js), with Java to follow. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
 
 
 ## Getting Started
