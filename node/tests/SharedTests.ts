@@ -755,7 +755,7 @@ export function runBaseTests<Context>(config: {
                     "value3",
                     "value4",
                 ]);
-                expect(await client.lpop(key, 2)).toEqual(["value2", "value3"]);
+                expect(await client.lpopCount(key, 2)).toEqual(["value2", "value3"]);
                 expect(await client.lrange("nonExistingKey", 0, -1)).toEqual(
                     []
                 );
@@ -899,7 +899,7 @@ export function runBaseTests<Context>(config: {
                 const valueList = ["value1", "value2", "value3", "value4"];
                 expect(await client.rpush(key, valueList)).toEqual(4);
                 expect(await client.rpop(key)).toEqual("value4");
-                expect(await client.rpop(key, 2)).toEqual(["value3", "value2"]);
+                expect(await client.rpopCount(key, 2)).toEqual(["value3", "value2"]);
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
             });
         },

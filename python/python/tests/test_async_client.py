@@ -680,7 +680,7 @@ class TestCommands:
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.lpop(key) == value_list[-1]
         assert await redis_client.lrange(key, 0, -1) == value_list[-2::-1]
-        assert await redis_client.lpop(key, 2) == value_list[-2:0:-1]
+        assert await redis_client.lpop_count(key, 2) == value_list[-2:0:-1]
         assert await redis_client.lrange("non_existing_key", 0, -1) == []
         assert await redis_client.lpop("non_existing_key") is None
 
@@ -711,7 +711,7 @@ class TestCommands:
         assert await redis_client.rpush(key, value_list) == 4
         assert await redis_client.rpop(key) == value_list[-1]
 
-        assert await redis_client.rpop(key, 2) == value_list[-2:0:-1]
+        assert await redis_client.rpop_count(key, 2) == value_list[-2:0:-1]
         assert await redis_client.rpop("non_existing_key") is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
