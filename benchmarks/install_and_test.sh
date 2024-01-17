@@ -135,8 +135,6 @@ function Help() {
     echo "         2 clients, 100 concurrent tasks and 20 bytes of data per value, "
     echo and the outputs will be saved to a file prefixed with \"foo\".
     echo
-    echo Pass -only-ffi to only run GLIDE FFI based clients.
-    echo Pass -only-socket to only run GLIDE socket based clients.
     echo Pass -only-glide to only run GLIDE clients.
     echo Pass -is-cluster if the host is a Cluster server. Otherwise the server is assumed to be in standalone mode.
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
