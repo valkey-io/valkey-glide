@@ -95,6 +95,8 @@ spotless {
         trimTrailingWhitespace()
         endWithNewline()
         googleJavaFormat('1.17.0').reflowLongStrings().groupArtifact('com.google.googlejavaformat:google-java-format')
+        indentWithTabs(2)
+        indentWithSpaces(4)
     }
 }
 // End of Spotless section

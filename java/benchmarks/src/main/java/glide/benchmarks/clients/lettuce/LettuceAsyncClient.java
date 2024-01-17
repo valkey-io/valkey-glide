@@ -15,50 +15,50 @@ import java.time.Duration;
 
 /** A Lettuce client with async capabilities see: https://lettuce.io/ */
 public class LettuceAsyncClient implements AsyncClient<String> {
-  static final int ASYNC_OPERATION_TIMEOUT_SEC = 1;
+    static final int ASYNC_OPERATION_TIMEOUT_SEC = 1;
 
-  private AbstractRedisClient client;
-  private RedisStringAsyncCommands<String, String> asyncCommands;
-  private StatefulConnection<String, String> connection;
+    private AbstractRedisClient client;
+    private RedisStringAsyncCommands<String, String> asyncCommands;
+    private StatefulConnection<String, String> connection;
 
-  @Override
-  public void connectToRedis(ConnectionSettings connectionSettings) {
-    RedisURI uri =
-        RedisURI.builder()
-            .withHost(connectionSettings.host)
-            .withPort(connectionSettings.port)
-            .withSsl(connectionSettings.useSsl)
-            .build();
-    if (connectionSettings.clusterMode) {
-      client = RedisClient.create(uri);
-      connection = ((RedisClient) client).connect();
-      asyncCommands = ((StatefulRedisConnection<String, String>) connection).async();
-    } else {
-      client = RedisClusterClient.create(uri);
-      connection = ((RedisClusterClient) client).connect();
-      asyncCommands = ((StatefulRedisClusterConnection<String, String>) connection).async();
+    @Override
+    public void connectToRedis(ConnectionSettings connectionSettings) {
+        RedisURI uri =
+                RedisURI.builder()
+                        .withHost(connectionSettings.host)
+                        .withPort(connectionSettings.port)
+                        .withSsl(connectionSettings.useSsl)
+                        .build();
+        if (connectionSettings.clusterMode) {
+            client = RedisClient.create(uri);
+            connection = ((RedisClient) client).connect();
+            asyncCommands = ((StatefulRedisConnection<String, String>) connection).async();
+        } else {
+            client = RedisClusterClient.create(uri);
+            connection = ((RedisClusterClient) client).connect();
+            asyncCommands = ((StatefulRedisClusterConnection<String, String>) connection).async();
+        }
+        connection.setTimeout(Duration.ofSeconds(ASYNC_OPERATION_TIMEOUT_SEC));
     }
-    connection.setTimeout(Duration.ofSeconds(ASYNC_OPERATION_TIMEOUT_SEC));
-  }
 
-  @Override
-  public RedisFuture<String> asyncSet(String key, String value) {
-    return asyncCommands.set(key, value);
-  }
+    @Override
+    public RedisFuture<String> asyncSet(String key, String value) {
+        return asyncCommands.set(key, value);
+    }
 
-  @Override
-  public RedisFuture<String> asyncGet(String key) {
-    return asyncCommands.get(key);
-  }
+    @Override
+    public RedisFuture<String> asyncGet(String key) {
+        return asyncCommands.get(key);
+    }
 
-  @Override
-  public void closeConnection() {
-    connection.close();
-    client.shutdown();
-  }
+    @Override
+    public void closeConnection() {
+        connection.close();
+        client.shutdown();
+    }
 
-  @Override
-  public String getName() {
-    return "Lettuce Async";
-  }
+    @Override
+    public String getName() {
+        return "Lettuce Async";
+    }
 }

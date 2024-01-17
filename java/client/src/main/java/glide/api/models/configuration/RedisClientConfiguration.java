@@ -7,9 +7,9 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @SuperBuilder
 public class RedisClientConfiguration extends BaseClientConfiguration {
-  /** Strategy used to determine how and when to reconnect, in case of connection failures. */
-  private final BackoffStrategy reconnectStrategy;
+    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
+    private final BackoffStrategy reconnectStrategy;
 
-  /** Index of the logical database to connect to. */
-  private final Integer databaseId;
+    /** Index of the logical database to connect to. */
+    private final Integer databaseId;
 }

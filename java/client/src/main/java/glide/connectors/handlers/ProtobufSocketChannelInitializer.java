@@ -15,17 +15,17 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ProtobufSocketChannelInitializer extends ChannelInitializer<UnixChannel> {
 
-  private final CallbackDispatcher callbackDispatcher;
+    private final CallbackDispatcher callbackDispatcher;
 
-  @Override
-  public void initChannel(@NonNull UnixChannel ch) {
-    ch.pipeline()
-        // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
-        .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
-        .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
-        .addLast("protobufDecoder", new ProtobufDecoder(Response.getDefaultInstance()))
-        .addLast("protobufEncoder", new ProtobufEncoder())
-        .addLast(new ReadHandler(callbackDispatcher))
-        .addLast(new ChannelOutboundHandlerAdapter());
-  }
+    @Override
+    public void initChannel(@NonNull UnixChannel ch) {
+        ch.pipeline()
+                // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
+                .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
+                .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
+                .addLast("protobufDecoder", new ProtobufDecoder(Response.getDefaultInstance()))
+                .addLast("protobufEncoder", new ProtobufEncoder())
+                .addLast(new ReadHandler(callbackDispatcher))
+                .addLast(new ChannelOutboundHandlerAdapter());
+    }
 }

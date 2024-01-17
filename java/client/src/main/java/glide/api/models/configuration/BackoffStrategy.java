@@ -15,16 +15,16 @@ import lombok.NonNull;
 @Getter
 @Builder
 public class BackoffStrategy {
-  /**
-   * Number of retry attempts that the client should perform when disconnected from the server,
-   * where the time between retries increases. Once the retries have reached the maximum value, the
-   * time between retries will remain constant until a reconnect attempt is successful.
-   */
-  @NonNull private final Integer numOfRetries;
+    /**
+     * Number of retry attempts that the client should perform when disconnected from the server,
+     * where the time between retries increases. Once the retries have reached the maximum value, the
+     * time between retries will remain constant until a reconnect attempt is successful.
+     */
+    @NonNull private final Integer numOfRetries;
 
-  /** The multiplier that will be applied to the waiting time between each retry. */
-  @NonNull private final Integer factor;
+    /** The multiplier that will be applied to the waiting time between each retry. */
+    @NonNull private final Integer factor;
 
-  /** The exponent base configured for the strategy. */
-  @NonNull private final Integer exponentBase;
+    /** The exponent base configured for the strategy. */
+    @NonNull private final Integer exponentBase;
 }

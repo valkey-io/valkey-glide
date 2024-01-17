@@ -5,7 +5,7 @@ package glide.api.models.exceptions;
  * temporary, as the client will attempt to reconnect.
  */
 public class ConnectionException extends RedisException {
-  public ConnectionException(String message) {
-    super(message);
-  }
+    public ConnectionException(String message) {
+        super(message);
+    }
 }
