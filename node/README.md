@@ -17,7 +17,7 @@ To install GLIDE for Redis using `npm`, follow these steps:
 1. Open your terminal.
 2. Execute the command below:
    ```bash
-   $ npm install glide-for-redis
+   $ npm install @aws/glide-for-redis
    ```
 3. After installation, confirm the client is installed by running:
     ```bash
