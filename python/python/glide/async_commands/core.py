@@ -182,7 +182,7 @@ class CoreCommands(Protocol):
         conditional_set: Union[ConditionalSet, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
-    ) -> TResult:
+    ) -> Optional[str]:
         """Set the given key with the given value. Return value is dependent on the passed options.
             See https://redis.io/commands/set/ for details.
 
@@ -200,7 +200,7 @@ class CoreCommands(Protocol):
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
         Returns:
-            TRESULT:
+            Optional[str]:
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
                 If return_old_value is set, return the old value as a string.
@@ -215,7 +215,9 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return await self._execute_command(RequestType.SetString, args)
+        return cast(
+            Optional[str], await self._execute_command(RequestType.SetString, args)
+        )
 
     async def get(self, key: str) -> Optional[str]:
         """Get the value associated with the given key, or null if no such value exists.
