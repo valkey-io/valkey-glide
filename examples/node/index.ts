@@ -1,4 +1,4 @@
-import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
+import { Logger, RedisClient, RedisClusterClient } from "@aws/glide-for-redis";
 
 async function sendPingToNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
