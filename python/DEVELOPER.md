@@ -6,19 +6,103 @@ This document describes how to set up your development environment to build and 
 
 The GLIDE for Redis Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
+### Build from source
 
-### Build
+#### Prerequisites
 
-- Follow the building instructions for the Python wrapper in the [Build from source](https://github.com/aws/glide-for-redis/blob/main/python/README.md#build-from-source) section to clone the code and build the wrapper.
+Software Dependencies
 
-- Install Python development requirements with:
+-   python3 virtualenv
+-   git
+-   GCC
+-   pkg-config
+-   protoc (protobuf compiler)
+-   openssl
+-   openssl-dev
+-   rustup
+
+**Dependencies installation for Ubuntu**
+
+```bash
+sudo apt update -y
+sudo apt install -y python3 python3-venv git gcc pkg-config protobuf-compiler openssl libssl-dev
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies installation for CentOS**
+
+```bash
+sudo yum update -y
+sudo yum install -y python3 git gcc pkgconfig protobuf-compiler openssl openssl-devel
+pip3 install virtualenv
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+**Dependencies installation for MacOS**
+
+```bash
+brew update
+brew install python3 git gcc pkgconfig protobuf openssl
+pip3 install virtualenv
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+#### Building and installation steps
+
+Before starting this step, make sure you've installed all software requirments.
+
+1. Clone the repository:
+    ```bash
+    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
+    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    cd glide-for-redis
+    ```
+2. Initialize git submodule:
+    ```bash
+    git submodule update --init --recursive
+    ```
+3. Generate protobuf files:
+    ```bash
+    GLIDE_ROOT_FOLDER_PATH=.
+    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+    ```
+4. Create a virtual environment:
+    ```bash
+    cd python
+    python3 -m venv .env
+    ```
+5. Activate the virtual environment:
+    ```bash
+    source .env/bin/activate
+    ```
+6. Install requirements:
+    ```bash
+    pip install -r requirements.txt
+    ```
+7. Build the Python wrapper in release mode:
+    ```
+    maturin develop --release --strip
+    ```
+    > **Note:** To build the wrapper binary with debug symbols remove the --strip flag.
+8. Run tests:
+    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    2. Validate the activation of the virtual environment from step 4 by ensuring its name (`.env`) is displayed next to your command prompt.
+    3. Execute the following command from the python folder:
+        ```bash
+        pytest --asyncio-mode=auto
+        ```
+        > **Note:** To run redis modules tests, add -k "test_redis_modules.py".
+
+-   Install Python development requirements with:
 
     ```bash
     pip install -r python/dev_requirements.txt
     ```
 
-- For a fast build, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the "--release" flag when measuring performance.
-
+-   For a fast build, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the "--release" flag when measuring performance.
 
 ### Test
 
@@ -43,14 +127,16 @@ git submodule update
 ```
 
 ### Generate protobuf files
+
 During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
 
 ```bash
 GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
 protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
-``` 
+```
 
 #### Protobuf interface files
+
 To generate the protobuf files with Python Interface files (pyi) for type-checking purposes, ensure you have installed `mypy-protobuf` with pip, and then execute the following command:
 
 ```bash
@@ -60,22 +146,27 @@ protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLD
 ```
 
 ### Linters
+
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
 #### Language-specific Linters
 
-__Python:__
-- flake8
-- isort
-- black
-- mypy
+**Python:**
 
-__Rust:__
-- clippy
-- fmt
+-   flake8
+-   isort
+-   black
+-   mypy
+
+**Rust:**
+
+-   clippy
+-   fmt
 
 #### Running the linters
+
 Run from the main `/python` folder
+
 1. Python
     > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running mypy linter
     ```bash
@@ -88,6 +179,7 @@ Run from the main `/python` folder
     mypy .
     ```
 2. Rust
+
     ```bash
     rustup component add clippy rustfmt
     cargo clippy --all-features --all-targets -- -D warnings
@@ -96,6 +188,7 @@ Run from the main `/python` folder
     ```
 
 ### Recommended extensions for VS Code
+
 -   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 -   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
 -   [Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
