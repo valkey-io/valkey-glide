@@ -5,6 +5,7 @@ pub(crate) enum ExpectedReturnType {
     Double,
     Boolean,
     Set,
+    ArrayOrNull,
     DoubleOrNull,
 }
 
@@ -60,6 +61,16 @@ pub(crate) fn convert_to_expected_type(
             Value::Nil => Ok(value),
             _ => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
         },
+        ExpectedReturnType::ArrayOrNull => match value {
+            Value::Nil => Ok(value),
+            Value::Array(array) => Ok(Value::Array(array)),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to Array",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -67,6 +78,14 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     if cmd.arg_idx(0) == Some(b"ZADD") {
         return if cmd.position(b"INCR").is_some() {
             Some(ExpectedReturnType::DoubleOrNull)
+        } else {
+            None
+        };
+    }
+
+    if cmd.arg_idx(0) == Some(b"LPOP") || cmd.arg_idx(0) == Some(b"RPOP") {
+        return if cmd.arg_idx(2).is_some() {
+            Some(ExpectedReturnType::ArrayOrNull)
         } else {
             None
         };
