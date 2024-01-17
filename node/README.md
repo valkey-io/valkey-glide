@@ -1,3 +1,17 @@
+# GLIDE for Redis
+
+General Language Independent Driver for the Enterprise (GLIDE) for Redis, is an AWS-sponsored, open-source Redis client. GLIDE for Redis works with any Redis distribution that adheres to the Redis Serialization Protocol (RESP) specification, including open-source Redis, Amazon ElastiCache for Redis, and Amazon MemoryDB for Redis.
+Strategic, mission-critical Redis-based applications have requirements for security, optimized performance, minimal downtime, and observability. GLIDE for Redis is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating Redis-compatible services used by hundreds of thousands of customers. To help ensure consistency in development and operations, GLIDE for Redis is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, GLIDE for Redis is available for Python and Javascript (Node.js), with support for Java actively under development.
+
+## Supported Redis Versions
+
+GLIDE for Redis is API-compatible with open source Redis version 6 and 7.
+
+## Current Status
+
+We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
+This preview release is recommended for testing purposes only.
+
 # Getting Started - Node Wrapper
 
 ## System Requirements
@@ -5,8 +19,8 @@
 The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## NodeJS supported version
+
 Node.js 16.20 or higher.
-> Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
 
 ## Installation and Setup
 
@@ -16,102 +30,15 @@ To install GLIDE for Redis using `npm`, follow these steps:
 
 1. Open your terminal.
 2. Execute the command below:
-   ```bash
-   $ npm install glide-for-redis
-   ```
+    ```bash
+    $ npm install @aws/glide-for-redis
+    ```
 3. After installation, confirm the client is installed by running:
     ```bash
     $ npm list
     myApp@ /home/ubuntu/myApp
-    └── glide-for-redis@0.1.0
+    └── @aws/glide-for-redis@0.1.0
     ```
-
-### Build from source
-
-#### Prerequisites
-
-Software Dependencies
--   npm v8
--   git
--   GCC
--   pkg-config
--   protoc (protobuf compiler)
--   openssl
--   openssl-dev
--   rustup
-
-**Dependencies installation for Ubuntu**
-```bash
-sudo apt update -y
-sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
-npm i -g npm@8
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-**Dependencies installation for CentOS**
-``` bash
-sudo yum update -y
-sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext
-npm i -g npm@8
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-**Dependencies installation for MacOS**
-```bash
-brew update
-brew install nodejs git gcc pkgconfig protobuf openssl 
-npm i -g npm@8
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-#### Building and installation steps
-Before starting this step, make sure you've installed all software requirments. 
-1. Clone the repository:
-    ```bash
-    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-    cd glide-for-redis
-    ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Install all node dependencies:
-    ```bash
-    cd node
-    npm i
-    cd rust-client
-    npm i
-    cd ..
-    ```
-4. Build the Node wrapper: 
-    Choose a build option from the following and run it from the `node` folder:
-    1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
-        ```bash
-        npm run build:release
-        ```
-
-    2. Build in release mode with debug symbols (optimized but large binary size):
-        ```bash
-        npm run build:benchmark
-        ```
-
-    3. For testing purposes, you can execute an unoptimized but fast build using:
-        ```bash
-        npm run build
-        ```
-    Once building completed, you'll find the compiled JavaScript code in the `./build-ts` folder.
-5. Run tests:
-    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
-    2. Execute the following command from the node folder:
-        ```bash
-        npm test
-        ```
-6. Integrating the built GLIDE package into your project:
-    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 ## Basic Examples
 
@@ -133,7 +60,6 @@ await client.set("foo", "bar");
 const value = await client.get("foo");
 client.close();
 ```
-
 
 #### Standalone Redis:
 
@@ -157,6 +83,11 @@ await client.set("foo", "bar");
 const value = await client.get("foo");
 client.close();
 ```
+
 ## Documenation
 
 Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+
+### Building & Testing
+
+Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/node/DEVELOPER.md#build-from-source) file.
