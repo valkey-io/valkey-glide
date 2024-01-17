@@ -4,9 +4,9 @@ import glide.benchmarks.utils.ConnectionSettings;
 
 /** A Redis client interface */
 public interface Client {
-  void connectToRedis(ConnectionSettings connectionSettings);
+    void connectToRedis(ConnectionSettings connectionSettings);
 
-  default void closeConnection() {}
+    default void closeConnection() {}
 
-  String getName();
+    String getName();
 }

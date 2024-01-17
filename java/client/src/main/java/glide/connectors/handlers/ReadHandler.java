@@ -10,26 +10,26 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class ReadHandler extends ChannelInboundHandlerAdapter {
 
-  private final CallbackDispatcher callbackDispatcher;
+    private final CallbackDispatcher callbackDispatcher;
 
-  /** Submit responses from glide to an instance {@link CallbackDispatcher} to handle them. */
-  @Override
-  public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg)
-      throws RuntimeException {
-    if (msg instanceof Response) {
-      Response response = (Response) msg;
-      callbackDispatcher.completeRequest(response);
-      ctx.fireChannelRead(msg);
-      return;
+    /** Submit responses from glide to an instance {@link CallbackDispatcher} to handle them. */
+    @Override
+    public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg)
+            throws RuntimeException {
+        if (msg instanceof Response) {
+            Response response = (Response) msg;
+            callbackDispatcher.completeRequest(response);
+            ctx.fireChannelRead(msg);
+            return;
+        }
+        throw new RuntimeException("Unexpected message in socket");
     }
-    throw new RuntimeException("Unexpected message in socket");
-  }
 
-  /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
-  @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-    System.out.printf("=== exceptionCaught %s %s %n", ctx, cause);
-    cause.printStackTrace(System.err);
-    super.exceptionCaught(ctx, cause);
-  }
+    /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        System.out.printf("=== exceptionCaught %s %s %n", ctx, cause);
+        cause.printStackTrace(System.err);
+        super.exceptionCaught(ctx, cause);
+    }
 }
