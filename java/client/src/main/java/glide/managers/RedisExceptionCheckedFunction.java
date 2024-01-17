@@ -1,4 +1,4 @@
-package glide.api.commands;
+package glide.managers;
 
 import glide.api.models.exceptions.RedisException;
 

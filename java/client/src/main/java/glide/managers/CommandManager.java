@@ -1,7 +1,6 @@
 package glide.managers;
 
 import glide.api.commands.Command;
-import glide.api.commands.RedisExceptionCheckedFunction;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;

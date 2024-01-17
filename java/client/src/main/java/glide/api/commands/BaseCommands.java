@@ -1,21 +1,12 @@
 package glide.api.commands;
 
 import glide.ffi.resolvers.RedisValueResolver;
-import java.util.List;
+import glide.managers.BaseCommandResponseResolver;
 import java.util.concurrent.CompletableFuture;
 import response.ResponseOuterClass.Response;
 
 /** Base Commands interface to handle generic command and transaction requests. */
 public interface BaseCommands {
-
-  /**
-   * default Object handler from response
-   *
-   * @return BaseCommandResponseResolver to deliver the response
-   */
-  static BaseCommandResponseResolver applyBaseCommandResponseResolver() {
-    return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer);
-  }
 
   /**
    * Extracts the response from the Protobuf response and either throws an exception or returns the
@@ -27,16 +18,7 @@ public interface BaseCommands {
   static Object handleObjectResponse(Response response) {
     // return function to convert protobuf.Response into the response object by
     // calling valueFromPointer
-    return BaseCommands.applyBaseCommandResponseResolver().apply(response);
-  }
-
-  public static List<Object> handleTransactionResponse(Response response) {
-    // return function to convert protobuf.Response into the response object by
-    // calling valueFromPointer
-
-    List<Object> transactionResponse =
-        (List<Object>) BaseCommands.applyBaseCommandResponseResolver().apply(response);
-    return transactionResponse;
+    return (new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer)).apply(response);
   }
 
   /**
