@@ -23,7 +23,7 @@ To install GLIDE for Redis using `npm`, follow these steps:
     ```bash
     $ npm list
     myApp@ /home/ubuntu/myApp
-    └── glide-for-redis@0.1.0
+    └── @aws/glide-for-redis@0.1.0
     ```
 
 ### Build from source
