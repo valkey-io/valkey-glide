@@ -22,7 +22,7 @@ If you have any questions, feature requests, encounter issues, or need assistanc
 1. A clear and concise title
 2. Detailed description of the problem or question
 3. A reproducible test case or series of steps
-4. The GLIDE version in use
+4. The GLIDE for Redis version in use
 5. Operating system
 6. Redis version
 7. Redis cluster information, cluster topology, number of shards, number of replicas, used data types
