@@ -125,11 +125,11 @@ export type BaseClientConfiguration = {
         port?: number;
     }[];
     /**
-     * True if communication with the cluster should use Transport Level Security.
+     * `"auto"` if communication with the cluster should use Transport Level Security, with automatic loading of certificates.
      * Should match the TLS configuration of the server/cluster,
      * otherwise the connection attempt will fail.
      */
-    useTLS?: boolean;
+    tlsMode?: "auto";
     /**
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.
@@ -977,9 +977,10 @@ export class BaseClient {
             protocol,
             clientName: options.clientName,
             addresses: options.addresses,
-            tlsMode: options.useTLS
-                ? connection_request.TlsMode.SecureTls
-                : connection_request.TlsMode.NoTls,
+            tlsMode:
+                options.tlsMode == "auto"
+                    ? connection_request.TlsMode.SecureTls
+                    : connection_request.TlsMode.NoTls,
             requestTimeout: options.requestTimeout,
             clusterModeEnabled: false,
             readFrom,
