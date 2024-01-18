@@ -14,7 +14,7 @@ import {
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
 async function getVersion(): Promise<[number, number, number]> {
-    const versioString = await new Promise<string>((resolve, reject) => {
+    const versionString = await new Promise<string>((resolve, reject) => {
         exec(`redis-server -v`, (error, stdout) => {
             if (error) {
                 reject(error);
@@ -23,7 +23,7 @@ async function getVersion(): Promise<[number, number, number]> {
             }
         });
     });
-    const version = versioString.split("v=")[1].split(" ")[0];
+    const version = versionString.split("v=")[1].split(" ")[0];
     const numbers = version?.split(".");
 
     if (numbers.length != 3) {
