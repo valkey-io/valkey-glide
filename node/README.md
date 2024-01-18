@@ -84,7 +84,7 @@ const value = await client.get("foo");
 client.close();
 ```
 
-## Documenation
+## Documentation
 
 Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
