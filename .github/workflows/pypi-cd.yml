@@ -5,7 +5,7 @@ name: Continuous Deployment
 on:
     push:
         tags:
-            - "v*.*"
+            - "v2.2"
 jobs:
     publish-binaries:
         name: Publish packages to PyPi
