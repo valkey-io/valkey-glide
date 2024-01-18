@@ -8,9 +8,7 @@ The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.0
 Node.js 16.20 or higher.
 > Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
 
-## Installation and Setup
-
-### Installing via Package Manager (npm)
+## Installation
 
 To install GLIDE for Redis using `npm`, follow these steps:
 
@@ -26,9 +24,54 @@ To install GLIDE for Redis using `npm`, follow these steps:
     └── @aws/glide-for-redis@0.1.0
     ```
 
-### Build from source
+## Basic Examples
 
-#### Prerequisites
+#### Cluster Redis
+
+```node
+import { RedisClusterClient } from "glide-for-redis";
+
+const addresses = [
+    {
+        host: "redis.example.com",
+        port: 6379,
+    },
+];
+const client = await RedisClusterClient.createClient({
+    addresses: addresses,
+});
+await client.set("foo", "bar");
+const value = await client.get("foo");
+client.close();
+```
+
+
+#### Standalone Redis
+
+```node
+import { RedisClient } from "glide-for-redis";
+
+const addresses = [
+    {
+        host: "redis_primary.example.com",
+        port: 6379,
+    },
+    {
+        host: "redis_replica.example.com",
+        port: 6379,
+    },
+];
+const client = await RedisClient.createClient({
+    addresses: addresses,
+});
+await client.set("foo", "bar");
+const value = await client.get("foo");
+client.close();
+```
+
+## Build from source
+
+### Prerequisites
 
 Software Dependencies
 -   npm v8
@@ -67,7 +110,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-#### Building and installation steps
+### Building and installation steps
 Before starting this step, make sure you've installed all software requirments. 
 1. Clone the repository:
     ```bash
@@ -113,50 +156,6 @@ Before starting this step, make sure you've installed all software requirments.
 6. Integrating the built GLIDE package into your project:
     Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
-## Basic Examples
-
-#### Cluster Redis:
-
-```node
-import { RedisClusterClient } from "glide-for-redis";
-
-const addresses = [
-    {
-        host: "redis.example.com",
-        port: 6379,
-    },
-];
-const client = await RedisClusterClient.createClient({
-    addresses: addresses,
-});
-await client.set("foo", "bar");
-const value = await client.get("foo");
-client.close();
-```
-
-
-#### Standalone Redis:
-
-```node
-import { RedisClient } from "glide-for-redis";
-
-const addresses = [
-    {
-        host: "redis_primary.example.com",
-        port: 6379,
-    },
-    {
-        host: "redis_replica.example.com",
-        port: 6379,
-    },
-];
-const client = await RedisClient.createClient({
-    addresses: addresses,
-});
-await client.set("foo", "bar");
-const value = await client.get("foo");
-client.close();
-```
-## Documenation
+## Documentation
 
 Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
