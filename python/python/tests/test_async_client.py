@@ -1044,6 +1044,17 @@ class TestCommands:
             == None
         )
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zrem(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zrem(key, ["one"]) == 1
+        assert await redis_client.zrem(key, ["one", "two", "three"]) == 2
+
+        assert await redis_client.zrem("non_existing_set", ["member"]) == 0
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
