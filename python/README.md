@@ -7,9 +7,45 @@ The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.0
 ## Python supported version
 Python 3.8 or higher.
 
-## Installation and Setup
+## Basic Examples
 
-### Installing via Package Manager (pip)
+#### Cluster Redis
+
+```python3
+from glide import (
+    NodeAddress,
+    ClusterClientConfiguration,
+    RedisClusterClient,
+)
+addresses = [NodeAddress("redis.example.com", 6379)]
+config = ClusterClientConfiguration(
+    addresses=addresses
+)
+client = await RedisClusterClient.create(config)
+await client.set("foo", "bar")
+
+await client.get("foo") # 'bar'
+```
+
+#### Standalone Redis
+
+```python3
+from glide import (
+    NodeAddress,
+    RedisClientConfiguration,
+    RedisClient,
+)
+addresses = [NodeAddress("redis_primary.example.com", 6379), NodeAddress("redis_replica.example.com", 6379)]
+config = RedisClientConfiguration(
+    addresses=addresses
+)
+client = await RedisClient.create(config)
+await client.set("foo", "bar")
+
+await client.get("foo") # 'bar'
+```
+
+## Installation and Setup
 
 To install GLIDE for Redis using `pip`, follow these steps:
 
@@ -23,10 +59,10 @@ To install GLIDE for Redis using `pip`, follow these steps:
     $ python3
     >>> import glide
     ```
+    
+## Build from source
 
-### Build from source
-
-#### Prerequisites
+### Prerequisites
 
 Software Dependencies
 
@@ -65,7 +101,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-#### Building and installation steps
+### Building and installation steps
 Before starting this step, make sure you've installed all software requirments. 
 1. Clone the repository:
     ```bash
@@ -109,47 +145,7 @@ Before starting this step, make sure you've installed all software requirments.
         ```
         > **Note:** To run redis modules tests, add -k "test_redis_modules.py".
 
-## Basic Examples
-
-#### Cluster Redis:
-
-```python:
->>> from glide import (
-...     NodeAddress,
-...     ClusterClientConfiguration,
-...     RedisClusterClient,
-... )
->>> addresses = [NodeAddress("redis.example.com", 6379)]
->>> config = ClusterClientConfiguration(
-...     addresses=addresses
-... )
->>> client = await RedisClusterClient.create(config)
->>> await client.set("foo", "bar")
-'OK'
->>> await client.get("foo")
-'bar'
-```
-
-#### Standalone Redis:
-
-```python:
->>> from glide import (
-...     NodeAddress,
-...     RedisClientConfiguration,
-...     RedisClient,
-... )
->>> addresses = [NodeAddress("redis_primary.example.com", 6379), NodeAddress("redis_replica.example.com", 6379)]
->>> config = RedisClientConfiguration(
-...     addresses=addresses
-... )
->>> client = await RedisClient.create(config)
->>> await client.set("foo", "bar")
-'OK'
->>> await client.get("foo")
-'bar'
-```
-
-## Documenation
+## Documentation
 
 Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
