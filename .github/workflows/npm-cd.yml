@@ -183,6 +183,9 @@ jobs:
                     then
                         echo "Installing package $package"
                         npm i --no-save "$package"
+                        npm ls
+                        pwd
+                        ls node_modules
                     fi
                   done
 
