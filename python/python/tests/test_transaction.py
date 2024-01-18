@@ -25,6 +25,7 @@ def transaction_test(
     key5 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -83,6 +84,9 @@ def transaction_test(
     transaction.smembers(key7)
     transaction.scard(key7)
 
+    transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
+    transaction.zadd_incr(key8, "one", 3)
+    transaction.zrem(key8, ["one"])
     return [
         OK,
         value,
@@ -120,6 +124,9 @@ def transaction_test(
         2,
         1,
         {"bar"},
+        1,
+        3,
+        4,
         1,
     ]
 
