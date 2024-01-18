@@ -2,7 +2,7 @@ import threading
 from typing import List, Mapping, Optional, Tuple, Union
 
 from glide.async_commands.core import (
-    ConditionalSet,
+    ConditionalChange,
     ExpireOptions,
     ExpirySet,
     InfoSection,
@@ -48,15 +48,15 @@ class BaseTransaction:
         self,
         key: str,
         value: str,
-        conditional_set: Union[ConditionalSet, None] = None,
+        conditional_set: Union[ConditionalChange, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
     ):
         args = [key, value]
         if conditional_set:
-            if conditional_set == ConditionalSet.ONLY_IF_EXISTS:
+            if conditional_set == ConditionalChange.ONLY_IF_EXISTS:
                 args.append("XX")
-            if conditional_set == ConditionalSet.ONLY_IF_DOES_NOT_EXIST:
+            if conditional_set == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
                 args.append("NX")
         if return_old_value:
             args.append("GET")
