@@ -9,6 +9,7 @@ import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     ExpireOptions,
     SetOptions,
+    ZaddOptions,
     createDecr,
     createDecrBy,
     createDel,
@@ -46,6 +47,7 @@ import {
     createSet,
     createTTL,
     createUnlink,
+    createZadd,
 } from "./Commands";
 import {
     ClosingError,
@@ -943,6 +945,71 @@ export class BaseClient {
             args: option?.args,
         });
         return this.createWritePromise(scriptInvocation);
+    }
+
+    /** Adds members with their scores to the sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its score is updated.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersScoresMap - A mapping of members to their corresponding scores.
+     * @param options - The Zadd options.
+     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
+     * @returns The number of elements added to the sorted set.
+     * If `changed` is set, returns the number of elements updated in the sorted set.
+     *
+     * @example
+     *      await zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
+     *      2 (Indicates that two elements have been added or updated in the sorted set "mySortedSet".)
+     *
+     *      await zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \});
+     *      2 (Updates the scores of two existing members in the sorted set "existingSortedSet".)
+     *
+     */
+    public zadd(
+        key: string,
+        membersScoresMap: Record<string, number>,
+        options?: ZaddOptions,
+        changed?: boolean
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZadd(
+                key,
+                membersScoresMap,
+                options,
+                changed ? "CH" : undefined
+            )
+        );
+    }
+
+    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+     * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - A member in the sorted set to increment.
+     * @param increment - The score to increment the member.
+     * @param options - The Zadd options.
+     * @returns The score of the member.
+     * If there was a conflict with the options, the operation aborts and null is returned.
+     *
+     * @example
+     *      await zaddIncr("mySortedSet", member , 5.0)
+     *      5.0
+     *
+     *      await zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
+     *      null
+     */
+    public zaddIncr(
+        key: string,
+        member: string,
+        increment: number,
+        options?: ZaddOptions
+    ): Promise<number | null> {
+        return this.createWritePromise(
+            createZadd(key, { [member]: increment }, options, "INCR")
+        );
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

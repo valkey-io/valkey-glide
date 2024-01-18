@@ -1245,6 +1245,102 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it(
+        "zadd and zaddIncr test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "zadd and zaddIncr with NX XX test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(
+                    await client.zadd(key, membersScores, {
+                        conditionalChange: "onlyIfExists",
+                    })
+                ).toEqual(0);
+
+                expect(
+                    await client.zadd(key, membersScores, {
+                        conditionalChange: "onlyIfDoesNotExist",
+                    })
+                ).toEqual(3);
+
+                expect(
+                    await client.zaddIncr(key, "one", 5.0, {
+                        conditionalChange: "onlyIfDoesNotExist",
+                    })
+                ).toEqual(null);
+
+                expect(
+                    await client.zaddIncr(key, "one", 5.0, {
+                        conditionalChange: "onlyIfExists",
+                    })
+                ).toEqual(6.0);
+            });
+        },
+        config.timeout
+    );
+
+    it(
+        "zadd and zaddIncr with GT LT test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: -3, two: 2, three: 3 };
+
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                membersScores["one"] = 10;
+
+                expect(
+                    await client.zadd(
+                        key,
+                        membersScores,
+                        {
+                            updateOptions: "scoreGreaterThanCurrent",
+                        },
+                        true
+                    )
+                ).toEqual(1);
+
+                expect(
+                    await client.zadd(
+                        key,
+                        membersScores,
+                        {
+                            updateOptions: "scoreLessThanCurrent",
+                        },
+                        true
+                    )
+                ).toEqual(0);
+
+                expect(
+                    await client.zaddIncr(key, "one", -3.0, {
+                        updateOptions: "scoreLessThanCurrent",
+                    })
+                ).toEqual(7.0);
+
+                expect(
+                    await client.zaddIncr(key, "one", -3.0, {
+                        updateOptions: "scoreGreaterThanCurrent",
+                    })
+                ).toEqual(null);
+            });
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
