@@ -363,7 +363,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
         }
         None => {
             return Err(ClienUsageError::InternalError(
-                "Failed to get request arguemnts, no arguments are set".to_string(),
+                "Failed to get request arguments, no arguments are set".to_string(),
             ));
         }
     };
