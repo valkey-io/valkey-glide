@@ -87,15 +87,15 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Publish to NPM
-              if: matrix.build.NPM_PUBLISH == true
-              shell: bash
-              working-directory: ./node
-              run: |
-                  npm set "//registry.npmjs.org//:_authToken=$NODE_AUTH_TOKEN"
-                  npm publish --access public
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+            # - name: Publish to NPM
+            #   if: matrix.build.NPM_PUBLISH == true
+            #   shell: bash
+            #   working-directory: ./node
+            #   run: |
+            #       npm set "//registry.npmjs.org//:_authToken=$NODE_AUTH_TOKEN"
+            #       npm publish --access public
+            #   env:
+            #       NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Pack the Node package
               if: matrix.build.NPM_PUBLISH == true
