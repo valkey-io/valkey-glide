@@ -79,7 +79,7 @@ To install GLIDE for Redis using `pip`, follow these steps:
 'bar'
 ```
 
-## Documenation
+## Documentation
 
 Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
