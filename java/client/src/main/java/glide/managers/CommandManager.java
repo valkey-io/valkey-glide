@@ -26,9 +26,8 @@ public class CommandManager {
      */
     public <T> CompletableFuture<T> submitNewCommand(
             Command command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
-        // register callback
-        // create protobuf message from command
-        // submit async call
+        // write command request to channel
+        // when complete, convert the response to our expected type T using the given responseHandler
         return channel
                 .write(prepareRedisRequest(command.getRequestType(), command.getArguments()), true)
                 .thenApplyAsync(response -> responseHandler.apply(response));
