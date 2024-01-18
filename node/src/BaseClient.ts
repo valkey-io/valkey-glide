@@ -48,6 +48,7 @@ import {
     createTTL,
     createUnlink,
     createZadd,
+    createZrem,
 } from "./Commands";
 import {
     ClosingError,
@@ -1036,6 +1037,20 @@ export class BaseClient {
         return this.createWritePromise(
             createZadd(key, { [member]: increment }, options, "INCR")
         );
+    }
+
+    /** Removes the specified members from the sorted set stored at `key`.
+     * Specified members that are not a member of this set are ignored.
+     * See https://redis.io/commands/zrem/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members to remove from the sorted set.
+     * @returns The number of members that were removed from the sorted set, not including non-existing members.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zrem(key: string, members: string[]): Promise<number> {
+        return this.createWritePromise(createZrem(key, members));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
