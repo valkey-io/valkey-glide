@@ -1185,3 +1185,34 @@ class CoreCommands(Protocol):
             Optional[float],
             await self._execute_command(RequestType.Zadd, args),
         )
+
+    async def zrem(
+        self,
+        key: str,
+        members: List[str],
+    ) -> int:
+        """
+        Removes the specified members from the sorted set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+
+        See https://redis.io/commands/zrem/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members to remove from the sorted set.
+
+        Returns:
+            int: The number of members that were removed from the sorted set, not including non-existing members.
+            If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+            If `key` holds a value that is not a sorted set, an error is returned.
+
+        Examples:
+            >>> await zrem("my_sorted_set", ["member1", "member2"])
+                2  # Indicates that two members have been removed from the sorted set "my_sorted_set."
+            >>> await zrem("non_existing_sorted_set", ["member1", "member2"])
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.Zrem, [key] + members),
+        )
