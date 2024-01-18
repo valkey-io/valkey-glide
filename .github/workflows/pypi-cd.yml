@@ -5,7 +5,7 @@ name: Continuous Deployment
 on:
     push:
         tags:
-            - "v2.2"
+            - "v*.*"
 jobs:
     publish-binaries:
         name: Publish packages to PyPi
@@ -51,110 +51,110 @@ jobs:
                           NPM_PUBLISH: false,
                           PYPI_PUBLISH: true,
                       }
-        # steps:
-    #         - name: Checkout
-    #           uses: actions/checkout@v4
-    #           with:
-    #               submodules: "true"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
 
-    #         - name: Set the release version
-    #           shell: bash
-    #           run: |
-    #               echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+            - name: Set the release version
+              shell: bash
+              run: |
+                  echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
 
-    #         ###### PYTHON #####
+            ###### PYTHON #####
 
-    #         - name: Set the package version for Python
-    #           if: matrix.build.PYPI_PUBLISH == true
-    #           working-directory: ./python
-    #           run: |
-    #               SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-    #               sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
-    #               # Log the edited Cargo.toml file
-    #               cat Cargo.toml
+            - name: Set the package version for Python
+              if: matrix.build.PYPI_PUBLISH == true
+              working-directory: ./python
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  # Log the edited Cargo.toml file
+                  cat Cargo.toml
 
-    #         - name: Set up Python
-    #           if: matrix.build.PYPI_PUBLISH == true && !contains(matrix.build.RUNNER, 'self-hosted')
-    #           uses: actions/setup-python@v4
-    #           with:
-    #               python-version: "3.10"
+            - name: Set up Python
+              if: matrix.build.PYPI_PUBLISH == true && !contains(matrix.build.RUNNER, 'self-hosted')
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.10"
 
-    #         - name: Setup Python for self-hosted Ubuntu runners
-    #           if: matrix.build.PYPI_PUBLISH == true && contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
-    #           run: |
-    #               sudo apt update -y
-    #               sudo apt upgrade -y
-    #               sudo apt install python3 python3-venv python3-pip -y
+            - name: Setup Python for self-hosted Ubuntu runners
+              if: matrix.build.PYPI_PUBLISH == true && contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
+              run: |
+                  sudo apt update -y
+                  sudo apt upgrade -y
+                  sudo apt install python3 python3-venv python3-pip -y
 
-    #         - name: Build Python wrapper
-    #           if: matrix.build.PYPI_PUBLISH == true
-    #           uses: ./.github/workflows/build-python-wrapper
-    #           with:
-    #               os: ${{ matrix.build.OS }}
-    #               target: ${{ matrix.build.TARGET }}
-    #               publish: "true"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Build Python wrapper
+              if: matrix.build.PYPI_PUBLISH == true
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ${{ matrix.build.OS }}
+                  target: ${{ matrix.build.TARGET }}
+                  publish: "true"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    #         - name: Include protobuf files in the package
-    #           working-directory: ./python
-    #           if: matrix.build.PYPI_PUBLISH == true
-    #           run: |
-    #               SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-    #               sed -i $SED_FOR_MACOS '/pb2.py/d' .gitignore
-    #               # Log the edited .gitignore file
-    #               cat .gitignore
+            - name: Include protobuf files in the package
+              working-directory: ./python
+              if: matrix.build.PYPI_PUBLISH == true
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  sed -i $SED_FOR_MACOS '/pb2.py/d' .gitignore
+                  # Log the edited .gitignore file
+                  cat .gitignore
 
-    #         - name: Build Python wheels (linux)
-    #           if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'linux')
-    #           uses: PyO3/maturin-action@v1
-    #           with:
-    #               working-directory: ./python
-    #               target: ${{ matrix.build.TARGET }}
-    #               args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
-    #               manylinux: auto
-    #               container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
-    #               before-script-linux: |
-    #                   # Install protobuf compiler
-    #                   if [[ $(`which apt`) != '' ]]
-    #                   then 
-    #                     apt install protobuf-compiler -y
-    #                   else
-    #                     PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-    #                     curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip
-    #                     unzip protoc-3.15.8-linux-x86_64.zip -d $HOME/.local
-    #                     export PATH="$PATH:$HOME/.local/bin"
-    #                   fi
+            - name: Build Python wheels (linux)
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'linux')
+              uses: PyO3/maturin-action@v1
+              with:
+                  working-directory: ./python
+                  target: ${{ matrix.build.TARGET }}
+                  args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
+                  manylinux: auto
+                  container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
+                  before-script-linux: |
+                      # Install protobuf compiler
+                      if [[ $(`which apt`) != '' ]]
+                      then 
+                        apt install protobuf-compiler -y
+                      else
+                        PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                        curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip
+                        unzip protoc-3.15.8-linux-x86_64.zip -d $HOME/.local
+                        export PATH="$PATH:$HOME/.local/bin"
+                      fi
 
-    #         - name: Build Python wheels (macos)
-    #           if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
-    #           uses: PyO3/maturin-action@v1
-    #           with:
-    #               working-directory: ./python
-    #               target: ${{ matrix.build.TARGET }}
-    #               args: --release --strip --out wheels -i python3.10 python3.11 python3.12
+            - name: Build Python wheels (macos)
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
+              uses: PyO3/maturin-action@v1
+              with:
+                  working-directory: ./python
+                  target: ${{ matrix.build.TARGET }}
+                  args: --release --strip --out wheels -i python3.10 python3.11 python3.12
 
-    #         - name: Upload Python wheels
-    #           if: matrix.build.PYPI_PUBLISH == true
-    #           uses: actions/upload-artifact@v3
-    #           with:
-    #               name: wheels
-    #               path: python/wheels
-    #               if-no-files-found: error
+            - name: Upload Python wheels
+              if: matrix.build.PYPI_PUBLISH == true
+              uses: actions/upload-artifact@v3
+              with:
+                  name: wheels
+                  path: python/wheels
+                  if-no-files-found: error
 
-    # publish-to-pypi:
-    #     name: Publish the base PyPi package
-    #     runs-on: ubuntu-latest
-    #     needs: publish-binaries
-    #     steps:
-    #         - uses: actions/download-artifact@v3
-    #           with:
-    #               path: python/wheels
-    #               name: wheels
-    #         - name: Publish to PyPI
-    #           uses: PyO3/maturin-action@v1
-    #           env:
-    #               MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
-    #               MATURIN_REPOSITORY: pypi
-    #           with:
-    #               command: upload
-    #               args: --skip-existing python/wheels/*
+    publish-to-pypi:
+        name: Publish the base PyPi package
+        runs-on: ubuntu-latest
+        needs: publish-binaries
+        steps:
+            - uses: actions/download-artifact@v3
+              with:
+                  path: python/wheels
+                  name: wheels
+            - name: Publish to PyPI
+              uses: PyO3/maturin-action@v1
+              env:
+                  MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
+                  MATURIN_REPOSITORY: pypi
+              with:
+                  command: upload
+                  args: --skip-existing python/wheels/*
