@@ -46,20 +46,20 @@ public class RedisClient extends BaseClient implements BaseCommands {
         return new CommandManager(channelHandler);
     }
 
-  protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
-    super(connectionManager, commandManager);
-  }
+    protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
+        super(connectionManager, commandManager);
+    }
 
-  /**
-   * Executes a single custom command, without checking inputs. Every part of the command, including
-   * subcommands, should be added as a separate value in args.
-   *
-   * @param args command and arguments for the custom command call
-   * @return CompletableFuture with the response
-   */
-  public CompletableFuture<Object> customCommand(String[] args) {
-    Command command =
-        Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).arguments(args).build();
-    return commandManager.submitNewCommand(command, BaseCommands::handleObjectResponse);
-  }
+    /**
+     * Executes a single custom command, without checking inputs. Every part of the command, including
+     * subcommands, should be added as a separate value in args.
+     *
+     * @param args command and arguments for the custom command call
+     * @return CompletableFuture with the response
+     */
+    public CompletableFuture<Object> customCommand(String[] args) {
+        Command command =
+                Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).arguments(args).build();
+        return commandManager.submitNewCommand(command, BaseCommands::handleObjectResponse);
+    }
 }

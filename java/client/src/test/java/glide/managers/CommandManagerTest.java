@@ -25,246 +25,246 @@ import response.ResponseOuterClass.Response;
 
 public class CommandManagerTest {
 
-  ChannelHandler channelHandler;
+    ChannelHandler channelHandler;
 
-  CommandManager service;
+    CommandManager service;
 
-  Command command;
+    Command command;
 
-  @BeforeEach
-  void init() {
-    command = Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).build();
+    @BeforeEach
+    void init() {
+        command = Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).build();
 
-    channelHandler = mock(ChannelHandler.class);
-    service = new CommandManager(channelHandler);
-  }
+        channelHandler = mock(ChannelHandler.class);
+        service = new CommandManager(channelHandler);
+    }
 
-  @Test
-  public void submitNewCommand_returnObjectResult()
-      throws ExecutionException, InterruptedException {
+    @Test
+    public void submitNewCommand_returnObjectResult()
+            throws ExecutionException, InterruptedException {
 
-    // setup
-    long pointer = -1;
-    Response respPointerResponse = Response.newBuilder().setRespPointer(pointer).build();
-    Object respObject = mock(Object.class);
+        // setup
+        long pointer = -1;
+        Response respPointerResponse = Response.newBuilder().setRespPointer(pointer).build();
+        Object respObject = mock(Object.class);
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(respPointerResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(respPointerResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    CompletableFuture result =
-        service.submitNewCommand(
-            command, new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
-    Object respPointer = result.get();
+        // exercise
+        CompletableFuture result =
+                service.submitNewCommand(
+                        command, new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
+        Object respPointer = result.get();
 
-    // verify
-    assertEquals(respObject, respPointer);
-  }
+        // verify
+        assertEquals(respObject, respPointer);
+    }
 
-  @Test
-  public void submitNewCommand_returnNullResult() throws ExecutionException, InterruptedException {
-    // setup
-    Response respPointerResponse = Response.newBuilder().build();
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(respPointerResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+    @Test
+    public void submitNewCommand_returnNullResult() throws ExecutionException, InterruptedException {
+        // setup
+        Response respPointerResponse = Response.newBuilder().build();
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(respPointerResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    CompletableFuture result =
-        service.submitNewCommand(
-            command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
-    Object respPointer = result.get();
+        // exercise
+        CompletableFuture result =
+                service.submitNewCommand(
+                        command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
+        Object respPointer = result.get();
 
-    assertNull(respPointer);
-  }
+        assertNull(respPointer);
+    }
 
-  @Test
-  public void submitNewCommand_returnStringResult()
-      throws ExecutionException, InterruptedException {
+    @Test
+    public void submitNewCommand_returnStringResult()
+            throws ExecutionException, InterruptedException {
 
-    // setup
-    long pointer = 123;
-    String testString = "TEST STRING";
+        // setup
+        long pointer = 123;
+        String testString = "TEST STRING";
 
-    Response respPointerResponse = Response.newBuilder().setRespPointer(pointer).build();
+        Response respPointerResponse = Response.newBuilder().setRespPointer(pointer).build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(respPointerResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(respPointerResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    CompletableFuture result =
-        service.submitNewCommand(
-            command, new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
-    Object respPointer = result.get();
+        // exercise
+        CompletableFuture result =
+                service.submitNewCommand(
+                        command, new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
+        Object respPointer = result.get();
 
-    // verify
-    assertTrue(respPointer instanceof String);
-    assertEquals(testString, respPointer);
-  }
+        // verify
+        assertTrue(respPointer instanceof String);
+        assertEquals(testString, respPointer);
+    }
 
-  @Test
-  public void submitNewCommand_throwClosingException() {
+    @Test
+    public void submitNewCommand_throwClosingException() {
 
-    // setup
-    String errorMsg = "Closing";
+        // setup
+        String errorMsg = "Closing";
 
-    Response closingErrorResponse = Response.newBuilder().setClosingError(errorMsg).build();
+        Response closingErrorResponse = Response.newBuilder().setClosingError(errorMsg).build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(closingErrorResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(closingErrorResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    ExecutionException e =
-        assertThrows(
-            ExecutionException.class,
-            () -> {
-              CompletableFuture result =
-                  service.submitNewCommand(
-                      command, new BaseCommandResponseResolver((ptr) -> new Object()));
-              result.get();
-            });
+        // exercise
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture result =
+                                    service.submitNewCommand(
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                            result.get();
+                        });
 
-    // verify
-    assertTrue(e.getCause() instanceof ClosingException);
-    assertEquals(errorMsg, e.getCause().getMessage());
-  }
+        // verify
+        assertTrue(e.getCause() instanceof ClosingException);
+        assertEquals(errorMsg, e.getCause().getMessage());
+    }
 
-  @Test
-  public void submitNewCommand_throwConnectionException() {
+    @Test
+    public void submitNewCommand_throwConnectionException() {
 
-    // setup
-    int disconnectedType = 3;
-    String errorMsg = "Disconnected";
+        // setup
+        int disconnectedType = 3;
+        String errorMsg = "Disconnected";
 
-    Response respPointerResponse =
-        Response.newBuilder()
-            .setRequestError(
-                RequestError.newBuilder()
-                    .setTypeValue(disconnectedType)
-                    .setMessage(errorMsg)
-                    .build())
-            .build();
+        Response respPointerResponse =
+                Response.newBuilder()
+                        .setRequestError(
+                                RequestError.newBuilder()
+                                        .setTypeValue(disconnectedType)
+                                        .setMessage(errorMsg)
+                                        .build())
+                        .build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(respPointerResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(respPointerResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    ExecutionException e =
-        assertThrows(
-            ExecutionException.class,
-            () -> {
-              CompletableFuture result =
-                  service.submitNewCommand(
-                      command, new BaseCommandResponseResolver((ptr) -> new Object()));
-              result.get();
-            });
+        // exercise
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture result =
+                                    service.submitNewCommand(
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                            result.get();
+                        });
 
-    // verify
-    assertTrue(e.getCause() instanceof ConnectionException);
-    assertEquals(errorMsg, e.getCause().getMessage());
-  }
+        // verify
+        assertTrue(e.getCause() instanceof ConnectionException);
+        assertEquals(errorMsg, e.getCause().getMessage());
+    }
 
-  @Test
-  public void submitNewCommand_throwTimeoutException() {
+    @Test
+    public void submitNewCommand_throwTimeoutException() {
 
-    // setup
-    int timeoutType = 2;
-    String errorMsg = "Timeout";
+        // setup
+        int timeoutType = 2;
+        String errorMsg = "Timeout";
 
-    Response timeoutErrorResponse =
-        Response.newBuilder()
-            .setRequestError(
-                RequestError.newBuilder().setTypeValue(timeoutType).setMessage(errorMsg).build())
-            .build();
+        Response timeoutErrorResponse =
+                Response.newBuilder()
+                        .setRequestError(
+                                RequestError.newBuilder().setTypeValue(timeoutType).setMessage(errorMsg).build())
+                        .build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(timeoutErrorResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(timeoutErrorResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    ExecutionException e =
-        assertThrows(
-            ExecutionException.class,
-            () -> {
-              CompletableFuture result =
-                  service.submitNewCommand(
-                      command, new BaseCommandResponseResolver((ptr) -> new Object()));
-              result.get();
-            });
+        // exercise
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture result =
+                                    service.submitNewCommand(
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                            result.get();
+                        });
 
-    // verify
-    assertTrue(e.getCause() instanceof TimeoutException);
-    assertEquals(errorMsg, e.getCause().getMessage());
-  }
+        // verify
+        assertTrue(e.getCause() instanceof TimeoutException);
+        assertEquals(errorMsg, e.getCause().getMessage());
+    }
 
-  @Test
-  public void submitNewCommand_throwExecAbortException() {
-    // setup
-    int execAbortType = 1;
-    String errorMsg = "ExecAbort";
+    @Test
+    public void submitNewCommand_throwExecAbortException() {
+        // setup
+        int execAbortType = 1;
+        String errorMsg = "ExecAbort";
 
-    Response execAbortErrorResponse =
-        Response.newBuilder()
-            .setRequestError(
-                RequestError.newBuilder().setTypeValue(execAbortType).setMessage(errorMsg).build())
-            .build();
+        Response execAbortErrorResponse =
+                Response.newBuilder()
+                        .setRequestError(
+                                RequestError.newBuilder().setTypeValue(execAbortType).setMessage(errorMsg).build())
+                        .build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(execAbortErrorResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(execAbortErrorResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    ExecutionException e =
-        assertThrows(
-            ExecutionException.class,
-            () -> {
-              CompletableFuture result =
-                  service.submitNewCommand(
-                      command, new BaseCommandResponseResolver((ptr) -> new Object()));
-              result.get();
-            });
+        // exercise
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture result =
+                                    service.submitNewCommand(
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                            result.get();
+                        });
 
-    // verify
-    assertTrue(e.getCause() instanceof ExecAbortException);
-    assertEquals(errorMsg, e.getCause().getMessage());
-  }
+        // verify
+        assertTrue(e.getCause() instanceof ExecAbortException);
+        assertEquals(errorMsg, e.getCause().getMessage());
+    }
 
-  @Test
-  public void submitNewCommand_handledUnspecifiedError() {
-    // setup
-    int unspecifiedType = 0;
-    String errorMsg = "Unspecified";
+    @Test
+    public void submitNewCommand_handledUnspecifiedError() {
+        // setup
+        int unspecifiedType = 0;
+        String errorMsg = "Unspecified";
 
-    Response unspecifiedErrorResponse =
-        Response.newBuilder()
-            .setRequestError(
-                RequestError.newBuilder()
-                    .setTypeValue(unspecifiedType)
-                    .setMessage(errorMsg)
-                    .build())
-            .build();
+        Response unspecifiedErrorResponse =
+                Response.newBuilder()
+                        .setRequestError(
+                                RequestError.newBuilder()
+                                        .setTypeValue(unspecifiedType)
+                                        .setMessage(errorMsg)
+                                        .build())
+                        .build();
 
-    CompletableFuture<Response> future = new CompletableFuture<>();
-    future.complete(unspecifiedErrorResponse);
-    when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        future.complete(unspecifiedErrorResponse);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-    // exercise
-    ExecutionException executionException =
-        assertThrows(
-            ExecutionException.class,
-            () -> {
-              CompletableFuture result =
-                  service.submitNewCommand(
-                      command, new BaseCommandResponseResolver((ptr) -> new Object()));
-              result.get();
-            });
+        // exercise
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture result =
+                                    service.submitNewCommand(
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                            result.get();
+                        });
 
-    // verify
-    assertTrue(executionException.getCause() instanceof RedisException);
-    assertEquals(errorMsg, executionException.getCause().getMessage());
-  }
+        // verify
+        assertTrue(executionException.getCause() instanceof RedisException);
+        assertEquals(errorMsg, executionException.getCause().getMessage());
+    }
 }
