@@ -58,7 +58,7 @@ public class ChannelHandler {
                         .channel(domainSocketChannelClass)
                         .handler(channelInitializer)
                         .connect(domainSocketAddress)
-                        // TODO call here .sync() if needed or remove this comment
+                        .syncUninterruptibly()
                         .channel();
         this.callbackDispatcher = callbackDispatcher;
     }
