@@ -55,10 +55,10 @@ mod tests {
         let contents = get_file_contents(identifier.as_str());
         assert!(
             contents.contains(identifier.as_str()),
-            "Contens: {}",
+            "Contents: {}",
             contents
         );
-        assert!(contents.contains("foo"), "Contens: {}", contents);
+        assert!(contents.contains("foo"), "Contents: {}", contents);
     }
 
     #[test]
@@ -73,10 +73,10 @@ mod tests {
         let contents = get_file_contents(identifier.as_str());
         assert!(
             contents.contains(identifier.as_str()),
-            "Contens: {}",
+            "Contents: {}",
             contents
         );
-        assert!(contents.contains("foo"), "Contens: {}", contents);
+        assert!(contents.contains("foo"), "Contents: {}", contents);
         assert!(!contents.contains("boo"));
     }
 
