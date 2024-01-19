@@ -45,8 +45,6 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
-
-        // teardown
     }
 
     @Test

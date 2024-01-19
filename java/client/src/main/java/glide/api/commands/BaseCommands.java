@@ -10,7 +10,7 @@ public interface BaseCommands {
 
     /**
      * Extracts the response from the Protobuf response and either throws an exception or returns the
-     * appropriate response has an Object
+     * appropriate response as an Object
      *
      * @param response Redis protobuf message
      * @return Response Object

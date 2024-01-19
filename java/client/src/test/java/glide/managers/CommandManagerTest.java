@@ -76,6 +76,7 @@ public class CommandManagerTest {
                         command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
 
+        // verify
         assertNull(respPointer);
     }
 
