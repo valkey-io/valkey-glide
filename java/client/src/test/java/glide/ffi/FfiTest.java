@@ -1,10 +1,9 @@
 package glide.ffi;
 
-import static java.lang.Math.toIntExact;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.ffi.resolvers.RedisValueResolver;
@@ -32,7 +31,7 @@ public class FfiTest {
 
   public static native long createLeakedLongArray(long[] value);
 
-  public static native long createLeakedMap();
+  public static native long createLeakedMap(long[] keys, long[] values);
 
   public static native long createLeakedDouble(double value);
 
@@ -65,44 +64,17 @@ public class FfiTest {
   }
 
   @ParameterizedTest
-  @ValueSource(longs = {0L, 100L, 774L})
+  @ValueSource(longs = {0L, 100L, 774L, Integer.MAX_VALUE + 1, Integer.MIN_VALUE - 1})
   public void redisValueToJavaValue_Int(Long input) {
     long ptr = FfiTest.createLeakedInt(input);
     Object longValue = RedisValueResolver.valueFromPointer(ptr);
+    assertTrue(longValue instanceof Long);
     assertEquals(input, longValue);
   }
 
   @Test
-  public void redisValueToJavaValue_CastToIntegerMax() {
-    long ptr = FfiTest.createLeakedInt(Integer.MAX_VALUE);
-    Object longValue = RedisValueResolver.valueFromPointer(ptr);
-    toIntExact((Long) longValue);
-  }
-
-  @Test
-  public void redisValueToJavaValue_CastToIntegerTooLarge() {
-    long ptr = FfiTest.createLeakedInt(((long) Integer.MAX_VALUE) + 1);
-    Object longValue = RedisValueResolver.valueFromPointer(ptr);
-    assertThrows(ArithmeticException.class, () -> toIntExact((Long) longValue));
-  }
-
-  @Test
-  public void redisValueToJavaValue_CastToIntegerMin() {
-    long ptr = FfiTest.createLeakedInt(Integer.MIN_VALUE);
-    Object longValue = RedisValueResolver.valueFromPointer(ptr);
-    toIntExact((Long) longValue);
-  }
-
-  @Test
-  public void redisValueToJavaValue_CastToIntegerTooSmall() {
-    long ptr = FfiTest.createLeakedInt(((long) Integer.MIN_VALUE) - 1);
-    Object longValue = RedisValueResolver.valueFromPointer(ptr);
-    assertThrows(ArithmeticException.class, () -> toIntExact((Long) longValue));
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"hello", "cat", "dog"})
-  public void redisValueToJavaValue_BulkString(String input) {
+  public void redisValueToJavaValue_BulkString() {
+    String input = "😀\n💎\n🗿";
     byte[] bulkString = input.getBytes();
     long ptr = FfiTest.createLeakedBulkString(bulkString);
     Object bulkStringValue = RedisValueResolver.valueFromPointer(ptr);
@@ -116,19 +88,21 @@ public class FfiTest {
     Object longArrayValue = RedisValueResolver.valueFromPointer(ptr);
     assertTrue(longArrayValue instanceof Object[]);
     Object[] result = (Object[]) longArrayValue;
-    assertAll(
-        () -> assertEquals(1L, result[0]),
-        () -> assertEquals(2L, result[1]),
-        () -> assertEquals(3L, result[2]));
+    assertArrayEquals(new Object[] {1L, 2L, 3L}, result);
   }
 
   @Test
   public void redisValueToJavaValue_Map() {
-    long ptr = FfiTest.createLeakedMap();
+    long[] keys = {12L, 14L, 23L};
+    long[] values = {1L, 2L, 3L};
+    long ptr = FfiTest.createLeakedMap(keys, values);
     Object mapValue = RedisValueResolver.valueFromPointer(ptr);
     assertTrue(mapValue instanceof HashMap);
     HashMap<Object, Object> result = (HashMap<Object, Object>) mapValue;
-    assertAll(() -> assertEquals(2L, result.get(1L)), () -> assertEquals("hi", result.get(3L)));
+    assertAll(
+        () -> assertEquals(1L, result.get(12L)),
+        () -> assertEquals(2L, result.get(14L)),
+        () -> assertEquals(3L, result.get(23L)));
   }
 
   @ParameterizedTest
