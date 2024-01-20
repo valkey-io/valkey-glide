@@ -3,6 +3,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    InfoSection,
     UpdateOptions,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
@@ -42,6 +43,7 @@ __all__ = [
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
+    "InfoSection",
     "UpdateOptions",
     "Logger",
     "LogLevel",
