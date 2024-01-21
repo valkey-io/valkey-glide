@@ -79,6 +79,11 @@ jobs:
               with:
                   python-version: "3.10"
 
+            - name: Set up Python older versions for MacOS
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
+              run: |
+                brew install python@3.8 python@3.9
+
             - name: Setup Python for self-hosted Ubuntu runners
               if: matrix.build.PYPI_PUBLISH == true && contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
               run: |
@@ -131,7 +136,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i python3.10 python3.11 python3.12
+                  args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
 
             - name: Upload Python wheels
               if: matrix.build.PYPI_PUBLISH == true
