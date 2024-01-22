@@ -126,10 +126,10 @@ export type BaseClientConfiguration = {
     }[];
     /**
      * `"auto"` if communication with the cluster should use Transport Level Security, with automatic loading of certificates.
-     * Should match the TLS configuration of the server/cluster,
-     * otherwise the connection attempt will fail.
+     * `"disabled"` if no TLS should be used.
+     * Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
      */
-    tlsMode?: "auto";
+    tlsMode?: "auto" | "disabled";
     /**
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.

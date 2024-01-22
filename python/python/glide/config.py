@@ -53,6 +53,11 @@ class ProtocolVersion(Enum):
 
 class TlsMode(Enum):
     """
+    Disabled TLS mode.
+    """
+
+    Disabled = 0
+    """
     Enabled TLS mode, with automatic loading of certificates.
     """
 
