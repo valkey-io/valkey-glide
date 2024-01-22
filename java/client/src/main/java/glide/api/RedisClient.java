@@ -22,16 +22,23 @@ public class RedisClient extends BaseClient {
      * @return a Future to connect and return a RedisClient
      */
     public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
-        ChannelHandler channelHandler = buildChannelHandler();
-        ConnectionManager connectionManager = buildConnectionManager(channelHandler);
-        CommandManager commandManager = buildCommandManager(channelHandler);
-        // TODO: Support exception throwing, including interrupted exceptions
-        return connectionManager
-                .connectToRedis(config)
-                .thenApply(ignore -> new RedisClient(connectionManager, commandManager));
+        try {
+            ChannelHandler channelHandler = buildChannelHandler();
+            ConnectionManager connectionManager = buildConnectionManager(channelHandler);
+            CommandManager commandManager = buildCommandManager(channelHandler);
+            // TODO: Support exception throwing, including interrupted exceptions
+            return connectionManager
+                    .connectToRedis(config)
+                    .thenApply(ignore -> new RedisClient(connectionManager, commandManager));
+        } catch (InterruptedException e) {
+            // Something bad happened while we were establishing netty connection to UDS
+            var future = new CompletableFuture<RedisClient>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
-    protected static ChannelHandler buildChannelHandler() {
+    protected static ChannelHandler buildChannelHandler() throws InterruptedException {
         CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
         return new ChannelHandler(callbackDispatcher, getSocket());
     }

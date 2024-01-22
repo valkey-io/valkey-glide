@@ -28,7 +28,8 @@ public class ChannelHandler {
     private final CallbackDispatcher callbackDispatcher;
 
     /** Open a new channel for a new client. */
-    public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath) {
+    public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath)
+            throws InterruptedException {
         this(
                 ThreadPoolAllocator.createOrGetNettyThreadPool(THREAD_POOL_NAME, Optional.empty()),
                 Platform.getClientUdsNettyChannelType(),
@@ -51,14 +52,15 @@ public class ChannelHandler {
             Class<? extends DomainSocketChannel> domainSocketChannelClass,
             ChannelInitializer<UnixChannel> channelInitializer,
             DomainSocketAddress domainSocketAddress,
-            CallbackDispatcher callbackDispatcher) {
+            CallbackDispatcher callbackDispatcher)
+            throws InterruptedException {
         channel =
                 new Bootstrap()
                         .group(eventLoopGroup)
                         .channel(domainSocketChannelClass)
                         .handler(channelInitializer)
                         .connect(domainSocketAddress)
-                        .syncUninterruptibly()
+                        .sync()
                         .channel();
         this.callbackDispatcher = callbackDispatcher;
     }
