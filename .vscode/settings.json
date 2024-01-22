@@ -2,7 +2,7 @@
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+        "source.organizeImports": "always"
     },
     "editor.formatOnSave": true,
     "files.insertFinalNewline": true,
