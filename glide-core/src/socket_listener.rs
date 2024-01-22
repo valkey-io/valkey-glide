@@ -212,6 +212,7 @@ async fn write_result(
                 ))
             } else {
                 log_warn("received error", error_message.as_str());
+                log_debug("received error", format!("for callback {}", callback_index));
                 let mut request_error = response::RequestError::default();
                 if err.is_connection_dropped() {
                     request_error.type_ = response::RequestErrorType::Disconnect.into();
@@ -500,9 +501,18 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                     }
                 }
             },
-            None => Err(ClienUsageError::InternalError(
-                "Received empty request".to_string(),
-            )),
+            None => {
+                log_debug(
+                    "received error",
+                    format!(
+                        "Received empty request for callback {}",
+                        request.callback_idx
+                    ),
+                );
+                Err(ClienUsageError::InternalError(
+                    "Received empty request".to_string(),
+                ))
+            }
         };
 
         let _res = write_result(result, request.callback_idx, &writer).await;
