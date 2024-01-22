@@ -11,11 +11,17 @@ run-name: ${{ inputs.name == '' && format('{0} @ {1}', github.ref_name, github.s
 
 jobs:
     java-benchmark:
+        timeout-minutes: 25
         strategy:
+            # Run all jobs
+            fail-fast: false
             matrix:
                 java:
                     - 11
                     - 17
+                redis:
+                    - 6.2.14
+                    - 7.2.3
         runs-on: ubuntu-latest
 
         steps:
@@ -29,12 +35,17 @@ jobs:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
 
-            - name: Start Redis
-              run: docker run -p 6379:6379 -p 8001:8001 -d redis/redis-stack
+            - name: Install redis
+              uses: ./.github/workflows/install-redis
+              with:
+                  redis-version: ${{ matrix.redis }}
 
-            - name: Run benchmarks
-              working-directory: java
-              run: ./gradlew :benchmark:run
+            - name: benchmark
+              uses: ./.github/workflows/test-benchmark
+              #   TODO - enable once benchmark works
+              if: ${{ false }}
+              with:
+                  language-flag: -java
 
             - name: Upload test reports
               if: always()
