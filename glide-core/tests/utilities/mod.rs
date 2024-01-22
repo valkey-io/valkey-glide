@@ -305,7 +305,6 @@ where
             Ok(())
         }
         Value::Set(ref values) => encode_iter(values, writer, "~"),
-        // Value::Nil => write!(writer, "_\r\n"), //TODO is it okey to use $-1 in resp3 ?
         Value::Double(val) => write!(writer, ",{}\r\n", val),
         Value::Boolean(v) => {
             if v {

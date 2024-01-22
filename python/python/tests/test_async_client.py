@@ -10,11 +10,12 @@ from typing import Dict, List, TypeVar, Union, cast
 import pytest
 from glide import ClosingError, RequestError, TimeoutError
 from glide.async_commands.core import (
-    ConditionalSet,
+    ConditionalChange,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
     InfoSection,
+    UpdateOptions,
 )
 from glide.config import ProtocolVersion, RedisCredentials
 from glide.constants import OK
@@ -288,16 +289,16 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
         res = await redis_client.set(
-            key, value, conditional_set=ConditionalSet.ONLY_IF_EXISTS
+            key, value, conditional_set=ConditionalChange.ONLY_IF_EXISTS
         )
         assert res is None
         res = await redis_client.set(
-            key, value, conditional_set=ConditionalSet.ONLY_IF_DOES_NOT_EXIST
+            key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res == OK
         assert await redis_client.get(key) == value
         res = await redis_client.set(
-            key, "foobar", conditional_set=ConditionalSet.ONLY_IF_DOES_NOT_EXIST
+            key, "foobar", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res is None
         assert await redis_client.get(key) == value
@@ -680,7 +681,7 @@ class TestCommands:
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.lpop(key) == value_list[-1]
         assert await redis_client.lrange(key, 0, -1) == value_list[-2::-1]
-        assert await redis_client.lpop(key, 2) == value_list[-2:0:-1]
+        assert await redis_client.lpop_count(key, 2) == value_list[-2:0:-1]
         assert await redis_client.lrange("non_existing_key", 0, -1) == []
         assert await redis_client.lpop("non_existing_key") is None
 
@@ -711,7 +712,7 @@ class TestCommands:
         assert await redis_client.rpush(key, value_list) == 4
         assert await redis_client.rpop(key) == value_list[-1]
 
-        assert await redis_client.rpop(key, 2) == value_list[-2:0:-1]
+        assert await redis_client.rpop_count(key, 2) == value_list[-2:0:-1]
         assert await redis_client.rpop("non_existing_key") is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -948,6 +949,111 @@ class TestCommands:
             await redis_client.pexpireat(key, int(time.time() * 1000) + 50000) == False
         )
         assert await redis_client.ttl(key) == -2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zadd_zaddincr(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await redis_client.zadd_incr(key, member="one", increment=2) == 3.0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zadd_nx_xx(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert (
+            await redis_client.zadd(
+                key,
+                members_scores=members_scores,
+                existing_options=ConditionalChange.ONLY_IF_EXISTS,
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zadd(
+                key,
+                members_scores=members_scores,
+                existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            )
+            == 3
+        )
+
+        assert (
+            await redis_client.zadd_incr(
+                key,
+                member="one",
+                increment=5.0,
+                existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            )
+            == None
+        )
+
+        assert (
+            await redis_client.zadd_incr(
+                key,
+                member="one",
+                increment=5.0,
+                existing_options=ConditionalChange.ONLY_IF_EXISTS,
+            )
+            == 6.0
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zadd_gt_lt(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": -3, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        members_scores["one"] = 10
+        assert (
+            await redis_client.zadd(
+                key,
+                members_scores=members_scores,
+                update_condition=UpdateOptions.GREATER_THAN,
+                changed=True,
+            )
+            == 1
+        )
+
+        assert (
+            await redis_client.zadd(
+                key,
+                members_scores=members_scores,
+                update_condition=UpdateOptions.LESS_THAN,
+                changed=True,
+            )
+            == 0
+        )
+
+        assert (
+            await redis_client.zadd_incr(
+                key,
+                member="one",
+                increment=-3.0,
+                update_condition=UpdateOptions.LESS_THAN,
+            )
+            == 7.0
+        )
+
+        assert (
+            await redis_client.zadd_incr(
+                key,
+                member="one",
+                increment=-3.0,
+                update_condition=UpdateOptions.GREATER_THAN,
+            )
+            == None
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zrem(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zrem(key, ["one"]) == 1
+        assert await redis_client.zrem(key, ["one", "two", "three"]) == 2
+
+        assert await redis_client.zrem("non_existing_set", ["member"]) == 0
 
 
 class TestCommandsUnitTests:

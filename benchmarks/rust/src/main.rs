@@ -11,9 +11,8 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{atomic::AtomicUsize, Arc},
-    time::Duration,
+    time::{Duration, Instant},
 };
-use stopwatch::Stopwatch;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -102,7 +101,7 @@ async fn perform_benchmark(args: Args) {
             })
             .await;
 
-        let mut stopwatch = stopwatch::Stopwatch::start_new();
+        let start = Instant::now();
         let results = join_all((0..*concurrent_tasks_count).map(|_| async {
             single_benchmark_task(
                 &connections,
@@ -114,7 +113,7 @@ async fn perform_benchmark(args: Args) {
             .await
         }))
         .await;
-        stopwatch.stop();
+        let elapsed = start.elapsed();
         let combined_results = results.into_iter().fold(HashMap::new(), |mut acc, map| {
             if acc.is_empty() {
                 return map;
@@ -139,7 +138,7 @@ async fn perform_benchmark(args: Args) {
         );
         results_json.insert(
             "tps".to_string(),
-            Value::Number((number_of_operations as i64 * 1000 / stopwatch.elapsed_ms()).into()),
+            Value::Number((number_of_operations as i64 * 1000 / elapsed.as_millis() as i64).into()),
         );
         results_json.insert(
             "client_count".to_string(),
@@ -236,7 +235,6 @@ async fn single_benchmark_task(
     data_size: usize,
 ) -> HashMap<ChosenAction, Vec<Duration>> {
     let mut buffer = itoa::Buffer::new();
-    let mut stopwatch = Stopwatch::new();
     let mut results = HashMap::new();
     results.insert(
         ChosenAction::GetNonExisting,
@@ -257,10 +255,10 @@ async fn single_benchmark_task(
         }
         let index = current_op % connections.len();
         let mut connection = connections[index].clone();
-        stopwatch.restart();
+        let start = Instant::now();
         let action = perform_operation(&mut connection, &mut buffer, data_size).await;
-        stopwatch.stop();
-        results.get_mut(&action).unwrap().push(stopwatch.elapsed());
+        let elapsed = start.elapsed();
+        results.get_mut(&action).unwrap().push(elapsed);
     }
 }
 

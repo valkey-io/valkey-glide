@@ -217,7 +217,7 @@ impl ReconnectingConnection {
                         }
                         {
                             let mut guard = connection_clone.inner.state.lock().unwrap();
-                            log_debug("reconnect", "completed succesfully");
+                            log_debug("reconnect", "completed successfully");
                             connection_clone
                                 .inner
                                 .backend

@@ -2,10 +2,11 @@ import threading
 from typing import List, Mapping, Optional, Tuple, Union
 
 from glide.async_commands.core import (
-    ConditionalSet,
+    ConditionalChange,
     ExpireOptions,
     ExpirySet,
     InfoSection,
+    UpdateOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -48,15 +49,15 @@ class BaseTransaction:
         self,
         key: str,
         value: str,
-        conditional_set: Union[ConditionalSet, None] = None,
+        conditional_set: Union[ConditionalChange, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
     ):
         args = [key, value]
         if conditional_set:
-            if conditional_set == ConditionalSet.ONLY_IF_EXISTS:
+            if conditional_set == ConditionalChange.ONLY_IF_EXISTS:
                 args.append("XX")
-            if conditional_set == ConditionalSet.ONLY_IF_DOES_NOT_EXIST:
+            if conditional_set == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
                 args.append("NX")
         if return_old_value:
             args.append("GET")
@@ -773,6 +774,130 @@ class BaseTransaction:
             int: TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
         """
         self.append_command(RequestType.TTL, [key])
+
+    def zadd(
+        self,
+        key: str,
+        members_scores: Mapping[str, float],
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+        changed: bool = False,
+    ):
+        """
+        Adds members with their scores to the sorted set stored at `key`.
+        If a member is already a part of the sorted set, its score is updated.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_scores (Mapping[str, float]): A mapping of members to their corresponding scores.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            update_condition (Optional[UpdateOptions]): Options for updating scores.
+                - GT: Only update scores greater than the current values.
+                - LT: Only update scores less than the current values.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Commands response:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        if changed:
+            args.append("CH")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        members_scores_list = [
+            str(item) for pair in members_scores.items() for item in pair[::-1]
+        ]
+        args += members_scores_list
+
+        self.append_command(RequestType.Zadd, args)
+
+    def zadd_incr(
+        self,
+        key: str,
+        member: str,
+        increment: float,
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+    ):
+        """
+        Increments the score of member in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+        If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): A member in the sorted set to increment.
+            increment (float): The score to increment the member.
+            existing_options (Optional[ConditionalChange]): Options for handling the member's existence.
+                - NX: Only increment a member that doesn't exist.
+                - XX: Only increment an existing member.
+            update_condition (Optional[UpdateOptions]): Options for updating the score.
+                - GT: Only increment the score of the member if the new score will be greater than the current score.
+                - LT: Only increment (decrement) the score of the member if the new score will be less than the current score.
+
+        Commands response:
+            Optional[float]: The score of the member.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and null is returned.
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        args.append("INCR")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        args += [str(increment), member]
+        self.append_command(RequestType.Zadd, args)
+
+    def zrem(
+        self,
+        key: str,
+        members: List[str],
+    ):
+        """
+        Removes the specified members from the sorted set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+
+        See https://redis.io/commands/zrem/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members to remove from the sorted set.
+
+        Commands response:
+            int: The number of members that were removed from the sorted set, not including non-existing members.
+            If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+            If `key` holds a value that is not a sorted set, an error is returned.
+        """
+        self.append_command(RequestType.Zrem, [key] + members)
 
 
 class Transaction(BaseTransaction):

@@ -19,14 +19,15 @@ from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
 
-class ConditionalSet(Enum):
-    """SET option: A condition to the "SET" command.
-    - ONLY_IF_EXISTS - Only set the key if it already exist. Equivalent to `XX` in the Redis API
-    - ONLY_IF_DOES_NOT_EXIST - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API
+class ConditionalChange(Enum):
+    """
+    A condition to the "SET" and "ZADD" commands.
+    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
+    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
 
-    ONLY_IF_EXISTS = 0  # Equivalent to `XX` in the Redis API
-    ONLY_IF_DOES_NOT_EXIST = 1  # Equivalent to `NX` in the Redis API
+    ONLY_IF_EXISTS = "XX"
+    ONLY_IF_DOES_NOT_EXIST = "NX"
 
 
 class ExpiryType(Enum):
@@ -106,6 +107,18 @@ class ExpireOptions(Enum):
     NewExpiryLessThanCurrent = "LT"
 
 
+class UpdateOptions(Enum):
+    """
+    Options for updating elements of a sorted set key.
+
+    - LESS_THAN: Only update existing elements if the new score is less than the current score.
+    - GREATER_THAN: Only update existing elements if the new score is greater than the current score.
+    """
+
+    LESS_THAN = "LT"
+    GREATER_THAN = "GT"
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -179,20 +192,20 @@ class CoreCommands(Protocol):
         self,
         key: str,
         value: str,
-        conditional_set: Union[ConditionalSet, None] = None,
+        conditional_set: Union[ConditionalChange, None] = None,
         expiry: Union[ExpirySet, None] = None,
         return_old_value: bool = False,
-    ) -> TResult:
+    ) -> Optional[str]:
         """Set the given key with the given value. Return value is dependent on the passed options.
             See https://redis.io/commands/set/ for details.
 
             @example - Set "foo" to "bar" only if "foo" already exists, and set the key expiration to 5 seconds:
 
-                connection.set("foo", "bar", conditional_set=ConditionalSet.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+                connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
         Args:
             key (str): the key to store.
             value (str): the value to store with the given key.
-            conditional_set (Union[ConditionalSet, None], optional): set the key only if the given condition is met.
+            conditional_set (Union[ConditionalChange, None], optional): set the key only if the given condition is met.
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
             expiry (Union[Expiry, None], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
@@ -200,22 +213,21 @@ class CoreCommands(Protocol):
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
         Returns:
-            TRESULT:
+            Optional[str]:
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
                 If return_old_value is set, return the old value as a string.
         """
         args = [key, value]
         if conditional_set:
-            if conditional_set == ConditionalSet.ONLY_IF_EXISTS:
-                args.append("XX")
-            if conditional_set == ConditionalSet.ONLY_IF_DOES_NOT_EXIST:
-                args.append("NX")
+            args.append(conditional_set.value)
         if return_old_value:
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return await self._execute_command(RequestType.SetString, args)
+        return cast(
+            Optional[str], await self._execute_command(RequestType.SetString, args)
+        )
 
     async def get(self, key: str) -> Optional[str]:
         """Get the value associated with the given key, or null if no such value exists.
@@ -568,37 +580,55 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
-    async def lpop(
-        self, key: str, count: Optional[int] = None
-    ) -> Optional[Union[str, List[str]]]:
+    async def lpop(self, key: str) -> Optional[str]:
         """Remove and return the first elements of the list stored at `key`.
-        By default, the command pops a single element from the beginning of the list.
-        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        The command pops a single element from the beginning of the list.
         See https://redis.io/commands/lpop/ for details.
 
         Args:
             key (str): The key of the list.
-            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
 
         Returns:
-            Optional[Union[str, List[str]]: The value of the first element if `count` is not provided.
-            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            Optional[str]: The value of the first element.
             If `key` does not exist, None will be returned.
             If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.lpop("my_list")
                 "value1"
-            >>> await client.lpop("my_list", 2)
-                ["value2", "value3"]
             >>> await client.lpop("non_exiting_key")
                 None
         """
 
-        args: List[str] = [key] if count is None else [key, str(count)]
         return cast(
-            Optional[Union[str, List[str]]],
-            await self._execute_command(RequestType.LPop, args),
+            Optional[str],
+            await self._execute_command(RequestType.LPop, [key]),
+        )
+
+    async def lpop_count(self, key: str, count: int) -> Optional[List[str]]:
+        """Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
+        See https://redis.io/commands/lpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (int): The count of elements to pop from the list.
+
+        Returns:
+            Optional[List[str]]: A a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+
+            >>> await client.lpop("my_list", 2)
+                ["value1", "value2"]
+            >>> await client.lpop("non_exiting_key" , 3)
+                None
+        """
+
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.LPop, [key, str(count)]),
         )
 
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
@@ -660,37 +690,54 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.RPush, [key] + elements)
         )
 
-    async def rpop(
-        self, key: str, count: Optional[int] = None
-    ) -> Optional[Union[str, List[str]]]:
+    async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
         """Removes and returns the last elements of the list stored at `key`.
-        By default, the command pops a single element from the end of the list.
-        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        The command pops a single element from the end of the list.
         See https://redis.io/commands/rpop/ for details.
 
         Args:
             key (str): The key of the list.
-            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
 
         Returns:
-            Optional[Union[str, List[str]]: The value of the last element if `count` is not provided.
-            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            Optional[str]: The value of the last element.
             If `key` does not exist, None will be returned.
             If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.rpop("my_list")
                 "value1"
-            >>> await client.rpop("my_list", 2)
-                ["value2", "value3"]
             >>> await client.rpop("non_exiting_key")
                 None
         """
 
-        args: List[str] = [key] if count is None else [key, str(count)]
         return cast(
-            Optional[Union[str, List[str]]],
-            await self._execute_command(RequestType.RPop, args),
+            Optional[str],
+            await self._execute_command(RequestType.RPop, [key]),
+        )
+
+    async def rpop_count(self, key: str, count: int) -> Optional[List[str]]:
+        """Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
+        See https://redis.io/commands/rpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (int): The count of elements to pop from the list.
+
+        Returns:
+            Optional[List[str]: A list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, an error is returned.
+
+        Examples:
+            >>> await client.rpop("my_list", 2)
+                ["value1", "value2"]
+            >>> await client.rpop("non_exiting_key" , 7)
+                None
+        """
+
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
     async def sadd(self, key: str, members: List[str]) -> int:
@@ -1019,3 +1066,153 @@ class CoreCommands(Protocol):
                 -2  # Returns -2 for a non-existing key.
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
+
+    async def zadd(
+        self,
+        key: str,
+        members_scores: Mapping[str, float],
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds members with their scores to the sorted set stored at `key`.
+        If a member is already a part of the sorted set, its score is updated.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_scores (Mapping[str, float]): A mapping of members to their corresponding scores.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            update_condition (Optional[UpdateOptions]): Options for updating scores.
+                - GT: Only update scores greater than the current values.
+                - LT: Only update scores less than the current values.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
+                2  # Indicates that two elements have been added or updated in the sorted set "my_sorted_set."
+            >>> await zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
+                2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        if changed:
+            args.append("CH")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        members_scores_list = [
+            str(item) for pair in members_scores.items() for item in pair[::-1]
+        ]
+        args += members_scores_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.Zadd, args),
+        )
+
+    async def zadd_incr(
+        self,
+        key: str,
+        member: str,
+        increment: float,
+        existing_options: Optional[ConditionalChange] = None,
+        update_condition: Optional[UpdateOptions] = None,
+    ) -> Optional[float]:
+        """
+        Increments the score of member in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+        If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+
+        See https://redis.io/commands/zadd/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): A member in the sorted set to increment.
+            increment (float): The score to increment the member.
+            existing_options (Optional[ConditionalChange]): Options for handling the member's existence.
+                - NX: Only increment a member that doesn't exist.
+                - XX: Only increment an existing member.
+            update_condition (Optional[UpdateOptions]): Options for updating the score.
+                - GT: Only increment the score of the member if the new score will be greater than the current score.
+                - LT: Only increment (decrement) the score of the member if the new score will be less than the current score.
+
+        Returns:
+            Optional[float]: The score of the member.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and null is returned.
+        Examples:
+            >>> await zaddIncr("my_sorted_set", member , 5.0)
+                5.0
+            >>> await zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
+                None
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if update_condition:
+            args.append(update_condition.value)
+
+        args.append("INCR")
+
+        if existing_options and update_condition:
+            if existing_options == ConditionalChange.ONLY_IF_DOES_NOT_EXIST:
+                raise ValueError(
+                    "The GT, LT and NX options are mutually exclusive. "
+                    f"Cannot choose both {update_condition.value} and NX."
+                )
+
+        args += [str(increment), member]
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.Zadd, args),
+        )
+
+    async def zrem(
+        self,
+        key: str,
+        members: List[str],
+    ) -> int:
+        """
+        Removes the specified members from the sorted set stored at `key`.
+        Specified members that are not a member of this set are ignored.
+
+        See https://redis.io/commands/zrem/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members to remove from the sorted set.
+
+        Returns:
+            int: The number of members that were removed from the sorted set, not including non-existing members.
+            If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+            If `key` holds a value that is not a sorted set, an error is returned.
+
+        Examples:
+            >>> await zrem("my_sorted_set", ["member1", "member2"])
+                2  # Indicates that two members have been removed from the sorted set "my_sorted_set."
+            >>> await zrem("non_existing_sorted_set", ["member1", "member2"])
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.Zrem, [key] + members),
+        )

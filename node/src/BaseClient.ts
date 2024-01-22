@@ -1,5 +1,6 @@
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    Script,
     StartSocketConnection,
     valueFromSplitPointer,
 } from "glide-rs";
@@ -8,6 +9,7 @@ import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     ExpireOptions,
     SetOptions,
+    ZaddOptions,
     createDecr,
     createDecrBy,
     createDel,
@@ -45,6 +47,7 @@ import {
     createSet,
     createTTL,
     createUnlink,
+    createZadd,
 } from "./Commands";
 import {
     ClosingError,
@@ -65,8 +68,12 @@ export type ReturnTypeAttribute = {
     value: ReturnType;
     attributes: ReturnTypeMap;
 };
-export type ProtocolVersion = connection_request.ProtocolVersion;
-export const ProtocolVersion = connection_request.ProtocolVersion;
+export enum ProtocolVersion {
+    /** Use RESP2 to communicate with the server nodes. */
+    RESP2 = connection_request.ProtocolVersion.RESP2,
+    /** Use RESP3 to communicate with the server nodes. */
+    RESP3 = connection_request.ProtocolVersion.RESP3,
+}
 export type ReturnType =
     | "OK"
     | string
@@ -121,6 +128,8 @@ export type BaseClientConfiguration = {
     }[];
     /**
      * True if communication with the cluster should use Transport Level Security.
+     * Should match the TLS configuration of the server/cluster,
+     * otherwise the connection attempt will fail.
      */
     useTLS?: boolean;
     /**
@@ -150,6 +159,17 @@ export type BaseClientConfiguration = {
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
     clientName?: string;
+};
+
+export type ScriptOptions = {
+    /**
+     * The keys that are used in the script.
+     */
+    keys?: string[];
+    /**
+     * The arguments for the script.
+     */
+    args?: string[];
 };
 
 function getRequestErrorClass(
@@ -295,7 +315,10 @@ export class BaseClient {
      * @internal
      */
     protected createWritePromise<T>(
-        command: redis_request.Command | redis_request.Command[],
+        command:
+            | redis_request.Command
+            | redis_request.Command[]
+            | redis_request.ScriptInvocation,
         route?: redis_request.Routes
     ): Promise<T> {
         if (this.isClosed) {
@@ -313,7 +336,10 @@ export class BaseClient {
 
     private writeOrBufferRedisRequest(
         callbackIdx: number,
-        command: redis_request.Command | redis_request.Command[],
+        command:
+            | redis_request.Command
+            | redis_request.Command[]
+            | redis_request.ScriptInvocation,
         route?: redis_request.Routes
     ) {
         const message = Array.isArray(command)
@@ -323,9 +349,14 @@ export class BaseClient {
                       commands: command,
                   }),
               })
-            : redis_request.RedisRequest.create({
+            : command instanceof redis_request.Command
+            ? redis_request.RedisRequest.create({
                   callbackIdx,
                   singleCommand: command,
+              })
+            : redis_request.RedisRequest.create({
+                  callbackIdx,
+                  scriptInvocation: command,
               });
         message.route = route;
 
@@ -603,20 +634,33 @@ export class BaseClient {
     }
 
     /** Removes and returns the first elements of the list stored at `key`.
-     * By default, the command pops a single element from the beginning of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the beginning of the list.
      * See https://redis.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
-     * @param count - The count of the elements to pop from the list.
-     * @returns The value of the first element if `count` is not provided. If `count` is provided, a list of the popped elements will be returned depending on the list's length.
+     * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(
         key: string,
-        count?: number
-    ): Promise<string | string[] | null> {
+    ): Promise<string | null> {
+        return this.createWritePromise(createLPop(key));
+    }
+
+    /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
+     * See https://redis.io/commands/lpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     * @returns A list of the popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public lpopCount(
+        key: string,
+        count: number
+    ): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
     }
 
@@ -701,20 +745,33 @@ export class BaseClient {
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
-     * By default, the command pops a single element from the end of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the end of the list.
      * See https://redis.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
-     * @param count - The count of the elements to pop from the list.
-     * @returns The value of the last element if `count` is not provided. If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
     public rpop(
         key: string,
-        count?: number
-    ): Promise<string | string[] | null> {
+    ): Promise<string | null> {
+        return this.createWritePromise(createRPop(key));
+    }
+
+    /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
+     * See https://redis.io/commands/rpop/ for details.
+     *
+     * @param key - The key of the list.
+     * @param count - The count of the elements to pop from the list.
+     * @returns A list of popped elements will be returned depending on the list's length.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, an error is raised.
+     */
+    public rpopCount(
+        key: string,
+        count: number
+    ): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
     }
 
@@ -886,6 +943,101 @@ export class BaseClient {
         return this.createWritePromise(createTTL(key));
     }
 
+    /** Invokes a Lua script with its keys and arguments.
+     * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+     * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
+     * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
+     *
+     * @param script - The Lua script to execute.
+     * @param options - The script option that contains keys and arguments for the script.
+     * @returns a value that depends on the script that was executed.
+     *
+     * @example
+     *       const luaScript = "return \{ KEYS[1], ARGV[1] \}";
+     *       const scriptOptions = \{
+     *            keys: ["foo"],
+     *            args: ["bar"],
+     *       \};
+     *       await invokeScript(luaScript, scriptOptions);
+     *       ["foo", "bar"]
+     */
+    public invokeScript(
+        script: Script,
+        option?: ScriptOptions
+    ): Promise<ReturnType> {
+        const scriptInvocation = redis_request.ScriptInvocation.create({
+            hash: script.getHash(),
+            keys: option?.keys,
+            args: option?.args,
+        });
+        return this.createWritePromise(scriptInvocation);
+    }
+
+    /** Adds members with their scores to the sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its score is updated.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersScoresMap - A mapping of members to their corresponding scores.
+     * @param options - The Zadd options.
+     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
+     * @returns The number of elements added to the sorted set.
+     * If `changed` is set, returns the number of elements updated in the sorted set.
+     *
+     * @example
+     *      await zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
+     *      2 (Indicates that two elements have been added or updated in the sorted set "mySortedSet".)
+     *
+     *      await zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \});
+     *      2 (Updates the scores of two existing members in the sorted set "existingSortedSet".)
+     *
+     */
+    public zadd(
+        key: string,
+        membersScoresMap: Record<string, number>,
+        options?: ZaddOptions,
+        changed?: boolean
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZadd(
+                key,
+                membersScoresMap,
+                options,
+                changed ? "CH" : undefined
+            )
+        );
+    }
+
+    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+     * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - A member in the sorted set to increment.
+     * @param increment - The score to increment the member.
+     * @param options - The Zadd options.
+     * @returns The score of the member.
+     * If there was a conflict with the options, the operation aborts and null is returned.
+     *
+     * @example
+     *      await zaddIncr("mySortedSet", member , 5.0)
+     *      5.0
+     *
+     *      await zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
+     *      null
+     */
+    public zaddIncr(
+        key: string,
+        member: string,
+        increment: number,
+        options?: ZaddOptions
+    ): Promise<number | null> {
+        return this.createWritePromise(
+            createZadd(key, { [member]: increment }, options, "INCR")
+        );
+    }
+
     private readonly MAP_READ_FROM_STRATEGY: Record<
         ReadFrom,
         connection_request.ReadFrom
@@ -911,8 +1063,11 @@ export class BaseClient {
                       username: options.credentials.username,
                   }
                 : undefined;
+        const protocol = options.serverProtocol as
+            | connection_request.ProtocolVersion
+            | undefined;
         return {
-            protocol: options.serverProtocol,
+            protocol,
             clientName: options.clientName,
             addresses: options.addresses,
             tlsMode: options.useTLS

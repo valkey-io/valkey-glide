@@ -12,7 +12,7 @@ import {
     InfoOptions,
     ProtocolVersion,
     RedisClusterClient,
-} from "../";
+} from "..";
 import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,

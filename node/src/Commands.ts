@@ -20,6 +20,9 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
+/**
+ * @internal
+ */
 export function parseInfoResponse(response: string): Record<string, string> {
     const lines = response.split("\n");
     const parsedResponse: Record<string, string> = {};
@@ -676,4 +679,63 @@ export function createPExpireAt(
  */
 export function createTTL(key: string): redis_request.Command {
     return createCommand(RequestType.TTL, [key]);
+}
+
+export type ZaddOptions = {
+    /**
+     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Redis API.
+     * `onlyIfExists` - Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Redis API.
+     */
+    conditionalChange?: "onlyIfExists" | "onlyIfDoesNotExist";
+    /**
+     * `scoreLessThanCurrent` - Only update existing elements if the new score is less than the current score.
+     *  Equivalent to `LT` in the Redis API.
+     * `scoreGreaterThanCurrent` - Only update existing elements if the new score is greater than the current score.
+     *  Equivalent to `GT` in the Redis API.
+     */
+    updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+};
+
+/**
+ * @internal
+ */
+export function createZadd(
+    key: string,
+    membersScoresMap: Record<string, number>,
+    options?: ZaddOptions,
+    changedOrIncr?: "CH" | "INCR"
+): redis_request.Command {
+    let args = [key];
+
+    if (options) {
+        if (options.conditionalChange === "onlyIfExists") {
+            args.push("XX");
+        } else if (options.conditionalChange === "onlyIfDoesNotExist") {
+            if (options.updateOptions) {
+                throw new Error(
+                    `The GT, LT, and NX options are mutually exclusive. Cannot choose both ${options.updateOptions} and NX.`
+                );
+            }
+
+            args.push("NX");
+        }
+
+        if (options.updateOptions === "scoreLessThanCurrent") {
+            args.push("LT");
+        } else if (options.updateOptions === "scoreGreaterThanCurrent") {
+            args.push("GT");
+        }
+    }
+
+    if (changedOrIncr) {
+        args.push(changedOrIncr);
+    }
+
+    args = args.concat(
+        Object.entries(membersScoresMap).flatMap(([key, value]) => [
+            value.toString(),
+            key,
+        ])
+    );
+    return createCommand(RequestType.Zadd, args);
 }

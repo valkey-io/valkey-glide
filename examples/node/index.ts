@@ -1,4 +1,4 @@
-import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
+import { Logger, RedisClient, RedisClusterClient } from "@aws/glide-for-redis";
 
 async function sendPingToNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
@@ -11,6 +11,7 @@ async function sendPingToNode() {
     // Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     const client = await RedisClient.createClient({
         addresses: addresses,
+        // if the server uses TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
         // useTLS: true,
         clientName: "test_standalone_client",
     });
@@ -39,7 +40,8 @@ async function sendPingToRandomNodeInCluster() {
     // Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     const client = await RedisClusterClient.createClient({
         addresses: addresses,
-        useTLS: true,
+        // if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
+        // useTLS: true,
         clientName: "test_cluster_client",
     });
     // The empty array signifies that there are no additional arguments.

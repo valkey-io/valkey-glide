@@ -1,3 +1,17 @@
+# GLIDE for Redis
+
+General Language Independent Driver for the Enterprise (GLIDE) for Redis, is an AWS-sponsored, open-source Redis client. GLIDE for Redis works with any Redis distribution that adheres to the Redis Serialization Protocol (RESP) specification, including open-source Redis, Amazon ElastiCache for Redis, and Amazon MemoryDB for Redis.
+Strategic, mission-critical Redis-based applications have requirements for security, optimized performance, minimal downtime, and observability. GLIDE for Redis is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating Redis-compatible services used by hundreds of thousands of customers. To help ensure consistency in development and operations, GLIDE for Redis is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, GLIDE for Redis is available for Python and Javascript (Node.js), with support for Java actively under development.
+
+## Supported Redis Versions
+
+GLIDE for Redis is API-compatible with open source Redis version 6 and 7.
+
+## Current Status
+
+We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
+This preview release is recommended for testing purposes only.
+
 # Getting Started - Python Wrapper
 
 ## System Requirements
@@ -5,6 +19,7 @@
 The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## Python supported version
+
 Python 3.8 or higher.
 
 ## Installation and Setup
@@ -15,99 +30,14 @@ To install GLIDE for Redis using `pip`, follow these steps:
 
 1. Open your terminal.
 2. Execute the command below:
-   ```bash
-   $ pip install glide-for-redis
-   ```
+    ```bash
+    $ pip install glide-for-redis
+    ```
 3. After installation, confirm the client is accessible by running:
     ```bash
     $ python3
     >>> import glide
     ```
-
-### Build from source
-
-#### Prerequisites
-
-Software Dependencies
-
--   python3 virtualenv
--   git
--   GCC
--   pkg-config
--   protoc (protobuf compiler)
--   openssl
--   openssl-dev
--   rustup
-
-**Dependencies installation for Ubuntu**
-```bash
-sudo apt update -y
-sudo apt install -y python3 python3-venv git gcc pkg-config protobuf-compiler openssl libssl-dev
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-**Dependencies installation for CentOS**
-```bash 
-sudo yum update -y
-sudo yum install -y python3 git gcc pkgconfig protobuf-compiler openssl openssl-devel
-pip3 install virtualenv
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-**Dependencies installation for MacOS**
-```bash
-brew update
-brew install python3 git gcc pkgconfig protobuf openssl 
-pip3 install virtualenv
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-#### Building and installation steps
-Before starting this step, make sure you've installed all software requirments. 
-1. Clone the repository:
-    ```bash
-    VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-    cd glide-for-redis
-    ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Generate protobuf files:
-    ```bash
-    GLIDE_ROOT_FOLDER_PATH=.
-    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
-    ```
-4. Create a virtual environment:
-    ```bash
-    cd python
-    python3 -m venv .env
-    ```
-5. Activate the virtual environment:
-    ```bash
-    source .env/bin/activate
-    ```
-6. Install requirements:
-    ```bash
-    pip install -r requirements.txt
-    ```
-7. Build the Python wrapper in release mode:
-    ```
-    maturin develop --release --strip
-    ```
-     > **Note:** To build the wrapper binary with debug symbols remove the --strip flag.
-8. Run tests:
-    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
-    2. Validate the activation of the virtual environment from step 4 by ensuring its name (`.env`) is displayed next to your command prompt. 
-    3. Execute the following command from the python folder:
-        ```bash
-        pytest --asyncio-mode=auto
-        ```
-        > **Note:** To run redis modules tests, add -k "test_redis_modules.py".
 
 ## Basic Examples
 
@@ -148,3 +78,11 @@ Before starting this step, make sure you've installed all software requirments.
 >>> await client.get("foo")
 'bar'
 ```
+
+## Documentation
+
+Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+
+### Building & Testing
+
+Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/python/DEVELOPER.md#build-from-source) file.
