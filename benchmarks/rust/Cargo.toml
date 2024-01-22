@@ -20,6 +20,7 @@ clap = { version = "4.3.8", features = ["derive"] }
 chrono = "0.4.26"
 serde_json = "1.0.99"
 statistical = "1.0.0"
+tikv-jemallocator = "0.5.4"
 
 [profile.release]
 debug = true
