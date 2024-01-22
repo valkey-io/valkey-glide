@@ -1,20 +1,25 @@
 use glide_core::start_socket_listener;
 
-use jni::objects::{JClass, JObject, JThrowable};
+use jni::objects::{JClass, JObject, JObjectArray, JThrowable};
 use jni::sys::jlong;
 use jni::JNIEnv;
 use log::error;
 use redis::Value;
 use std::sync::mpsc;
 
-fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
+#[cfg(ffi_test)]
+mod ffi_test;
+#[cfg(ffi_test)]
+pub use ffi_test::*;
+
+// TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
+fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
         Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
         Value::Okay => JObject::from(env.new_string("OK").unwrap()),
-        // TODO use primitive integer
         Value::Int(num) => env
-            .new_object("java/lang/Integer", "(I)V", &[num.into()])
+            .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
         Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
             Ok(val) => JObject::from(env.new_string(val).unwrap()),
@@ -23,16 +28,60 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
                 JObject::null()
             }
         },
-        Value::Array(_array) => {
-            let _ = env.throw("Not implemented");
-            JObject::null()
+        Value::Array(array) => {
+            let items: JObjectArray = env
+                .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
+                .unwrap();
+
+            for (i, item) in array.into_iter().enumerate() {
+                let java_value = redis_value_to_java(env, item);
+                env.set_object_array_element(&items, i as i32, java_value)
+                    .unwrap();
+            }
+
+            items.into()
         }
-        Value::Map(_map) => todo!(),
-        Value::Double(_float) => todo!(),
-        Value::Boolean(_bool) => todo!(),
-        Value::VerbatimString { format: _, text: _ } => todo!(),
+        Value::Map(map) => {
+            let hashmap = env.new_object("java/util/HashMap", "()V", &[]).unwrap();
+
+            for (key, value) in map {
+                let java_key = redis_value_to_java(env, key);
+                let java_value = redis_value_to_java(env, value);
+                env.call_method(
+                    &hashmap,
+                    "put",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    &[(&java_key).into(), (&java_value).into()],
+                )
+                .unwrap();
+            }
+
+            hashmap
+        }
+        Value::Double(float) => env
+            .new_object("java/lang/Double", "(D)V", &[float.into_inner().into()])
+            .unwrap(),
+        Value::Boolean(bool) => env
+            .new_object("java/lang/Boolean", "(Z)V", &[bool.into()])
+            .unwrap(),
+        Value::VerbatimString { format: _, text } => JObject::from(env.new_string(text).unwrap()),
         Value::BigNumber(_num) => todo!(),
-        Value::Set(_array) => todo!(),
+        Value::Set(array) => {
+            let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();
+
+            for elem in array {
+                let java_value = redis_value_to_java(env, elem);
+                env.call_method(
+                    &set,
+                    "add",
+                    "(Ljava/lang/Object;)Z",
+                    &[(&java_value).into()],
+                )
+                .unwrap();
+            }
+
+            set
+        }
         Value::Attribute {
             data: _,
             attributes: _,
@@ -43,12 +92,12 @@ fn redis_value_to_java(mut env: JNIEnv, val: Value) -> JObject {
 
 #[no_mangle]
 pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointer<'local>(
-    env: JNIEnv<'local>,
+    mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong,
 ) -> JObject<'local> {
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_java(env, *value)
+    redis_value_to_java(&mut env, *value)
 }
 
 #[no_mangle]
