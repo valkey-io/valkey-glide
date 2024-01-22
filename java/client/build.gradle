@@ -50,22 +50,34 @@ tasks.register('cleanProtobuf') {
     }
 }
 
+tasks.register('cleanRust') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, '../target').toString())
+    }
+}
+
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRustReleaseStrip', Exec) {
     commandLine 'cargo', 'build', '--release', '--strip'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRust', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
-    environment 'CARGO_TERM_COLOR', 'always'
+    environment CARGO_TERM_COLOR: 'always'
+}
+
+tasks.register('buildRustFfi', Exec) {
+    commandLine 'cargo', 'build'
+    workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
 }
 
 tasks.register('buildWithRust') {
@@ -88,13 +100,24 @@ tasks.register('buildWithProto') {
     finalizedBy 'build'
 }
 
+tasks.register('testFfi', Test) {
+    dependsOn 'buildRustFfi'
+    include "glide/ffi/FfiTest.class"
+}
+
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust'
+    dependsOn 'protobuf', 'buildRust', 'testFfi'
     finalizedBy 'build'
 }
 
-compileJava.dependsOn('protobuf')
-clean.dependsOn('cleanProtobuf')
+compileJava.dependsOn('protobuf', 'buildRustRelease')
+clean.dependsOn('cleanProtobuf', 'cleanRust')
+test.dependsOn('buildRust')
+testFfi.dependsOn('buildRust')
+
+test {
+    exclude "glide/ffi/FfiTest.class"
+}
 
 tasks.withType(Test) {
     testLogging {
@@ -102,5 +125,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/debug"
+    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
+
