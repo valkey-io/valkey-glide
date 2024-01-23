@@ -977,6 +977,7 @@ def main():
             args.load_module,
         )
         if args.cluster_mode:
+            # Create a cluster
             create_cluster(
                 servers,
                 args.shard_count,
@@ -984,7 +985,8 @@ def main():
                 cluster_folder,
                 args.tls,
             )
-        else:
+        elif args.replica_count > 0:
+            # Create a standalone replication group
             create_standalone_replication(
                 servers,
                 cluster_folder,
