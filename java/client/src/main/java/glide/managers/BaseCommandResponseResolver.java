@@ -26,8 +26,6 @@ public class BaseCommandResponseResolver
      * @return A generic Object with the Response | null if the response is empty
      */
     public Object apply(Response response) throws RedisException {
-        // TODO: handle object if the object is small
-        // TODO: handle RESP2 object if configuration is set
         if (response.hasRequestError()) {
             RequestError error = response.getRequestError();
             String msg = error.getMessage();

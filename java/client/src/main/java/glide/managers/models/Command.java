@@ -1,4 +1,4 @@
-package glide.api.commands;
+package glide.managers.models;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;

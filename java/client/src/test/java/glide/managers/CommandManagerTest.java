@@ -4,22 +4,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static response.ResponseOuterClass.RequestErrorType.UNRECOGNIZED;
+import static response.ResponseOuterClass.RequestErrorType.Unspecified;
 
-import glide.api.commands.Command;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.ChannelHandler;
+import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import response.ResponseOuterClass;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
@@ -133,139 +139,53 @@ public class CommandManagerTest {
         assertEquals(errorMsg, e.getCause().getMessage());
     }
 
-    @Test
-    public void submitNewCommand_throwConnectionException() {
-
-        // setup
-        int disconnectedType = 3;
-        String errorMsg = "Disconnected";
-
-        Response respPointerResponse =
+    @ParameterizedTest
+    @EnumSource(ResponseOuterClass.RequestErrorType.class) // six numbers
+    public void BaseCommandResponseResolver_handles_all_errors(
+            ResponseOuterClass.RequestErrorType requestErrorType) {
+        if (requestErrorType == UNRECOGNIZED) {
+            return;
+        }
+        Response errorResponse =
                 Response.newBuilder()
                         .setRequestError(
                                 RequestError.newBuilder()
-                                        .setTypeValue(disconnectedType)
-                                        .setMessage(errorMsg)
+                                        .setTypeValue(requestErrorType.getNumber())
+                                        .setMessage(requestErrorType.toString())
                                         .build())
                         .build();
 
         CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(respPointerResponse);
+        future.complete(errorResponse);
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
-        // exercise
-        ExecutionException e =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture result =
-                                    service.submitNewCommand(
-                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
-                            result.get();
-                        });
-
-        // verify
-        assertTrue(e.getCause() instanceof ConnectionException);
-        assertEquals(errorMsg, e.getCause().getMessage());
-    }
-
-    @Test
-    public void submitNewCommand_throwTimeoutException() {
-
-        // setup
-        int timeoutType = 2;
-        String errorMsg = "Timeout";
-
-        Response timeoutErrorResponse =
-                Response.newBuilder()
-                        .setRequestError(
-                                RequestError.newBuilder().setTypeValue(timeoutType).setMessage(errorMsg).build())
-                        .build();
-
-        CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(timeoutErrorResponse);
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        // exercise
-        ExecutionException e =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture result =
-                                    service.submitNewCommand(
-                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
-                            result.get();
-                        });
-
-        // verify
-        assertTrue(e.getCause() instanceof TimeoutException);
-        assertEquals(errorMsg, e.getCause().getMessage());
-    }
-
-    @Test
-    public void submitNewCommand_throwExecAbortException() {
-        // setup
-        int execAbortType = 1;
-        String errorMsg = "ExecAbort";
-
-        Response execAbortErrorResponse =
-                Response.newBuilder()
-                        .setRequestError(
-                                RequestError.newBuilder().setTypeValue(execAbortType).setMessage(errorMsg).build())
-                        .build();
-
-        CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(execAbortErrorResponse);
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        // exercise
-        ExecutionException e =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture result =
-                                    service.submitNewCommand(
-                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
-                            result.get();
-                        });
-
-        // verify
-        assertTrue(e.getCause() instanceof ExecAbortException);
-        assertEquals(errorMsg, e.getCause().getMessage());
-    }
-
-    @Test
-    public void submitNewCommand_handledUnspecifiedError() {
-        // setup
-        int unspecifiedType = 0;
-        String errorMsg = "Unspecified";
-
-        Response unspecifiedErrorResponse =
-                Response.newBuilder()
-                        .setRequestError(
-                                RequestError.newBuilder()
-                                        .setTypeValue(unspecifiedType)
-                                        .setMessage(errorMsg)
-                                        .build())
-                        .build();
-
-        CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(unspecifiedErrorResponse);
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        // exercise
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> {
                             CompletableFuture result =
-                                    service.submitNewCommand(
-                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
+                                    service.submitNewCommand(command, new BaseCommandResponseResolver((ptr) -> null));
                             result.get();
                         });
 
         // verify
-        assertTrue(executionException.getCause() instanceof RedisException);
-        assertEquals(errorMsg, executionException.getCause().getMessage());
+        switch (requestErrorType) {
+            case Unspecified:
+                // only Unspecified errors return a RequestException
+                assertTrue(executionException.getCause() instanceof RequestException);
+                break;
+            case ExecAbort:
+                assertTrue(executionException.getCause() instanceof ExecAbortException);
+                break;
+            case Timeout:
+                assertTrue(executionException.getCause() instanceof TimeoutException);
+                break;
+            case Disconnect:
+                assertTrue(executionException.getCause() instanceof ConnectionException);
+                break;
+            default:
+                fail("Unexpected protobuf error type");
+        }
+        assertEquals(requestErrorType.toString(), executionException.getCause().getMessage());
     }
 }

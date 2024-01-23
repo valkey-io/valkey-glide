@@ -3,12 +3,12 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 
 import glide.api.commands.BaseCommands;
-import glide.api.commands.Command;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -60,6 +60,6 @@ public class RedisClient extends BaseClient implements BaseCommands {
     public CompletableFuture<Object> customCommand(String[] args) {
         Command command =
                 Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).arguments(args).build();
-        return commandManager.submitNewCommand(command, BaseCommands::handleObjectResponse);
+        return commandManager.submitNewCommand(command, BaseClient::handleObjectResponse);
     }
 }

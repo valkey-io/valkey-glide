@@ -1,7 +1,7 @@
 package glide.managers;
 
-import glide.api.commands.Command;
 import glide.connectors.handlers.ChannelHandler;
+import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
