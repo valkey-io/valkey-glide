@@ -165,9 +165,10 @@ async fn write_closing_error(
     err: ClosingError,
     callback_index: u32,
     writer: &Rc<Writer>,
+    identifier: &str,
 ) -> Result<(), io::Error> {
     let err = err.err_message;
-    log_error("client creation", err.as_str());
+    log_error(identifier, err.as_str());
     let mut response = Response::new();
     response.callback_idx = callback_index;
     response.value = Some(response::response::Value::ClosingError(err.into()));
@@ -611,14 +612,27 @@ async fn listen_on_client_stream(socket: UnixStream) {
         }
         Err(ClientCreationError::SocketListenerClosed(reason)) => {
             let err_message = format!("Socket listener closed due to {reason:?}");
-            let _res = write_closing_error(ClosingError { err_message }, u32::MAX, &writer).await;
+            let _res = write_closing_error(
+                ClosingError { err_message },
+                u32::MAX,
+                &writer,
+                "client creation",
+            )
+            .await;
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_))
         | Err(e @ ClientCreationError::IO(_))
         | Err(e @ ClientCreationError::ConnectionError(_)) => {
             let err_message = e.to_string();
-            let _res = write_closing_error(ClosingError { err_message }, u32::MAX, &writer).await;
+            log_error("client creation", &err_message);
+            let _res = write_closing_error(
+                ClosingError { err_message },
+                u32::MAX,
+                &writer,
+                "client creation",
+            )
+            .await;
             return;
         }
     };
@@ -626,7 +640,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
     tokio::select! {
             reader_closing = read_values_loop(client_listener, &client, writer.clone()) => {
                 if let ClosingReason::UnhandledError(err) = reader_closing {
-                    let _res = write_closing_error(ClosingError{err_message: err.to_string()}, u32::MAX, &writer).await;
+                    let _res = write_closing_error(ClosingError{err_message: err.to_string()}, u32::MAX, &writer, "client closing").await;
                 };
                 log_trace("client closing", "reader closed");
             },
