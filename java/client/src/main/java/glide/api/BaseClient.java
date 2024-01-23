@@ -6,7 +6,7 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.ExecutionException;
 import lombok.AllArgsConstructor;
-import response.ResponseOuterClass;
+import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
@@ -22,7 +22,7 @@ public abstract class BaseClient implements AutoCloseable {
      * @param response Redis protobuf message
      * @return Response Object
      */
-    protected static Object handleObjectResponse(ResponseOuterClass.Response response) {
+    protected static Object handleObjectResponse(Response response) {
         // return function to convert protobuf.Response into the response object by
         // calling valueFromPointer
         return (new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer)).apply(response);

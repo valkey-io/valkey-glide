@@ -5,6 +5,7 @@ import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
+import redis_request.RedisRequestOuterClass.RequestType;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -62,10 +63,10 @@ public class CommandManager {
                                 .build());
     }
 
-    private RedisRequestOuterClass.RequestType mapRequestTypes(Command.RequestType inType) {
+    private RequestType mapRequestTypes(Command.RequestType inType) {
         switch (inType) {
             case CUSTOM_COMMAND:
-                return RedisRequestOuterClass.RequestType.CustomCommand;
+                return RequestType.CustomCommand;
         }
         throw new RuntimeException("Unsupported request type");
     }
