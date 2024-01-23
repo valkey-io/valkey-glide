@@ -43,7 +43,7 @@ pub struct StandaloneClient {
 
 pub enum StandaloneClientConnectionError {
     NoAddressesProvided,
-    FailedConnection(Vec<(String, RedisError)>),
+    FailedConnection(Vec<(Option<String>, RedisError)>),
 }
 
 impl std::fmt::Debug for StandaloneClientConnectionError {
@@ -53,10 +53,29 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
                 write!(f, "No addresses provided")
             }
             StandaloneClientConnectionError::FailedConnection(errs) => {
-                writeln!(f, "Received errors:")?;
-                for (address, error) in errs {
-                    writeln!(f, "{address}: {error}")?;
-                }
+                match errs.len() {
+                    0 => {
+                        writeln!(f, "Failed without explicit error")?;
+                    }
+                    1 => {
+                        let (ref address, ref error) = errs[0];
+                        match address {
+                            Some(address) => {
+                                writeln!(f, "Received error for address `{address}`: {error}")?
+                            }
+                            None => writeln!(f, "Received error: {error}")?,
+                        }
+                    }
+                    _ => {
+                        writeln!(f, "Received errors:")?;
+                        for (address, error) in errs {
+                            match address {
+                                Some(address) => writeln!(f, "{address}: {error}")?,
+                                None => writeln!(f, "{error}")?,
+                            }
+                        }
+                    }
+                };
                 Ok(())
             }
         }
@@ -104,12 +123,21 @@ impl StandaloneClient {
                 }
                 Err((address, (connection, err))) => {
                     nodes.push(connection);
-                    addresses_and_errors.push((address, err));
+                    addresses_and_errors.push((Some(address), err));
                 }
             }
         }
 
         let Some(primary_index) = primary_index else {
+            if addresses_and_errors.is_empty() {
+                addresses_and_errors.insert(
+                    0,
+                    (
+                        None,
+                        RedisError::from((redis::ErrorKind::ClientError, "No primary node found")),
+                    ),
+                )
+            };
             return Err(StandaloneClientConnectionError::FailedConnection(
                 addresses_and_errors,
             ));
