@@ -1,3 +1,10 @@
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 use byteorder::{LittleEndian, WriteBytesExt};
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
@@ -11,7 +18,6 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use std::collections::HashMap;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
-
 #[napi]
 pub enum Level {
     Debug = 3,
