@@ -2,6 +2,7 @@ import {
     ExpireOptions,
     InfoOptions,
     SetOptions,
+    ZaddOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -49,6 +50,8 @@ import {
     createSet,
     createTTL,
     createUnlink,
+    createZadd,
+    createZrem,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -694,6 +697,73 @@ export class BaseTransaction {
      */
     public ttl(key: string) {
         this.commands.push(createTTL(key));
+    }
+
+    /** Adds members with their scores to the sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its score is updated.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersScoresMap - A mapping of members to their corresponding scores.
+     * @param options - The Zadd options.
+     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
+     *
+     * Command Response - The number of elements added to the sorted set.
+     * If `changed` is set, returns the number of elements updated in the sorted set.
+     */
+    public zadd(
+        key: string,
+        membersScoresMap: Record<string, number>,
+        options?: ZaddOptions,
+        changed?: boolean
+    ) {
+        this.commands.push(
+            createZadd(
+                key,
+                membersScoresMap,
+                options,
+                changed ? "CH" : undefined
+            )
+        );
+    }
+
+    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
+     * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+     * See https://redis.io/commands/zadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - A member in the sorted set to increment.
+     * @param increment - The score to increment the member.
+     * @param options - The Zadd options.
+     *
+     * Command Response - The score of the member.
+     * If there was a conflict with the options, the operation aborts and null is returned.
+     */
+    public zaddIncr(
+        key: string,
+        member: string,
+        increment: number,
+        options?: ZaddOptions
+    ) {
+        this.commands.push(
+            createZadd(key, { [member]: increment }, options, "INCR")
+        );
+    }
+
+    /** Removes the specified members from the sorted set stored at `key`.
+     * Specified members that are not a member of this set are ignored.
+     * See https://redis.io/commands/zrem/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members to remove from the sorted set.
+     *
+     * Command Response - The number of members that were removed from the sorted set, not including non-existing members.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zrem(key: string, members: string[]) {
+        this.commands.push(createZrem(key, members));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
