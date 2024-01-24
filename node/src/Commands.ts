@@ -739,3 +739,13 @@ export function createZadd(
     );
     return createCommand(RequestType.Zadd, args);
 }
+
+/**
+ * @internal
+ */
+export function createZrem(
+    key: string,
+    members: string[]
+): redis_request.Command {
+    return createCommand(RequestType.Zrem, [key].concat(members));
+}

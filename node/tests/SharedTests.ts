@@ -1341,6 +1341,25 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it(
+        "zrem test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zrem(key, ["one"])).toEqual(1);
+                expect(await client.zrem(key, ["one", "two", "three"])).toEqual(
+                    2
+                );
+                expect(
+                    await client.zrem("non_existing_set", ["member"])
+                ).toEqual(0);
+            });
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {

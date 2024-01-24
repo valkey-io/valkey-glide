@@ -57,6 +57,7 @@ export function transactionTest(
     const key5 = "{key}" + uuidv4();
     const key6 = "{key}" + uuidv4();
     const key7 = "{key}" + uuidv4();
+    const key8 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
     baseTransaction.set(key1, "bar");
@@ -84,6 +85,9 @@ export function transactionTest(
     baseTransaction.srem(key7, ["foo"]);
     baseTransaction.scard(key7);
     baseTransaction.smembers(key7);
+    baseTransaction.zadd(key8, { member1: 1, member2: 2 });
+    baseTransaction.zaddIncr(key8, "member2", 1);
+    baseTransaction.zrem(key8, ["member1"]);
     return [
         "OK",
         null,
@@ -108,6 +112,9 @@ export function transactionTest(
         1,
         1,
         ["bar"],
+        2,
+        3,
+        1,
     ];
 }
 
