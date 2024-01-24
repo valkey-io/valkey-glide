@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, TypeVar, Union, cast
 
 import pytest
-from glide import ClosingError, RequestError, TimeoutError
+from glide import ClosingError, RequestError, Script, TimeoutError
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -1229,3 +1229,28 @@ class TestExceptions:
         key = get_random_string(10)
         with pytest.raises(TimeoutError) as e:
             await redis_client.custom_command(["BLPOP", key, "1"])
+
+
+@pytest.mark.asyncio
+class TestScripts:
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_script(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        script = Script("return 'Hello'")
+        assert await redis_client.invoke_script(script) == "Hello"
+
+        script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
+        assert (
+            await redis_client.invoke_script(script, keys=[key1], args=["value1"])
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            await redis_client.invoke_script(script, keys=[key2], args=["value2"])
+            == "OK"
+        )
+        script = Script("return redis.call('GET', KEYS[1])")
+        assert await redis_client.invoke_script(script, keys=[key1]) == "value1"
+        assert await redis_client.invoke_script(script, keys=[key2]) == "value2"

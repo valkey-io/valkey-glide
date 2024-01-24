@@ -230,6 +230,30 @@ class BaseRedisClient(CoreCommands):
         await response_future
         return response_future.result()
 
+    async def execute_script(
+        self,
+        hash: str,
+        keys: Optional[List[str]] = None,
+        args: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TResult:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+        request = RedisRequest()
+        request.callback_idx = self._get_callback_index()
+        request.script_invocation.hash = hash
+        request.script_invocation.args[:] = args if args is not None else []
+        request.script_invocation.keys[:] = keys if keys is not None else []
+        set_protobuf_route(request, route)
+        # Create a response future for this request and add it to the available
+        # futures map
+        response_future = self._get_future(request.callback_idx)
+        self._create_write_task(request)
+        await response_future
+        return response_future.result()
+
     def _get_callback_index(self) -> int:
         try:
             return self._available_callback_indexes.pop()
