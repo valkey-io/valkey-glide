@@ -51,6 +51,7 @@ public class CommandManager {
             commandArgs.addArgs(arg);
         }
 
+        // TODO: set route properly when no RouteOptions given
         return RedisRequestOuterClass.RedisRequest.newBuilder()
                 .setSingleCommand(
                         RedisRequestOuterClass.Command.newBuilder()
