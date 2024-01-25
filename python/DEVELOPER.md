@@ -16,7 +16,7 @@ Software Dependencies
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler)
+-   protoc (protobuf compiler) >= v3.20.0
 -   openssl
 -   openssl-dev
 -   rustup
@@ -25,29 +25,51 @@ Software Dependencies
 
 ```bash
 sudo apt update -y
-sudo apt install -y python3 python3-venv git gcc pkg-config protobuf-compiler openssl libssl-dev
+sudo apt install -y python3 python3-venv git gcc pkg-config openssl libssl-dev unzip
+# Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check that the Rust compiler is installed
+rustc --version
+# Install protobuf compiler
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed
+protoc --version
 ```
 
 **Dependencies installation for CentOS**
 
 ```bash
 sudo yum update -y
-sudo yum install -y python3 git gcc pkgconfig protobuf-compiler openssl openssl-devel
+sudo yum install -y python3 git gcc pkgconfig openssl openssl-devel unzip
 pip3 install virtualenv
+# Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check that the Rust compiler is installed
+rustc --version
+# Install protobuf compiler
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed
+protoc --version
 ```
 
 **Dependencies installation for MacOS**
 
 ```bash
 brew update
-brew install python3 git gcc pkgconfig protobuf openssl
+brew install python3 git gcc pkgconfig protobuf@3 openssl
 pip3 install virtualenv
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check that the Rust compiler is installed
+rustc --version
 ```
 
 #### Building and installation steps
