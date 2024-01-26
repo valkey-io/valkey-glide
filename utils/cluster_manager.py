@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import argparse
 import logging
 import os
@@ -258,7 +260,7 @@ def create_cluster_folder(path: str, prefix: str) -> str:
         str: The full path of the cluster folder
     """
     time = datetime.now(timezone.utc)
-    time_str = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    time_str = time.strftime("%Y-%m-%dT%H-%M-%SZ")
     cluster_folder = f"{path}/{prefix}-{time_str}-{get_random_string(6)}"
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
