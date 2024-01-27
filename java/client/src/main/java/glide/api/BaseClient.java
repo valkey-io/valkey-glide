@@ -12,8 +12,8 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient implements AutoCloseable {
 
-    protected ConnectionManager connectionManager;
-    protected CommandManager commandManager;
+    protected final ConnectionManager connectionManager;
+    protected final CommandManager commandManager;
 
     /**
      * Extracts the response from the Protobuf response and either throws an exception or returns the
@@ -22,10 +22,9 @@ public abstract class BaseClient implements AutoCloseable {
      * @param response Redis protobuf message
      * @return Response Object
      */
-    protected static Object handleObjectResponse(Response response) {
-        // return function to convert protobuf.Response into the response object by
-        // calling valueFromPointer
-        return (new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer)).apply(response);
+    protected Object handleObjectResponse(Response response) {
+        // convert protobuf response into Object and then Object into T
+        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
     }
 
     /**

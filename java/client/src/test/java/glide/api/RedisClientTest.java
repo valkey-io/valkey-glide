@@ -36,7 +36,7 @@ public class RedisClientTest {
         String cmd = "GETSTRING";
         CompletableFuture<Object> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
-        when(commandManager.submitNewCommand(any(), any())).thenReturn(testResponse);
+        when(commandManager.submitNewCommand(any(), any(), any())).thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object> response = service.customCommand(new String[] {cmd, key});
@@ -56,7 +56,7 @@ public class RedisClientTest {
         CompletableFuture<Object> testResponse = mock(CompletableFuture.class);
         InterruptedException interruptedException = new InterruptedException();
         when(testResponse.get()).thenThrow(interruptedException);
-        when(commandManager.submitNewCommand(any(), any())).thenReturn(testResponse);
+        when(commandManager.submitNewCommand(any(), any(), any())).thenReturn(testResponse);
 
         // exercise
         InterruptedException exception =

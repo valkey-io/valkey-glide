@@ -9,18 +9,23 @@ import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.models.Command;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link
- * #CreateClient(RedisClientConfiguration)} to request a client to Redis.
+ * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
+ * client to Redis.
  */
 public class RedisClient extends BaseClient implements BaseCommands {
 
+    protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
+        super(connectionManager, commandManager);
+    }
+
     /**
-     * Request an async (non-blocking) Redis client in Standalone mode.
+     * Async request for an async (non-blocking) Redis client in Standalone mode.
      *
-     * @param config - Redis Client Configuration
+     * @param config Redis client Configuration
      * @return a Future to connect and return a RedisClient
      */
     public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
@@ -53,29 +58,10 @@ public class RedisClient extends BaseClient implements BaseCommands {
         return new CommandManager(channelHandler);
     }
 
-    protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
-        super(connectionManager, commandManager);
-    }
-
-    /**
-     * Executes a single command, without checking inputs. Every part of the command, including
-     * subcommands, should be added as a separate value in args.
-     *
-     * @remarks This function should only be used for single-response commands. Commands that don't
-     *     return response (such as SUBSCRIBE), or that return potentially more than a single response
-     *     (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on
-     *     RESP2 connections) shouldn't be called using this function.
-     * @example Returns a list of all pub/sub clients:
-     *     <pre>
-     * Object result = client.customCommand(new String[]{"CLIENT","LIST","TYPE", "PUBSUB"}).get();
-     * </pre>
-     *
-     * @param args arguments for the custom command
-     * @return a CompletableFuture with response result from Redis
-     */
+    @Override
     public CompletableFuture<Object> customCommand(String[] args) {
         Command command =
                 Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).arguments(args).build();
-        return commandManager.submitNewCommand(command, BaseClient::handleObjectResponse);
+        return commandManager.submitNewCommand(command, Optional.empty(), this::handleObjectResponse);
     }
 }
