@@ -16,6 +16,7 @@ import connection_request.ConnectionRequestOuterClass;
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRetryStrategy;
+import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
@@ -30,7 +31,7 @@ import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import response.ResponseOuterClass;
+import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 public class ConnectionManagerTest {
@@ -53,7 +54,7 @@ public class ConnectionManagerTest {
     private static int REQUEST_TIMEOUT = 3;
 
     @BeforeEach
-    public void setUp() throws ExecutionException, InterruptedException {
+    public void setUp() {
         channel = mock(ChannelHandler.class);
         ChannelFuture closeFuture = mock(ChannelFuture.class);
         when(closeFuture.syncUninterruptibly()).thenReturn(closeFuture);
@@ -63,18 +64,17 @@ public class ConnectionManagerTest {
 
     @SneakyThrows
     @Test
-    public void ConnectionRequestProtobufGeneration_DefaultRedisClientConfiguration_returns() {
+    public void connection_request_protobuf_generation_default_standalone_configuration() {
         // setup
         RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
-                        .setTlsMode(ConnectionRequestOuterClass.TlsMode.NoTls)
+                        .setTlsMode(TlsMode.NoTls)
                         .setClusterModeEnabled(false)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder().setConstantResponse(ResponseOuterClass.ConstantResponse.OK).build();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
         completedFuture.complete(response);
 
         // execute
@@ -88,19 +88,18 @@ public class ConnectionManagerTest {
 
     @SneakyThrows
     @Test
-    public void ConnectionRequestProtobufGeneration_DefaultRedisClusterClientConfiguration_returns() {
+    public void connection_request_protobuf_generation_default_cluster_configuration() {
         // setup
         RedisClusterClientConfiguration redisClusterClientConfiguration =
                 RedisClusterClientConfiguration.builder().build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
-                        .setTlsMode(ConnectionRequestOuterClass.TlsMode.NoTls)
+                        .setTlsMode(TlsMode.NoTls)
                         .setClusterModeEnabled(true)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.Primary)
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder().setConstantResponse(ResponseOuterClass.ConstantResponse.OK).build();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
         completedFuture.complete(response);
 
         // execute
@@ -115,7 +114,7 @@ public class ConnectionManagerTest {
 
     @SneakyThrows
     @Test
-    public void ConnectionRequestProtobufGeneration_RedisClientAllFieldsSet_returns() {
+    public void connection_request_protobuf_generation_with_all_fields_set() {
         // setup
         RedisClientConfiguration redisClientConfiguration =
                 RedisClientConfiguration.builder()
@@ -145,7 +144,7 @@ public class ConnectionManagerTest {
                                         .setHost(DEFAULT_HOST)
                                         .setPort(DEFAULT_PORT)
                                         .build())
-                        .setTlsMode(ConnectionRequestOuterClass.TlsMode.SecureTls)
+                        .setTlsMode(TlsMode.SecureTls)
                         .setReadFrom(ConnectionRequestOuterClass.ReadFrom.PreferReplica)
                         .setClusterModeEnabled(false)
                         .setAuthenticationInfo(
@@ -160,8 +159,7 @@ public class ConnectionManagerTest {
                         .setDatabaseId(DATABASE_ID)
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder().setConstantResponse(ResponseOuterClass.ConstantResponse.OK).build();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
         completedFuture.complete(response);
 
         // execute
@@ -175,12 +173,11 @@ public class ConnectionManagerTest {
 
     @SneakyThrows
     @Test
-    public void CheckRedisResponse_ConstantResponse_returnsSuccessfully() {
+    public void response_validation_on_constant_response_returns_successfully() {
         // setup
         RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder().setConstantResponse(ResponseOuterClass.ConstantResponse.OK).build();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
         completedFuture.complete(response);
 
         // execute
@@ -193,7 +190,7 @@ public class ConnectionManagerTest {
     }
 
     @Test
-    public void onConnection_emptyResponse_throwsClosingException() {
+    public void connection_on_empty_response_throws_ClosingException() {
         // setup
         RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
@@ -213,46 +210,22 @@ public class ConnectionManagerTest {
     }
 
     @Test
-    public void CheckRedisResponse_RequestError_throwsClosingException() {
+    public void connection_on_resp_pointer_throws_ClosingException() {
         // setup
         RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder()
-                        .setRequestError(
-                                ResponseOuterClass.RequestError.newBuilder()
-                                        .setType(ResponseOuterClass.RequestErrorType.Timeout)
-                                        .setMessage("Timeout Occurred")
-                                        .build())
-                        .build();
+        Response response = Response.newBuilder().setRespPointer(42).build();
         completedFuture.complete(response);
 
         // execute
         when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
-        // verify
-        ExecutionException exception = assertThrows(ExecutionException.class, result::get);
-        assertTrue(exception.getCause() instanceof ClosingException);
-
+        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertEquals("Unexpected data in response", executionException.getCause().getMessage());
         verify(channel).close();
-    }
-
-    @Test
-    public void CheckRedisResponse_ClosingError_throwsClosingException() {
-        // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
-        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response = Response.newBuilder().setClosingError("Closing Error Occurred").build();
-        completedFuture.complete(response);
-
-        // execute
-        when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
-
-        // verify
-        ExecutionException exception = assertThrows(ExecutionException.class, result::get);
-        assertTrue(exception.getCause() instanceof ClosingException);
-        assertEquals(response.getClosingError(), exception.getCause().getMessage());
     }
 }

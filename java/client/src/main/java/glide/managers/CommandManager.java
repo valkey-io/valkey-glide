@@ -1,5 +1,6 @@
 package glide.managers;
 
+import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
@@ -31,7 +32,25 @@ public class CommandManager {
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
                 .write(prepareRedisRequest(command.getRequestType(), command.getArguments()), true)
+                .exceptionally(this::exceptionHandler)
                 .thenApplyAsync(response -> responseHandler.apply(response));
+    }
+
+    /**
+     * Exception handler for future pipeline.
+     *
+     * @param e An exception thrown in the pipeline before
+     * @return Nothing, it rethrows the exception
+     */
+    private Response exceptionHandler(Throwable e) {
+        if (e instanceof ClosingException) {
+            channel.close();
+        }
+        if (e instanceof RuntimeException) {
+            // RedisException also goes here
+            throw (RuntimeException) e;
+        }
+        throw new RuntimeException(e);
     }
 
     /**

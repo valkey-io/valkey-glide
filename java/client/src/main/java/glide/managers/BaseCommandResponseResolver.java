@@ -1,13 +1,7 @@
 package glide.managers;
 
-import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConnectionException;
-import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.RedisException;
-import glide.api.models.exceptions.RequestException;
-import glide.api.models.exceptions.TimeoutException;
 import lombok.AllArgsConstructor;
-import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -20,40 +14,15 @@ public class BaseCommandResponseResolver
     private RedisExceptionCheckedFunction<Long, Object> respPointerResolver;
 
     /**
-     * Extracts value from the RESP pointer. <br>
-     * Throws errors when the response is unsuccessful.
+     * Extracts value from the RESP pointer.
      *
-     * @return A generic Object with the Response | null if the response is empty
+     * @return A generic Object with the Response or null if the response is empty
      */
     public Object apply(Response response) throws RedisException {
-        if (response.hasRequestError()) {
-            RequestError error = response.getRequestError();
-            String msg = error.getMessage();
-            switch (error.getType()) {
-                case Unspecified:
-                    // Unspecified error on Redis service-side
-                    throw new RequestException(msg);
-                case ExecAbort:
-                    // Transactional error on Redis service-side
-                    throw new ExecAbortException(msg);
-                case Timeout:
-                    // Timeout from Glide to Redis service
-                    throw new TimeoutException(msg);
-                case Disconnect:
-                    // Connection problem between Glide and Redis
-                    throw new ConnectionException(msg);
-                default:
-                    // Request or command error from Redis
-                    throw new RequestException(msg);
-            }
-        }
-        if (response.hasClosingError()) {
-            // A closing error is thrown when Rust-core is not connected to Redis
-            // We want to close shop and throw a ClosingException
-            // TODO: close the channel on a closing error
-            // channel.close();
-            throw new ClosingException(response.getClosingError());
-        }
+        // Note: errors are already handled before in CallbackDispatcher
+        assert !response.hasClosingError() : "Unhandled response closing error";
+        assert !response.hasRequestError() : "Unhandled response request error";
+
         if (response.hasConstantResponse()) {
             // Return "OK"
             return response.getConstantResponse().toString();

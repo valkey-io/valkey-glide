@@ -1,11 +1,17 @@
 package glide.connectors.handlers;
 
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.ExecAbortException;
+import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
+import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
 /** Holder for resources required to dispatch responses and used by {@link ReadHandler}. */
@@ -13,7 +19,7 @@ import response.ResponseOuterClass.Response;
 public class CallbackDispatcher {
 
     /** Unique request ID (callback ID). Thread-safe and overflow-safe. */
-    private final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);
+    protected final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);
 
     /**
      * Storage of Futures to handle responses. Map key is callback id, which starts from 0. The value
@@ -23,7 +29,7 @@ public class CallbackDispatcher {
      * Negative Java values would be shown as positive on Rust side. There is no data loss, because
      * callback ID remains unique.
      */
-    private final ConcurrentHashMap<Integer, CompletableFuture<Response>> responses =
+    protected final ConcurrentHashMap<Integer, CompletableFuture<Response>> responses =
             new ConcurrentHashMap<>();
 
     /**
@@ -32,7 +38,7 @@ public class CallbackDispatcher {
      */
     // TODO: Optimize to avoid growing up to 2e32 (16 Gb)
     // https://github.com/aws/glide-for-redis/issues/704
-    private final ConcurrentLinkedQueue<Integer> freeRequestIds = new ConcurrentLinkedQueue<>();
+    protected final ConcurrentLinkedQueue<Integer> freeRequestIds = new ConcurrentLinkedQueue<>();
 
     /**
      * Register a new request to be sent. Once response received, the given future completes with it.
@@ -58,21 +64,56 @@ public class CallbackDispatcher {
     }
 
     /**
-     * Complete the corresponding client promise and free resources.
+     * Complete the corresponding client promise, handle error and free resources.
      *
      * @param response A response received
      */
     public void completeRequest(Response response) {
+        if (response.hasClosingError()) {
+            // According to https://github.com/aws/glide-for-redis/issues/851
+            // a response with a closing error may arrive with any/random callback ID (usually -1)
+            // CommandManager and ConnectionManager would close the UDS channel on ClosingException
+            responses
+                    .values()
+                    .forEach(f -> f.completeExceptionally(new ClosingException(response.getClosingError())));
+            responses.clear();
+            return;
+        }
         // Complete and return the response at callbackId
         // free up the callback ID in the freeRequestIds list
         int callbackId = response.getCallbackIdx();
         CompletableFuture<Response> future = responses.remove(callbackId);
-        freeRequestIds.add(callbackId);
         if (future != null) {
+            freeRequestIds.add(callbackId);
+            if (response.hasRequestError()) {
+                RequestError error = response.getRequestError();
+                String msg = error.getMessage();
+                switch (error.getType()) {
+                    case Unspecified:
+                        // Unspecified error on Redis service-side
+                        future.completeExceptionally(new RequestException(msg));
+                    case ExecAbort:
+                        // Transactional error on Redis service-side
+                        future.completeExceptionally(new ExecAbortException(msg));
+                    case Timeout:
+                        // Timeout from Glide to Redis service
+                        future.completeExceptionally(new TimeoutException(msg));
+                    case Disconnect:
+                        // Connection problem between Glide and Redis
+                        future.completeExceptionally(new ConnectionException(msg));
+                    default:
+                        // Request or command error from Redis
+                        future.completeExceptionally(new RequestException(msg));
+                }
+            }
             future.completeAsync(() -> response);
         } else {
             // TODO: log an error.
             // probably a response was received after shutdown or `registerRequest` call was missing
+
+            System.err.printf(
+                    "Received a response for not registered callback id %d, request error = %s%n",
+                    callbackId, response.getRequestError());
         }
     }
 

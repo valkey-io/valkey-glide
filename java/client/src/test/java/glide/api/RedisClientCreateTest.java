@@ -50,7 +50,7 @@ public class RedisClientCreateTest {
 
     @Test
     @SneakyThrows
-    public void createClient_withConfig_successfullyReturnsRedisClient() {
+    public void createClient_with_config_successfully_returns_RedisClient() {
 
         // setup
         CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
@@ -71,7 +71,7 @@ public class RedisClientCreateTest {
 
     @SneakyThrows
     @Test
-    public void createClient_errorOnConnectionThrowsExecutionException() {
+    public void createClient_error_on_connection_throws_ExecutionException() {
         // setup
         CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
         ClosingException exception = new ClosingException("disconnected");
@@ -84,8 +84,7 @@ public class RedisClientCreateTest {
         // exercise
         CompletableFuture<RedisClient> result = CreateClient(config);
 
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> result.get());
+        ExecutionException executionException = assertThrows(ExecutionException.class, result::get);
 
         // verify
         assertEquals(exception, executionException.getCause());
