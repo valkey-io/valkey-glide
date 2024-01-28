@@ -39,10 +39,10 @@
         "typescript": "^4.9.4"
     },
     "optionalDependencies": {
-        "${scope}glide-for-redis-darwin-arm64": "^1.1.0",
-        "${scope}glide-for-redis-darwin-x64": "^1.1.0",
-        "${scope}glide-for-redis-linux-arm64": "^1.1.0",
-        "${scope}glide-for-redis-linux-x64": "^1.1.0"
+        "${scope}glide-for-redis-darwin-arm64": "${package_version}",
+        "${scope}glide-for-redis-darwin-x64": "${package_version}",
+        "${scope}glide-for-redis-linux-arm64": "${package_version}",
+        "${scope}glide-for-redis-linux-x64": "${package_version}"
     },
     "eslintConfig": {
         "extends": [
