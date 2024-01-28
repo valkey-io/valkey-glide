@@ -1184,6 +1184,24 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Zadd, args),
         )
 
+    async def zcard(self, key: str) -> int:
+        """
+        Returns the cardinality (number of elements) of the sorted set stored at `key`.
+
+        See https://redis.io/commands/zcard/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Returns:
+            int: The number of elements in the sorted set.
+
+        Examples:
+            >>> await zcard("my_sorted_set")
+            3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
+        """
+        return cast(int, await self._execute_command(RequestType.Zcard, [key]))
+
     async def zrem(
         self,
         key: str,
