@@ -877,6 +877,20 @@ class BaseTransaction:
         args += [str(increment), member]
         self.append_command(RequestType.Zadd, args)
 
+    def zcard(self, key: str):
+        """
+        Returns the cardinality (number of elements) of the sorted set stored at `key`.
+
+        See https://redis.io/commands/zcard/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Commands response:
+            int: The number of elements in the sorted set.
+        """
+        self.append_command(RequestType.Zcard, [key])
+
     def zrem(
         self,
         key: str,

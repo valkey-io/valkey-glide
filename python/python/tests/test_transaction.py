@@ -87,6 +87,7 @@ def transaction_test(
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     transaction.zadd_incr(key8, "one", 3)
     transaction.zrem(key8, ["one"])
+    transaction.zcard(key8)
     return [
         OK,
         value,
@@ -128,6 +129,7 @@ def transaction_test(
         3,
         4,
         1,
+        2,
     ]
 
 
