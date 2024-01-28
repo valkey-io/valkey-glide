@@ -8,7 +8,7 @@ on:
             - "v*.*"
 jobs:
     publish-binaries:
-        name: Publish packages
+        name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         strategy:
             fail-fast: false
@@ -20,7 +20,6 @@ jobs:
                           RUNNER: ubuntu-latest,
                           ARCH: x64,
                           TARGET: x86_64-unknown-linux-gnu,
-                          NPM_PUBLISH: true,
                           PYPI_PUBLISH: true,
                       }
                     - {
@@ -29,7 +28,6 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
                           TARGET: aarch64-unknown-linux-gnu,
-                          NPM_PUBLISH: true,
                           PYPI_PUBLISH: true,
                           CONTAINER: "2_28",
                       }
@@ -39,7 +37,6 @@ jobs:
                           RUNNER: macos-latest,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
-                          NPM_PUBLISH: true,
                           PYPI_PUBLISH: true,
                       }
                     - {
@@ -48,7 +45,6 @@ jobs:
                           RUNNER: macos-13-xlarge,
                           arch: arm64,
                           TARGET: aarch64-apple-darwin,
-                          NPM_PUBLISH: true,
                           PYPI_PUBLISH: true,
                       }
         steps:
@@ -61,64 +57,6 @@ jobs:
               shell: bash
               run: |
                   echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
-
-            ###### NODEJS #####
-
-            - name: Setup node
-              if: matrix.build.NPM_PUBLISH == true
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "16"
-                  registry-url: "https://registry.npmjs.org"
-                  architecture: ${{ matrix.build.ARCH }}
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Build Node wrapper
-              if: matrix.build.NPM_PUBLISH == true
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.build.OS }}
-                  named_os: ${{ matrix.build.NAMED_OS }}
-                  arch: ${{ matrix.build.ARCH }}
-                  target: ${{ matrix.build.TARGET }}
-                  npm_scope: ${{ vars.NPM_SCOPE }}
-                  publish: "true"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Publish to NPM
-              if: matrix.build.NPM_PUBLISH == true
-              shell: bash
-              working-directory: ./node
-              run: |
-                  npm publish
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Pack the Node package
-              if: matrix.build.NPM_PUBLISH == true
-              shell: bash
-              working-directory: ./node
-              run: |
-                  # Remove the "cpu" and "os" fileds so the base package would be able to install it on ubuntu
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/"cpu":/d' ./package.json && sed -i $SED_FOR_MACOS '/"os":/d' ./package.json 
-                  mkdir -p bin
-                  npm pack --pack-destination ./bin
-                  ls ./bin
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Upload the Node package
-              if: matrix.build.NPM_PUBLISH == true
-              uses: actions/upload-artifact@v3
-              with:
-                  name: ${{ matrix.build.TARGET }}
-                  path: ./node/bin
-                  if-no-files-found: error
-
-            ###### PYTHON #####
 
             - name: Set the package version for Python
               if: matrix.build.PYPI_PUBLISH == true
@@ -134,6 +72,11 @@ jobs:
               uses: actions/setup-python@v4
               with:
                   python-version: "3.10"
+
+            - name: Set up Python older versions for MacOS
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
+              run: |
+                brew install python@3.8 python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: matrix.build.PYPI_PUBLISH == true && contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
@@ -187,7 +130,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i python3.10 python3.11 python3.12
+                  args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
 
             - name: Upload Python wheels
               if: matrix.build.PYPI_PUBLISH == true
@@ -198,7 +141,7 @@ jobs:
                   if-no-files-found: error
 
     publish-to-pypi:
-        name: Publish PyPI package
+        name: Publish the base PyPi package
         runs-on: ubuntu-latest
         needs: publish-binaries
         steps:
@@ -214,82 +157,3 @@ jobs:
               with:
                   command: upload
                   args: --skip-existing python/wheels/*
-
-    publish-base-to-npm:
-        name: Publish the base NPM package
-        needs: publish-binaries
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v3
-              with:
-                  submodules: "true"
-
-            - name: Install node
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "16"
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
-
-            - name: Create package.json file
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  export pkg_name=glide-for-redis
-                  echo "${GITHUB_REF:11}"
-                  export package_version=${GITHUB_REF:11}
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
-                  cat package.json
-                  # Fix index.ts based on the scope variable
-                  sed -i "s|@scope/|${scope}|g" index.ts
-              env:
-                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
-
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ubuntu-latest
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create a directory for the packed packages
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: mkdir packages
-
-            - name: Download the packed packages
-              id: download
-              uses: actions/download-artifact@v3
-              with:
-                  path: ./node/npm/glide/packages
-
-            - name: Install the packed packages
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  ls -LR packages/
-                  packages_list=`find ${{steps.download.outputs.download-path}} -type f -follow -print`
-                  for package in $packages_list
-                  do
-                    if [[ "${package}" == *.tgz ]]
-                    then
-                        echo "Installing package $package"
-                        npm i --no-save "$package"
-                    fi
-                  done
-
-            - name: Publish the base package
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  # Copy the main README file
-                  cp ../../README.md .
-                  npm install
-                  npm run build
-                  npm publish
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
