@@ -178,15 +178,13 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[str],
         route: Optional[Route] = ...,
-    ) -> TResult:
-        ...
+    ) -> TResult: ...
 
     async def execute_transaction(
         self,
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
-    ) -> List[TResult]:
-        ...
+    ) -> List[TResult]: ...
 
     async def set(
         self,
