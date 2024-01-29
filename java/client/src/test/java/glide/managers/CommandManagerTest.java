@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
-import lombok.SneakyThrows;
+import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import response.ResponseOuterClass.Response;
@@ -33,8 +33,8 @@ public class CommandManagerTest {
     }
 
     @Test
-    @SneakyThrows
-    public void submitNewCommand_return_Object_result() {
+    public void submitNewCommand_returnObjectResult()
+            throws ExecutionException, InterruptedException {
 
         // setup
         long pointer = -1;
@@ -46,7 +46,7 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
         // exercise
-        CompletableFuture<Object> result =
+        CompletableFuture result =
                 service.submitNewCommand(
                         command, new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
@@ -56,8 +56,7 @@ public class CommandManagerTest {
     }
 
     @Test
-    @SneakyThrows
-    public void submitNewCommand_return_Null_result() {
+    public void submitNewCommand_returnNullResult() throws ExecutionException, InterruptedException {
         // setup
         Response respPointerResponse = Response.newBuilder().build();
         CompletableFuture<Response> future = new CompletableFuture<>();
@@ -65,7 +64,7 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
         // exercise
-        CompletableFuture<Object> result =
+        CompletableFuture result =
                 service.submitNewCommand(
                         command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
@@ -75,8 +74,8 @@ public class CommandManagerTest {
     }
 
     @Test
-    @SneakyThrows
-    public void submitNewCommand_return_String_result() {
+    public void submitNewCommand_returnStringResult()
+            throws ExecutionException, InterruptedException {
 
         // setup
         long pointer = 123;
@@ -89,7 +88,7 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
         // exercise
-        CompletableFuture<Object> result =
+        CompletableFuture result =
                 service.submitNewCommand(
                         command, new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();

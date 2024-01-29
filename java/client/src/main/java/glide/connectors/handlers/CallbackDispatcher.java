@@ -108,12 +108,18 @@ public class CallbackDispatcher {
             }
             future.completeAsync(() -> response);
         } else {
-            // TODO: log an error.
+            // TODO: log an error thru logger.
             // probably a response was received after shutdown or `registerRequest` call was missing
-
             System.err.printf(
                     "Received a response for not registered callback id %d, request error = %s%n",
                     callbackId, response.getRequestError());
+            responses
+                    .values()
+                    .forEach(
+                            f ->
+                                    f.completeExceptionally(
+                                            new ClosingException("Client is in an erroneous state and should close")));
+            responses.clear();
         }
     }
 

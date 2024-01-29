@@ -152,7 +152,7 @@ public class ExceptionHandlingTests {
 
         var future1 = connectionManager.connectToRedis(createDummyConfig());
         var future2 = connectionManager.connectToRedis(createDummyConfig());
-        var response = Response.newBuilder().setCallbackIdx(42).setClosingError("TEST").build();
+        var response = Response.newBuilder().setClosingError("TEST").build();
         callbackDispatcher.completeRequest(response);
 
         var exception = assertThrows(ExecutionException.class, future1::get);
@@ -197,13 +197,44 @@ public class ExceptionHandlingTests {
             callbackDispatcher.completeRequest(response);
 
             var exception = assertThrows(ExecutionException.class, future::get);
-            // a ClosingException thrown from CallbackDispatcher::completeRequest and then
+            // a RedisException thrown from CallbackDispatcher::completeRequest and then
             // rethrown by CommandManager::exceptionHandler
             assertEquals(errorType.getValue(), exception.getCause().getClass());
             assertEquals("TEST", exception.getCause().getMessage());
             // check the channel
             assertFalse(channelHandler.wasClosed);
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void callback_dispatcher_handles_response_without_error_but_with_incorrect_callback_id() {
+        var callbackDispatcher = new CallbackDispatcher();
+        var channelHandler = new TestChannelHandler(callbackDispatcher);
+        var connectionManager = new ConnectionManager(channelHandler);
+
+        var future1 = connectionManager.connectToRedis(createDummyConfig());
+        var future2 = connectionManager.connectToRedis(createDummyConfig());
+
+        var response = Response.newBuilder().setCallbackIdx(42).build();
+        callbackDispatcher.completeRequest(response);
+
+        var exception = assertThrows(ExecutionException.class, future1::get);
+        // a ClosingException thrown from CallbackDispatcher::completeRequest and then
+        // rethrown by CommandManager::exceptionHandler
+        assertTrue(exception.getCause() instanceof ClosingException);
+        assertEquals(
+                exception.getCause().getMessage(), "Client is in an erroneous state and should close");
+        // check the channel
+        assertTrue(channelHandler.wasClosed);
+
+        // all pending requests should be aborted once ClosingError received in callback dispatcher
+        exception = assertThrows(ExecutionException.class, future2::get);
+        // or could be cancelled in CallbackDispatcher::shutdownGracefully
+        // cancellation overwrites previous status, so we may not get ClosingException due to a race
+        assertTrue(
+                exception.getCause() instanceof ClosingException
+                        || exception.getCause() instanceof CancellationException);
     }
 
     @Test
