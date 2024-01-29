@@ -21,7 +21,7 @@ public class ClusterValue<T> {
      * Check with {@link #hasMultiData()} prior to accessing the data.
      */
     public Map<String, T> getMultiValue() {
-        assert hasMultiData();
+        assert hasMultiData() : "No multi value stored";
         return multiValue;
     }
 
@@ -30,11 +30,11 @@ public class ClusterValue<T> {
      * Check with {@link #hasSingleData()} ()} prior to accessing the data.
      */
     public T getSingleValue() {
-        assert hasSingleData();
+        assert hasSingleData() : "No single value stored";
         return singleValue;
     }
 
-    /** A constructor for the value. */
+    /** A constructor for the value with type auto-detection. */
     @SuppressWarnings("unchecked")
     public static <T> ClusterValue<T> of(Object data) {
         var res = new ClusterValue<T>();
@@ -43,6 +43,20 @@ public class ClusterValue<T> {
         } else {
             res.singleValue = (T) data;
         }
+        return res;
+    }
+
+    /** A constructor for the value. */
+    public static <T> ClusterValue<T> ofSingleValue(T data) {
+        var res = new ClusterValue<T>();
+        res.singleValue = data;
+        return res;
+    }
+
+    /** A constructor for the value. */
+    public static <T> ClusterValue<T> ofMultiValue(Map<String, T> data) {
+        var res = new ClusterValue<T>();
+        res.multiValue = data;
         return res;
     }
 

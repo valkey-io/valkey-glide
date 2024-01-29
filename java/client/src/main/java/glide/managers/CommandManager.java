@@ -1,6 +1,9 @@
 package glide.managers;
 
-import glide.api.models.configuration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
@@ -11,10 +14,6 @@ import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.RequestType;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotIdRoute;
-import redis_request.RedisRequestOuterClass.SlotKeyRoute;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -31,18 +30,20 @@ public class CommandManager {
      * Build a command and send.
      *
      * @param command The command to execute
-     * @param route The routing options
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
-            Command command,
-            Optional<Route> route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            Command command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
-                .write(prepareRedisRequest(command.getRequestType(), command.getArguments(), route), true)
+                .write(
+                        prepareRedisRequest(
+                                command.getRequestType(),
+                                command.getArguments(),
+                                Optional.ofNullable(command.getRoute())),
+                        true)
                 .thenApplyAsync(responseHandler::apply);
     }
 
@@ -83,57 +84,28 @@ public class CommandManager {
             return builder;
         }
 
-        switch (route.get().getRouteType()) {
-            case RANDOM:
-            case ALL_NODES:
-            case ALL_PRIMARIES:
-                builder.setRoute(
-                        RedisRequestOuterClass.Routes.newBuilder()
-                                .setSimpleRoutes(getSimpleRoutes(route.get().getRouteType()))
-                                .build());
-                break;
-            case PRIMARY_SLOT_KEY:
-            case REPLICA_SLOT_KEY:
-                builder.setRoute(
-                        RedisRequestOuterClass.Routes.newBuilder()
-                                .setSlotKeyRoute(
-                                        SlotKeyRoute.newBuilder()
-                                                .setSlotKey(route.get().getSlotKey())
-                                                .setSlotType(getSlotTypes(route.get().getRouteType()))));
-                break;
-            case PRIMARY_SLOT_ID:
-            case REPLICA_SLOT_ID:
-                builder.setRoute(
-                        RedisRequestOuterClass.Routes.newBuilder()
-                                .setSlotIdRoute(
-                                        SlotIdRoute.newBuilder()
-                                                .setSlotId(route.get().getSlotId())
-                                                .setSlotType(getSlotTypes(route.get().getRouteType()))));
+        if (route.get() instanceof SimpleRoute) {
+            builder.setRoute(
+                    RedisRequestOuterClass.Routes.newBuilder()
+                            .setSimpleRoutes(((SimpleRoute) route.get()).getProtobufMapping())
+                            .build());
+        } else if (route.get() instanceof SlotIdRoute) {
+            builder.setRoute(
+                    RedisRequestOuterClass.Routes.newBuilder()
+                            .setSlotIdRoute(
+                                    RedisRequestOuterClass.SlotIdRoute.newBuilder()
+                                            .setSlotId(((SlotIdRoute) route.get()).getSlotId())
+                                            .setSlotType(((SlotIdRoute) route.get()).getSlotType().getSlotTypes())));
+        } else if (route.get() instanceof SlotKeyRoute) {
+            builder.setRoute(
+                    RedisRequestOuterClass.Routes.newBuilder()
+                            .setSlotKeyRoute(
+                                    RedisRequestOuterClass.SlotKeyRoute.newBuilder()
+                                            .setSlotKey(((SlotKeyRoute) route.get()).getSlotKey())
+                                            .setSlotType(((SlotKeyRoute) route.get()).getSlotType().getSlotTypes())));
+        } else {
+            throw new IllegalArgumentException("Unknown type of route");
         }
         return builder;
-    }
-
-    private SimpleRoutes getSimpleRoutes(Route.RouteType routeType) {
-        switch (routeType) {
-            case RANDOM:
-                return SimpleRoutes.Random;
-            case ALL_NODES:
-                return SimpleRoutes.AllNodes;
-            case ALL_PRIMARIES:
-                return SimpleRoutes.AllPrimaries;
-        }
-        throw new IllegalStateException("Unreachable code");
-    }
-
-    private SlotTypes getSlotTypes(Route.RouteType routeType) {
-        switch (routeType) {
-            case PRIMARY_SLOT_ID:
-            case PRIMARY_SLOT_KEY:
-                return SlotTypes.Primary;
-            case REPLICA_SLOT_ID:
-            case REPLICA_SLOT_KEY:
-                return SlotTypes.Replica;
-        }
-        throw new IllegalStateException("Unreachable code");
     }
 }

@@ -13,10 +13,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static response.ResponseOuterClass.RequestErrorType.UNRECOGNIZED;
-import static response.ResponseOuterClass.RequestErrorType.Unspecified;
 
-import glide.api.models.configuration.Route;
-import glide.api.models.configuration.Route.RouteType;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
@@ -24,8 +25,6 @@ import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,8 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import redis_request.RedisRequestOuterClass.RedisRequest;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
@@ -72,9 +69,7 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture result =
                 service.submitNewCommand(
-                        command,
-                        Optional.empty(),
-                        new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
+                        command, new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
 
         // verify
@@ -92,9 +87,7 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture result =
                 service.submitNewCommand(
-                        command,
-                        Optional.empty(),
-                        new BaseCommandResponseResolver((p) -> new RuntimeException("")));
+                        command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
 
         // verify
@@ -118,9 +111,7 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture result =
                 service.submitNewCommand(
-                        command,
-                        Optional.empty(),
-                        new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
+                        command, new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();
 
         // verify
@@ -147,9 +138,7 @@ public class CommandManagerTest {
                         () -> {
                             CompletableFuture result =
                                     service.submitNewCommand(
-                                            command,
-                                            Optional.empty(),
-                                            new BaseCommandResponseResolver((ptr) -> new Object()));
+                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
                             result.get();
                         });
 
@@ -183,8 +172,7 @@ public class CommandManagerTest {
                         ExecutionException.class,
                         () -> {
                             CompletableFuture result =
-                                    service.submitNewCommand(
-                                            command, Optional.empty(), new BaseCommandResponseResolver((ptr) -> null));
+                                    service.submitNewCommand(command, new BaseCommandResponseResolver((ptr) -> null));
                             result.get();
                         });
 
@@ -210,23 +198,17 @@ public class CommandManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = RouteType.class,
-            names = {"ALL_NODES", "ALL_PRIMARIES", "RANDOM"})
-    public void prepare_request_with_simple_routes(RouteType routeType) {
+    @EnumSource(value = SimpleRoute.class)
+    public void prepare_request_with_simple_routes(SimpleRoute routeType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        var protocSimpleRouteToClientSimpleRoute =
-                Map.of(
-                        SimpleRoutes.Random, RouteType.RANDOM,
-                        SimpleRoutes.AllNodes, RouteType.ALL_NODES,
-                        SimpleRoutes.AllPrimaries, RouteType.ALL_PRIMARIES);
+        var command =
+                Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).route(routeType).build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(command, Optional.of(new Route.Builder(routeType).build()), r -> null);
+        service.submitNewCommand(command, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -235,31 +217,26 @@ public class CommandManagerTest {
                 () -> assertTrue(requestBuilder.getRoute().hasSimpleRoutes()),
                 () ->
                         assertEquals(
-                                routeType,
-                                protocSimpleRouteToClientSimpleRoute.get(
-                                        requestBuilder.getRoute().getSimpleRoutes())),
+                                routeType.getProtobufMapping(), requestBuilder.getRoute().getSimpleRoutes()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = RouteType.class,
-            names = {"PRIMARY_SLOT_ID", "REPLICA_SLOT_ID"})
-    public void prepare_request_with_slot_id_routes(RouteType routeType) {
+    @EnumSource(value = SlotType.class)
+    public void prepare_request_with_slot_id_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        var protocSlotTypeToClientSlotIdRoute =
-                Map.of(
-                        SlotTypes.Primary, RouteType.PRIMARY_SLOT_ID,
-                        SlotTypes.Replica, RouteType.REPLICA_SLOT_ID);
+        var command =
+                Command.builder()
+                        .requestType(Command.RequestType.CUSTOM_COMMAND)
+                        .route(new SlotIdRoute(42, slotType))
+                        .build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(
-                command, Optional.of(new Route.Builder(routeType).setSlotId(42).build()), r -> null);
+        service.submitNewCommand(command, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -268,32 +245,27 @@ public class CommandManagerTest {
                 () -> assertTrue(requestBuilder.getRoute().hasSlotIdRoute()),
                 () ->
                         assertEquals(
-                                routeType,
-                                protocSlotTypeToClientSlotIdRoute.get(
-                                        requestBuilder.getRoute().getSlotIdRoute().getSlotType())),
+                                slotType.getSlotTypes(), requestBuilder.getRoute().getSlotIdRoute().getSlotType()),
                 () -> assertEquals(42, requestBuilder.getRoute().getSlotIdRoute().getSlotId()),
                 () -> assertFalse(requestBuilder.getRoute().hasSimpleRoutes()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = RouteType.class,
-            names = {"PRIMARY_SLOT_KEY", "REPLICA_SLOT_KEY"})
-    public void prepare_request_with_slot_key_routes(RouteType routeType) {
+    @EnumSource(value = SlotType.class)
+    public void prepare_request_with_slot_key_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        var protocSlotTypeToClientSlotKeyRoute =
-                Map.of(
-                        SlotTypes.Primary, RouteType.PRIMARY_SLOT_KEY,
-                        SlotTypes.Replica, RouteType.REPLICA_SLOT_KEY);
+        var command =
+                Command.builder()
+                        .requestType(Command.RequestType.CUSTOM_COMMAND)
+                        .route(new SlotKeyRoute("TEST", slotType))
+                        .build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(
-                command, Optional.of(new Route.Builder(routeType).setSlotKey("TEST").build()), r -> null);
+        service.submitNewCommand(command, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -302,11 +274,25 @@ public class CommandManagerTest {
                 () -> assertTrue(requestBuilder.getRoute().hasSlotKeyRoute()),
                 () ->
                         assertEquals(
-                                routeType,
-                                protocSlotTypeToClientSlotKeyRoute.get(
-                                        requestBuilder.getRoute().getSlotKeyRoute().getSlotType())),
+                                slotType.getSlotTypes(), requestBuilder.getRoute().getSlotKeyRoute().getSlotType()),
                 () -> assertEquals("TEST", requestBuilder.getRoute().getSlotKeyRoute().getSlotKey()),
                 () -> assertFalse(requestBuilder.getRoute().hasSimpleRoutes()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()));
+    }
+
+    @Test
+    public void prepare_request_with_unknown_route_type() {
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        var command =
+                Command.builder()
+                        .requestType(Command.RequestType.CUSTOM_COMMAND)
+                        .route(() -> false)
+                        .build();
+
+        var exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> service.submitNewCommand(command, r -> null));
+        assertEquals("Unknown type of route", exception.getMessage());
     }
 }

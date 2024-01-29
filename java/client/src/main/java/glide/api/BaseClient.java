@@ -1,5 +1,9 @@
 package glide.api;
 
+import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+
+import glide.connectors.handlers.CallbackDispatcher;
+import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
@@ -42,5 +46,18 @@ public abstract class BaseClient implements AutoCloseable {
             // suppressing the interrupted exception - it is already suppressed in the future
             throw new RuntimeException(e);
         }
+    }
+
+    protected static ChannelHandler buildChannelHandler() throws InterruptedException {
+        CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
+        return new ChannelHandler(callbackDispatcher, getSocket());
+    }
+
+    protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
+        return new ConnectionManager(channelHandler);
+    }
+
+    protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
+        return new CommandManager(channelHandler);
     }
 }

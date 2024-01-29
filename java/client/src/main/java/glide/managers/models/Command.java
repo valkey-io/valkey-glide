@@ -1,5 +1,6 @@
 package glide.managers.models;
 
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -13,6 +14,9 @@ public class Command {
 
     /** Redis command request type */
     @NonNull final RequestType requestType;
+
+    /** Request routing configuration */
+    final Route route;
 
     /** List of Arguments for the Redis command request */
     @Builder.Default final String[] arguments = new String[] {};

@@ -20,7 +20,10 @@ public class ClusterValueTests {
                 () -> assertFalse(value.hasMultiData()),
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertNull(value.getSingleValue()),
-                () -> assertThrows(Throwable.class, value::getMultiValue));
+                () ->
+                        assertEquals(
+                                "No multi value stored",
+                                assertThrows(Throwable.class, value::getMultiValue).getMessage()));
     }
 
     @Test
@@ -30,7 +33,10 @@ public class ClusterValueTests {
                 () -> assertFalse(value.hasMultiData()),
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertEquals(42, value.getSingleValue()),
-                () -> assertThrows(Throwable.class, value::getMultiValue));
+                () ->
+                        assertEquals(
+                                "No multi value stored",
+                                assertThrows(Throwable.class, value::getMultiValue).getMessage()));
     }
 
     @Test
@@ -42,6 +48,27 @@ public class ClusterValueTests {
                 () -> assertFalse(value.hasSingleData()),
                 () -> assertNotNull(value.getMultiValue()),
                 () -> assertEquals(data, value.getMultiValue()),
-                () -> assertThrows(Throwable.class, value::getSingleValue));
+                () ->
+                        assertEquals(
+                                "No single value stored",
+                                assertThrows(Throwable.class, value::getSingleValue).getMessage()));
+    }
+
+    @Test
+    public void single_value_ctor() {
+        var value = ClusterValue.ofSingleValue(Map.of("config1", "param1", "config2", "param2"));
+        assertAll(
+                () -> assertFalse(value.hasMultiData()),
+                () -> assertTrue(value.hasSingleData()),
+                () -> assertNotNull(value.getSingleValue()));
+    }
+
+    @Test
+    public void multi_value_ctor() {
+        var value = ClusterValue.ofMultiValue(Map.of("config1", "param1", "config2", "param2"));
+        assertAll(
+                () -> assertTrue(value.hasMultiData()),
+                () -> assertFalse(value.hasSingleData()),
+                () -> assertNotNull(value.getMultiValue()));
     }
 }
