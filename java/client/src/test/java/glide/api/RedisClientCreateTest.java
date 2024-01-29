@@ -78,7 +78,8 @@ public class RedisClientCreateTest {
         CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
         ClosingException exception = new ClosingException("disconnected");
         connectToRedisFuture.completeExceptionally(exception);
-        RedisClientConfiguration config = RedisClientConfiguration.builder().build();
+        RedisClientConfiguration config =
+                RedisClientConfiguration.builder().threadPoolResource(threadPoolResource).build();
 
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
