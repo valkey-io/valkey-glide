@@ -101,4 +101,7 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     jvmArgs "-Djava.library.path=${project.rootDir}/target/release"
+    afterTest { desc, result ->
+        logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
+    }
 }
