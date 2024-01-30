@@ -19,6 +19,22 @@ dependencies {
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
 }
 
+def standaloneRedisPorts = []
+def clusterRedisPorts = []
+
+ext {
+    extractPortsFromClusterManagerOutput = { String output, ArrayList dest ->
+        for (def line : output.split("\n")) {
+            if (!line.startsWith("CLUSTER_NODES="))
+                continue
+
+            def addresses = line.split("=")[1].split(",")
+            for (def address : addresses)
+                dest << address.split(":")[1]
+        }
+    }
+}
+
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
     commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster', '--keep-folder'
@@ -38,14 +54,30 @@ tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
 }
 
-tasks.register('startCluster', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode', '-p', '7000', '7001', '7002', '7003', '7004', '7005'
+tasks.register('startCluster') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
+                standardOutput = os
+            }
+            extractPortsFromClusterManagerOutput(os.toString(), clusterRedisPorts)
+        }
+    }
 }
 
-tasks.register('startStandalone', Exec) {
-    workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'start', '-p', '6380', '-r', '0'
+tasks.register('startStandalone') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
+                standardOutput = os
+            }
+            extractPortsFromClusterManagerOutput(os.toString(), standaloneRedisPorts)
+        }
+    }
 }
 
 test.dependsOn 'stopAllBeforeTests'
@@ -56,8 +88,12 @@ test.finalizedBy 'stopAllAfterTests'
 test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
-    systemProperty 'test.redis.standalone.port', '6380'
-    systemProperty 'test.redis.cluster.port', '7000'
+    doFirst {
+        println "Cluster ports = ${clusterRedisPorts}"
+        println "Standalone ports = ${standaloneRedisPorts}"
+        systemProperty 'test.redis.standalone.ports', standaloneRedisPorts.join(',')
+        systemProperty 'test.redis.cluster.ports', clusterRedisPorts.join(',')
+    }
 
     testLogging {
         exceptionFormat "full"

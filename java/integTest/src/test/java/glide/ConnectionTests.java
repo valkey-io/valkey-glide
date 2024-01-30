@@ -15,7 +15,8 @@ public class ConnectionTests {
         var regularClient =
                 RedisClient.CreateClient(
                                 RedisClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(TestConfiguration.STANDALONE_PORT).build())
+                                        .address(
+                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
                         .get(10, TimeUnit.SECONDS);
         regularClient.close();

@@ -1,5 +1,7 @@
 package glide;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import glide.api.RedisClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -19,7 +21,8 @@ public class CommandTests {
         regularClient =
                 RedisClient.CreateClient(
                                 RedisClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(TestConfiguration.STANDALONE_PORT).build())
+                                        .address(
+                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
                         .get(10, TimeUnit.SECONDS);
     }
@@ -33,6 +36,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        regularClient.customCommand(new String[] {"info"}).get(10, TimeUnit.SECONDS);
+        var data = regularClient.customCommand(new String[] {"info"}).get(10, TimeUnit.SECONDS);
+        assertTrue(((String) data).contains("# Stats"));
     }
 }
