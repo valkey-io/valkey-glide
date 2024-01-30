@@ -15,6 +15,7 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
+import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -26,15 +27,19 @@ import glide.managers.models.Command;
 import glide.managers.models.Command.RequestType;
 import io.netty.channel.ChannelFuture;
 import java.io.IOException;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.RequestError;
+import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
 
 // ./gradlew :client:test --tests ExceptionHandlingTests  --debug-jvm
@@ -171,39 +176,40 @@ public class ExceptionHandlingTests {
                         || exception.getCause() instanceof CancellationException);
     }
 
-    @Test
+    private static Stream<Arguments> getProtobufErrorsToJavaClientErrorsMapping() {
+        return Stream.of(
+                Arguments.of(Unspecified, RequestException.class),
+                Arguments.of(ExecAbort, ExecAbortException.class),
+                Arguments.of(Timeout, TimeoutException.class),
+                Arguments.of(Disconnect, ConnectionException.class)
+                // can't test default branch in switch-case
+                );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getProtobufErrorsToJavaClientErrorsMapping")
     @SneakyThrows
-    public void callback_dispatcher_handles_response_with_request_error() {
+    public void callback_dispatcher_handles_response_with_request_error(
+            RequestErrorType errorType, Class<? extends RedisException> exceptionType) {
         var callbackDispatcher = new CallbackDispatcher();
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
 
-        var protobufErrorsToJavaClientErrors =
-                Map.of(
-                        Unspecified, RequestException.class,
-                        ExecAbort, ExecAbortException.class,
-                        Timeout, TimeoutException.class,
-                        Disconnect, ConnectionException.class);
-        // can't test default branch in switch-case
+        var future = commandManager.submitNewCommand(createDummyCommand(), r -> null);
+        var response =
+                Response.newBuilder()
+                        .setCallbackIdx(0)
+                        .setRequestError(RequestError.newBuilder().setType(errorType).setMessage("TEST"))
+                        .build();
+        callbackDispatcher.completeRequest(response);
 
-        for (var errorType : protobufErrorsToJavaClientErrors.entrySet()) {
-            var future = commandManager.submitNewCommand(createDummyCommand(), r -> null);
-            var response =
-                    Response.newBuilder()
-                            .setCallbackIdx(0)
-                            .setRequestError(
-                                    RequestError.newBuilder().setType(errorType.getKey()).setMessage("TEST"))
-                            .build();
-            callbackDispatcher.completeRequest(response);
-
-            var exception = assertThrows(ExecutionException.class, future::get);
-            // a RedisException thrown from CallbackDispatcher::completeRequest and then
-            // rethrown by CommandManager::exceptionHandler
-            assertEquals(errorType.getValue(), exception.getCause().getClass());
-            assertEquals("TEST", exception.getCause().getMessage());
-            // check the channel
-            assertFalse(channelHandler.wasClosed);
-        }
+        var exception = assertThrows(ExecutionException.class, future::get);
+        // a RedisException thrown from CallbackDispatcher::completeRequest and then
+        // rethrown by CommandManager::exceptionHandler
+        assertEquals(exceptionType, exception.getCause().getClass());
+        assertEquals("TEST", exception.getCause().getMessage());
+        // check the channel
+        assertFalse(channelHandler.wasClosed);
     }
 
     @Test
