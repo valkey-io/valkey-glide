@@ -86,6 +86,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             Some(ExpectedReturnType::Boolean)
         }
         b"SMEMBERS" => Some(ExpectedReturnType::Set),
+        b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         _ => None,
     }
 }
