@@ -14,6 +14,8 @@ from typing import (
     Union,
     cast,
     get_args,
+    Callable,
+    Any,
 )
 
 from glide.constants import TOK, TResult
@@ -1368,3 +1370,104 @@ class CoreCommands(Protocol):
                 ["foo", "bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
+
+    @dataclass
+    class PubSubMsg:
+        """ Describes incomming message """
+        message: str
+        """
+        Incomming message
+        """
+        channel: str
+        """
+        Name of an channel that triggered the message
+        """
+        pattern: Optional[str]
+        """
+        Pattern that triggered the message
+        """
+
+    class ChannelModes(Enum):
+        """ Describes subsciption modes. """
+        Exact = 1
+        """ Use exact channel names """
+        Pattern = 2
+        """ Use channel name patterns """
+        Sharded = 3
+        """ Use sharded PUBSUB. See  https://redis.io/docs/interact/pubsub/#sharded-pubsub for more details """
+
+    async def subscribe(self,
+                        channels_or_patterns: Set[str],
+                        channel_mode: ChannelModes,
+                        callback: Callable[[PubSubMsg, Optional[Any]]],
+                        context: Optional[Any]) -> None:
+        """
+        Add specific channels or set of channels defined by a pattern to active subscriptions.
+        The callback is associated with each channel/pattern,
+        meaning subsequent subsciption for the same channel/pattern will override the previous association, dereferencing the original callback object
+        Note1: Overlapping subscriptions produced by combinations of Exact and Pattern modes
+        count as distinc subscriptions and will produce duplicated messages.
+        Note2: Patterns are not applicable in Sharded mode. 
+        See https://redis.io/docs/interact/pubsub for more details.
+
+        Args:
+            channels_or_patterns: Set of channels or patterns to subscibe to.
+            channel_mode: Mode of operation. See ChannelModes
+            callback: Callback to be async-triggered for each new message accompanied with a context object. For each channel or pattern there is exactly one active callback.
+                    Subsequent calls to subscribe() will reset callbacks for existing channels or patterns.
+            context: User-provided context for this subscription        
+
+        Examples:
+            >>> await client.subscribe({"local-news"}, ChannelModes.Exact, process_news_message, None)
+                1  # Subscribes to local-news channel with process_news_message callback function
+            >>> await client.subscribe({"*"}, ChannelModes.Pattern, process_all_messages, None)
+                2  # Subscribes to all channels with process_all_message callback function
+        """
+        pass
+
+    async def publish(self,
+                      message: str,
+                      channels: Set[str],
+                      sharded: bool = False) -> int:
+        """
+        Publish message on channels.
+        See https://redis.io/docs/interact/pubsub for more details.
+
+        Args:
+            message: Message to publish
+            channels: Set of channels or patterns to publish the message on.
+            sharded: Use sharded PUBSUB mode.
+
+        Returns:
+            int: Number of clients that received the message. //TODO: Consider None, do we really want it?
+
+        Examples:
+            >>> await client.publish("Hi all!", {"global-channel"}, True)
+                1  # Publishes "Hi all!" message on global-channel channel using sharded mode
+            >>> await client.publish("Hi to sharded channel1 and channel2!", {"channel1", "channel2"}, True)
+                2  # Publishes "Hi to sharded channel1 and channel2!" message on channel1 and channel2 using sharded mode
+        """
+        pass
+
+    # async def get_pubsub_message(self) -> PubSubMsg:
+    #     pass
+
+    async def unsubscribe(self,
+                          channels_or_patterns: Set[str],
+                          channel_mode: ChannelModes):
+        """
+        Remove specific channels or channel patterns from active susbsciptions.
+        Note that channels and patterns must be removed separately.
+        See https://redis.io/docs/interact/pubsub for more details.
+
+        Args:
+            channels_or_patterns: Set of channels or patterns to unsubscibe from.
+            channel_mode: Mode of operation. See ChannelModes
+
+        Examples:
+            >>> await client.unsubscribe({"local-news"}, ChannelModes.Exact)
+                1  # Removes "local-news" channel from active exact subscriptions
+            >>> await client.unsubscribe({"*"}, ChannelModes.Pattern)
+                2  # Removes channel pattern "*" from active pattern subsciptions
+        """
+        pass
