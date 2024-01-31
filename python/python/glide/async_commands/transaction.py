@@ -117,7 +117,7 @@ class BaseTransaction:
             parameters (List[str]): A list of configuration parameter names to retrieve values for.
 
         Command response:
-            List[str]: A list of values corresponding to the configuration parameters.
+            Dict[str, str]: A dictionary of values corresponding to the configuration parameters.
         """
         self.append_command(RequestType.ConfigGet, parameters)
 
@@ -231,8 +231,8 @@ class BaseTransaction:
           amount (float) : The amount to increment.
 
         Command response:
-              str: The value of key after the increment. An error is returned if the key contains a value
-              of the wrong type.
+            float: The value of key after the increment. The transaction fails if the key contains a value
+            of the wrong type.
         """
         self.append_command(RequestType.IncrByFloat, [key, str(amount)])
 
@@ -343,7 +343,7 @@ class BaseTransaction:
                 Use a negative value to decrement.
 
         Returns:
-            str: The value of the specified field in the hash stored at `key` after the increment as a string.
+            float: The value of the specified field in the hash stored at `key` after the increment as a string.
                 The transaction fails if `key` contains a value of the wrong type or the current field content is not
                 parsable as a double precision floating point number.
         """
@@ -358,8 +358,8 @@ class BaseTransaction:
             field (str): The field to check in the hash stored at `key`.
 
         Command response:
-            int: Returns 1 if the hash contains the specified field. If the hash does not contain the field,
-                or if the key does not exist, it returns 0.
+            bool: Returns 'True' if the hash contains the specified field. If the hash does not contain the field,
+                or if the key does not exist, it returns 'False'.
                 If `key` holds a value that is not a hash, the transaction fails with an error.
         """
         self.append_command(RequestType.HashExists, [key, field])
@@ -383,9 +383,9 @@ class BaseTransaction:
             key (str): The key of the hash.
 
         Command response:
-            List[str]: A list of fields and their values stored in the hash. Every field name in the list is followed by
-            its value. If `key` does not exist, it returns an empty list.
-            If `key` holds a value that is not a hash , the transaction fails.
+            Dict[str, str]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
+            its value. If `key` does not exist, it returns an empty dictionary.
+            If `key` holds a value that is not a hash, the transaction fails with an error.
         """
         self.append_command(RequestType.HashGetAll, [key]),
 
@@ -554,7 +554,7 @@ class BaseTransaction:
             key (str): The key from which to retrieve the set members.
 
         Commands response:
-            List[str]: A list of all members of the set.
+            Set[str]: A set of all members of the set.
                 If `key` does not exist an empty list will be returned.
                 If `key` holds a value that is not a set, the transaction fails.
         """
@@ -672,7 +672,7 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         """
@@ -699,7 +699,7 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
         """
         args = (
@@ -725,7 +725,7 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
 
         """
@@ -754,7 +754,7 @@ class BaseTransaction:
             option (Optional[ExpireOptions]): The expire option.
 
         Commands response:
-            int: 1 if the timeout was set, 0 if the timeout was not set (e.g., the key doesn't exist or the operation is
+            bool: 'True' if the timeout was set, 'False' if the timeout was not set (e.g., the key doesn't exist or the operation is
                 skipped due to the provided arguments).
         """
         args = (
