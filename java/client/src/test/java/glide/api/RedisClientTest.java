@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

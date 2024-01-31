@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 fn main() {
     let customization_options = protobuf_codegen::Customize::default()
         .lite_runtime(false)

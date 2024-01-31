@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -125,12 +127,12 @@ class ExpirySet:
     def __init__(
         self,
         expiry_type: ExpiryType,
-        value: Union[int, datetime, timedelta, None],
+        value: Optional[Union[int, datetime, timedelta]],
     ) -> None:
         """
         Args:
             - expiry_type (ExpiryType): The expiry type.
-            - value (Union[int, datetime, timedelta, None]): The value of the expiration type. The type of expiration
+            - value (Optional[Union[int, datetime, timedelta]]): The value of the expiration type. The type of expiration
                 determines the type of expiration value:
                 - SEC: Union[int, timedelta]
                 - MILLSEC: Union[int, timedelta]
@@ -141,7 +143,7 @@ class ExpirySet:
         self.set_expiry_type_and_value(expiry_type, value)
 
     def set_expiry_type_and_value(
-        self, expiry_type: ExpiryType, value: Union[int, datetime, timedelta, None]
+        self, expiry_type: ExpiryType, value: Optional[Union[int, datetime, timedelta]]
     ):
         if not isinstance(value, get_args(expiry_type.value[1])):
             raise ValueError(
@@ -178,22 +180,20 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[str],
         route: Optional[Route] = ...,
-    ) -> TResult:
-        ...
+    ) -> TResult: ...
 
     async def execute_transaction(
         self,
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
-    ) -> List[TResult]:
-        ...
+    ) -> List[TResult]: ...
 
     async def set(
         self,
         key: str,
         value: str,
-        conditional_set: Union[ConditionalChange, None] = None,
-        expiry: Union[ExpirySet, None] = None,
+        conditional_set: Optional[ConditionalChange] = None,
+        expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
     ) -> Optional[str]:
         """Set the given key with the given value. Return value is dependent on the passed options.
@@ -205,9 +205,9 @@ class CoreCommands(Protocol):
         Args:
             key (str): the key to store.
             value (str): the value to store with the given key.
-            conditional_set (Union[ConditionalChange, None], optional): set the key only if the given condition is met.
+            conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
-            expiry (Union[Expiry, None], optional): set expiriation to the given key.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
             return_old_value (bool, optional): Return the old string stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
@@ -237,7 +237,7 @@ class CoreCommands(Protocol):
             key (str): the key to retrieve from the database
 
         Returns:
-            Union[str, None]: If the key exists, returns the value of the key as a string. Otherwise, return None.
+            Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
         return cast(
             Optional[str], await self._execute_command(RequestType.GetString, [key])
@@ -1185,6 +1185,24 @@ class CoreCommands(Protocol):
             Optional[float],
             await self._execute_command(RequestType.Zadd, args),
         )
+
+    async def zcard(self, key: str) -> int:
+        """
+        Returns the cardinality (number of elements) of the sorted set stored at `key`.
+
+        See https://redis.io/commands/zcard/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Returns:
+            int: The number of elements in the sorted set.
+
+        Examples:
+            >>> await zcard("my_sorted_set")
+            3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
+        """
+        return cast(int, await self._execute_command(RequestType.Zcard, [key]))
 
     async def zrem(
         self,

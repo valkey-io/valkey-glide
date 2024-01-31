@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 import asyncio
 import threading
 from typing import List, Optional, Set, Tuple, Union, cast
@@ -264,6 +266,8 @@ class BaseRedisClient(CoreCommands):
                         if response.HasField("closing_error")
                         else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
                     )
+                    if res_future is not None:
+                        res_future.set_exception(ClosingError(err_msg))
                     await self.close(err_msg)
                     raise ClosingError(err_msg)
                 else:

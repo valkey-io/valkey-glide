@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 from glide.logger import Level, Logger
 from tests.conftest import DEFAULT_TEST_LOG_LEVEL
 

@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
@@ -41,11 +42,11 @@ public class ChannelHandler {
     /**
      * Open a new channel for a new client and running it on the provided EventLoopGroup
      *
-     * @param eventLoopGroup - ELG to run handler on
-     * @param domainSocketChannelClass - socket channel class for Handler
-     * @param channelInitializer - UnixChannel initializer
-     * @param domainSocketAddress - address to connect
-     * @param callbackDispatcher - dispatcher to handle callbacks
+     * @param eventLoopGroup ELG to run handler on
+     * @param domainSocketChannelClass Socket channel class for Handler
+     * @param channelInitializer UnixChannel initializer
+     * @param domainSocketAddress Address to connect
+     * @param callbackDispatcher Dispatcher to handle callbacks
      */
     public ChannelHandler(
             EventLoopGroup eventLoopGroup,

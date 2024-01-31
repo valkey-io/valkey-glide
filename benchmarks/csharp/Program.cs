@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;

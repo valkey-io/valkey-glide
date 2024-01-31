@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 const { platform, arch } = process;
 let nativeBinding = null;
 switch (platform) {
