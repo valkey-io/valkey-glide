@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;

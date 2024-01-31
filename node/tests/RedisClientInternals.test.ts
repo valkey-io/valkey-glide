@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { beforeAll, describe, expect, it } from "@jest/globals";
 import fs from "fs";
 import {
