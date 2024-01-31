@@ -25,6 +25,7 @@ import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import redis_request.RedisRequestOuterClass.RedisRequest;
+import redis_request.RedisRequestOuterClass.SimpleRoutes;
+import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
@@ -208,6 +211,12 @@ public class CommandManagerTest {
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
+        var protobufToClientRouteMapping =
+                Map.of(
+                        SimpleRoutes.AllNodes, SimpleRoute.ALL_NODES,
+                        SimpleRoutes.AllPrimaries, SimpleRoute.ALL_PRIMARIES,
+                        SimpleRoutes.Random, SimpleRoute.RANDOM);
+
         service.submitNewCommand(command, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
@@ -217,7 +226,8 @@ public class CommandManagerTest {
                 () -> assertTrue(requestBuilder.getRoute().hasSimpleRoutes()),
                 () ->
                         assertEquals(
-                                routeType.getProtobufMapping(), requestBuilder.getRoute().getSimpleRoutes()),
+                                routeType,
+                                protobufToClientRouteMapping.get(requestBuilder.getRoute().getSimpleRoutes())),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
     }
@@ -240,12 +250,19 @@ public class CommandManagerTest {
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
+        var protobufToClientRouteMapping =
+                Map.of(
+                        SlotTypes.Primary, SlotType.PRIMARY,
+                        SlotTypes.Replica, SlotType.REPLICA);
+
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
                 () -> assertTrue(requestBuilder.getRoute().hasSlotIdRoute()),
                 () ->
                         assertEquals(
-                                slotType.getSlotTypes(), requestBuilder.getRoute().getSlotIdRoute().getSlotType()),
+                                slotType,
+                                protobufToClientRouteMapping.get(
+                                        requestBuilder.getRoute().getSlotIdRoute().getSlotType())),
                 () -> assertEquals(42, requestBuilder.getRoute().getSlotIdRoute().getSlotId()),
                 () -> assertFalse(requestBuilder.getRoute().hasSimpleRoutes()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
@@ -269,12 +286,19 @@ public class CommandManagerTest {
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
+        var protobufToClientRouteMapping =
+                Map.of(
+                        SlotTypes.Primary, SlotType.PRIMARY,
+                        SlotTypes.Replica, SlotType.REPLICA);
+
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
                 () -> assertTrue(requestBuilder.getRoute().hasSlotKeyRoute()),
                 () ->
                         assertEquals(
-                                slotType.getSlotTypes(), requestBuilder.getRoute().getSlotKeyRoute().getSlotType()),
+                                slotType,
+                                protobufToClientRouteMapping.get(
+                                        requestBuilder.getRoute().getSlotKeyRoute().getSlotType())),
                 () -> assertEquals("TEST", requestBuilder.getRoute().getSlotKeyRoute().getSlotKey()),
                 () -> assertFalse(requestBuilder.getRoute().hasSimpleRoutes()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()));

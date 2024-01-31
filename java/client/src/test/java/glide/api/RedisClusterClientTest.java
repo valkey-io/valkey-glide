@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.managers.CommandManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import glide.managers.models.Command;
@@ -50,7 +51,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[0], () -> true).get();
+        var value = client.customCommand(new String[0], SimpleRoute.RANDOM).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
     }
@@ -63,7 +64,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[0], () -> false).get();
+        var value = client.customCommand(new String[0], SimpleRoute.ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }

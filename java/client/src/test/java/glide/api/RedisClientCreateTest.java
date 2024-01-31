@@ -5,6 +5,7 @@ import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -41,6 +42,7 @@ public class RedisClientCreateTest {
         mockedClient.when(BaseClient::buildChannelHandler).thenReturn(channelHandler);
         mockedClient.when(() -> buildConnectionManager(channelHandler)).thenReturn(connectionManager);
         mockedClient.when(() -> buildCommandManager(channelHandler)).thenReturn(commandManager);
+        mockedClient.when(() -> CreateClient(any(), any())).thenCallRealMethod();
     }
 
     @AfterEach

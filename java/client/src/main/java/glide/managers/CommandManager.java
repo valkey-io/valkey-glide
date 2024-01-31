@@ -14,6 +14,9 @@ import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.RequestType;
+import redis_request.RedisRequestOuterClass.Routes;
+import redis_request.RedisRequestOuterClass.SimpleRoutes;
+import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -86,23 +89,27 @@ public class CommandManager {
 
         if (route.get() instanceof SimpleRoute) {
             builder.setRoute(
-                    RedisRequestOuterClass.Routes.newBuilder()
-                            .setSimpleRoutes(((SimpleRoute) route.get()).getProtobufMapping())
+                    Routes.newBuilder()
+                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleRoute) route.get()).ordinal()))
                             .build());
         } else if (route.get() instanceof SlotIdRoute) {
             builder.setRoute(
-                    RedisRequestOuterClass.Routes.newBuilder()
+                    Routes.newBuilder()
                             .setSlotIdRoute(
                                     RedisRequestOuterClass.SlotIdRoute.newBuilder()
                                             .setSlotId(((SlotIdRoute) route.get()).getSlotId())
-                                            .setSlotType(((SlotIdRoute) route.get()).getSlotType().getSlotTypes())));
+                                            .setSlotType(
+                                                    SlotTypes.forNumber(
+                                                            ((SlotIdRoute) route.get()).getSlotType().ordinal()))));
         } else if (route.get() instanceof SlotKeyRoute) {
             builder.setRoute(
-                    RedisRequestOuterClass.Routes.newBuilder()
+                    Routes.newBuilder()
                             .setSlotKeyRoute(
                                     RedisRequestOuterClass.SlotKeyRoute.newBuilder()
                                             .setSlotKey(((SlotKeyRoute) route.get()).getSlotKey())
-                                            .setSlotType(((SlotKeyRoute) route.get()).getSlotType().getSlotTypes())));
+                                            .setSlotType(
+                                                    SlotTypes.forNumber(
+                                                            ((SlotKeyRoute) route.get()).getSlotType().ordinal()))));
         } else {
             throw new IllegalArgumentException("Unknown type of route");
         }
