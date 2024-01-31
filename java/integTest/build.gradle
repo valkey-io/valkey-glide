@@ -1,0 +1,107 @@
+plugins {
+    id 'java-library'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // client
+    implementation project(':client')
+
+    // lombok
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    // junit
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.6.2'
+    testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
+}
+
+def standaloneRedisPorts = []
+def clusterRedisPorts = []
+
+ext {
+    extractPortsFromClusterManagerOutput = { String output, ArrayList dest ->
+        for (def line : output.split("\n")) {
+            if (!line.startsWith("CLUSTER_NODES="))
+                continue
+
+            def addresses = line.split("=")[1].split(",")
+            for (def address : addresses)
+                dest << address.split(":")[1]
+        }
+    }
+}
+
+tasks.register('stopAllAfterTests', Exec) {
+    workingDir "${project.rootDir}/../utils"
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster', '--keep-folder'
+}
+
+// We need to call for stop before and after the test, but gradle doesn't support executing a task
+// twice. So there are two identical tasks with different names.
+// We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
+tasks.register('stopAllBeforeTests', Exec) {
+    workingDir "${project.rootDir}/../utils"
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster'
+    ignoreExitValue true // ignore fail if servers are stopped before
+}
+
+// delete dirs if stop failed due to https://github.com/aws/glide-for-redis/issues/849
+tasks.register('clearDirs', Delete) {
+    delete "${project.rootDir}/../utils/clusters"
+}
+
+tasks.register('startCluster') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
+                standardOutput = os
+            }
+            extractPortsFromClusterManagerOutput(os.toString(), clusterRedisPorts)
+        }
+    }
+}
+
+tasks.register('startStandalone') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                workingDir "${project.rootDir}/../utils"
+                commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
+                standardOutput = os
+            }
+            extractPortsFromClusterManagerOutput(os.toString(), standaloneRedisPorts)
+        }
+    }
+}
+
+test.dependsOn 'stopAllBeforeTests'
+stopAllBeforeTests.finalizedBy 'clearDirs'
+clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startCluster'
+test.finalizedBy 'stopAllAfterTests'
+test.dependsOn ':client:buildRustRelease'
+
+tasks.withType(Test) {
+    doFirst {
+        println "Cluster ports = ${clusterRedisPorts}"
+        println "Standalone ports = ${standaloneRedisPorts}"
+        systemProperty 'test.redis.standalone.ports', standaloneRedisPorts.join(',')
+        systemProperty 'test.redis.cluster.ports', clusterRedisPorts.join(',')
+    }
+
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    jvmArgs "-Djava.library.path=${project.rootDir}/target/release"
+    afterTest { desc, result ->
+        logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
+    }
+}
