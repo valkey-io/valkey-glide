@@ -2,7 +2,6 @@ package glide.api;
 
 import glide.api.commands.BaseCommands;
 import glide.api.models.configuration.RedisClientConfiguration;
-import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.models.Command;
@@ -25,20 +24,7 @@ public class RedisClient extends BaseClient implements BaseCommands {
      * @return a Future to connect and return a RedisClient
      */
     public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
-        try {
-            ChannelHandler channelHandler = buildChannelHandler();
-            ConnectionManager connectionManager = buildConnectionManager(channelHandler);
-            CommandManager commandManager = buildCommandManager(channelHandler);
-            // TODO: Support exception throwing, including interrupted exceptions
-            return connectionManager
-                    .connectToRedis(config)
-                    .thenApply(ignore -> new RedisClient(connectionManager, commandManager));
-        } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to UDS
-            var future = new CompletableFuture<RedisClient>();
-            future.completeExceptionally(e);
-            return future;
-        }
+        return CreateClient(config, RedisClient::new);
     }
 
     @Override

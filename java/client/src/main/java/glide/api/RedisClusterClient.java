@@ -4,7 +4,6 @@ import glide.api.commands.ClusterBaseCommands;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
-import glide.connectors.handlers.ChannelHandler;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.models.Command;
@@ -29,20 +28,7 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             RedisClusterClientConfiguration config) {
-        try {
-            ChannelHandler channelHandler = buildChannelHandler();
-            ConnectionManager connectionManager = buildConnectionManager(channelHandler);
-            CommandManager commandManager = buildCommandManager(channelHandler);
-            // TODO: Support exception throwing, including interrupted exceptions
-            return connectionManager
-                    .connectToRedis(config)
-                    .thenApply(ignored -> new RedisClusterClient(connectionManager, commandManager));
-        } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to UDS
-            var future = new CompletableFuture<RedisClusterClient>();
-            future.completeExceptionally(e);
-            return future;
-        }
+        return CreateClient(config, RedisClusterClient::new);
     }
 
     @Override
