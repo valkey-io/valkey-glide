@@ -150,7 +150,9 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void callback_dispatcher_handles_response_with_closing_error() {
+    public void close_connection_on_response_with_closing_error() {
+        // CallbackDispatcher throws ClosingException which causes ConnectionManager and CommandManager
+        // to close the channel
         var callbackDispatcher = new CallbackDispatcher();
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
@@ -189,7 +191,9 @@ public class ExceptionHandlingTests {
     @ParameterizedTest(name = "{0}")
     @MethodSource("getProtobufErrorsToJavaClientErrorsMapping")
     @SneakyThrows
-    public void callback_dispatcher_handles_response_with_request_error(
+    public void dont_close_connection_when_callback_dispatcher_receives_response_with_closing_error(
+            // CallbackDispatcher throws a corresponding exception which should not cause
+            // ConnectionManager and CommandManager to close the channel
             RequestErrorType errorType, Class<? extends RedisException> exceptionType) {
         var callbackDispatcher = new CallbackDispatcher();
         var channelHandler = new TestChannelHandler(callbackDispatcher);
@@ -214,7 +218,8 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void callback_dispatcher_handles_response_without_error_but_with_incorrect_callback_id() {
+    public void close_connection_on_response_without_error_but_with_incorrect_callback_id() {
+        // CallbackDispatcher does the same as it received closing error
         var callbackDispatcher = new CallbackDispatcher();
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);

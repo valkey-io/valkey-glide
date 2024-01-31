@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

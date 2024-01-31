@@ -6,6 +6,8 @@ import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
+import glide.managers.CommandManager;
+import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -60,8 +62,7 @@ public class CallbackDispatcher {
     }
 
     public CompletableFuture<Response> registerConnection() {
-        var res = registerRequest();
-        return res.getValue();
+        return registerRequest().getValue();
     }
 
     /**
@@ -74,10 +75,7 @@ public class CallbackDispatcher {
             // According to https://github.com/aws/glide-for-redis/issues/851
             // a response with a closing error may arrive with any/random callback ID (usually -1)
             // CommandManager and ConnectionManager would close the UDS channel on ClosingException
-            responses
-                    .values()
-                    .forEach(f -> f.completeExceptionally(new ClosingException(response.getClosingError())));
-            responses.clear();
+            distributeClosingException(response.getClosingError());
             return;
         }
         // Complete and return the response at callbackId
@@ -114,14 +112,20 @@ public class CallbackDispatcher {
             System.err.printf(
                     "Received a response for not registered callback id %d, request error = %s%n",
                     callbackId, response.getRequestError());
-            responses
-                    .values()
-                    .forEach(
-                            f ->
-                                    f.completeExceptionally(
-                                            new ClosingException("Client is in an erroneous state and should close")));
-            responses.clear();
+            distributeClosingException("Client is in an erroneous state and should close");
         }
+    }
+
+    /**
+     * Distribute {@link ClosingException} to all pending requests. {@link CommandManager} and {@link
+     * ConnectionManager} should catch it, handle and close the UDS connection.<br>
+     * Should be used to termination the client/connection only.
+     *
+     * @param message Exception message
+     */
+    public void distributeClosingException(String message) {
+        responses.values().forEach(f -> f.completeExceptionally(new ClosingException(message)));
+        responses.clear();
     }
 
     public void shutdownGracefully() {
