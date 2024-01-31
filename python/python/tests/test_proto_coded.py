@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 import pytest
 from glide.protobuf.redis_request_pb2 import RedisRequest, RequestType
 from glide.protobuf.response_pb2 import Response

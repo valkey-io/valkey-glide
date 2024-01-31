@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use super::{create_connection_request, ClusterMode, TestConfiguration};
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;

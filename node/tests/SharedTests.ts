@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";

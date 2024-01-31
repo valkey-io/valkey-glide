@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use test_env_helpers::*;
 
 #[cfg(test)]

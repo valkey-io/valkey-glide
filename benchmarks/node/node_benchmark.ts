@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { writeFileSync } from "fs";
 import { Logger, RedisClient, RedisClusterClient } from "glide-for-redis";
 import { Cluster, Redis } from "ioredis";

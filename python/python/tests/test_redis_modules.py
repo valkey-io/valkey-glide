@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 import pytest
 from glide.async_commands.core import InfoSection
 from glide.redis_client import TRedisClient

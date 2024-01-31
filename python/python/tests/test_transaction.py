@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 from datetime import datetime, timezone
 from typing import List, Union
 
@@ -87,6 +89,7 @@ def transaction_test(
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     transaction.zadd_incr(key8, "one", 3)
     transaction.zrem(key8, ["one"])
+    transaction.zcard(key8)
     return [
         OK,
         value,
@@ -108,7 +111,7 @@ def transaction_test(
         value2,
         5,
         10.5,
-        1,
+        True,
         [value, None, value2],
         {key: value, key2: value2, key3: "10.5"},
         2,
@@ -128,6 +131,7 @@ def transaction_test(
         3,
         4,
         1,
+        2,
     ]
 
 

@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
 use crate::connection_request::{ConnectionRequest, NodeAddress, TlsMode};

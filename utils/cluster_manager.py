@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 import argparse
 import logging
 import os

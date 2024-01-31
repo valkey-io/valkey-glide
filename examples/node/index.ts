@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { Logger, RedisClient, RedisClusterClient } from "@aws/glide-for-redis";
 
 async function sendPingToNode() {

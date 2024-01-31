@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use glide_core::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},

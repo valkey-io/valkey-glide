@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
@@ -206,35 +209,28 @@ async fn write_result(
         }
         Err(ClienUsageError::RedisError(err)) => {
             let error_message = err.to_string();
-            if err.is_connection_refusal() {
-                log_error("response error", &error_message);
-                Some(response::response::Value::ClosingError(
-                    error_message.into(),
-                ))
+            log_warn("received error", error_message.as_str());
+            log_debug("received error", format!("for callback {}", callback_index));
+            let mut request_error = response::RequestError::default();
+            if err.is_connection_dropped() {
+                request_error.type_ = response::RequestErrorType::Disconnect.into();
+                request_error.message = format!(
+                    "Received connection error `{error_message}`. Will attempt to reconnect"
+                )
+                .into();
+            } else if err.is_timeout() {
+                request_error.type_ = response::RequestErrorType::Timeout.into();
+                request_error.message = error_message.into();
             } else {
-                log_warn("received error", error_message.as_str());
-                log_debug("received error", format!("for callback {}", callback_index));
-                let mut request_error = response::RequestError::default();
-                if err.is_connection_dropped() {
-                    request_error.type_ = response::RequestErrorType::Disconnect.into();
-                    request_error.message = format!(
-                        "Received connection error `{error_message}`. Will attempt to reconnect"
-                    )
-                    .into();
-                } else if err.is_timeout() {
-                    request_error.type_ = response::RequestErrorType::Timeout.into();
-                    request_error.message = error_message.into();
-                } else {
-                    request_error.type_ = match err.kind() {
-                        redis::ErrorKind::ExecAbortError => {
-                            response::RequestErrorType::ExecAbort.into()
-                        }
-                        _ => response::RequestErrorType::Unspecified.into(),
-                    };
-                    request_error.message = error_message.into();
-                }
-                Some(response::response::Value::RequestError(request_error))
+                request_error.type_ = match err.kind() {
+                    redis::ErrorKind::ExecAbortError => {
+                        response::RequestErrorType::ExecAbort.into()
+                    }
+                    _ => response::RequestErrorType::Unspecified.into(),
+                };
+                request_error.message = error_message.into();
             }
+            Some(response::response::Value::RequestError(request_error))
         }
     };
     write_to_writer(response, writer).await

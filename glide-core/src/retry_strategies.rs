@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use crate::connection_request::ConnectionRetryStrategy;
 use std::time::Duration;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
