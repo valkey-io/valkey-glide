@@ -1,4 +1,4 @@
-/** Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
 /** Represents the client's read from strategy. */

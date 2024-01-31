@@ -1,4 +1,4 @@
-# Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide.config import BaseClientConfiguration, NodeAddress, ReadFrom
 from glide.protobuf.connection_request_pb2 import ConnectionRequest

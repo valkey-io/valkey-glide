@@ -1,4 +1,4 @@
-# Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
 
 import random
 from typing import AsyncGenerator, List, Optional, Union

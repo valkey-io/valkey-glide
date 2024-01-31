@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::connection_request;
 use glide_core::{client::Client as GlideClient, connection_request::NodeAddress};

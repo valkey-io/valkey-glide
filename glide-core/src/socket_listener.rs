@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
