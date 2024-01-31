@@ -484,3 +484,9 @@ class TestPubSub:
                 all_clients[-1].connect_and_subscribe()
         
         TestPubSub.publish_and_assert(all_clients)
+
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("sharded_pubsub", [True, False])
+    async def test_pubsub_unsubscribe(self, request, cluster_mode, sharded_pubsub):
+        pass
