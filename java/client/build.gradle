@@ -110,7 +110,7 @@ tasks.register('buildAll') {
     finalizedBy 'build'
 }
 
-compileJava.dependsOn('protobuf', 'buildRustRelease')
+compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
@@ -127,4 +127,3 @@ tasks.withType(Test) {
     }
     jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
-
