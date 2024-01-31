@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 export { Script } from "glide-rs";
 export * from "./src/BaseClient";
 export * from "./src/Commands";

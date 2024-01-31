@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use arcstr::ArcStr;
 use logger_core::log_info;
 use once_cell::sync::Lazy;

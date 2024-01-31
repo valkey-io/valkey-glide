@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use once_cell::sync::OnceCell;
 use std::sync::RwLock;
 use tracing::{self, event};

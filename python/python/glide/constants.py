@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 from typing import Dict, List, Literal, Set, TypeVar, Union
 
 from glide.protobuf.connection_request_pb2 import ConnectionRequest

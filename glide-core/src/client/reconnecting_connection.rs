@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use crate::connection_request::{NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;

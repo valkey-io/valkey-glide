@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { RedisClientType, RedisClusterType } from "redis";
 import { createRedisClient, receivedOptions } from "./utils";
 

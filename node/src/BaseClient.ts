@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,

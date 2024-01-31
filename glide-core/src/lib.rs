@@ -1,3 +1,7 @@
+/*
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 include!(concat!(env!("OUT_DIR"), "/protobuf/mod.rs"));
 pub mod client;
 mod retry_strategies;

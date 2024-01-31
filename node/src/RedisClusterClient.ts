@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import * as net from "net";
 import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {

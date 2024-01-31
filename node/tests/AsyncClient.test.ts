@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { AsyncClient } from "glide-rs";
 import RedisServer from "redis-server";

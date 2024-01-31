@@ -1,3 +1,6 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
 use glide_core::start_socket_listener;
 use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;

@@ -1,3 +1,7 @@
+/**
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 import {
     ExpireOptions,
     InfoOptions,
@@ -221,7 +225,7 @@ export class BaseTransaction {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      *
-     * Command Response - the value of `key` after the increment as string.
+     * Command Response - the value of `key` after the increment.
      * An error is raised if `key` contains a value of the wrong type,
      * or the current key content is not parsable as a double precision floating point number.
      *
@@ -269,7 +273,7 @@ export class BaseTransaction {
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
-     * Command Response - A list of values corresponding to the configuration parameters.
+     * Command Response - A map of values corresponding to the configuration parameters.
      *
      */
     public configGet(parameters: string[]) {
@@ -351,8 +355,8 @@ export class BaseTransaction {
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
      *
-     * Command Response - 1 if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
-     * the command response will be 0.
+     * Command Response - `true` if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
+     * the command response will be `false`.
      */
     public hexists(key: string, field: string) {
         this.commands.push(createHExists(key, field));
@@ -363,8 +367,8 @@ export class BaseTransaction {
      *
      * @param key - The key of the hash.
      *
-     * Command Response - a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
-     * If `key` does not exist, it returns an empty list.
+     * Command Response - a map of fields and their values stored in the hash. Every field name in the map is followed by its value.
+     * If `key` does not exist, it returns an empty map.
      * If `key` holds a value that is not a hash, an error is raised.
      */
     public hgetall(key: string) {
@@ -397,7 +401,7 @@ export class BaseTransaction {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      *
-     * Command Response - the value of `field` in the hash stored at `key` after the increment as string.
+     * Command Response - the value of `field` in the hash stored at `key` after the increment.
      *  An error is raised if `key` contains a value of the wrong type
      *  or the current field content is not parsable as a double precision floating point number.
      *
@@ -626,7 +630,7 @@ export class BaseTransaction {
      * @param seconds - The timeout in seconds.
      * @param option - The expire option.
      *
-     * Command Response - 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public expire(key: string, seconds: number, option?: ExpireOptions) {
@@ -643,7 +647,7 @@ export class BaseTransaction {
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
      * @param option - The expire option.
      *
-     * Command Response - 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public expireAt(key: string, unixSeconds: number, option?: ExpireOptions) {
@@ -660,7 +664,7 @@ export class BaseTransaction {
      * @param milliseconds - The timeout in milliseconds.
      * @param option - The expire option.
      *
-     * Command Response - 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public pexpire(key: string, milliseconds: number, option?: ExpireOptions) {
@@ -677,7 +681,7 @@ export class BaseTransaction {
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
      * @param option - The expire option.
      *
-     * Command Response - 1 if the timeout was set. 0 if the timeout was not set. e.g. key doesn't exist,
+     * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
     public pexpireAt(

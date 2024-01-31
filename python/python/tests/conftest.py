@@ -1,3 +1,5 @@
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+
 import random
 from typing import AsyncGenerator, List, Optional, Union
 
@@ -127,9 +129,9 @@ async def create_client(
     else:
         assert type(pytest.standalone_cluster) is RedisCluster
         config = RedisClientConfiguration(
-            addresses=pytest.standalone_cluster.nodes_addr
-            if addresses is None
-            else addresses,
+            addresses=(
+                pytest.standalone_cluster.nodes_addr if addresses is None else addresses
+            ),
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
