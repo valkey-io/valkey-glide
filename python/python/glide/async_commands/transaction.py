@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 import threading
 from typing import List, Mapping, Optional, Tuple, Union

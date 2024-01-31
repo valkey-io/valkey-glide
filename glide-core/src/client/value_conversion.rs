@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use redis::{cluster_routing::Routable, from_redis_value, Cmd, ErrorKind, RedisResult, Value};
 
