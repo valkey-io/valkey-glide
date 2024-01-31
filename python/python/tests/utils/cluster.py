@@ -1,3 +1,5 @@
+# Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 import os
 import subprocess
 import sys
