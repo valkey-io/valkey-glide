@@ -27,12 +27,11 @@ public class ConnectionTests {
     @SneakyThrows
     public void cluster_client() {
         var regularClient =
-            RedisClient.CreateClient(
-                    RedisClientConfiguration.builder()
-                        .address(
-                            NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
-                        .build())
-                .get(10, TimeUnit.SECONDS);
+                RedisClient.CreateClient(
+                                RedisClientConfiguration.builder()
+                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
+                                        .build())
+                        .get(10, TimeUnit.SECONDS);
         regularClient.close();
     }
 }
