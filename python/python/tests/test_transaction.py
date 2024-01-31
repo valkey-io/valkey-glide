@@ -1,4 +1,4 @@
-# Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from datetime import datetime, timezone
 from typing import List, Union

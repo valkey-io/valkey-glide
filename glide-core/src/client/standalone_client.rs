@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
