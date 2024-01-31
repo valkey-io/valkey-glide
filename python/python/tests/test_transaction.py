@@ -111,7 +111,7 @@ def transaction_test(
         value2,
         5,
         10.5,
-        1,
+        True,
         [value, None, value2],
         {key: value, key2: value2, key3: "10.5"},
         2,
