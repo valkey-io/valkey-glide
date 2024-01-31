@@ -1,3 +1,5 @@
+# Copyright GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 import asyncio
 import threading
 from typing import List, Optional, Set, Tuple, Union, cast
