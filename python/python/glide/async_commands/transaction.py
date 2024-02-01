@@ -915,6 +915,24 @@ class BaseTransaction:
         """
         self.append_command(RequestType.Zrem, [key] + members)
 
+    def zscore(self, key: str, member: str):
+        """
+        Returns the score of `member` in the sorted set stored at `key`.
+
+        See https://redis.io/commands/zscore/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose score is to be retrieved.
+
+        Commands response:
+            Optional[float]: The score of the member.
+            If `member` does not exist in the sorted set, None is returned.
+            If `key` does not exist,  None is returned.
+            If `key` holds a value that is not a sorted set, the transaction fails with an error
+        """
+        self.append_command(RequestType.ZScore, [key, member])
+
 
 class Transaction(BaseTransaction):
     """

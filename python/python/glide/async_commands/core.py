@@ -1245,6 +1245,34 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Zrem, [key] + members),
         )
 
+    async def zscore(self, key: str, member: str) -> Optional[float]:
+        """
+        Returns the score of `member` in the sorted set stored at `key`.
+
+        See https://redis.io/commands/zscore/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose score is to be retrieved.
+
+        Returns:
+            Optional[float]: The score of the member.
+            If `member` does not exist in the sorted set, None is returned.
+            If `key` does not exist,  None is returned.
+            If `key` holds a value that is not a sorted set, an error is returned.
+
+
+        Examples:
+            >>> await zscore("my_sorted_set", "member")
+                10.5  # Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
+            >>> await zscore("my_sorted_set", "non_existing_member")
+                None
+        """
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.ZScore, [key, member]),
+        )
+
     async def invoke_script(
         self,
         script: Script,

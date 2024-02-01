@@ -102,6 +102,7 @@ enum RequestType {
     Zcard = 64;
     Zcount = 65;
     ZIncrBy = 66;
+    ZScore = 67;
 }
 
 message Command {
