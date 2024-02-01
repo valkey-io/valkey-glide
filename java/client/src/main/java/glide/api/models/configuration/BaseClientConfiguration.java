@@ -54,9 +54,8 @@ public abstract class BaseClientConfiguration {
     private final Integer requestTimeout;
 
     /**
-     * Advanced users can pass an extended {@link glide.connectors.resources.ThreadPoolResource} to
-     * pass a user-defined event loop group. If set, users are responsible for shutting the resource
-     * down when no longer in use.
+     * Advanced users can pass an extended {@link ThreadPoolResource} to pass a user-defined event
+     * loop group. If set, users are responsible for shutting the resource down when no longer in use.
      */
     private final ThreadPoolResource threadPoolResource;
 }

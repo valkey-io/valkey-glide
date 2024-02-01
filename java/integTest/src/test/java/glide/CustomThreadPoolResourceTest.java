@@ -41,7 +41,7 @@ public class CustomThreadPoolResourceTest {
                         .get(10, TimeUnit.SECONDS);
 
         String payload = (String) regularClient.customCommand(new String[] {"PING"}).get();
-        assertEquals(payload, "PONG");
+        assertEquals("PONG", payload);
 
         regularClient.close();
         customThreadPoolResource.getEventLoopGroup().shutdownGracefully();
