@@ -456,7 +456,7 @@ describe("SocketConnectionInternals", () => {
         });
     });
 
-    it("should handle receiving a closing error with an unknown callback index", async () => {
+    it("should fail all requests when receiving a closing error with an unknown callback index", async () => {
         await testWithResources(async (connection, socket) => {
             const error = "check";
             socket.once("data", (data) => {
