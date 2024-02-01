@@ -805,6 +805,7 @@ class BaseTransaction:
         Commands response:
             int: The number of elements added to the sorted set.
             If `changed` is set, returns the number of elements updated in the sorted set.
+            If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         args = [key]
         if existing_options:
@@ -858,7 +859,8 @@ class BaseTransaction:
 
         Commands response:
             Optional[float]: The score of the member.
-            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and null is returned.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
+            If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         args = [key]
         if existing_options:
@@ -890,6 +892,8 @@ class BaseTransaction:
 
         Commands response:
             int: The number of elements in the sorted set.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         self.append_command(RequestType.Zcard, [key])
 
@@ -910,8 +914,8 @@ class BaseTransaction:
 
         Commands response:
             int: The number of members that were removed from the sorted set, not including non-existing members.
-            If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
-            If `key` holds a value that is not a sorted set, an error is returned.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         self.append_command(RequestType.Zrem, [key] + members)
 
@@ -929,7 +933,7 @@ class BaseTransaction:
             Optional[float]: The score of the member.
             If `member` does not exist in the sorted set, None is returned.
             If `key` does not exist,  None is returned.
-            If `key` holds a value that is not a sorted set, the transaction fails with an error
+            If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         self.append_command(RequestType.ZScore, [key, member])
 

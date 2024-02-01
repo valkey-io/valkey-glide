@@ -1068,6 +1068,7 @@ class TestCommands:
 
         assert await redis_client.zrem(key, ["one"]) == 1
         assert await redis_client.zcard(key) == 2
+        assert await redis_client.zcard("non_existing_key") == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_zscore(self, redis_client: TRedisClient):
