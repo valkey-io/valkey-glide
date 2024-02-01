@@ -92,8 +92,9 @@ public class ChannelHandler {
      * @return A connection promise
      */
     public CompletableFuture<Response> connect(ConnectionRequest request) {
+        var future = callbackDispatcher.registerConnection();
         channel.writeAndFlush(request);
-        return callbackDispatcher.registerConnection();
+        return future;
     }
 
     /** Closes the UDS connection and frees corresponding resources. */
