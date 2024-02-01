@@ -184,20 +184,19 @@ class CoreCommands(Protocol):
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
-    async def execute_transaction(
+    async def _execute_transaction(
         self,
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
     ) -> List[TResult]: ...
 
-    async def execute_script(
+    async def _execute_script(
         self,
         hash: str,
         keys: Optional[List[str]] = None,
         args: Optional[List[str]] = None,
         route: Optional[Route] = None,
-    ) -> TResult:
-        ...
+    ) -> TResult: ...
 
     async def set(
         self,
@@ -1272,4 +1271,4 @@ class CoreCommands(Protocol):
             >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
                 ["foo", "bar"]
         """
-        return await self.execute_script(script.get_hash(), keys, args)
+        return await self._execute_script(script.get_hash(), keys, args)

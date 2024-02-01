@@ -197,14 +197,9 @@ class BaseRedisClient(CoreCommands):
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = args  # TODO - use arg pointer
         set_protobuf_route(request, route)
-        # Create a response future for this request and add it to the available
-        # futures map
-        response_future = self._get_future(request.callback_idx)
-        self._create_write_task(request)
-        await response_future
-        return response_future.result()
+        return await self._write_request_await_response(request)
 
-    async def execute_transaction(
+    async def _execute_transaction(
         self,
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
@@ -223,14 +218,9 @@ class BaseRedisClient(CoreCommands):
             transaction_commands.append(command)
         request.transaction.commands.extend(transaction_commands)
         set_protobuf_route(request, route)
-        # Create a response future for this request and add it to the available
-        # futures map
-        response_future = self._get_future(request.callback_idx)
-        self._create_write_task(request)
-        await response_future
-        return response_future.result()
+        return await self._write_request_await_response(request)
 
-    async def execute_script(
+    async def _execute_script(
         self,
         hash: str,
         keys: Optional[List[str]] = None,
@@ -247,6 +237,9 @@ class BaseRedisClient(CoreCommands):
         request.script_invocation.args[:] = args if args is not None else []
         request.script_invocation.keys[:] = keys if keys is not None else []
         set_protobuf_route(request, route)
+        return await self._write_request_await_response(request)
+
+    async def _write_request_await_response(self, request: RedisRequest):
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
