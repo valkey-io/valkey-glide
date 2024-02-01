@@ -135,7 +135,7 @@ pub(crate) mod shared_client_tests {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_client_handle_concurrent_workload(
+    fn test_client_handle_concurrent_workload_without_dropping_or_changing_values(
         #[values(false, true)] use_tls: bool,
         #[values(false, true)] use_cluster: bool,
     ) {
