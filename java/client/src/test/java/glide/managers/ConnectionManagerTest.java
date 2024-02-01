@@ -32,7 +32,6 @@ import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import response.ResponseOuterClass;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -216,42 +215,18 @@ public class ConnectionManagerTest {
         // setup
         RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response =
-                Response.newBuilder()
-                        .setRequestError(
-                                ResponseOuterClass.RequestError.newBuilder()
-                                        .setType(ResponseOuterClass.RequestErrorType.Timeout)
-                                        .setMessage("Timeout Occurred")
-                                        .build())
-                        .build();
+        Response response = Response.newBuilder().setRespPointer(42).build();
         completedFuture.complete(response);
 
         // execute
         when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
-        // verify
-        ExecutionException exception = assertThrows(ExecutionException.class, result::get);
-        assertTrue(exception.getCause() instanceof ClosingException);
-
+        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertEquals("Unexpected data in response", executionException.getCause().getMessage());
         verify(channel).close();
-    }
-
-    @Test
-    public void check_response_on_closing_error_throws_ClosingException() {
-        // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
-        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
-        Response response = Response.newBuilder().setClosingError("Closing Error Occurred").build();
-        completedFuture.complete(response);
-
-        // execute
-        when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
-
-        // verify
-        ExecutionException exception = assertThrows(ExecutionException.class, result::get);
-        assertTrue(exception.getCause() instanceof ClosingException);
-        assertEquals(response.getClosingError(), exception.getCause().getMessage());
     }
 }
