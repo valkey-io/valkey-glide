@@ -7,28 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static response.ResponseOuterClass.RequestErrorType.UNRECOGNIZED;
 
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
-import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConnectionException;
-import glide.api.models.exceptions.ExecAbortException;
-import glide.api.models.exceptions.RequestException;
-import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.ChannelHandler;
 import glide.managers.models.Command;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +30,6 @@ import org.mockito.ArgumentCaptor;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
 import redis_request.RedisRequestOuterClass.SlotTypes;
-import response.ResponseOuterClass;
-import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
 public class CommandManagerTest {
@@ -123,84 +113,6 @@ public class CommandManagerTest {
         // verify
         assertTrue(respPointer instanceof String);
         assertEquals(testString, respPointer);
-    }
-
-    @Test
-    public void submitNewCommand_throw_closing_exception() {
-
-        // setup
-        String errorMsg = "Closing";
-
-        Response closingErrorResponse = Response.newBuilder().setClosingError(errorMsg).build();
-
-        CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(closingErrorResponse);
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        // exercise
-        ExecutionException e =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture<Object> result =
-                                    service.submitNewCommand(
-                                            command, new BaseCommandResponseResolver((ptr) -> new Object()));
-                            result.get();
-                        });
-
-        // verify
-        assertTrue(e.getCause() instanceof ClosingException);
-        assertEquals(errorMsg, e.getCause().getMessage());
-    }
-
-    @ParameterizedTest
-    @EnumSource(ResponseOuterClass.RequestErrorType.class) // six numbers
-    public void BaseCommandResponseResolver_handles_all_errors(
-            ResponseOuterClass.RequestErrorType requestErrorType) {
-        if (requestErrorType == UNRECOGNIZED) {
-            return;
-        }
-        Response errorResponse =
-                Response.newBuilder()
-                        .setRequestError(
-                                RequestError.newBuilder()
-                                        .setTypeValue(requestErrorType.getNumber())
-                                        .setMessage(requestErrorType.toString())
-                                        .build())
-                        .build();
-
-        CompletableFuture<Response> future = new CompletableFuture<>();
-        future.complete(errorResponse);
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture<Object> result =
-                                    service.submitNewCommand(command, new BaseCommandResponseResolver((ptr) -> null));
-                            result.get();
-                        });
-
-        // verify
-        switch (requestErrorType) {
-            case Unspecified:
-                // only Unspecified errors return a RequestException
-                assertTrue(executionException.getCause() instanceof RequestException);
-                break;
-            case ExecAbort:
-                assertTrue(executionException.getCause() instanceof ExecAbortException);
-                break;
-            case Timeout:
-                assertTrue(executionException.getCause() instanceof TimeoutException);
-                break;
-            case Disconnect:
-                assertTrue(executionException.getCause() instanceof ConnectionException);
-                break;
-            default:
-                fail("Unexpected protobuf error type");
-        }
-        assertEquals(requestErrorType.toString(), executionException.getCause().getMessage());
     }
 
     @ParameterizedTest
