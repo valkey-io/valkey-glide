@@ -436,25 +436,37 @@ class BaseTransaction:
         """
         self.append_command(RequestType.LPush, [key] + elements)
 
-    def lpop(self, key: str, count: Optional[int] = None):
+    def lpop(self, key: str):
         """Remove and return the first elements of the list stored at `key`.
-        By default, the command pops a single element from the beginning of the list.
-        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        The command pops a single element from the beginning of the list.
         See https://redis.io/commands/lpop/ for details.
 
         Args:
             key (str): The key of the list.
-            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
 
         Command response:
-            Optional[Union[str, List[str]]]: The value of the first element if `count` is not provided.
-            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+            Optional[str]: The value of the first element.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, the transaction fails.
+            If `key` holds a value that is not a list, the transaction fails with an error
         """
 
-        args: List[str] = [key] if count is None else [key, str(count)]
-        self.append_command(RequestType.LPop, args)
+        self.append_command(RequestType.LPop, [key])
+
+    def lpop_count(self, key: str, count: int):
+        """Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
+        See https://redis.io/commands/lpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (int): The count of elements to pop from the list.
+
+        Command response:
+            Optional[List[str]]: A a list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, the transaction fails with an error
+        """
+
+        self.append_command(RequestType.LPop, [key, str(count)])
 
     def lrange(self, key: str, start: int, end: int):
         """Retrieve the specified elements of the list stored at `key` within the given range.
@@ -496,23 +508,35 @@ class BaseTransaction:
 
     def rpop(self, key: str, count: Optional[int] = None):
         """Removes and returns the last elements of the list stored at `key`.
-        By default, the command pops a single element from the end of the list.
-        When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+        The command pops a single element from the end of the list.
         See https://redis.io/commands/rpop/ for details.
 
         Args:
             key (str): The key of the list.
-            count (Optional[int]): The count of elements to pop from the list. Default is to pop a single element.
 
-        Command response:
-            Optional[Union[str, List[str]]: The value of the last element if `count` is not provided.
-            If `count` is provided, a list of popped elements will be returned depending on the list's length.
+        Commands response:
+            Optional[str]: The value of the last element.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, the transaction fails.
+            If `key` holds a value that is not a list, the transaction fails with an error.
         """
 
-        args: List[str] = [key] if count is None else [key, str(count)]
-        self.append_command(RequestType.RPop, args)
+        self.append_command(RequestType.RPop, [key])
+
+    def rpop_count(self, key: str, count: int):
+        """Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
+        See https://redis.io/commands/rpop/ for details.
+
+        Args:
+            key (str): The key of the list.
+            count (int): The count of elements to pop from the list.
+
+        Commands response:
+            Optional[List[str]: A list of popped elements will be returned depending on the list's length.
+            If `key` does not exist, None will be returned.
+            If `key` holds a value that is not a list, the transaction fails with an error.
+        """
+
+        self.append_command(RequestType.RPop, [key, str(count)])
 
     def sadd(self, key: str, members: List[str]):
         """Add specified members to the set stored at `key`.

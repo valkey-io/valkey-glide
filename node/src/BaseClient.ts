@@ -648,9 +648,7 @@ export class BaseClient {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public lpop(
-        key: string,
-    ): Promise<string | null> {
+    public lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
     }
 
@@ -663,10 +661,7 @@ export class BaseClient {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public lpopCount(
-        key: string,
-        count: number
-    ): Promise<string[] | null> {
+    public lpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
     }
 
@@ -759,9 +754,7 @@ export class BaseClient {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public rpop(
-        key: string,
-    ): Promise<string | null> {
+    public rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
     }
 
@@ -774,10 +767,7 @@ export class BaseClient {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public rpopCount(
-        key: string,
-        count: number
-    ): Promise<string[] | null> {
+    public rpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
     }
 
