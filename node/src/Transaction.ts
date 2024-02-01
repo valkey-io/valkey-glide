@@ -57,6 +57,7 @@ import {
     createZadd,
     createZcard,
     createZrem,
+    createZscore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -819,6 +820,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcard(key: string): T {
         return this.addAndReturn(createZcard(key));
+    }
+
+    /** Returns the score of `member` in the sorted set stored at `key`.
+     * See https://redis.io/commands/zscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose score is to be retrieved.
+     *
+     * Command Response - The score of the member.
+     * If `member` does not exist in the sorted set, null is returned.
+     * If `key` does not exist, null is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zscore(key: string, member: string) {
+        this.commands.push(createZscore(key, member));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
