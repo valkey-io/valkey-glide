@@ -336,6 +336,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Zcard => Some(cmd("ZCARD")),
         RequestType::Zcount => Some(cmd("ZCOUNT")),
         RequestType::ZIncrBy => Some(cmd("ZINCRBY")),
+        RequestType::ZScore => Some(cmd("ZSCORE")),
     }
 }
 
