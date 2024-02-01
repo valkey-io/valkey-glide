@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import glide.api.RedisClient;
@@ -22,5 +23,15 @@ public class ConnectionTests {
         regularClient.close();
     }
 
-    // TODO cluster client once implemented
+    @Test
+    @SneakyThrows
+    public void cluster_client() {
+        var regularClient =
+                RedisClient.CreateClient(
+                                RedisClientConfiguration.builder()
+                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
+                                        .build())
+                        .get(10, TimeUnit.SECONDS);
+        regularClient.close();
+    }
 }

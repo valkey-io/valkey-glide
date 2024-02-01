@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import java.util.Arrays;
