@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "glide", "lib\glide.csproj",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tests", "tests\tests.csproj", "{B5A73329-1C34-4D33-8013-D030983A59FF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp_benchmark", "..\benchmarks\csharp\csharp_benchmark.csproj", "{C62D5809-3059-4633-A267-31B402FCBFDA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{B5A73329-1C34-4D33-8013-D030983A59FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B5A73329-1C34-4D33-8013-D030983A59FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B5A73329-1C34-4D33-8013-D030983A59FF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C62D5809-3059-4633-A267-31B402FCBFDA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
