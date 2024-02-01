@@ -20,6 +20,8 @@ from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
+from ..glide import Script
+
 
 class ConditionalChange(Enum):
     """
@@ -182,11 +184,19 @@ class CoreCommands(Protocol):
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
-    async def execute_transaction(
+    async def _execute_transaction(
         self,
         commands: List[Tuple[RequestType.ValueType, List[str]]],
         route: Optional[Route] = None,
     ) -> List[TResult]: ...
+
+    async def _execute_script(
+        self,
+        hash: str,
+        keys: Optional[List[str]] = None,
+        args: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TResult: ...
 
     async def set(
         self,
@@ -1234,3 +1244,31 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(RequestType.Zrem, [key] + members),
         )
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[str]] = None,
+        args: Optional[List[str]] = None,
+    ) -> TResult:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
+        After that, it will be invoked using the Redis `EVALSHA` command.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (List[str]): The keys that are used in the script.
+            args (List[str]): The arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                ["foo", "bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args)
