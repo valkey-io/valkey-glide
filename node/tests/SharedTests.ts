@@ -1370,6 +1370,21 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it(
+        "zcard test",
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zcard(key)).toEqual(3);
+                expect(await client.zrem(key, ["one"])).toEqual(1);
+                expect(await client.zcard(key)).toEqual(2);
+            });
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
