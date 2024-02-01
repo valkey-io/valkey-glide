@@ -58,7 +58,6 @@ public class CallbackDispatcher {
             callbackId = nextAvailableRequestId.getAndIncrement();
         }
         responses.put(callbackId, future);
-        System.out.printf("=== %d registerRequest %d%n", System.nanoTime(), callbackId);
         return Pair.of(callbackId, future);
     }
 
@@ -82,7 +81,6 @@ public class CallbackDispatcher {
         // Complete and return the response at callbackId
         // free up the callback ID in the freeRequestIds list
         int callbackId = response.getCallbackIdx();
-        System.out.printf("=== %d completeRequest %d%n", System.nanoTime(), callbackId);
         CompletableFuture<Response> future = responses.remove(callbackId);
         if (future != null) {
             freeRequestIds.add(callbackId);
