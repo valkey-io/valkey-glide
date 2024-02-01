@@ -116,7 +116,7 @@ class TestRedisClients:
         assert "lib-ver=0.1.0" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_large_values(self, redis_client: TRedisClient):
+    async def test_send_and_receive_large_values(self, redis_client: TRedisClient):
         length = 2**16
         key = get_random_string(length)
         value = get_random_string(length)
@@ -126,7 +126,7 @@ class TestRedisClients:
         assert await redis_client.get(key) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_non_ascii_unicode(self, redis_client: TRedisClient):
+    async def test_send_and_receive_non_ascii_unicode(self, redis_client: TRedisClient):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
@@ -135,7 +135,9 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_concurrent_tasks(self, redis_client: TRedisClient, value_size):
+    async def test_client_handle_concurrent_workload_without_dropping_or_changing_values(
+        self, redis_client: TRedisClient, value_size
+    ):
         num_of_concurrent_tasks = 100
         running_tasks = set()
 
