@@ -80,7 +80,7 @@ class ClusterCommands(CoreCommands):
             If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
-        return await self.execute_transaction(commands, route)
+        return await self._execute_transaction(commands, route)
 
     async def config_resetstat(
         self,

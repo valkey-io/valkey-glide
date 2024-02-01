@@ -37,6 +37,8 @@ from glide.routes import (
     SlotType,
 )
 
+from .glide import Script
+
 __all__ = [
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
@@ -54,6 +56,7 @@ __all__ = [
     "RedisClient",
     "RedisClusterClient",
     "RedisCredentials",
+    "Script",
     "NodeAddress",
     "Transaction",
     "ClusterTransaction",

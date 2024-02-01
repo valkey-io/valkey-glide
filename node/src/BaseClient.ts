@@ -958,7 +958,7 @@ export class BaseClient {
      * @returns a value that depends on the script that was executed.
      *
      * @example
-     *       const luaScript = "return \{ KEYS[1], ARGV[1] \}";
+     *       const luaScript = new Script("return \{ KEYS[1], ARGV[1] \}");
      *       const scriptOptions = \{
      *            keys: ["foo"],
      *            args: ["bar"],
