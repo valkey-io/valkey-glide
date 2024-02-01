@@ -178,7 +178,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
         Value::Map(map) => {
             let mut obj = js_env.create_object()?;
             for (key, value) in map {
-                let field_name = String::from_redis_value(&key).map_err(to_js_error)?;
+                let field_name = String::from_owned_redis_value(key).map_err(to_js_error)?;
                 let value = redis_value_to_js(value, js_env)?;
                 obj.set_named_property(&field_name, value)?;
             }

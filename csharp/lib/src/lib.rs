@@ -147,7 +147,7 @@ pub extern "C" fn get(client_ptr: *const c_void, callback_index: usize, key: *co
                 return;
             }
         };
-        let result = Option::<CString>::from_redis_value(&value);
+        let result = Option::<CString>::from_owned_redis_value(value);
 
         unsafe {
             match result {

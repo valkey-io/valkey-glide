@@ -96,8 +96,8 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
-            let hello: std::collections::HashMap<String, Value> = redis::from_redis_value(
-                &test_basics
+            let hello: std::collections::HashMap<String, Value> = redis::from_owned_redis_value(
+                test_basics
                     .client
                     .send_command(&redis::cmd("HELLO"), None)
                     .await
@@ -293,8 +293,8 @@ pub(crate) mod shared_client_tests {
             )
             .await;
             let mut client = test_basics.client;
-            let client_info: String = redis::from_redis_value(
-                &client.send_command(&client_info_cmd, None).await.unwrap(),
+            let client_info: String = redis::from_owned_redis_value(
+                client.send_command(&client_info_cmd, None).await.unwrap(),
             )
             .unwrap();
             assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
@@ -314,8 +314,10 @@ pub(crate) mod shared_client_tests {
             }
             let client_info: String = repeat_try_create(|| async {
                 let mut client = client.clone();
-                redis::from_redis_value(&client.send_command(&client_info_cmd, None).await.unwrap())
-                    .ok()
+                redis::from_owned_redis_value(
+                    client.send_command(&client_info_cmd, None).await.unwrap(),
+                )
+                .ok()
             })
             .await;
 
