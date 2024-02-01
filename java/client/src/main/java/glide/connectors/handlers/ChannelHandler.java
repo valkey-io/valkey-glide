@@ -25,8 +25,8 @@ public class ChannelHandler {
 
     private static final String THREAD_POOL_NAME = "glide-channel";
 
-    private final Channel channel;
-    private final CallbackDispatcher callbackDispatcher;
+    protected final Channel channel;
+    protected final CallbackDispatcher callbackDispatcher;
 
     /** Open a new channel for a new client. */
     public ChannelHandler(CallbackDispatcher callbackDispatcher, String socketPath)
