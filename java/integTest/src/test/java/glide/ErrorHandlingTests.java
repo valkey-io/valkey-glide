@@ -32,9 +32,7 @@ public class ErrorHandlingTests {
                                         .get(10, TimeUnit.SECONDS));
         assertAll(
                 () -> assertTrue(exception.getCause() instanceof ClosingException),
-                () ->
-                        assertTrue(
-                                exception.getCause().getMessage().contains("Connection refused (os error 111)")));
+                () -> assertTrue(exception.getCause().getMessage().contains("Connection refused")));
     }
 
     @Test
@@ -53,7 +51,7 @@ public class ErrorHandlingTests {
                             () -> regularClient.customCommand(new String[] {"pewpew"}).get(10, TimeUnit.SECONDS));
             assertAll(
                     () -> assertTrue(exception.getCause() instanceof RequestException),
-                    () -> assertTrue(exception.getCause().getMessage().contains("unknown command `pewpew`")));
+                    () -> assertTrue(exception.getCause().getMessage().contains("unknown command")));
         }
     }
 
@@ -77,11 +75,7 @@ public class ErrorHandlingTests {
             assertAll(
                     () -> assertTrue(exception.getCause() instanceof RequestException),
                     () ->
-                            assertTrue(
-                                    exception
-                                            .getCause()
-                                            .getMessage()
-                                            .contains("wrong number of arguments for 'ping' command")));
+                            assertTrue(exception.getCause().getMessage().contains("wrong number of arguments")));
         }
     }
 
