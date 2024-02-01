@@ -715,6 +715,7 @@ export class BaseTransaction {
      *
      * Command Response - The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
+     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zadd(
         key: string,
@@ -744,6 +745,7 @@ export class BaseTransaction {
      *
      * Command Response - The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zaddIncr(
         key: string,
