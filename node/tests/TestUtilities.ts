@@ -92,6 +92,7 @@ export function transactionTest(
     baseTransaction.zadd(key8, { member1: 1, member2: 2 });
     baseTransaction.zaddIncr(key8, "member2", 1);
     baseTransaction.zrem(key8, ["member1"]);
+    baseTransaction.zcard(key8);
     return [
         "OK",
         null,
@@ -118,6 +119,7 @@ export function transactionTest(
         ["bar"],
         2,
         3,
+        1,
         1,
     ];
 }
