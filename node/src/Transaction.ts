@@ -426,18 +426,28 @@ export class BaseTransaction {
     }
 
     /** Removes and returns the first elements of the list stored at `key`.
-     * By default, the command pops a single element from the beginning of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the beginning of the list.
+     * See https://redis.io/commands/lpop/ for details.
+     *
+     * @param key - The key of the list.
+     * Command Response - The value of the first element.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, the transaction fails with an error.
+     */
+    public lpop(key: string) {
+        this.commands.push(createLPop(key));
+    }
+
+    /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
      * See https://redis.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     *
-     * Command Response - The value of the first element if `count` is not provided. If `count` is provided, a list of the popped elements will be returned depending on the list's length.
+     * Command Response - A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
+     * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public lpop(key: string, count?: number) {
+    public lpopCount(key: string, count: number) {
         this.commands.push(createLPop(key, count));
     }
 
@@ -527,19 +537,29 @@ export class BaseTransaction {
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
-     * By default, the command pops a single element from the end of the list.
-     * When `count` is provided, the command pops up to `count` elements, depending on the list's length.
+     * The command pops a single element from the end of the list.
+     * See https://redis.io/commands/rpop/ for details.
+     *
+     * @param key - The key of the list.
+     * Command Response - The value of the last element.
+     * If `key` does not exist null will be returned.
+     * If `key` holds a value that is not a list, the transaction fails with an error.
+     */
+    public rpop(key: string) {
+        this.commands.push(createRPop(key));
+    }
+
+    /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
      * See https://redis.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     *
-     * Command Response - The value of the last element if `count` is not provided. If `count` is provided, list of popped elements will be returned depending on the list's length.
+     * Command Response - A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
+     * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public rpop(key: string, count?: number) {
-        this.commands.push(createRPop(key, count));
+    public rpopCount(key: string, count: number) {
+        return this.commands.push(createRPop(key, count));
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
