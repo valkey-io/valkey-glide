@@ -30,10 +30,33 @@ impl Level {
     }
 }
 
+#[pyclass]
+pub struct Script {
+    hash: String,
+}
+
+#[pymethods]
+impl Script {
+    #[new]
+    fn new(code: String) -> Self {
+        let hash = glide_core::scripts_container::add_script(&code);
+        Script { hash }
+    }
+
+    fn get_hash(&self) -> String {
+        self.hash.clone()
+    }
+
+    fn __del__(&mut self) {
+        glide_core::scripts_container::remove_script(&self.hash);
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Level>()?;
+    m.add_class::<Script>()?;
     m.add(
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
         DEFAULT_TIMEOUT_IN_MILLISECONDS,
