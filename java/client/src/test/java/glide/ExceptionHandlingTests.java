@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
@@ -42,7 +43,6 @@ import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
 
-// ./gradlew :client:test --tests ExceptionHandlingTests  --debug-jvm
 public class ExceptionHandlingTests {
 
     /**
