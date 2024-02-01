@@ -25,9 +25,9 @@ public class ChannelHandler {
     /**
      * Open a new channel for a new client and running it on the provided EventLoopGroup.
      *
-     * @param callbackDispatcher - dispatcher to handle callbacks
-     * @param socketPath - address to connect
-     * @param threadPoolResource - resource to choose ELG and domainSocketChannelClass
+     * @param callbackDispatcher Dispatcher to handle callbacks
+     * @param socketPath Address to connect
+     * @param threadPoolResource Resource to choose ELG and domainSocketChannelClass
      */
     public ChannelHandler(
             CallbackDispatcher callbackDispatcher,
