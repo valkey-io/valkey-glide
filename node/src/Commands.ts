@@ -753,3 +753,10 @@ export function createZrem(
 ): redis_request.Command {
     return createCommand(RequestType.Zrem, [key].concat(members));
 }
+
+/**
+ * @internal
+ */
+export function createZcard(key: string): redis_request.Command {
+    return createCommand(RequestType.Zcard, [key]);
+}
