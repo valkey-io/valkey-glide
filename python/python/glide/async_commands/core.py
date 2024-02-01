@@ -1105,6 +1105,7 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of elements added to the sorted set.
             If `changed` is set, returns the number of elements updated in the sorted set.
+            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
@@ -1167,7 +1168,9 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[float]: The score of the member.
-            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and null is returned.
+            If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
+            If `key` holds a value that is not a sorted set, an error is returned.
+
         Examples:
             >>> await zaddIncr("my_sorted_set", member , 5.0)
                 5.0
@@ -1207,10 +1210,14 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The number of elements in the sorted set.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zcard("my_sorted_set")
-            3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
+                3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
+            >>> await zcard("non_existing_key")
+                0
         """
         return cast(int, await self._execute_command(RequestType.Zcard, [key]))
 
@@ -1231,7 +1238,7 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The number of members that were removed from the sorted set, not including non-existing members.
-            If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
             If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
@@ -1260,7 +1267,6 @@ class CoreCommands(Protocol):
             If `member` does not exist in the sorted set, None is returned.
             If `key` does not exist,  None is returned.
             If `key` holds a value that is not a sorted set, an error is returned.
-
 
         Examples:
             >>> await zscore("my_sorted_set", "member")
