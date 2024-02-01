@@ -1,7 +1,9 @@
-package glide;
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+package glide.standalone;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.TestConfiguration;
 import glide.api.RedisClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
