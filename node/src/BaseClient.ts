@@ -52,6 +52,7 @@ import {
     createTTL,
     createUnlink,
     createZadd,
+    createZcard,
     createZrem,
 } from "./Commands";
 import {
@@ -1055,6 +1056,18 @@ export class BaseClient {
      */
     public zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZrem(key, members));
+    }
+
+    /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
+     * See https://redis.io/commands/zcard/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @returns The number of elements in the sorted set.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zcard(key: string): Promise<number> {
+        return this.createWritePromise(createZcard(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
