@@ -6,6 +6,7 @@ import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
+import static glide.api.models.commands.InfoOptions.Section.LATENCYSTATS;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
@@ -117,7 +118,6 @@ public class CommandTests {
         var options = builder.build();
         var data = clusterClient.info(options).get(10, SECONDS);
         for (var info : data.getMultiValue().values()) {
-
             for (var section :  options.toArgs()) {
                 assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
             }
@@ -146,7 +146,9 @@ public class CommandTests {
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
         for (var section : EVERYTHING_INFO_SECTIONS) {
-            assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
+            if (!TestConfiguration.REDIS_VERSION.startsWith("7") && section.equals("Latencystats")) {
+                assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
+            }
         }
     }
 
