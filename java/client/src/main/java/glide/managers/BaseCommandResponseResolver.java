@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import glide.api.models.Ok;
 import glide.api.models.exceptions.RedisException;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
@@ -26,7 +27,7 @@ public class BaseCommandResponseResolver
 
         if (response.hasConstantResponse()) {
             // Return "OK"
-            return response.getConstantResponse().toString();
+            return Ok.INSTANCE;
         }
         if (response.hasRespPointer()) {
             // Return the shared value - which may be a null value

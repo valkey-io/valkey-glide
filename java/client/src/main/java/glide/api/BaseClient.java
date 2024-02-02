@@ -8,6 +8,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.commands.ConnectionCommands;
 import glide.api.commands.StringCommands;
+import glide.api.models.Ok;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -115,15 +116,15 @@ public abstract class BaseClient implements AutoCloseable, StringCommands, Conne
      *
      * @return An empty response
      */
-    protected Void handleVoidResponse(Response response) {
+    protected Ok handleOkResponse(Response response) {
         Object value = handleObjectResponse(response);
-        if (value == null) {
-            return null;
+        if (value == Ok.INSTANCE) {
+            return Ok.INSTANCE;
         }
         throw new RedisException(
                 "Unexpected return type from Redis: got "
                         + value.getClass().getSimpleName()
-                        + " expected null");
+                        + " expected simple-string Ok");
     }
 
     /**
@@ -135,8 +136,11 @@ public abstract class BaseClient implements AutoCloseable, StringCommands, Conne
      */
     protected String handleStringResponse(Response response) {
         Object value = handleObjectResponse(response);
-        if (value instanceof String) {
+        if (value instanceof String || value == null) {
             return (String) value;
+        }
+        if (value instanceof Ok) {
+            return Ok.INSTANCE.toString();
         }
         throw new RedisException(
                 "Unexpected return type from Redis: got "
@@ -198,9 +202,9 @@ public abstract class BaseClient implements AutoCloseable, StringCommands, Conne
     }
 
     @Override
-    public CompletableFuture<Void> set(String key, String value) {
+    public CompletableFuture<Ok> set(String key, String value) {
         return commandManager.submitNewCommand(
-                SetString, new String[] {key, value}, this::handleVoidResponse);
+                SetString, new String[] {key, value}, this::handleOkResponse);
     }
 
     @Override

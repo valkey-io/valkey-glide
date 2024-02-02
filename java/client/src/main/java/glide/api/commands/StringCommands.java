@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.Ok;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -27,7 +28,7 @@ public interface StringCommands {
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis.
      */
-    CompletableFuture<Void> set(String key, String value);
+    CompletableFuture<Ok> set(String key, String value);
 
     /**
      * Set the given key with the given value. Return value is dependent on the passed options.
