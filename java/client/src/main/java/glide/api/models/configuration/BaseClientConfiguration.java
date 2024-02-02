@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import glide.connectors.resources.ThreadPoolResource;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -51,4 +52,10 @@ public abstract class BaseClientConfiguration {
      * it will result in a timeout error. If not set, a default value will be used.
      */
     private final Integer requestTimeout;
+
+    /**
+     * Advanced users can pass an extended {@link ThreadPoolResource} to pass a user-defined event
+     * loop group. If set, users are responsible for shutting the resource down when no longer in use.
+     */
+    private final ThreadPoolResource threadPoolResource;
 }

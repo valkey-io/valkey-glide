@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.BaseClient.buildChannelHandler;
 import static glide.api.RedisClient.CreateClient;
 import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
@@ -15,6 +16,8 @@ import static org.mockito.Mockito.when;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
+import glide.connectors.resources.ThreadPoolResource;
+import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
@@ -31,6 +34,7 @@ public class RedisClientCreateTest {
     private ChannelHandler channelHandler;
     private ConnectionManager connectionManager;
     private CommandManager commandManager;
+    private ThreadPoolResource threadPoolResource;
 
     @BeforeEach
     public void init() {
@@ -39,11 +43,18 @@ public class RedisClientCreateTest {
         channelHandler = mock(ChannelHandler.class);
         commandManager = mock(CommandManager.class);
         connectionManager = mock(ConnectionManager.class);
+        threadPoolResource = mock(ThreadPoolResource.class);
 
-        mockedClient.when(BaseClient::buildChannelHandler).thenReturn(channelHandler);
+        mockedClient.when(() -> buildChannelHandler(any())).thenReturn(channelHandler);
         mockedClient.when(() -> buildConnectionManager(channelHandler)).thenReturn(connectionManager);
         mockedClient.when(() -> buildCommandManager(channelHandler)).thenReturn(commandManager);
         mockedClient.when(() -> CreateClient(any(), any())).thenCallRealMethod();
+
+        var threadPoolResource = ThreadPoolResourceAllocator.getOrCreate(() -> null);
+        if (threadPoolResource != null) {
+            threadPoolResource.getEventLoopGroup().shutdownGracefully();
+            ThreadPoolResourceAllocator.getOrCreate(() -> null);
+        }
     }
 
     @AfterEach
@@ -53,12 +64,31 @@ public class RedisClientCreateTest {
 
     @Test
     @SneakyThrows
-    public void createClient_with_config_successfully_returns_RedisClient() {
-
+    public void createClient_with_default_config_successfully_returns_RedisClient() {
         // setup
         CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
         connectToRedisFuture.complete(null);
         RedisClientConfiguration config = RedisClientConfiguration.builder().build();
+
+        when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
+
+        // exercise
+        CompletableFuture<RedisClient> result = CreateClient(config);
+        RedisClient client = result.get();
+
+        // verify
+        assertEquals(connectionManager, client.connectionManager);
+        assertEquals(commandManager, client.commandManager);
+    }
+
+    @Test
+    @SneakyThrows
+    public void createClient_with_custom_config_successfully_returns_RedisClient() {
+        // setup
+        CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
+        connectToRedisFuture.complete(null);
+        RedisClientConfiguration config =
+                RedisClientConfiguration.builder().threadPoolResource(threadPoolResource).build();
 
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
@@ -78,7 +108,8 @@ public class RedisClientCreateTest {
         CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
         ClosingException exception = new ClosingException("disconnected");
         connectToRedisFuture.completeExceptionally(exception);
-        RedisClientConfiguration config = RedisClientConfiguration.builder().build();
+        RedisClientConfiguration config =
+                RedisClientConfiguration.builder().threadPoolResource(threadPoolResource).build();
 
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
