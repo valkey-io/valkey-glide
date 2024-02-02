@@ -15,6 +15,7 @@ import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
@@ -50,11 +51,11 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(Route route, String... args) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull Route route, String... args) {
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,
-                Optional.ofNullable(route),
+                Optional.of(route),
                 response ->
                         route.isSingleNodeRoute()
                                 ? ClusterValue.ofSingleValue(handleObjectResponse(response))
@@ -71,11 +72,11 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> info(Route route) {
+    public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info,
                 new String[0],
-                Optional.ofNullable(route),
+                Optional.of(route),
                 response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
@@ -89,11 +90,11 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route) {
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions options, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info,
                 options.toArgs(),
-                Optional.ofNullable(route),
+                Optional.of(route),
                 response -> ClusterValue.of(handleObjectResponse(response)));
     }
 }
