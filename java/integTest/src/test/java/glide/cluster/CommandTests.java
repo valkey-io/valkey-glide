@@ -10,6 +10,9 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
+import static glide.api.models.commands.SetOptions.TimeToLiveType.KEEP_EXISTING;
+import static glide.api.models.commands.SetOptions.TimeToLiveType.MILLISECONDS;
+import static glide.api.models.commands.SetOptions.TimeToLiveType.UNIX_SECONDS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
@@ -24,6 +27,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SetOptions.TimeToLive;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -106,16 +110,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions options =
-                InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
-        ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
-        assertTrue(data.hasMultiData());
+        var builder = InfoOptions.builder().section(CLUSTER);
+        if (TestConfiguration.REDIS_VERSION.startsWith("7")) {
+            builder.section(CPU).section(MEMORY);
+        }
+        var options = builder.build();
+        var data = clusterClient.info(options).get(10, SECONDS);
         for (var info : data.getMultiValue().values()) {
 
-            for (var section : options.toArgs()) {
-                assertTrue(
-                        info.toLowerCase().contains("# " + section.toLowerCase()),
-                        "Section " + section + " is missing");
+            for (var section :  options.toArgs()) {
+                assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
             }
         }
     }
@@ -162,7 +166,11 @@ public class CommandTests {
         // Extracting first slot key
         var slotKey = (String)((Object[])((Object[])((Object[])slotData.getSingleValue())[0])[2])[2];
 
-        var options = InfoOptions.builder().section(CLIENTS).section(COMMANDSTATS).section(REPLICATION).build();
+        var builder = InfoOptions.builder().section(CLIENTS);
+        if (TestConfiguration.REDIS_VERSION.startsWith("7")) {
+            builder.section(COMMANDSTATS).section(REPLICATION);
+        }
+        var options = builder.build();
         var routing = new SlotKeyRoute(slotKey, PRIMARY);
         var data = clusterClient.info(options, routing).get(10, SECONDS);
 
@@ -257,5 +265,53 @@ public class CommandTests {
         clusterClient.set("set_only_if_does_not_exists_existing_key", ANOTHER_VALUE, options).get(10, SECONDS);
         var data = clusterClient.get("set_only_if_does_not_exists_existing_key").get(10, SECONDS);
         assertEquals(INITIAL_VALUE, data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void set_value_with_ttl_and_update_value_with_keeping_ttl() {
+        var options = SetOptions.builder().expiry(
+            SetOptions.TimeToLive.builder().count(2000).type(MILLISECONDS).build()).build();
+        clusterClient.set("set_value_with_ttl_and_update_value_with_keeping_ttl", INITIAL_VALUE, options).get(10, SECONDS);
+        var data = clusterClient.get("set_value_with_ttl_and_update_value_with_keeping_ttl").get(10, SECONDS);
+        assertEquals(INITIAL_VALUE, data);
+
+        options = SetOptions.builder().expiry(TimeToLive.builder().type(KEEP_EXISTING).build()).build();
+        clusterClient.set("set_value_with_ttl_and_update_value_with_keeping_ttl", ANOTHER_VALUE, options).get(10, SECONDS);
+        data = clusterClient.get("set_value_with_ttl_and_update_value_with_keeping_ttl").get(10, SECONDS);
+        assertEquals(ANOTHER_VALUE, data);
+
+        Thread.sleep(2222); // sleep a bit more than TTL
+
+        data = clusterClient.get("set_value_with_ttl_and_update_value_with_keeping_ttl").get(10, SECONDS);
+        assertNull(data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void set_value_with_ttl_and_update_value_with_new_ttl() {
+        var options = SetOptions.builder().expiry(TimeToLive.builder().count(100500).type(MILLISECONDS).build()).build();
+        clusterClient.set("set_value_with_ttl_and_update_value_with_new_ttl", INITIAL_VALUE, options).get(10, SECONDS);
+        var data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
+        assertEquals(INITIAL_VALUE, data);
+
+        options = SetOptions.builder().expiry(TimeToLive.builder().count(2000).type(MILLISECONDS).build()).build();
+        clusterClient.set("set_value_with_ttl_and_update_value_with_new_ttl", ANOTHER_VALUE, options).get(10, SECONDS);
+        data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
+        assertEquals(ANOTHER_VALUE, data);
+
+        Thread.sleep(2222); // sleep a bit more than new TTL
+
+        data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
+        assertNull(data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void set_expired_value() { // expiration is in the past
+        var options = SetOptions.builder().expiry(TimeToLive.builder().count(100500).type(UNIX_SECONDS).build()).build();
+        clusterClient.set("set_expired_value", INITIAL_VALUE, options).get(10, SECONDS);
+        var data = clusterClient.get("set_expired_value").get(10, SECONDS);
+        assertNull(data);
     }
 }
