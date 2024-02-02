@@ -167,7 +167,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Build protobuf {@link Command} object for given command and arguments. */
     protected Command buildCommand(RequestType requestType) {
-        return Command.newBuilder().setRequestType(requestType).build();
+        return buildCommand(requestType, buildArgs());
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */
