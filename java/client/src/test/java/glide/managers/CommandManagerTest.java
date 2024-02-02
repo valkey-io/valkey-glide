@@ -14,13 +14,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
+import glide.api.models.ClusterTransaction;
+import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.connectors.handlers.ChannelHandler;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -221,5 +226,113 @@ public class CommandManagerTest {
                         IllegalArgumentException.class,
                         () -> service.submitNewCommand(CustomCommand, new String[0], () -> false, r -> null));
         assertEquals("Unknown type of route", exception.getMessage());
+    }
+
+    @SneakyThrows
+    @Test
+    public void submitNewCommand_with_Transaction_sends_protobuf_request() {
+        // setup
+        String[] arg1 = new String[] {"GETSTRING", "one"};
+        String[] arg2 = new String[] {"GETSTRING", "two"};
+        String[] arg3 = new String[] {"GETSTRING", "three"};
+        Transaction trans = new Transaction();
+        trans.customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+
+        ArgumentCaptor<RedisRequest.Builder> captor =
+                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+
+        // exercise
+        service.submitNewCommand(trans, r -> null);
+
+        // verify
+        verify(channelHandler).write(captor.capture(), anyBoolean());
+        var requestBuilder = captor.getValue();
+
+        // verify
+        assertTrue(requestBuilder.hasTransaction());
+        assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
+
+        LinkedList<String> resultPayloads = new LinkedList<>();
+        resultPayloads.add("one");
+        resultPayloads.add("two");
+        resultPayloads.add("three");
+        for (redis_request.RedisRequestOuterClass.Command command :
+                requestBuilder.getTransaction().getCommandsList()) {
+            assertEquals(CustomCommand, command.getRequestType());
+            assertEquals("GETSTRING", command.getArgsArray().getArgs(0));
+            assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void submitNewCommand_with_Transaction_throws_interruptedException() {
+        // setup
+        String[] arg1 = new String[] {"GETSTRING", "one"};
+        String[] arg2 = new String[] {"GETSTRING", "two"};
+        String[] arg3 = new String[] {"GETSTRING", "two"};
+        Transaction trans =
+                new Transaction().customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        CompletableFuture<Response> futureResponse = mock(CompletableFuture.class);
+        CompletableFuture<Object> futureObject = mock(CompletableFuture.class);
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(futureResponse);
+        InterruptedException interruptedException = new InterruptedException();
+        when(futureResponse.exceptionally(any())).thenReturn(futureResponse);
+        when(futureResponse.thenApplyAsync(any())).thenReturn(futureObject);
+        when(futureObject.get()).thenThrow(new ExecutionException(interruptedException));
+
+        ArgumentCaptor<RedisRequest.Builder> captor =
+                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+
+        // exercise
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            CompletableFuture<Object> response = service.submitNewCommand(trans, r -> null);
+                            response.get();
+                        });
+        verify(channelHandler).write(captor.capture(), anyBoolean());
+        var requestBuilder = captor.getValue();
+
+        // verify
+        assertTrue(requestBuilder.hasTransaction());
+        assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
+        assertEquals(interruptedException, exception.getCause());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = SimpleRoute.class)
+    public void submitNewCommand_with_ClusterTransaction_with_route_sends_protobuf_request(
+            SimpleRoute routeType) {
+
+        String[] arg1 = new String[] {"GETSTRING", "one"};
+        String[] arg2 = new String[] {"GETSTRING", "two"};
+        String[] arg3 = new String[] {"GETSTRING", "two"};
+        ClusterTransaction trans =
+                new ClusterTransaction().customCommand(arg1).customCommand(arg2).customCommand(arg3);
+
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+
+        ArgumentCaptor<RedisRequest.Builder> captor =
+                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+
+        service.submitNewCommand(trans, Optional.of(routeType), r -> null);
+        verify(channelHandler).write(captor.capture(), anyBoolean());
+        var requestBuilder = captor.getValue();
+
+        assertAll(
+                () -> assertTrue(requestBuilder.hasRoute()),
+                () -> assertTrue(requestBuilder.getRoute().hasSimpleRoutes()),
+                () ->
+                        assertEquals(
+                                routeType.getProtobufMapping(), requestBuilder.getRoute().getSimpleRoutes()),
+                () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
+                () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
     }
 }

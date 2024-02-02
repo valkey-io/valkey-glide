@@ -22,6 +22,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import glide.managers.models.Command;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;

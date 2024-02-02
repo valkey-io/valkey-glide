@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+\import glide.api.models.ClusterTransaction;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -15,6 +16,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
@@ -61,6 +63,18 @@ public class RedisClusterClient extends BaseClient
                                 ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
                                 : ClusterValue.ofMultiValue(
                                         (Map<String, Object>) handleObjectOrNullResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
+        return commandManager.submitNewCommand(
+            transaction, Optional.empty(), this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> exec(ClusterTransaction transaction, Route route) {
+        return commandManager.submitNewCommand(
+            transaction, Optional.ofNullable(route), this::handleArrayResponse);
     }
 
     @Override
