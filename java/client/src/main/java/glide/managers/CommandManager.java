@@ -39,9 +39,9 @@ public class CommandManager {
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
-        RedisRequestOuterClass.RequestType requestType,
-        String[] arguments,
-        RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            RedisRequestOuterClass.RequestType requestType,
+            String[] arguments,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
         return submitNewCommand(command, responseHandler);

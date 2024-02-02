@@ -28,8 +28,6 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import redis_request.RedisRequestOuterClass;
 
 public class RedisClientTest {
 
