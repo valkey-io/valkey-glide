@@ -21,6 +21,8 @@ import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import glide.connectors.resources.Platform;
+import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -34,6 +36,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -44,6 +47,14 @@ import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
 
 public class ExceptionHandlingTests {
+    @BeforeEach
+    public void init() {
+        var threadPoolResource = ThreadPoolResourceAllocator.getOrCreate(() -> null);
+        if (threadPoolResource != null) {
+            threadPoolResource.getEventLoopGroup().shutdownGracefully();
+            ThreadPoolResourceAllocator.getOrCreate(() -> null);
+        }
+    }
 
     /**
      * This test shows how exception handling works in the middle of future pipeline The client has
@@ -277,7 +288,10 @@ public class ExceptionHandlingTests {
     private static class TestChannelHandler extends ChannelHandler {
 
         public TestChannelHandler(CallbackDispatcher callbackDispatcher) throws InterruptedException {
-            super(callbackDispatcher, getSocket());
+            super(
+                    callbackDispatcher,
+                    getSocket(),
+                    ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier()));
         }
 
         public boolean wasClosed = false;

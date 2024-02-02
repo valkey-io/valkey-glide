@@ -6,6 +6,9 @@ import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import glide.connectors.resources.Platform;
+import glide.connectors.resources.ThreadPoolResource;
+import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
@@ -47,7 +50,12 @@ public abstract class BaseClient implements AutoCloseable {
             BaseClientConfiguration config,
             BiFunction<ConnectionManager, CommandManager, T> constructor) {
         try {
-            ChannelHandler channelHandler = buildChannelHandler();
+            ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
+            if (threadPoolResource == null) {
+                threadPoolResource =
+                        ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
+            }
+            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
             CommandManager commandManager = buildCommandManager(channelHandler);
             // TODO: Support exception throwing, including interrupted exceptions
@@ -79,9 +87,10 @@ public abstract class BaseClient implements AutoCloseable {
         }
     }
 
-    protected static ChannelHandler buildChannelHandler() throws InterruptedException {
+    protected static ChannelHandler buildChannelHandler(ThreadPoolResource threadPoolResource)
+            throws InterruptedException {
         CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
-        return new ChannelHandler(callbackDispatcher, getSocket());
+        return new ChannelHandler(callbackDispatcher, getSocket(), threadPoolResource);
     }
 
     protected static ConnectionManager buildConnectionManager(ChannelHandler channelHandler) {
