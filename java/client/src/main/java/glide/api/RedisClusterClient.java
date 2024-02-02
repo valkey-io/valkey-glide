@@ -67,7 +67,7 @@ public class RedisClusterClient extends BaseClient
                 Info,
                 new String[0],
                 Optional.empty(),
-                response -> ClusterValue.of(handleStringResponse(response)));
+                response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
     @Override
@@ -76,7 +76,7 @@ public class RedisClusterClient extends BaseClient
                 Info,
                 new String[0],
                 Optional.ofNullable(route),
-                response -> ClusterValue.of(handleStringResponse(response)));
+                response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
     @Override
@@ -85,7 +85,7 @@ public class RedisClusterClient extends BaseClient
                 Info,
                 options.toArgs(),
                 Optional.empty(),
-                response -> ClusterValue.of(handleStringResponse(response)));
+                response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
     @Override
@@ -94,6 +94,6 @@ public class RedisClusterClient extends BaseClient
                 Info,
                 options.toArgs(),
                 Optional.ofNullable(route),
-                response -> ClusterValue.of(handleStringResponse(response)));
+                response -> ClusterValue.of(handleObjectResponse(response)));
     }
 }
