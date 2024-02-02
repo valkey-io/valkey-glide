@@ -287,10 +287,19 @@ public class CommandManagerTest {
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
+        var protobufToClientRouteMapping =
+                Map.of(
+                        SimpleRoutes.AllNodes, SimpleRoute.ALL_NODES,
+                        SimpleRoutes.AllPrimaries, SimpleRoute.ALL_PRIMARIES,
+                        SimpleRoutes.Random, SimpleRoute.RANDOM);
+
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
                 () -> assertTrue(requestBuilder.getRoute().hasSimpleRoutes()),
-                () -> assertEquals(routeType, requestBuilder.getRoute().getSimpleRoutes()),
+                () ->
+                        assertEquals(
+                                routeType,
+                                protobufToClientRouteMapping.get(requestBuilder.getRoute().getSimpleRoutes())),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
                 () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
     }
