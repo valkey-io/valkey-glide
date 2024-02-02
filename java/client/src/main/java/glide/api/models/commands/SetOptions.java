@@ -3,7 +3,7 @@ package glide.api.models.commands;
 
 import glide.api.commands.StringCommands;
 import glide.api.models.exceptions.RequestException;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -96,7 +96,7 @@ public final class SetOptions {
     }
 
     /** String representation of {@link #returnOldValue} when set. */
-    public static String RETURN_OLD_VALUE = "GET";
+    public static final String RETURN_OLD_VALUE = "GET";
 
     /**
      * Converts SetOptions into a String[] to add to a {@link Command} arguments.
@@ -104,7 +104,7 @@ public final class SetOptions {
      * @return String[]
      */
     public String[] toArgs() {
-        List<String> optionArgs = new LinkedList<>();
+        List<String> optionArgs = new ArrayList<>();
         if (conditionalSet != null) {
             optionArgs.add(conditionalSet.redisApi);
         }

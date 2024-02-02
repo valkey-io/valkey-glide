@@ -30,6 +30,35 @@ public class CommandTests {
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
 
+    private static final List<String> DEFAULT_INFO_SECTIONS =
+            List.of(
+                    "Server",
+                    "Clients",
+                    "Memory",
+                    "Persistence",
+                    "Stats",
+                    "Replication",
+                    "CPU",
+                    "Modules",
+                    "Errorstats",
+                    "Cluster",
+                    "Keyspace");
+    private static final List<String> EVERYTHING_INFO_SECTIONS =
+            List.of(
+                    "Server",
+                    "Clients",
+                    "Memory",
+                    "Persistence",
+                    "Stats",
+                    "Replication",
+                    "CPU",
+                    "Modules",
+                    "Commandstats",
+                    "Errorstats",
+                    "Latencystats",
+                    "Cluster",
+                    "Keyspace");
+
     @BeforeAll
     @SneakyThrows
     public static void init() {
@@ -59,19 +88,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get(10, SECONDS);
-        for (var section :
-                List.of(
-                        "Server",
-                        "Clients",
-                        "Memory",
-                        "Persistence",
-                        "Stats",
-                        "Replication",
-                        "CPU",
-                        "Modules",
-                        "Errorstats",
-                        "Cluster",
-                        "Keyspace")) {
+        for (var section : DEFAULT_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
@@ -94,21 +111,7 @@ public class CommandTests {
     public void info_with_everything_option() {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
         String data = regularClient.info(options).get(10, SECONDS);
-        for (var section :
-                List.of(
-                        "Server",
-                        "Clients",
-                        "Memory",
-                        "Persistence",
-                        "Stats",
-                        "Replication",
-                        "CPU",
-                        "Modules",
-                        "Commandstats",
-                        "Errorstats",
-                        "Latencystats",
-                        "Cluster",
-                        "Keyspace")) {
+        for (var section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }

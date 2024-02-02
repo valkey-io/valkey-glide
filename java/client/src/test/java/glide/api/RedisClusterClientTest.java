@@ -5,6 +5,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleR
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,6 +22,7 @@ import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +52,7 @@ public class RedisClusterClientTest {
 
         var client = new TestClient(commandManager, "TEST");
 
-        var value = client.customCommand().get();
+        var value = client.customCommand("test").get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertEquals("TEST", value.getSingleValue()));
@@ -64,7 +66,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand().get();
+        var value = client.customCommand("test").get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -78,7 +80,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(RANDOM).get();
+        var value = client.customCommand(RANDOM, "Test").get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
     }
@@ -91,7 +93,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(ALL_NODES).get();
+        var value = client.customCommand(ALL_NODES, "Test").get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -139,7 +141,7 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<Object>> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(ClusterValue.of(value));
         when(commandManager.<ClusterValue<Object>>submitNewCommand(
-                        eq(CustomCommand), any(), any(), any()))
+                        eq(CustomCommand), eq(arguments), any(), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -147,23 +149,30 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        ClusterValue clusterValue = response.get();
+        ClusterValue<Object> clusterValue = response.get();
         assertTrue(clusterValue.hasSingleData());
         String payload = (String) clusterValue.getSingleValue();
         assertEquals(value, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void customCommand_requires_args() {
+        assertThrows(IllegalArgumentException.class, () -> service.customCommand());
+        assertThrows(IllegalArgumentException.class, () -> service.customCommand(RANDOM));
     }
 
     @SneakyThrows
     @Test
     public void info_returns_string() {
         // setup
-        CompletableFuture<ClusterValue<Map>> testResponse = mock(CompletableFuture.class);
-        Map testPayload = new HashMap<String, String>();
+        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
+        Map<String, String> testPayload = new HashMap<String, String>();
         testPayload.put("addr1", "value1");
-        testPayload.put("addr1", "value2");
-        testPayload.put("addr1", "value3");
+        testPayload.put("addr2", "value2");
+        testPayload.put("addr3", "value3");
         when(testResponse.get()).thenReturn(ClusterValue.of(testPayload));
-        when(commandManager.<ClusterValue<Map>>submitNewCommand(
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
                         eq(Info), eq(new String[0]), any(), any()))
                 .thenReturn(testResponse);
 
@@ -171,7 +180,6 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<String>> response = service.info();
 
         // verify
-        assertEquals(testResponse, response);
         ClusterValue<String> clusterValue = response.get();
         assertTrue(clusterValue.hasMultiData());
         Map<String, String> payload = clusterValue.getMultiValue();
@@ -182,18 +190,17 @@ public class RedisClusterClientTest {
     @Test
     public void info_with_route_returns_string() {
         // setup
-        CompletableFuture<ClusterValue<Map>> testResponse = mock(CompletableFuture.class);
+        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
         RequestRoutingConfiguration.Route route = RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
         when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
-        when(commandManager.<ClusterValue<Map>>submitNewCommand(eq(Info), any(), any(), any()))
+        when(commandManager.<ClusterValue<String>>submitNewCommand(eq(Info), any(), any(), any()))
                 .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<ClusterValue<String>> response = service.info(route);
 
         // verify
-        assertEquals(testResponse, response);
         ClusterValue<String> clusterValue = response.get();
         assertTrue(clusterValue.hasMultiData());
         Map<String, String> clusterMap = clusterValue.getMultiValue();
@@ -206,12 +213,12 @@ public class RedisClusterClientTest {
     public void info_with_route_with_infoOptions_returns_string() {
         // setup
         String[] infoArguments = new String[] {"ALL", "DEFAULT"};
-        CompletableFuture<ClusterValue<Map>> testResponse = mock(CompletableFuture.class);
+        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
         when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
         RequestRoutingConfiguration.Route route = RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
-        when(commandManager.<ClusterValue<Map>>submitNewCommand(
-                        eq(Info), eq(infoArguments), any(), any()))
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(Info), eq(infoArguments), eq(Optional.of(route)), any()))
                 .thenReturn(testResponse);
 
         // exercise

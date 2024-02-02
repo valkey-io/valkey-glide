@@ -41,6 +41,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(String... args) {
+        if (args.length == 0) throw new IllegalArgumentException("No arguments provided");
         // TODO if a command returns a map as a single value, ClusterValue misleads user
         return commandManager.submitNewCommand(
                 CustomCommand,
@@ -53,6 +54,7 @@ public class RedisClusterClient extends BaseClient
     @SuppressWarnings("unchecked")
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull Route route, String... args) {
+        if (args.length == 0) throw new IllegalArgumentException("No arguments provided");
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,

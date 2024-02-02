@@ -10,9 +10,9 @@ import response.ResponseOuterClass;
  * @see <a href="https://redis.io/docs/reference/protocol-spec/#simple-strings">Simple Strings
  *     response</a>
  */
-public class Ok {
+public final class Ok {
 
-    public static Ok INSTANCE = new Ok();
+    public static final Ok INSTANCE = new Ok();
 
     // Constructor is private - use Ok.INSTANCE instead
     private Ok() {}
