@@ -3,8 +3,6 @@ package glide.api.models.configuration;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 
 /** Request routing configuration. */
 public class RequestRoutingConfiguration {
@@ -22,17 +20,13 @@ public class RequestRoutingConfiguration {
         boolean isSingleNodeRoute();
     }
 
-    @RequiredArgsConstructor
-    @Getter
     public enum SimpleRoute implements Route {
         /** Route request to all nodes. */
-        ALL_NODES(SimpleRoutes.AllNodes),
+        ALL_NODES,
         /** Route request to all primary nodes. */
-        ALL_PRIMARIES(SimpleRoutes.AllPrimaries),
+        ALL_PRIMARIES,
         /** Route request to a random node. */
-        RANDOM(SimpleRoutes.Random);
-
-        private final SimpleRoutes protobufMapping;
+        RANDOM;
 
         @Override
         public boolean isSingleNodeRoute() {
@@ -40,13 +34,9 @@ public class RequestRoutingConfiguration {
         }
     }
 
-    @RequiredArgsConstructor
-    @Getter
     public enum SlotType {
-        PRIMARY(SlotTypes.Primary),
-        REPLICA(SlotTypes.Replica);
-
-        private final SlotTypes slotTypes;
+        PRIMARY,
+        REPLICA,
     }
 
     /**
