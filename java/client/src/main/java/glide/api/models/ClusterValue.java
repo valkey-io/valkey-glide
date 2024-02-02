@@ -1,14 +1,21 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 
 /**
- * union-like type which can store single-value or multi-value retrieved from Redis. The
- * multi-value, if defined, contains the routed value as a Map<String, Object> containing a cluster
- * node address to cluster node value.
+ * Represents a Response object from a Redis server with cluster-mode enabled. The response type may
+ * depend on the submitted {@link Route}.
  *
- * @param <T> The wrapped data type
+ * @remark ClusterValue stores values in a union-like object. It contains a single-value or
+ *     multi-value response from Redis. If the command's routing is to one node use {@link
+ *     #getSingleValue()} to return a response of type <code>T</code>. Otherwise, use {@link
+ *     #getMultiValue()} to return a <code>Map</code> of <code>address: nodeResponse</code> where
+ *     <code>address</code> is of type <code>string</code> and <code>nodeResponse</code> is of type
+ *     <code>T</code>.
+ * @see <a href="https://redis.io/docs/reference/cluster-spec/">Redis cluster specification</a>
+ * @param <T> The wrapped response type
  */
 public class ClusterValue<T> {
     private Map<String, T> multiValue = null;
@@ -19,7 +26,7 @@ public class ClusterValue<T> {
 
     /**
      * Get per-node value.<br>
-     * Check with {@link #hasMultiData()} prior to accessing the data.
+     * Asserts if {@link #hasMultiData()} is false.
      */
     public Map<String, T> getMultiValue() {
         assert hasMultiData() : "No multi value stored";
@@ -28,7 +35,7 @@ public class ClusterValue<T> {
 
     /**
      * Get the single value.<br>
-     * Check with {@link #hasSingleData()} ()} prior to accessing the data.
+     * Asserts if {@link #hasSingleData()} is false.
      */
     public T getSingleValue() {
         assert hasSingleData() : "No single value stored";

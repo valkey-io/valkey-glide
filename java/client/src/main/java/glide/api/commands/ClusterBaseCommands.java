@@ -21,12 +21,12 @@ public interface ClusterBaseCommands {
      *     this function.
      * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
      *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
+     * Object result = client.customCommand("CLIENT", "LIST", "TYPE", "PUBSUB").get();
      * </code>
-     * @param args Arguments for the custom command including the command name
-     * @return A <em>CompletableFuture</em> with response result from Redis
+     * @param args Arguments for the custom command including the command name.
+     * @return Response from Redis containing an <code>Object</code>.
      */
-    CompletableFuture<ClusterValue<Object>> customCommand(String[] args);
+    CompletableFuture<ClusterValue<Object>> customCommand(String... args);
 
     /**
      * Executes a single command, without checking inputs. Every part of the command, including
@@ -39,11 +39,11 @@ public interface ClusterBaseCommands {
      *     this function.
      * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
      *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
+     * Object result = client.customCommand("CLIENT", "LIST", "TYPE", "PUBSUB").get();
      * </code>
-     * @param args Arguments for the custom command including the command name
      * @param route Routing configuration for the command
-     * @return A <em>CompletableFuture</em> with response result from Redis
+     * @param args Arguments for the custom command including the command name
+     * @return Response from Redis containing an <code>Object</code>.
      */
-    CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route);
+    CompletableFuture<ClusterValue<Object>> customCommand(Route route, String... args);
 }

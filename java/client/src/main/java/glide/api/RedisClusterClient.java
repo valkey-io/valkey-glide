@@ -1,21 +1,27 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.Info;
+
 import glide.api.commands.ClusterBaseCommands;
+import glide.api.commands.ClusterServerCommands;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import glide.managers.models.Command;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
  * client to Redis.
  */
-public class RedisClusterClient extends BaseClient implements ClusterBaseCommands {
+public class RedisClusterClient extends BaseClient
+        implements ClusterBaseCommands, ClusterServerCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -25,7 +31,7 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
      * Async request for an async (non-blocking) Redis client in Cluster mode.
      *
      * @param config Redis cluster client Configuration
-     * @return a Future to connect and return a ClusterClient
+     * @return A Future to connect and return a RedisClusterClient
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             RedisClusterClientConfiguration config) {
@@ -33,29 +39,61 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
-        Command command =
-                Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).arguments(args).build();
+    public CompletableFuture<ClusterValue<Object>> customCommand(String... args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
         return commandManager.submitNewCommand(
-                command, response -> ClusterValue.of(handleObjectResponse(response)));
+                CustomCommand,
+                args,
+                Optional.empty(),
+                response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
-        Command command =
-                Command.builder()
-                        .requestType(Command.RequestType.CUSTOM_COMMAND)
-                        .arguments(args)
-                        .route(route)
-                        .build();
-
+    public CompletableFuture<ClusterValue<Object>> customCommand(Route route, String... args) {
         return commandManager.submitNewCommand(
-                command,
+                CustomCommand,
+                args,
+                Optional.ofNullable(route),
                 response ->
                         route.isSingleNodeRoute()
                                 ? ClusterValue.ofSingleValue(handleObjectResponse(response))
                                 : ClusterValue.ofMultiValue((Map<String, Object>) handleObjectResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info() {
+        return commandManager.submitNewCommand(
+                Info,
+                new String[0],
+                Optional.empty(),
+                response -> ClusterValue.of(handleStringResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Route route) {
+        return commandManager.submitNewCommand(
+                Info,
+                new String[0],
+                Optional.ofNullable(route),
+                response -> ClusterValue.of(handleStringResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions options) {
+        return commandManager.submitNewCommand(
+                Info,
+                options.toArgs(),
+                Optional.empty(),
+                response -> ClusterValue.of(handleStringResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route) {
+        return commandManager.submitNewCommand(
+                Info,
+                options.toArgs(),
+                Optional.ofNullable(route),
+                response -> ClusterValue.of(handleStringResponse(response)));
     }
 }
