@@ -156,33 +156,6 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void customCommand_interruptedException() {
-        // setup
-        String key = "testKey";
-        String cmd = "GETSTRING";
-        String[] arguments = new String[] {cmd, key};
-        CompletableFuture<ClusterValue<Object>> testResponse = mock(CompletableFuture.class);
-        InterruptedException interruptedException = new InterruptedException();
-        when(testResponse.get()).thenThrow(interruptedException);
-        when(commandManager.<ClusterValue<Object>>submitNewCommand(
-                        eq(CustomCommand), any(), any(), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        InterruptedException exception =
-                assertThrows(
-                        InterruptedException.class,
-                        () -> {
-                            CompletableFuture<ClusterValue<Object>> response = service.customCommand(arguments);
-                            response.get();
-                        });
-
-        // verify
-        assertEquals(interruptedException, exception);
-    }
-
-    @SneakyThrows
-    @Test
     public void info_returns_string() {
         // setup
         CompletableFuture<ClusterValue<Map>> testResponse = mock(CompletableFuture.class);

@@ -28,8 +28,7 @@ public final class SetOptions {
     /**
      * Set command to return the old string stored at <code>key</code>, or <code>null</code> if <code>
      * key</code> did not exist. An error is returned and <code>SET</code> aborted if the value stored
-     * at <code>key
-     * </code> is not a string. Equivalent to <code>GET</code> in the Redis API.
+     * at <code>key</code> is not a string. Equivalent to <code>GET</code> in the Redis API.
      */
     private final boolean returnOldValue;
 

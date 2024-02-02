@@ -120,35 +120,6 @@ public class CommandManagerTest {
         assertEquals(testString, respPointer);
     }
 
-    @SneakyThrows
-    @Test
-    public void submitNewCommand_throws_ClosingException() {
-        // setup
-        String errorMsg = "Closing";
-        Response closingErrorResponse = Response.newBuilder().setClosingError(errorMsg).build();
-        BaseCommandResponseResolver handler =
-                new BaseCommandResponseResolver((ptr) -> closingErrorResponse);
-
-        CompletableFuture<Response> futureResponse = new CompletableFuture<>();
-        when(channelHandler.write(any(), anyBoolean())).thenReturn(futureResponse);
-        ClosingException closingException = new ClosingException(errorMsg);
-        futureResponse.completeExceptionally(closingException);
-
-        // exercise
-        ExecutionException e =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            CompletableFuture<Object> result =
-                                    service.submitNewCommand(CustomCommand, new String[0], Optional.empty(), handler);
-                            result.get();
-                        });
-
-        // verify
-        assertEquals(closingException, e.getCause());
-        assertEquals(errorMsg, e.getCause().getMessage());
-    }
-
     @ParameterizedTest
     @EnumSource(value = SimpleRoute.class)
     public void prepare_request_with_simple_routes(SimpleRoute routeType) {

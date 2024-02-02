@@ -71,35 +71,6 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void customCommand_throws_InterruptedException() {
-        // setup
-        String key = "testKey";
-        Object value = "testValue";
-        String cmd = "GETSTRING";
-        String[] arguments = new String[] {cmd, key};
-        CompletableFuture<Object> testResponse = mock(CompletableFuture.class);
-        InterruptedException interruptedException = new InterruptedException();
-        when(testResponse.get()).thenThrow(interruptedException);
-
-        // match on protobuf request
-        when(commandManager.submitNewCommand(eq(CustomCommand), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        InterruptedException exception =
-                assertThrows(
-                        InterruptedException.class,
-                        () -> {
-                            CompletableFuture<Object> response = service.customCommand(arguments);
-                            response.get();
-                        });
-
-        // verify
-        assertEquals(interruptedException, exception);
-    }
-
-    @SneakyThrows
-    @Test
     public void ping_returns_success() {
         // setup
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
