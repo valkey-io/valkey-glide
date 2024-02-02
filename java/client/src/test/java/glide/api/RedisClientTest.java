@@ -20,6 +20,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
+import glide.api.models.Ok;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.managers.CommandManager;
@@ -235,12 +236,12 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Void> response = service.set(key, value);
-        Object nullResponse = response.get();
+        CompletableFuture<Ok> response = service.set(key, value);
+        Object okResponse = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertNull(nullResponse);
+        assertNull(okResponse);
     }
 
     @SneakyThrows
