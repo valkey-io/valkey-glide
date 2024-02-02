@@ -5,10 +5,10 @@ import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 import glide.TestConfiguration;
 import glide.api.RedisClient;
@@ -18,7 +18,6 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.List;
-import java.util.Random;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,7 +59,19 @@ public class CommandTests {
     @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get(10, SECONDS);
-        for (var section : List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace")) {
+        for (var section :
+                List.of(
+                        "Server",
+                        "Clients",
+                        "Memory",
+                        "Persistence",
+                        "Stats",
+                        "Replication",
+                        "CPU",
+                        "Modules",
+                        "Errorstats",
+                        "Cluster",
+                        "Keyspace")) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
@@ -68,10 +79,13 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions options = InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
+        InfoOptions options =
+                InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
         String data = regularClient.info(options).get(10, SECONDS);
-        for (var section :  options.toArgs()) {
-            assertTrue(data.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+        for (var section : options.toArgs()) {
+            assertTrue(
+                    data.toLowerCase().contains("# " + section.toLowerCase()),
+                    "Section " + section + " is missing");
         }
     }
 
@@ -80,7 +94,21 @@ public class CommandTests {
     public void info_with_everything_option() {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
         String data = regularClient.info(options).get(10, SECONDS);
-        for (var section :  List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Latencystats", "Cluster", "Keyspace")) {
+        for (var section :
+                List.of(
+                        "Server",
+                        "Clients",
+                        "Memory",
+                        "Persistence",
+                        "Stats",
+                        "Replication",
+                        "CPU",
+                        "Modules",
+                        "Commandstats",
+                        "Errorstats",
+                        "Latencystats",
+                        "Cluster",
+                        "Keyspace")) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }

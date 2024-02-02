@@ -68,7 +68,19 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info().get(10, SECONDS);
         assertTrue(data.hasMultiData());
         for (var info : data.getMultiValue().values()) {
-            for (var section : List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace")) {
+            for (var section :
+                    List.of(
+                            "Server",
+                            "Clients",
+                            "Memory",
+                            "Persistence",
+                            "Stats",
+                            "Replication",
+                            "CPU",
+                            "Modules",
+                            "Errorstats",
+                            "Cluster",
+                            "Keyspace")) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
@@ -80,7 +92,19 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(RANDOM).get(10, SECONDS);
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
-        for (var section : List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace")) {
+        for (var section :
+                List.of(
+                        "Server",
+                        "Clients",
+                        "Memory",
+                        "Persistence",
+                        "Stats",
+                        "Replication",
+                        "CPU",
+                        "Modules",
+                        "Errorstats",
+                        "Cluster",
+                        "Keyspace")) {
             assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
         }
     }
@@ -88,13 +112,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions options = InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
+        InfoOptions options =
+                InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
         ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
         assertTrue(data.hasMultiData());
         for (var info : data.getMultiValue().values()) {
 
-            for (var section :  options.toArgs()) {
-                assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+            for (var section : options.toArgs()) {
+                assertTrue(
+                        info.toLowerCase().contains("# " + section.toLowerCase()),
+                        "Section " + section + " is missing");
             }
         }
     }
@@ -107,7 +134,21 @@ public class CommandTests {
         assertTrue(data.hasMultiData());
         for (var info : data.getMultiValue().values()) {
 
-            for (var section :  List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Latencystats", "Cluster", "Keyspace")) {
+            for (var section :
+                    List.of(
+                            "Server",
+                            "Clients",
+                            "Memory",
+                            "Persistence",
+                            "Stats",
+                            "Replication",
+                            "CPU",
+                            "Modules",
+                            "Commandstats",
+                            "Errorstats",
+                            "Latencystats",
+                            "Cluster",
+                            "Keyspace")) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
@@ -120,7 +161,21 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(options, RANDOM).get(10, SECONDS);
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
-        for (var section :  List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Latencystats", "Cluster", "Keyspace")) {
+        for (var section :
+                List.of(
+                        "Server",
+                        "Clients",
+                        "Memory",
+                        "Persistence",
+                        "Stats",
+                        "Replication",
+                        "CPU",
+                        "Modules",
+                        "Commandstats",
+                        "Errorstats",
+                        "Latencystats",
+                        "Cluster",
+                        "Keyspace")) {
             assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
         }
     }

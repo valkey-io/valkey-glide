@@ -51,7 +51,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull Route route, String... args) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(
+            @NonNull Route route, String... args) {
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,
