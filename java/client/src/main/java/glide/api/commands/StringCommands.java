@@ -7,7 +7,11 @@ import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.concurrent.CompletableFuture;
 
-/** String Commands interface to handle single commands that return Strings. */
+/**
+ * String Commands interface to handle single commands.
+ *
+ * @see <a href="https://redis.io/commands/?group=string">String Commands</a>
+ */
 public interface StringCommands {
 
     /**
