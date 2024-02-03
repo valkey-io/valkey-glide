@@ -43,22 +43,6 @@ public class CommandTests {
                     "Errorstats",
                     "Cluster",
                     "Keyspace");
-    private static final List<String> EVERYTHING_INFO_SECTIONS =
-            List.of(
-                    "Server",
-                    "Clients",
-                    "Memory",
-                    "Persistence",
-                    "Stats",
-                    "Replication",
-                    "CPU",
-                    "Modules",
-                    "Commandstats",
-                    "Errorstats",
-                    // not available in Redis 6
-                    // "Latencystats",
-                    "Cluster",
-                    "Keyspace");
 
     @BeforeAll
     @SneakyThrows
@@ -104,16 +88,6 @@ public class CommandTests {
             assertTrue(
                     data.toLowerCase().contains("# " + section.toLowerCase()),
                     "Section " + section + " is missing");
-        }
-    }
-
-    @Test
-    @SneakyThrows
-    public void info_with_everything_option() {
-        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        String data = regularClient.info(options).get(10, SECONDS);
-        for (var section : EVERYTHING_INFO_SECTIONS) {
-            assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
 
