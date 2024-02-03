@@ -141,7 +141,7 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<Object>> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(ClusterValue.of(value));
         when(commandManager.<ClusterValue<Object>>submitNewCommand(
-                        eq(CustomCommand), eq(arguments), any(), any()))
+                        eq(CustomCommand), eq(arguments), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -173,7 +173,7 @@ public class RedisClusterClientTest {
         testPayload.put("addr3", "value3");
         when(testResponse.get()).thenReturn(ClusterValue.of(testPayload));
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Info), eq(new String[0]), any(), any()))
+                        eq(Info), eq(new String[0]), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -194,7 +194,8 @@ public class RedisClusterClientTest {
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
         RequestRoutingConfiguration.Route route = RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
         when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
-        when(commandManager.<ClusterValue<String>>submitNewCommand(eq(Info), any(), any(), any()))
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(Info), eq(new String[0]), eq(Optional.of(route)), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -230,7 +231,7 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<String>> response = service.info(options, route);
 
         // verify
-        assertEquals(testResponse, response);
+        assertEquals(testResponse.get(), response.get());
         ClusterValue<String> clusterValue = response.get();
         assertTrue(clusterValue.hasMultiData());
         Map<String, String> clusterMap = clusterValue.getMultiValue();
