@@ -3,7 +3,10 @@ package glide.standalone;
 
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
+import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
+import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -16,7 +19,6 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
-import java.util.List;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,20 +30,6 @@ public class CommandTests {
     private static final String KEY_NAME = "key";
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
-
-    private static final List<String> DEFAULT_INFO_SECTIONS =
-            List.of(
-                    "Server",
-                    "Clients",
-                    "Memory",
-                    "Persistence",
-                    "Stats",
-                    "Replication",
-                    "CPU",
-                    "Modules",
-                    "Errorstats",
-                    "Cluster",
-                    "Keyspace");
 
     @BeforeAll
     @SneakyThrows
@@ -64,7 +52,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        var data = regularClient.customCommand(new String[] {"info"}).get(10, SECONDS);
+        var data = regularClient.customCommand("info").get(10, SECONDS);
         assertTrue(((String) data).contains("# Stats"));
     }
 
@@ -80,13 +68,26 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions options =
-                InfoOptions.builder().section(CLUSTER).section(CPU).section(MEMORY).build();
+        var builder = InfoOptions.builder().section(CLUSTER);
+        if (TestConfiguration.REDIS_VERSION.feature() >= 7) {
+            builder.section(CPU).section(MEMORY);
+        }
+        var options = builder.build();
         String data = regularClient.info(options).get(10, SECONDS);
         for (var section : options.toArgs()) {
             assertTrue(
                     data.toLowerCase().contains("# " + section.toLowerCase()),
                     "Section " + section + " is missing");
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_everything_option() {
+        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
+        String data = regularClient.info(options).get(10, SECONDS);
+        for (var section : EVERYTHING_INFO_SECTIONS) {
+            assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
 

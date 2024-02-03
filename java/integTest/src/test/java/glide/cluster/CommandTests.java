@@ -47,7 +47,11 @@ public class CommandTests {
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
 
-    private static final List<String> DEFAULT_INFO_SECTIONS = List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace");
+    public static final List<String> DEFAULT_INFO_SECTIONS = List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace");
+    public static final List<String> EVERYTHING_INFO_SECTIONS = TestConfiguration.REDIS_VERSION.feature() >= 7
+        // Latencystats was added in redis 7
+        ? List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Latencystats", "Cluster", "Keyspace")
+        : List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Cluster", "Keyspace");
 
     @BeforeAll
     @SneakyThrows
@@ -65,6 +69,7 @@ public class CommandTests {
     @SneakyThrows
     public static void teardown() {
         clusterClient.close();
+        Runtime.Version.parse("1.2.3");
     }
 
     @Test
@@ -111,7 +116,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multiple_options() {
         var builder = InfoOptions.builder().section(CLUSTER);
-        if (TestConfiguration.REDIS_VERSION.startsWith("7")) {
+        if (TestConfiguration.REDIS_VERSION.feature() >= 7) {
             builder.section(CPU).section(MEMORY);
         }
         var options = builder.build();
@@ -130,8 +135,7 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
         assertTrue(data.hasMultiData());
         for (var info : data.getMultiValue().values()) {
-
-            for (var section : DEFAULT_INFO_SECTIONS) {
+            for (var section : EVERYTHING_INFO_SECTIONS) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
@@ -154,7 +158,7 @@ public class CommandTests {
         var slotKey = (String)((Object[])((Object[])((Object[])slotData.getSingleValue())[0])[2])[2];
 
         var builder = InfoOptions.builder().section(CLIENTS);
-        if (TestConfiguration.REDIS_VERSION.startsWith("7")) {
+        if (TestConfiguration.REDIS_VERSION.feature() >= 7) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
         var options = builder.build();
