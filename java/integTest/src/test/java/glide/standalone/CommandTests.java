@@ -55,7 +55,8 @@ public class CommandTests {
                     "Modules",
                     "Commandstats",
                     "Errorstats",
-                    "Latencystats",
+                    // not available in Redis 6
+                    // "Latencystats",
                     "Cluster",
                     "Keyspace");
 
