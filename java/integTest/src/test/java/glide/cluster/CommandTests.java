@@ -6,7 +6,6 @@ import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
-import static glide.api.models.commands.InfoOptions.Section.LATENCYSTATS;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
@@ -69,7 +68,6 @@ public class CommandTests {
     @SneakyThrows
     public static void teardown() {
         clusterClient.close();
-        Runtime.Version.parse("1.2.3");
     }
 
     @Test
