@@ -18,10 +18,6 @@ This preview release is recommended for testing purposes only.
 
 # Getting Started - C# Wrapper
 
-## System Requirements
-
-The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
-
 ## .net sdk supported version
 
 .net 6.0 or higher.

@@ -49,19 +49,13 @@ git submodule update --init --recursive
 3.  Build the c# wrapper:
     Choose a build option from the following and run it from the `csharp` folder:
 
-    1. Build in release mode, stripped from all debug symbols:
+    Build in release mode, stripped from all debug symbols:
 
-        ```bash
-        dotnet build
-        ```
+    ```bash
+    dotnet build
+    ```
 
-    2. Build with debug symbols:
-
-        ```bash
-        dotnet build --debug
-        ```
-
-4.  Run tests:
+4.  Run benchmark:
 
     1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
 
