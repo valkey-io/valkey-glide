@@ -201,13 +201,22 @@ async fn write_result(
                 None
             }
         }
-        Err(ClienUsageError::InternalError(error_message)) => {
+        Err(ClienUsageError::Internal(error_message)) => {
             log_error("internal error", &error_message);
             Some(response::response::Value::ClosingError(
                 error_message.into(),
             ))
         }
-        Err(ClienUsageError::RedisError(err)) => {
+        Err(ClienUsageError::User(error_message)) => {
+            log_error("user error", &error_message);
+            let request_error = response::RequestError {
+                type_: response::RequestErrorType::Unspecified.into(),
+                message: error_message.into(),
+                ..Default::default()
+            };
+            Some(response::response::Value::RequestError(request_error))
+        }
+        Err(ClienUsageError::Redis(err)) => {
             let error_message = err.to_string();
             log_warn("received error", error_message.as_str());
             log_debug("received error", format!("for callback {}", callback_index));
@@ -342,7 +351,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
 
 fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     let Some(mut cmd) = get_command(command) else {
-        return Err(ClienUsageError::InternalError(format!(
+        return Err(ClienUsageError::Internal(format!(
             "Received invalid request type: {:?}",
             command.request_type
         )));
@@ -361,11 +370,17 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
             }
         }
         None => {
-            return Err(ClienUsageError::InternalError(
+            return Err(ClienUsageError::Internal(
                 "Failed to get request arguments, no arguments are set".to_string(),
             ));
         }
     };
+
+    if cmd.args_iter().next().is_none() {
+        return Err(ClienUsageError::User(
+            "Received command without a command name or arguments".into(),
+        ));
+    }
 
     Ok(cmd)
 }
@@ -416,9 +431,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
             SlotTypes::Primary => SlotAddr::Master,
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
         })
-        .map_err(|id| {
-            ClienUsageError::InternalError(format!("Received unexpected slot id type {id}"))
-        })
+        .map_err(|id| ClienUsageError::Internal(format!("Received unexpected slot id type {id}")))
 }
 
 fn get_route(
@@ -438,9 +451,7 @@ fn get_route(
     match route {
         Value::SimpleRoutes(simple_route) => {
             let simple_route = simple_route.enum_value().map_err(|id| {
-                ClienUsageError::InternalError(format!(
-                    "Received unexpected simple route type {id}"
-                ))
+                ClienUsageError::Internal(format!("Received unexpected simple route type {id}"))
             })?;
             match simple_route {
                 crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode((
@@ -507,7 +518,7 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                         request.callback_idx
                     ),
                 );
-                Err(ClienUsageError::InternalError(
+                Err(ClienUsageError::Internal(
                     "Received empty request".to_string(),
                 ))
             }
@@ -791,10 +802,13 @@ enum ClientCreationError {
 #[derive(Debug, Error)]
 enum ClienUsageError {
     #[error("Redis error: {0}")]
-    RedisError(#[from] RedisError),
+    Redis(#[from] RedisError),
     /// An error that stems from wrong behavior of the client.
     #[error("Internal error: {0}")]
-    InternalError(String),
+    Internal(String),
+    /// An error that stems from wrong behavior of the user.
+    #[error("User error: {0}")]
+    User(String),
 }
 
 type ClientUsageResult<T> = Result<T, ClienUsageError>;
