@@ -207,6 +207,15 @@ async fn write_result(
                 error_message.into(),
             ))
         }
+        Err(ClienUsageError::UserError(error_message)) => {
+            log_error("user error", &error_message);
+            let mut request_error = response::RequestError::default();
+            request_error.type_ = response::RequestErrorType::Unspecified.into();
+            request_error.message = error_message.into();
+            Some(response::response::Value::RequestError(
+                request_error.into(),
+            ))
+        }
         Err(ClienUsageError::RedisError(err)) => {
             let error_message = err.to_string();
             log_warn("received error", error_message.as_str());
@@ -366,6 +375,12 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
             ));
         }
     };
+
+    if cmd.args_iter().next().is_none() {
+        return Err(ClienUsageError::UserError(
+            "Received command without a command name or arguments".into(),
+        ));
+    }
 
     Ok(cmd)
 }
@@ -795,6 +810,9 @@ enum ClienUsageError {
     /// An error that stems from wrong behavior of the client.
     #[error("Internal error: {0}")]
     InternalError(String),
+    /// An error that stems from wrong behavior of the user.
+    #[error("User error: {0}")]
+    UserError(String),
 }
 
 type ClientUsageResult<T> = Result<T, ClienUsageError>;
