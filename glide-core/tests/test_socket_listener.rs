@@ -1023,4 +1023,28 @@ mod socket_listener {
             ResponseType::Value,
         );
     }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_empty_custom_command_is_an_error(#[values(true, false)] use_cluster: bool) {
+        let mut test_basics = setup_test_basics(false, true, use_cluster);
+        const CALLBACK_INDEX: u32 = 42;
+
+        let mut buffer = Vec::with_capacity(APPROX_RESP_HEADER_LEN);
+        write_command_request(
+            &mut buffer,
+            CALLBACK_INDEX,
+            vec![],
+            RequestType::CustomCommand.into(),
+            false,
+        );
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        assert_error_response(
+            buffer.as_slice(),
+            CALLBACK_INDEX,
+            ResponseType::RequestError,
+        );
+    }
 }
