@@ -42,12 +42,21 @@ export function createRedisClient(
 }
 
 const optionDefinitions = [
-    { name: "resultsFile", type: String },
-    { name: "dataSize", type: String },
-    { name: "concurrentTasks", type: String, multiple: true },
-    { name: "clients", type: String },
-    { name: "host", type: String },
-    { name: "clientCount", type: String, multiple: true },
+    {
+        name: "resultsFile",
+        type: String,
+        defaultValue: "../results/node-results.json",
+    },
+    { name: "dataSize", type: String, defaultValue: "100" },
+    {
+        name: "concurrentTasks",
+        type: String,
+        multiple: true,
+        defaultValue: ["1", "10", "100", "1000"],
+    },
+    { name: "clients", type: String, defaultValue: "all" },
+    { name: "host", type: String, defaultValue: "localhost" },
+    { name: "clientCount", type: String, multiple: true, defaultValue: ["1"] },
     { name: "tls", type: Boolean, defaultValue: false },
     { name: "minimal", type: Boolean, defaultValue: false },
     { name: "clusterModeEnabled", type: Boolean, defaultValue: false },
