@@ -118,7 +118,7 @@ impl StandaloneClient {
                 Ok((connection, replication_status)) => {
                     nodes.push(connection);
                     if primary_index.is_none()
-                        && redis::from_redis_value::<String>(&replication_status)
+                        && redis::from_owned_redis_value::<String>(replication_status)
                             .is_ok_and(|val| val.contains("role:master"))
                     {
                         primary_index = Some(nodes.len() - 1);

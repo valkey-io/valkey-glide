@@ -306,9 +306,10 @@ mod standalone_client_tests {
             .await;
             let mut client = test_basics.client;
 
-            let client_info =
-                String::from_redis_value(&client.send_command(&client_info_cmd).await.unwrap())
-                    .unwrap();
+            let client_info: String = String::from_owned_redis_value(
+                client.send_command(&client_info_cmd).await.unwrap(),
+            )
+            .unwrap();
             assert!(client_info.contains("db=4"));
 
             kill_connection(&mut client).await;
@@ -323,7 +324,8 @@ mod standalone_client_tests {
 
             let client_info = repeat_try_create(|| async {
                 let mut client = client.clone();
-                String::from_redis_value(&client.send_command(&client_info_cmd).await.unwrap()).ok()
+                String::from_owned_redis_value(client.send_command(&client_info_cmd).await.unwrap())
+                    .ok()
             })
             .await;
             assert!(client_info.contains("db=4"));
