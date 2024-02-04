@@ -12,7 +12,7 @@ The GLIDE C# wrapper consists of both C# and Rust code.
 
 Software Dependencies
 
--   .net sdk 6 or 8
+-   .net sdk 6 or later
 -   git
 -   GCC
 -   pkg-config
@@ -24,7 +24,7 @@ Software Dependencies
 **Dependencies installation for MacOS**
 
 visit https://dotnet.microsoft.com/en-us/download/dotnet
-to download .net 6 and 8 installer
+to download .net installer
 ```bash
 brew update
 brew install git gcc pkgconfig protobuf openssl
@@ -67,7 +67,6 @@ git submodule update --init --recursive
 
     2. Execute the following command from the root project folder:
         ```bash
-        docker run --name some-redis -d redis -p 6379:6379
         cd benchmarks/csharp
         dotnet run --framework net8.0  --dataSize 1024 --resultsFile test.json --concurrentTasks 4 --clients all --host localhost --clientCount 4
         ```

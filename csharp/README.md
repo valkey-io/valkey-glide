@@ -26,8 +26,6 @@ The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.0
 
 .net 6.0 or higher.
 
-## Installation and Setup
-
 ## Basic Example
 
 ```csharp
