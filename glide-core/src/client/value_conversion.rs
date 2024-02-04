@@ -1,7 +1,9 @@
 /**
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
-use redis::{cluster_routing::Routable, from_redis_value, Cmd, ErrorKind, RedisResult, Value};
+use redis::{
+    cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
+};
 
 pub(crate) enum ExpectedReturnType {
     Map,
@@ -57,11 +59,13 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::Double => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
-        ExpectedReturnType::Boolean => Ok(Value::Boolean(from_redis_value::<bool>(&value)?)),
+        ExpectedReturnType::Double => {
+            Ok(Value::Double(from_owned_redis_value::<f64>(value)?.into()))
+        }
+        ExpectedReturnType::Boolean => Ok(Value::Boolean(from_owned_redis_value::<bool>(value)?)),
         ExpectedReturnType::DoubleOrNull => match value {
             Value::Nil => Ok(value),
-            _ => Ok(Value::Double(from_redis_value::<f64>(&value)?.into())),
+            _ => Ok(Value::Double(from_owned_redis_value::<f64>(value)?.into())),
         },
     }
 }
