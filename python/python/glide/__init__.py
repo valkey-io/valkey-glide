@@ -5,7 +5,9 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    InfBound,
     InfoSection,
+    ScoreLimit,
     UpdateOptions,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
@@ -43,10 +45,12 @@ __all__ = [
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
     "RedisClientConfiguration",
+    "ScoreLimit",
     "ConditionalChange",
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
+    "InfBound",
     "InfoSection",
     "UpdateOptions",
     "Logger",
