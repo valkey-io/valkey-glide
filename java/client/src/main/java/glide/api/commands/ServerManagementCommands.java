@@ -10,7 +10,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
  */
-public interface ServerCommands {
+public interface ServerManagementCommands {
 
     /**
      * Get information and statistics about the Redis server. No argument is provided, so the {@link

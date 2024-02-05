@@ -4,8 +4,8 @@ package glide.api;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 
-import glide.api.commands.ClusterBaseCommands;
-import glide.api.commands.ClusterServerCommands;
+import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
@@ -22,7 +22,7 @@ import lombok.NonNull;
  * client to Redis.
  */
 public class RedisClusterClient extends BaseClient
-        implements ClusterBaseCommands, ClusterServerCommands {
+        implements GenericClusterCommands, ServerManagementClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);

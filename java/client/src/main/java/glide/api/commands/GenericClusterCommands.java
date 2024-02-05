@@ -6,9 +6,10 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Base Commands interface to handle generic command and transaction requests with routing options.
+ * Generic Commands interface to handle generic command and transaction requests with routing
+ * options.
  */
-public interface ClusterBaseCommands {
+public interface GenericClusterCommands {
 
     /**
      * Executes a single command, without checking inputs. Every part of the command, including

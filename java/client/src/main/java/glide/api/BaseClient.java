@@ -6,7 +6,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
-import glide.api.commands.ConnectionCommands;
+import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -30,7 +30,8 @@ import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
-public abstract class BaseClient implements AutoCloseable, StringCommands, ConnectionCommands {
+public abstract class BaseClient
+        implements AutoCloseable, StringCommands, ConnectionManagementCommands {
 
     public static final String OK = "OK";
 

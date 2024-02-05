@@ -8,7 +8,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see: <a href="https://redis.io/commands/?group=connection">Connection Management Commands</a>
  */
-public interface ConnectionCommands {
+public interface ConnectionManagementCommands {
 
     /**
      * Ping the Redis server.

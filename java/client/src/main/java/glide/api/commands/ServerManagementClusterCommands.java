@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
  */
-public interface ClusterServerCommands {
+public interface ServerManagementClusterCommands {
 
     /**
      * Get information and statistics about the Redis server. DEFAULT option is assumed

@@ -3,8 +3,8 @@ package glide.api.commands;
 
 import java.util.concurrent.CompletableFuture;
 
-/** Base Commands interface to handle generic command and transaction requests. */
-public interface BaseCommands {
+/** Generic Commands interface to handle generic command and transaction requests. */
+public interface GenericCommands {
 
     /**
      * Executes a single command, without checking inputs. Every part of the command, including

@@ -1,13 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import glide.api.commands.ServerCommands;
+import glide.api.commands.ServerManagementCommands;
 import java.util.List;
 import lombok.Builder;
 import lombok.Singular;
 
 /**
- * Optional arguments to {@link ServerCommands#info(InfoOptions)}
+ * Optional arguments to {@link ServerManagementCommands#info(InfoOptions)}
  *
  * @see <a href="https://redis.io/commands/info/">redis.io</a>
  */

@@ -4,9 +4,9 @@ package glide.api;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 
-import glide.api.commands.BaseCommands;
-import glide.api.commands.ConnectionCommands;
-import glide.api.commands.ServerCommands;
+import glide.api.commands.ConnectionManagementCommands;
+import glide.api.commands.GenericCommands;
+import glide.api.commands.ServerManagementCommands;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  * client to Redis.
  */
 public class RedisClient extends BaseClient
-        implements BaseCommands, ConnectionCommands, ServerCommands {
+        implements GenericCommands, ConnectionManagementCommands, ServerManagementCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
