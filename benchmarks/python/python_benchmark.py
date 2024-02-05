@@ -14,6 +14,7 @@ from typing import List
 
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
+
 from glide import (
     BaseClientConfiguration,
     Logger,
@@ -36,47 +37,51 @@ arguments_parser = argparse.ArgumentParser()
 arguments_parser.add_argument(
     "--resultsFile",
     help="Where to write the results file",
-    required=True,
+    required=False,
+    default="../results/python-results.json",
 )
 arguments_parser.add_argument(
-    "--dataSize",
-    help="Size of data to set",
-    required=True,
+    "--dataSize", help="Size of data to set", required=False, default="100"
 )
 arguments_parser.add_argument(
     "--concurrentTasks",
     help="List of number of concurrent tasks to run",
     nargs="+",
-    required=True,
+    required=False,
+    default=("1", "10", "100", "1000"),
 )
 arguments_parser.add_argument(
-    "--clients",
-    help="Which clients should run",
-    required=True,
+    "--clients", help="Which clients should run", required=False, default="all"
 )
 arguments_parser.add_argument(
-    "--host",
-    help="What host to target",
-    required=True,
+    "--host", help="What host to target", required=False, default="localhost"
 )
 arguments_parser.add_argument(
     "--clientCount",
     help="Number of clients to run concurrently",
     nargs="+",
-    required=True,
+    required=False,
+    default=("1"),
 )
 arguments_parser.add_argument(
-    "--tls", help="Should benchmark a TLS server", action="store_true"
+    "--tls",
+    help="Should benchmark a TLS server",
+    action="store_true",
+    required=False,
+    default=False,
 )
 arguments_parser.add_argument(
     "--clusterModeEnabled",
     help="Should benchmark a cluster mode enabled cluster",
     action="store_true",
+    required=False,
+    default=False,
 )
 arguments_parser.add_argument(
     "--port",
     default=PORT,
     type=int,
+    required=False,
     help="Which port to connect to, defaults to `%(default)s`",
 )
 arguments_parser.add_argument(
