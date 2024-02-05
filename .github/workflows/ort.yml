@@ -1,0 +1,207 @@
+
+name: The OSS Review Toolkit (ORT)
+
+on:
+    push:
+        tags:
+            - "ort-for-v*.*"
+    pull_request:
+        paths:
+            - .github/workflows/ort.yml
+jobs:
+    run-ort:
+        name: Create attribution files
+        runs-on: ubuntu-latest
+        strategy:
+          fail-fast: false
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  # echo "RELEASE_VERSION=${GITHUB_REF:19}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=0.2.0" >> $GITHUB_ENV
+                
+            - name: Set up JDK 11 for the ORT package
+              uses: actions/setup-java@v3
+              with:
+                  distribution: "temurin"
+                  java-version: 11
+
+            - name: Cache Gradle and ORT packages
+              uses: actions/cache@v3
+              id: cache-ort
+              with:
+                path: |
+                  ./ort
+                  ~/.gradle/caches
+                  ~/.gradle/wrapper
+                key: ${{ runner.os }}-ort
+
+            - name: Checkout ORT Repository
+              if: steps.cache-ort.outputs.cache-hit != 'true'
+              uses: actions/checkout@v4
+              with: 
+                  repository: "oss-review-toolkit/ort"
+                  path: "./ort"
+                  ref: main
+                  submodules: recursive
+
+            - name: Checkout ORT latest release tag
+              working-directory: ./ort/
+              run: |
+                # Get new tags from remote
+                git fetch --tags
+                # Get latest tag name
+                LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+                # Checkout latest tag
+                git checkout $LATEST_TAG
+
+            - name: Install ORT
+              if: steps.cache-ort.outputs.cache-hit != 'true'
+              working-directory: ./ort/
+              run: |
+                echo $GITHUB_WORKSPACE
+                ls -l
+                export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
+                ./gradlew installDist
+
+            - name: Create ORT config file
+              run: |
+                mkdir -p ~/.ort/config
+                cat << EOF > ~/.ort/config/config.yml
+                ort:
+                  analyzer:
+                    allowDynamicVersions: true
+                    enabledPackageManagers: [Cargo, NPM, PIP]
+                EOF
+                cat ~/.ort/config/config.yml
+
+          ### NODE ###
+
+            - name: Set up Node.js 16.x
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 16.x
+
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: "ubuntu-latest"
+                  target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Fix Node base package.json file for ORT
+              working-directory: ./node/npm/glide
+              run: |
+                # Remove the glide-rs dependency to avoid duplication 
+                sed -i '/ "glide-rs":/d' ../../package.json
+                export pkg_name=glide-for-redis-base
+                export package_version="${{ env.RELEASE_VERSION }}"
+                export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                mv package.json package.json.tmpl
+                envsubst < package.json.tmpl > "package.json"
+                cat package.json
+            
+            - name: Run ORT tools
+              working-directory: ./ort/
+              run: | 
+                echo "full dir is $GITHUB_WORKSPACE/node/ort_results"
+                mkdir $GITHUB_WORKSPACE/node/ort_results
+                # Analyzer (analyzer-result.json)
+                ./gradlew cli:run --args="analyze -i $GITHUB_WORKSPACE/node -o $GITHUB_WORKSPACE/node/ort_results -f JSON"
+                
+                # NOTICE DEFAULT
+                ./gradlew cli:run --args="report -i $GITHUB_WORKSPACE/node/ort_results/analyzer-result.json -o $GITHUB_WORKSPACE/node/ort_results/ -f PlainTextTemplate"
+        
+            # - name: Upload the ORT reports 
+            #   uses: actions/upload-artifact@v3
+            #   with:
+            #       name: node-ort-results
+            #       path: $GITHUB_WORKSPACE/node/ort_results
+            #       if-no-files-found: error
+            
+          ### Python ###
+
+            - name: Set up Python 3.10
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.10"
+
+            - name: Install Python dependencies
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install mypy-protobuf
+                  pip install git+https://github.com/nexB/python-inspector
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: "ubuntu-latest"
+                  target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run ORT tools
+              working-directory: ./ort/
+              run: | 
+                mkdir $GITHUB_WORKSPACE/python/ort_results
+                # Analyzer (analyzer-result.json)
+                ./gradlew cli:run --args="analyze -i $GITHUB_WORKSPACE/python -o $GITHUB_WORKSPACE/python/ort_results -f JSON"
+                
+                # NOTICE DEFAULT
+                ./gradlew cli:run --args="report -i $GITHUB_WORKSPACE/python/ort_results/analyzer-result.json -o $GITHUB_WORKSPACE/python/ort_results/ -f PlainTextTemplate"
+      
+            # - name: Upload the ORT reports 
+            #   uses: actions/upload-artifact@v3
+            #   with:
+            #       name: python-ort-results
+            #       path: $GITHUB_WORKSPACE/python/ort_results
+            #       if-no-files-found: error
+
+            ### Rust ###
+
+            - uses: dtolnay/rust-toolchain@stable
+            - name: Build Rust core
+              working-directory: ./glide-core
+              run: cargo build --all-features
+
+            - name: Run ORT tools
+              working-directory: ./ort/
+              run: | 
+                mkdir $GITHUB_WORKSPACE/glide-core/ort_results
+                # Analyzer (analyzer-result.json)
+                ./gradlew cli:run --args="analyze -i $GITHUB_WORKSPACE/glide-core -o $GITHUB_WORKSPACE/glide-core/ort_results -f JSON"
+                
+                # NOTICE DEFAULT
+                ./gradlew cli:run --args="report -i $GITHUB_WORKSPACE/glide-core/ort_results/analyzer-result.json -o $GITHUB_WORKSPACE/glide-core/ort_results/ -f PlainTextTemplate"
+      
+            # - name: Upload the ORT reports 
+            #   uses: actions/upload-artifact@v3
+            #   with:
+            #       name: rust-ort-results
+            #       path: $GITHUB_WORKSPACE/glide-core/ort_results
+            #       if-no-files-found: error
+
+            ### Create PR ###
+            - name: create pull request
+              run: |
+                export BRANCH_NAME="ort-for-${{ env.RELEASE_VERSION }}"
+                git config --global user.email "barshaul@amazon.com"
+                git config --global user.name "barshaul"
+                git checkout -b ${BRANCH_NAME}
+                echo "new branch is = ${BRANCH_NAME}"
+                mv python/ort_results/NOTICE_DEFAULT python/THIRD_PARTY_LICENSES_PYTHON
+                mv node/ort_results/NOTICE_DEFAULT node/THIRD_PARTY_LICENSES_NODE
+                mv glide-core/ort_results/NOTICE_DEFAULT glide-core/THIRD_PARTY_LICENSES_RUST
+                git add python/THIRD_PARTY_LICENSES_PYTHON node/THIRD_PARTY_LICENSES_NODE glide-core/THIRD_PARTY_LICENSES_RUST
+                git commit -m "Updated attribution files"
+                git push --set-upstream origin ${BRANCH_NAME}
+                gh pr create -B main -H ${BRANCH_NAME} --title 'Updated attribution files for ${{ env.RELEASE_VERSION }}' --body 'Created by Github action'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
