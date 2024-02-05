@@ -18,29 +18,29 @@ public static class MainClass
 
     public class CommandLineOptions
     {
-        [Option('r', "resultsFile", Required = true, HelpText = "Set the file to which the JSON results are written.")]
-        public string resultsFile { get; set; } = "";
+        [Option('r', "resultsFile", Required = false, HelpText = "Set the file to which the JSON results are written.")]
+        public string resultsFile { get; set; } = "../results/csharp-results.json";
 
-        [Option('d', "dataSize", Required = true, HelpText = "The size of the sent data in bytes.")]
-        public int dataSize { get; set; } = -1;
+        [Option('d', "dataSize", Required = false, HelpText = "The size of the sent data in bytes.")]
+        public int dataSize { get; set; } = 100;
 
-        [Option('c', "concurrentTasks", Required = true, HelpText = "The number of concurrent operations to perform.")]
-        public IEnumerable<int> concurrentTasks { get; set; } = Enumerable.Empty<int>();
+        [Option('c', "concurrentTasks", Required = false, HelpText = "The number of concurrent operations to perform.", Default = new[] { 1, 10, 100, 1000 })]
+        public IEnumerable<int> concurrentTasks { get; set; }
 
-        [Option('l', "clients", Required = true, HelpText = "Which clients should run")]
-        public string clientsToRun { get; set; } = "";
+        [Option('l', "clients", Required = false, HelpText = "Which clients should run")]
+        public string clientsToRun { get; set; } = "all";
 
-        [Option('h', "host", Required = true, HelpText = "What host to target")]
-        public string host { get; set; } = "";
+        [Option('h', "host", Required = false, HelpText = "What host to target")]
+        public string host { get; set; } = "localhost";
 
-        [Option('C', "clientCount", Required = true, HelpText = "Number of clients to run concurrently")]
-        public IEnumerable<int> clientCount { get; set; } = Enumerable.Empty<int>();
+        [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
+        public IEnumerable<int> clientCount { get; set; }
 
-        [Option('t', "tls", Default = false, HelpText = "Should benchmark a TLS server")]
+        [Option('t', "tls", HelpText = "Should benchmark a TLS server")]
         public bool tls { get; set; } = false;
 
 
-        [Option('m', "minimal", Default = false, HelpText = "Should use a minimal number of actions")]
+        [Option('m', "minimal", HelpText = "Should use a minimal number of actions")]
         public bool minimal { get; set; } = false;
     }
 

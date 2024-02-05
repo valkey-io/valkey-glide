@@ -28,16 +28,20 @@ use std::{
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(name = "resultsFile", long)]
+    #[arg(
+        name = "resultsFile",
+        long,
+        default_value = "../results/rust-results.json"
+    )]
     results_file: String,
 
-    #[arg(long)]
+    #[arg(long, default_value = "localhost")]
     host: String,
 
-    #[arg(name = "dataSize", long)]
+    #[arg(name = "dataSize", long, default_value_t = 100)]
     data_size: usize,
 
-    #[arg(name = "concurrentTasks", long)]
+    #[arg(name = "concurrentTasks", long, default_values_t = [1,10,100,1000])]
     concurrent_tasks: Vec<usize>,
 
     #[arg(name = "clientCount", long, default_value_t = 1)]
