@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
@@ -152,6 +154,54 @@ public class RedisClusterClientTest {
         assertTrue(clusterValue.hasSingleData());
         String payload = (String) clusterValue.getSingleValue();
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("PONG");
+
+        RequestRoutingConfiguration.Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Ping), eq(new String[0]), eq(Optional.of(route)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(route);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("PONG", payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_message_returns_success() {
+        // setup
+        String message = "RETURN OF THE PONG";
+        String[] arguments = new String[] {message};
+        CompletableFuture<String> testResponse = new CompletableFuture();
+        testResponse.complete(message);
+
+        RequestRoutingConfiguration.Route route = ALL_PRIMARIES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Ping), eq(arguments), eq(Optional.of(route)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(message, route);
+        String pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
     }
 
     @SneakyThrows

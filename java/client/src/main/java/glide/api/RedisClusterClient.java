@@ -3,7 +3,9 @@ package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
+import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterValue;
@@ -22,7 +24,9 @@ import lombok.NonNull;
  * client to Redis.
  */
 public class RedisClusterClient extends BaseClient
-        implements GenericClusterCommands, ServerManagementClusterCommands {
+        implements ConnectionManagementClusterCommands,
+                GenericClusterCommands,
+                ServerManagementClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -60,6 +64,18 @@ public class RedisClusterClient extends BaseClient
                         route.isSingleNodeRoute()
                                 ? ClusterValue.ofSingleValue(handleObjectResponse(response))
                                 : ClusterValue.ofMultiValue((Map<String, Object>) handleObjectResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> ping(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Ping, new String[0], Optional.of(route), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> ping(@NonNull String msg, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Ping, new String[] {msg}, Optional.of(route), this::handleStringResponse);
     }
 
     @Override

@@ -14,6 +14,7 @@ import static glide.api.models.commands.SetOptions.TimeToLiveType.KEEP_EXISTING;
 import static glide.api.models.commands.SetOptions.TimeToLiveType.MILLISECONDS;
 import static glide.api.models.commands.SetOptions.TimeToLiveType.UNIX_SECONDS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -30,6 +31,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.TimeToLive;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -184,6 +186,20 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping_with_route() {
+        String data = clusterClient.ping(ALL_NODES).get(10, SECONDS);
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message_with_route() {
+        String data = clusterClient.ping("H3LL0", ALL_PRIMARIES).get(10, SECONDS);
+        assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
     public void custom_command_del_returns_a_number() {
         clusterClient.set("DELME", INITIAL_VALUE).get(10, SECONDS);
         var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get(10, SECONDS);
@@ -205,11 +221,6 @@ public class CommandTests {
     @Test
     public void get_requires_a_key() {
         assertThrows(NullPointerException.class, () -> clusterClient.get(null));
-    }
-
-    @Test
-    public void ping_with_message_requires_a_message() {
-        assertThrows(NullPointerException.class, () -> clusterClient.ping(null));
     }
 
     @Test
