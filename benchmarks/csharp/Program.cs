@@ -16,30 +16,30 @@ public static class MainClass
 
     public class CommandLineOptions
     {
-        [Option('r', "resultsFile", Required = false, HelpText = "Set the file to which the JSON results are written.")]
-        public string resultsFile { get; set; } = "../results/csharp-results.json";
+        [Option('r', "resultsFile", Required = false, HelpText = "Set the file to which the JSON results are written.", Default = "../results/csharp-results.json")]
+        public string resultsFile { get; set; }
 
-        [Option('d', "dataSize", Required = false, HelpText = "The size of the sent data in bytes.")]
-        public int dataSize { get; set; } = 100;
+        [Option('d', "dataSize", Required = false, HelpText = "The size of the sent data in bytes.", Default = 100)]
+        public int dataSize { get; set; }
 
         [Option('c', "concurrentTasks", Required = false, HelpText = "The number of concurrent operations to perform.", Default = new[] { 1, 10, 100, 1000 })]
         public IEnumerable<int> concurrentTasks { get; set; }
 
-        [Option('l', "clients", Required = false, HelpText = "Which clients should run")]
-        public string clientsToRun { get; set; } = "all";
+        [Option('l', "clients", Required = false, HelpText = "Which clients should run", Default = "all")]
+        public string clientsToRun { get; set; }
 
-        [Option('h', "host", Required = false, HelpText = "What host to target")]
-        public string host { get; set; } = "localhost";
+        [Option('h', "host", Required = false, HelpText = "What host to target", Default = "localhost")]
+        public string host { get; set; }
 
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
         public IEnumerable<int> clientCount { get; set; }
 
-        [Option('t', "tls", HelpText = "Should benchmark a TLS server")]
-        public bool tls { get; set; } = false;
+        [Option('t', "tls", HelpText = "Should benchmark a TLS server", Default = false)]
+        public bool tls { get; set; }
 
 
-        [Option('m', "minimal", HelpText = "Should use a minimal number of actions")]
-        public bool minimal { get; set; } = false;
+        [Option('m', "minimal", HelpText = "Should use a minimal number of actions", Default = false)]
+        public bool minimal { get; set; }
     }
 
     private const int PORT = 6379;
@@ -118,10 +118,8 @@ public static class MainClass
 
     private static void print_results(string resultsFile)
     {
-        using (FileStream createStream = File.Create(resultsFile))
-        {
-            JsonSerializer.Serialize(createStream, bench_json_results);
-        }
+        using FileStream createStream = File.Create(resultsFile);
+        JsonSerializer.Serialize(createStream, bench_json_results);
     }
 
     private static async Task redis_benchmark(
