@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.TestConfiguration;
@@ -42,5 +43,12 @@ public class CommandTests {
         for (var info : data.getMultiValue().values()) {
             assertTrue(((String) info).contains("# Stats"));
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_ping() {
+        var data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
+        assertEquals("PONG", data.getSingleValue());
     }
 }
