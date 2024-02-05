@@ -77,11 +77,16 @@ import { redis_request } from "./ProtobufMessage";
  *       await client.exec(transaction);
  *       [OK , "value"]
  */
-export class BaseTransaction {
+export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * @internal
      */
     readonly commands: redis_request.Command[] = [];
+
+    protected addAndReturn(command: redis_request.Command): T {
+        this.commands.push(command);
+        return this as unknown as T;
+    }
 
     /** Get the value associated with the given key, or null if no such value exists.
      * See https://redis.io/commands/get/ for details.
@@ -90,8 +95,8 @@ export class BaseTransaction {
      *
      * Command Response - If `key` exists, returns the value of `key` as a string. Otherwise, return null.
      */
-    public get(key: string) {
-        this.commands.push(createGet(key));
+    public get(key: string): T {
+        return this.addAndReturn(createGet(key));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -105,8 +110,8 @@ export class BaseTransaction {
      * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      */
-    public set(key: string, value: string, options?: SetOptions) {
-        this.commands.push(createSet(key, value, options));
+    public set(key: string, value: string, options?: SetOptions): T {
+        return this.addAndReturn(createSet(key, value, options));
     }
 
     /** Ping the Redis server.
@@ -116,8 +121,8 @@ export class BaseTransaction {
      *
      * Command Response - PONG if no argument is provided, otherwise return a copy of the argument.
      */
-    public ping(str?: string) {
-        this.commands.push(createPing(str));
+    public ping(str?: string): T {
+        return this.addAndReturn(createPing(str));
     }
 
     /** Get information and statistics about the Redis server.
@@ -128,8 +133,8 @@ export class BaseTransaction {
      *
      * Command Response - a string containing the information for the sections requested.
      */
-    public info(options?: InfoOptions[]) {
-        this.commands.push(createInfo(options));
+    public info(options?: InfoOptions[]): T {
+        return this.addAndReturn(createInfo(options));
     }
 
     /** Remove the specified keys. A key is ignored if it does not exist.
@@ -139,8 +144,8 @@ export class BaseTransaction {
      *
      * Command Response - the number of keys that were removed.
      */
-    public del(keys: string[]) {
-        this.commands.push(createDel(keys));
+    public del(keys: string[]): T {
+        return this.addAndReturn(createDel(keys));
     }
 
     /** Get the name of the current connection.
@@ -148,8 +153,8 @@ export class BaseTransaction {
      *
      * Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
      */
-    public clientGetName() {
-        this.commands.push(createClientGetName());
+    public clientGetName(): T {
+        return this.addAndReturn(createClientGetName());
     }
 
     /** Rewrite the configuration file with the current configuration.
@@ -157,8 +162,8 @@ export class BaseTransaction {
      *
      * Command Response - "OK" when the configuration was rewritten properly, Otherwise an error is raised.
      */
-    public configRewrite() {
-        this.commands.push(createConfigRewrite());
+    public configRewrite(): T {
+        return this.addAndReturn(createConfigRewrite());
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
@@ -166,8 +171,8 @@ export class BaseTransaction {
      *
      * Command Response - always "OK"
      */
-    public configResetStat() {
-        this.commands.push(createConfigResetStat());
+    public configResetStat(): T {
+        return this.addAndReturn(createConfigResetStat());
     }
 
     /** Retrieve the values of multiple keys.
@@ -178,8 +183,8 @@ export class BaseTransaction {
      * Command Response - A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      */
-    public mget(keys: string[]) {
-        this.commands.push(createMGet(keys));
+    public mget(keys: string[]): T {
+        return this.addAndReturn(createMGet(keys));
     }
 
     /** Set multiple keys to multiple values in a single atomic operation.
@@ -189,8 +194,8 @@ export class BaseTransaction {
      *
      * Command Response - always "OK".
      */
-    public mset(keyValueMap: Record<string, string>) {
-        this.commands.push(createMSet(keyValueMap));
+    public mset(keyValueMap: Record<string, string>): T {
+        return this.addAndReturn(createMSet(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -201,8 +206,8 @@ export class BaseTransaction {
      * Command Response - the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
-    public incr(key: string) {
-        this.commands.push(createIncr(key));
+    public incr(key: string): T {
+        return this.addAndReturn(createIncr(key));
     }
 
     /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
@@ -214,8 +219,8 @@ export class BaseTransaction {
      * Command Response - the value of `key` after the increment, An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
-    public incrBy(key: string, amount: number) {
-        this.commands.push(createIncrBy(key, amount));
+    public incrBy(key: string, amount: number): T {
+        return this.addAndReturn(createIncrBy(key, amount));
     }
 
     /** Increment the string representing a floating point number stored at `key` by `amount`.
@@ -231,8 +236,8 @@ export class BaseTransaction {
      * or the current key content is not parsable as a double precision floating point number.
      *
      */
-    public incrByFloat(key: string, amount: number) {
-        this.commands.push(createIncrByFloat(key, amount));
+    public incrByFloat(key: string, amount: number): T {
+        return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
     /** Returns the current connection id.
@@ -240,8 +245,8 @@ export class BaseTransaction {
      *
      * Command Response - the id of the client.
      */
-    public clientId() {
-        this.commands.push(createClientId());
+    public clientId(): T {
+        return this.addAndReturn(createClientId());
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -252,8 +257,8 @@ export class BaseTransaction {
      * Command Response - the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
-    public decr(key: string) {
-        this.commands.push(createDecr(key));
+    public decr(key: string): T {
+        return this.addAndReturn(createDecr(key));
     }
 
     /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
@@ -265,8 +270,8 @@ export class BaseTransaction {
      * Command Response - the value of `key` after the decrement. An error is raised if `key` contains a value
      * of the wrong type or contains a string that can not be represented as integer.
      */
-    public decrBy(key: string, amount: number) {
-        this.commands.push(createDecrBy(key, amount));
+    public decrBy(key: string, amount: number): T {
+        return this.addAndReturn(createDecrBy(key, amount));
     }
 
     /** Reads the configuration parameters of a running Redis server.
@@ -277,8 +282,8 @@ export class BaseTransaction {
      * Command Response - A map of values corresponding to the configuration parameters.
      *
      */
-    public configGet(parameters: string[]) {
-        this.commands.push(createConfigGet(parameters));
+    public configGet(parameters: string[]): T {
+        return this.addAndReturn(createConfigGet(parameters));
     }
 
     /** Set configuration parameters to the specified values.
@@ -292,8 +297,8 @@ export class BaseTransaction {
      * config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
      *
      */
-    public configSet(parameters: Record<string, string>) {
-        this.commands.push(createConfigSet(parameters));
+    public configSet(parameters: Record<string, string>): T {
+        return this.addAndReturn(createConfigSet(parameters));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
@@ -304,8 +309,8 @@ export class BaseTransaction {
      *
      * Command Response - the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      */
-    public hget(key: string, field: string) {
-        this.commands.push(createHGet(key, field));
+    public hget(key: string, field: string): T {
+        return this.addAndReturn(createHGet(key, field));
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -317,8 +322,8 @@ export class BaseTransaction {
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: string, fieldValueMap: Record<string, string>) {
-        this.commands.push(createHSet(key, fieldValueMap));
+    public hset(key: string, fieldValueMap: Record<string, string>): T {
+        return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
@@ -332,8 +337,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
      * If `key` holds a value that is not a hash, an error is raised.
      */
-    public hdel(key: string, fields: string[]) {
-        this.commands.push(createHDel(key, fields));
+    public hdel(key: string, fields: string[]): T {
+        return this.addAndReturn(createHDel(key, fields));
     }
 
     /** Returns the values associated with the specified fields in the hash stored at `key`.
@@ -346,8 +351,8 @@ export class BaseTransaction {
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
      */
-    public hmget(key: string, fields: string[]) {
-        this.commands.push(createHMGet(key, fields));
+    public hmget(key: string, fields: string[]): T {
+        return this.addAndReturn(createHMGet(key, fields));
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -359,8 +364,8 @@ export class BaseTransaction {
      * Command Response - `true` if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
      * the command response will be `false`.
      */
-    public hexists(key: string, field: string) {
-        this.commands.push(createHExists(key, field));
+    public hexists(key: string, field: string): T {
+        return this.addAndReturn(createHExists(key, field));
     }
 
     /** Returns all fields and values of the hash stored at `key`.
@@ -372,8 +377,8 @@ export class BaseTransaction {
      * If `key` does not exist, it returns an empty map.
      * If `key` holds a value that is not a hash, an error is raised.
      */
-    public hgetall(key: string) {
-        this.commands.push(createHGetAll(key));
+    public hgetall(key: string): T {
+        return this.addAndReturn(createHGetAll(key));
     }
 
     /** Increments the number stored at `field` in the hash stored at `key` by `increment`.
@@ -389,8 +394,8 @@ export class BaseTransaction {
      *  An error will be raised if `key` holds a value of an incorrect type (not a string)
      *  or if it contains a string that cannot be represented as an integer.
      */
-    public hincrBy(key: string, field: string, amount: number) {
-        this.commands.push(createHIncrBy(key, field, amount));
+    public hincrBy(key: string, field: string, amount: number): T {
+        return this.addAndReturn(createHIncrBy(key, field, amount));
     }
 
     /** Increment the string representing a floating point number stored at `field` in the hash stored at `key` by `increment`.
@@ -407,8 +412,8 @@ export class BaseTransaction {
      *  or the current field content is not parsable as a double precision floating point number.
      *
      */
-    public hincrByFloat(key: string, field: string, amount: number) {
-        this.commands.push(createHIncrByFloat(key, field, amount));
+    public hincrByFloat(key: string, field: string, amount: number): T {
+        return this.addAndReturn(createHIncrByFloat(key, field, amount));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -422,8 +427,8 @@ export class BaseTransaction {
      * Command Response - the length of the list after the push operations.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public lpush(key: string, elements: string[]) {
-        this.commands.push(createLPush(key, elements));
+    public lpush(key: string, elements: string[]): T {
+        return this.addAndReturn(createLPush(key, elements));
     }
 
     /** Removes and returns the first elements of the list stored at `key`.
@@ -435,8 +440,8 @@ export class BaseTransaction {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public lpop(key: string) {
-        this.commands.push(createLPop(key));
+    public lpop(key: string): T {
+        return this.addAndReturn(createLPop(key));
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -448,8 +453,8 @@ export class BaseTransaction {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public lpopCount(key: string, count: number) {
-        this.commands.push(createLPop(key, count));
+    public lpopCount(key: string, count: number): T {
+        return this.addAndReturn(createLPop(key, count));
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -468,8 +473,8 @@ export class BaseTransaction {
      * If `key` does not exist an empty list will be returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public lrange(key: string, start: number, end: number) {
-        this.commands.push(createLRange(key, start, end));
+    public lrange(key: string, start: number, end: number): T {
+        return this.addAndReturn(createLRange(key, start, end));
     }
 
     /** Returns the length of the list stored at `key`.
@@ -481,8 +486,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public llen(key: string) {
-        this.commands.push(createLLen(key));
+    public llen(key: string): T {
+        return this.addAndReturn(createLLen(key));
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.
@@ -501,8 +506,8 @@ export class BaseTransaction {
      * If `key` does not exist the command will be ignored.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public ltrim(key: string, start: number, end: number) {
-        this.commands.push(createLTrim(key, start, end));
+    public ltrim(key: string, start: number, end: number): T {
+        return this.addAndReturn(createLTrim(key, start, end));
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
@@ -518,8 +523,8 @@ export class BaseTransaction {
      * If `key` does not exist, 0 is returned.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public lrem(key: string, count: number, element: string) {
-        this.commands.push(createLRem(key, count, element));
+    public lrem(key: string, count: number, element: string): T {
+        return this.addAndReturn(createLRem(key, count, element));
     }
 
     /** Inserts all the specified values at the tail of the list stored at `key`.
@@ -533,8 +538,8 @@ export class BaseTransaction {
      * Command Response - the length of the list after the push operations.
      * If `key` holds a value that is not a list, an error is raised.
      */
-    public rpush(key: string, elements: string[]) {
-        this.commands.push(createRPush(key, elements));
+    public rpush(key: string, elements: string[]): T {
+        return this.addAndReturn(createRPush(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
@@ -546,8 +551,8 @@ export class BaseTransaction {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public rpop(key: string) {
-        this.commands.push(createRPop(key));
+    public rpop(key: string): T {
+        return this.addAndReturn(createRPop(key));
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -559,8 +564,8 @@ export class BaseTransaction {
      * If `key` does not exist null will be returned.
      * If `key` holds a value that is not a list, the transaction fails with an error.
      */
-    public rpopCount(key: string, count: number) {
-        return this.commands.push(createRPop(key, count));
+    public rpopCount(key: string, count: number): T {
+        return this.addAndReturn(createRPop(key, count));
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -573,8 +578,8 @@ export class BaseTransaction {
      * Command Response - the number of members that were added to the set, not including all the members already present in the set.
      * If `key` holds a value that is not a set, an error is raised.
      */
-    public sadd(key: string, members: string[]) {
-        this.commands.push(createSAdd(key, members));
+    public sadd(key: string, members: string[]): T {
+        return this.addAndReturn(createSAdd(key, members));
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
@@ -587,8 +592,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
      * If `key` holds a value that is not a set, an error is raised.
      */
-    public srem(key: string, members: string[]) {
-        this.commands.push(createSRem(key, members));
+    public srem(key: string, members: string[]): T {
+        return this.addAndReturn(createSRem(key, members));
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -600,8 +605,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      * If `key` holds a value that is not a set, an error is raised.
      */
-    public smembers(key: string) {
-        this.commands.push(createSMembers(key));
+    public smembers(key: string): T {
+        return this.addAndReturn(createSMembers(key));
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -612,8 +617,8 @@ export class BaseTransaction {
      * Command Response - the cardinality (number of elements) of the set, or 0 if key does not exist.
      * If `key` holds a value that is not a set, an error is raised.
      */
-    public scard(key: string) {
-        this.commands.push(createSCard(key));
+    public scard(key: string): T {
+        return this.addAndReturn(createSCard(key));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -624,8 +629,8 @@ export class BaseTransaction {
      * Command Response - the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
      * it will be counted multiple times.
      */
-    public exists(keys: string[]) {
-        this.commands.push(createExists(keys));
+    public exists(keys: string[]): T {
+        return this.addAndReturn(createExists(keys));
     }
 
     /** Removes the specified keys. A key is ignored if it does not exist.
@@ -637,8 +642,8 @@ export class BaseTransaction {
      *
      * Command Response - the number of keys that were unlinked.
      */
-    public unlink(keys: string[]) {
-        this.commands.push(createUnlink(keys));
+    public unlink(keys: string[]): T {
+        return this.addAndReturn(createUnlink(keys));
     }
 
     /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
@@ -654,8 +659,8 @@ export class BaseTransaction {
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
-    public expire(key: string, seconds: number, option?: ExpireOptions) {
-        this.commands.push(createExpire(key, seconds, option));
+    public expire(key: string, seconds: number, option?: ExpireOptions): T {
+        return this.addAndReturn(createExpire(key, seconds, option));
     }
 
     /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
@@ -671,8 +676,12 @@ export class BaseTransaction {
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
-    public expireAt(key: string, unixSeconds: number, option?: ExpireOptions) {
-        this.commands.push(createExpireAt(key, unixSeconds, option));
+    public expireAt(
+        key: string,
+        unixSeconds: number,
+        option?: ExpireOptions
+    ): T {
+        return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
 
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
@@ -688,8 +697,12 @@ export class BaseTransaction {
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      */
-    public pexpire(key: string, milliseconds: number, option?: ExpireOptions) {
-        this.commands.push(createPExpire(key, milliseconds, option));
+    public pexpire(
+        key: string,
+        milliseconds: number,
+        option?: ExpireOptions
+    ): T {
+        return this.addAndReturn(createPExpire(key, milliseconds, option));
     }
 
     /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
@@ -709,8 +722,10 @@ export class BaseTransaction {
         key: string,
         unixMilliseconds: number,
         option?: ExpireOptions
-    ) {
-        this.commands.push(createPExpireAt(key, unixMilliseconds, option));
+    ): T {
+        return this.addAndReturn(
+            createPExpireAt(key, unixMilliseconds, option)
+        );
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
@@ -720,8 +735,8 @@ export class BaseTransaction {
      *
      * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
      */
-    public ttl(key: string) {
-        this.commands.push(createTTL(key));
+    public ttl(key: string): T {
+        return this.addAndReturn(createTTL(key));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -742,8 +757,8 @@ export class BaseTransaction {
         membersScoresMap: Record<string, number>,
         options?: ZaddOptions,
         changed?: boolean
-    ) {
-        this.commands.push(
+    ): T {
+        return this.addAndReturn(
             createZadd(
                 key,
                 membersScoresMap,
@@ -772,8 +787,8 @@ export class BaseTransaction {
         member: string,
         increment: number,
         options?: ZaddOptions
-    ) {
-        this.commands.push(
+    ): T {
+        return this.addAndReturn(
             createZadd(key, { [member]: increment }, options, "INCR")
         );
     }
@@ -789,8 +804,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
      * If `key` holds a value that is not a sorted set, an error is returned.
      */
-    public zrem(key: string, members: string[]) {
-        this.commands.push(createZrem(key, members));
+    public zrem(key: string, members: string[]): T {
+        return this.addAndReturn(createZrem(key, members));
     }
 
     /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
@@ -802,8 +817,8 @@ export class BaseTransaction {
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
      * If `key` holds a value that is not a sorted set, an error is returned.
      */
-    public zcard(key: string) {
-        this.commands.push(createZcard(key));
+    public zcard(key: string): T {
+        return this.addAndReturn(createZcard(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -817,8 +832,8 @@ export class BaseTransaction {
      * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
      * ```
      */
-    public customCommand(args: string[]) {
-        return this.commands.push(createCustomCommand(args));
+    public customCommand(args: string[]): T {
+        return this.addAndReturn(createCustomCommand(args));
     }
 }
 
@@ -840,7 +855,7 @@ export class BaseTransaction {
  *       await RedisClient.exec(transaction);
  *       [OK , OK , null]
  */
-export class Transaction extends BaseTransaction {
+export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
     /** Change the currently selected Redis database.
@@ -850,8 +865,8 @@ export class Transaction extends BaseTransaction {
      *
      * Command Response - A simple OK response.
      */
-    public select(index: number) {
-        this.commands.push(createSelect(index));
+    public select(index: number): Transaction {
+        return this.addAndReturn(createSelect(index));
     }
 }
 
@@ -866,6 +881,6 @@ export class Transaction extends BaseTransaction {
  *  Specific response types are documented alongside each method.
  *
  */
-export class ClusterTransaction extends BaseTransaction {
+export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
 }

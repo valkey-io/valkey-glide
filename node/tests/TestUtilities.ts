@@ -52,7 +52,7 @@ export function getFirstResult(
 }
 
 export function transactionTest(
-    baseTransaction: BaseTransaction
+    baseTransaction: BaseTransaction<any>
 ): ReturnType[] {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -64,38 +64,39 @@ export function transactionTest(
     const key8 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
-    baseTransaction.set(key1, "bar");
-    baseTransaction.set(key2, "baz", {
-        returnOldValue: true,
-    });
-    baseTransaction.customCommand(["MGET", key1, key2]);
-    baseTransaction.mset({ [key3]: value });
-    baseTransaction.mget([key1, key2]);
-    baseTransaction.del([key1]);
-    baseTransaction.hset(key4, { [field]: value });
-    baseTransaction.hget(key4, field);
-    baseTransaction.hgetall(key4);
-    baseTransaction.hdel(key4, [field]);
-    baseTransaction.hmget(key4, [field]);
-    baseTransaction.hexists(key4, field);
-    baseTransaction.lpush(key5, [field + "1", field + "2", field + "3" , field + "4"]);
-    baseTransaction.lpop(key5);
-    baseTransaction.llen(key5);
-    baseTransaction.lrem(key5, 1 , field + "1");
-    baseTransaction.ltrim(key5, 0, 1);
-    baseTransaction.lrange(key5, 0, -1);
-    baseTransaction.lpopCount(key5 , 2);
-    baseTransaction.rpush(key6, [field + "1", field + "2" , field + "3"]);
-    baseTransaction.rpop(key6);
-    baseTransaction.rpopCount(key6 , 2)
-    baseTransaction.sadd(key7, ["bar", "foo"]);
-    baseTransaction.srem(key7, ["foo"]);
-    baseTransaction.scard(key7);
-    baseTransaction.smembers(key7);
-    baseTransaction.zadd(key8, { member1: 1, member2: 2 });
-    baseTransaction.zaddIncr(key8, "member2", 1);
-    baseTransaction.zrem(key8, ["member1"]);
-    baseTransaction.zcard(key8);
+    baseTransaction
+        .set(key1, "bar")
+        .set(key2, "baz", {
+            returnOldValue: true,
+        })
+        .customCommand(["MGET", key1, key2])
+        .mset({ [key3]: value })
+        .mget([key1, key2])
+        .del([key1])
+        .hset(key4, { [field]: value })
+        .hget(key4, field)
+        .hgetall(key4)
+        .hdel(key4, [field])
+        .hmget(key4, [field])
+        .hexists(key4, field)
+        .lpush(key5, [field + "1", field + "2", field + "3", field + "4"])
+        .lpop(key5)
+        .llen(key5)
+        .lrem(key5, 1, field + "1")
+        .ltrim(key5, 0, 1)
+        .lrange(key5, 0, -1)
+        .lpopCount(key5, 2)
+        .rpush(key6, [field + "1", field + "2", field + "3"])
+        .rpop(key6)
+        .rpopCount(key6, 2)
+        .sadd(key7, ["bar", "foo"])
+        .srem(key7, ["foo"])
+        .scard(key7)
+        .smembers(key7)
+        .zadd(key8, { member1: 1, member2: 2 })
+        .zaddIncr(key8, "member2", 1)
+        .zrem(key8, ["member1"])
+        .zcard(key8);
     return [
         "OK",
         null,
@@ -114,11 +115,11 @@ export function transactionTest(
         3,
         1,
         "OK",
-        [field + "3" , field + "2"],
-        [field + "3" , field + "2"],
+        [field + "3", field + "2"],
+        [field + "3", field + "2"],
         3,
         field + "3",
-        [field + "2" , field + "1"],
+        [field + "2", field + "1"],
         2,
         1,
         1,
