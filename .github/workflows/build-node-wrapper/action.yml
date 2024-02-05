@@ -38,7 +38,7 @@ inputs:
         description: "The NPM scope"
         required: false
         type: string
-        default: ""
+        default: "@aws"
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
@@ -58,31 +58,13 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Create package.json file
-          shell: bash
-          working-directory: ./node
-          run: |
-              # set the package name
-              name="glide-for-redis"
-              # derive the OS and architecture from the inputs
-              export node_os="${{ inputs.named_os }}"
-              export node_arch="${{ inputs.arch }}"
-              # set the version
-              export package_version="${{ env.RELEASE_VERSION }}"
-              # set the package name
-              export pkg_name="${name}-${node_os}-${node_arch}"
-              # set the scope
-              export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
-              # set the registry scope
-              export registry_scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}:"; fi`
-              # remove the current name section
-              SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-              sed -i $SED_FOR_MACOS '/"name":/d' ./package.json
-              # Remove all `///` occurrences to enable the commented out sections
-              sed -i -e 's|///||g' package.json
-              # generate package.json from the template
-              mv package.json package.json.tmpl
-              envsubst < package.json.tmpl > "package.json"
-              cat package.json
+          uses: ./.github/workflows/node-create-package-file
+          with:
+            release_version: ${{ env.RELEASE_VERSION }}
+            os: ${{ inputs.os }}
+            named_os: ${{ inputs.named_os }}
+            arch: ${{ inputs.arch }}
+            npm_scope: ${{ inputs.npm_scope }}
 
         - name: npm install
           shell: bash
