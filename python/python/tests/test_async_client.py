@@ -16,7 +16,9 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    InfBound,
     InfoSection,
+    ScoreLimit,
     UpdateOptions,
 )
 from glide.config import ProtocolVersion, RedisCredentials
@@ -1069,6 +1071,34 @@ class TestCommands:
         assert await redis_client.zrem(key, ["one"]) == 1
         assert await redis_client.zcard(key) == 2
         assert await redis_client.zcard("non_existing_key") == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_zcount(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
+        assert (
+            await redis_client.zcount(key, ScoreLimit(1, False), ScoreLimit(3, False))
+            == 1
+        )
+        assert (
+            await redis_client.zcount(key, ScoreLimit(1, False), ScoreLimit(3, True))
+            == 2
+        )
+        assert (
+            await redis_client.zcount(key, InfBound.NEG_INF, ScoreLimit(3, True)) == 3
+        )
+        assert (
+            await redis_client.zcount(key, InfBound.POS_INF, ScoreLimit(3, True)) == 0
+        )
+        assert (
+            await redis_client.zcount(
+                "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
+            )
+            == 0
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_zscore(self, redis_client: TRedisClient):

@@ -5,6 +5,7 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
+from glide.async_commands.core import InfBound, ScoreLimit
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -92,6 +93,7 @@ def transaction_test(
     transaction.zadd_incr(key8, "one", 3)
     transaction.zrem(key8, ["one"])
     transaction.zcard(key8)
+    transaction.zcount(key8, ScoreLimit(2, True), InfBound.POS_INF)
     transaction.zscore(key8, "two")
     return [
         OK,
@@ -136,6 +138,7 @@ def transaction_test(
         3,
         4,
         1,
+        2,
         2,
         2.0,
     ]

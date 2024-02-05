@@ -7,7 +7,9 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
+    InfBound,
     InfoSection,
+    ScoreLimit,
     UpdateOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -920,6 +922,34 @@ class BaseTransaction:
             If `key` holds a value that is not a sorted set, the transaction fails with an error.
         """
         self.append_command(RequestType.Zcard, [key])
+
+    def zcount(
+        self,
+        key: str,
+        min_score: Union[InfBound, ScoreLimit],
+        max_score: Union[InfBound, ScoreLimit],
+    ):
+        """
+        Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
+
+        See https://redis.io/commands/zcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_score (Union[InfBound, ScoreLimit]): The minimum score to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreLimit representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreLimit]): The maximum score to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreLimit representing a specific score and inclusivity.
+
+        Commands response:
+            int: The number of members in the specified score range.
+            If key does not exist, 0 is returned.
+            If `max_score` < `min_score`, 0 is returned.
+            If `key` holds a value that is not a sorted set, an error is returned.
+        """
+        self.append_command(RequestType.Zcount, [key, min_score.value, max_score.value])
 
     def zrem(
         self,
