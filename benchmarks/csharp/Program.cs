@@ -4,9 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Glide;
 using CommandLine;
 using LinqStatistics;
@@ -339,7 +337,7 @@ public static class MainClass
 
     public static async Task Main(string[] args)
     {
-        CommandLineOptions options = new CommandLineOptions();
+        CommandLineOptions options = new ();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 

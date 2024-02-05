@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <RootNamespace>Glide</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -11,10 +11,18 @@
     <Exec Command="cargo build --release" />
   </Target>
 
-  <ItemGroup Condition=" '$(OS)' == 'UNIX'">
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.so">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>%(FileName)%(Extension)</Link>
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(FileName)%(Extension)</Link>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(FileName)%(Extension)</Link>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.dylib" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
 

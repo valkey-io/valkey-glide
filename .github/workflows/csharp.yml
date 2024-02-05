@@ -54,7 +54,7 @@ jobs:
 
             - name: Test
               working-directory: ./csharp
-              run: dotnet test
+              run: dotnet test --framework net6.0
 
             - uses: ./.github/workflows/test-benchmark
               with:

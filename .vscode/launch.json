@@ -18,25 +18,15 @@
             "stopAtEntry": false
         },
         {
-            "name": ".NET Core Attach",
-            "type": "coreclr",
-            "request": "attach"
-        },
-        {
             "name": "C# benchmark Launch (console)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/benchmarks/csharp/bin/Debug/net6.0/csharp_benchmark.dll",
+            "program": "${workspaceFolder}/benchmarks/csharp/bin/Debug/net8.0/csharp_benchmark.dll",
             "args": [],
             "cwd": "${workspaceFolder}/benchmarks/csharp",
             "console": "internalConsole",
             "stopAtEntry": true
-        },
-        {
-            "name": ".NET Core Attach",
-            "type": "coreclr",
-            "request": "attach"
         }
     ]
 }
