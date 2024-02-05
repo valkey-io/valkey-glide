@@ -1,7 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
-import glide.api.models.Ok;
+import static glide.api.BaseClient.OK;
+
 import glide.api.models.exceptions.RedisException;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
@@ -26,8 +27,7 @@ public class BaseCommandResponseResolver
         assert !response.hasRequestError() : "Unhandled response request error";
 
         if (response.hasConstantResponse()) {
-            // Return "OK"
-            return Ok.INSTANCE;
+            return OK;
         }
         if (response.hasRespPointer()) {
             // Return the shared value - which may be a null value

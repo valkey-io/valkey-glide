@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
@@ -14,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.TestConfiguration;
 import glide.api.RedisClient;
-import glide.api.models.Ok;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
@@ -94,8 +94,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_and_get_without_options() {
-        Ok ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(Ok.INSTANCE, ok);
+        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        assertEquals(OK, ok);
 
         String data = regularClient.get(KEY_NAME).get(10, SECONDS);
         assertEquals(INITIAL_VALUE, data);
@@ -111,8 +111,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_overwrite_value_and_returnOldValue_returns_string() {
-        var ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(Ok.INSTANCE, ok);
+        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        assertEquals(OK, ok);
 
         var options = SetOptions.builder().returnOldValue(true).build();
         var data = regularClient.set(KEY_NAME, ANOTHER_VALUE, options).get(10, SECONDS);
@@ -122,8 +122,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_missing_value_and_returnOldValue_is_null() {
-        var ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(Ok.INSTANCE, ok);
+        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        assertEquals(OK, ok);
 
         var options = SetOptions.builder().returnOldValue(true).build();
         var data = regularClient.set("another", ANOTHER_VALUE, options).get(10, SECONDS);

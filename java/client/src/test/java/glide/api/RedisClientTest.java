@@ -19,7 +19,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
-import glide.api.models.Ok;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.managers.CommandManager;
@@ -206,7 +205,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Ok> response = service.set(key, value);
+        CompletableFuture<String> response = service.set(key, value);
         Object okResponse = response.get();
 
         // verify
