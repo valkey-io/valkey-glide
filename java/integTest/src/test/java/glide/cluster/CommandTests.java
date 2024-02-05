@@ -142,7 +142,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_routing_and_options() {
-        var slotData = clusterClient.customCommand("cluster", "slots").get(10, SECONDS);
+        var slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get(10, SECONDS);
         /*
         Nested Object arrays like
         1) 1) (integer) 0
@@ -186,7 +186,7 @@ public class CommandTests {
     @SneakyThrows
     public void custom_command_del_returns_a_number() {
         clusterClient.set("DELME", INITIAL_VALUE).get(10, SECONDS);
-        var del = clusterClient.customCommand("DEL", "DELME").get(10, SECONDS);
+        var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get(10, SECONDS);
         assertEquals(1L, del.getSingleValue());
         var data = clusterClient.get("DELME").get(10, SECONDS);
         assertNull(data);
@@ -210,12 +210,6 @@ public class CommandTests {
     @Test
     public void ping_with_message_requires_a_message() {
         assertThrows(NullPointerException.class, () -> clusterClient.ping(null));
-    }
-
-    @Test
-    public void custom_command_requires_args() {
-        assertThrows(IllegalArgumentException.class, () -> clusterClient.customCommand());
-        assertThrows(IllegalArgumentException.class, () -> clusterClient.customCommand(ALL_NODES));
     }
 
     @Test

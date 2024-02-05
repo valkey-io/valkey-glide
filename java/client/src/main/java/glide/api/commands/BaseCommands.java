@@ -23,5 +23,5 @@ public interface BaseCommands {
      * @param args Arguments for the custom command.
      * @return Response from Redis containing an <code>Object</code>.
      */
-    CompletableFuture<Object> customCommand(String... args);
+    CompletableFuture<Object> customCommand(String[] args);
 }

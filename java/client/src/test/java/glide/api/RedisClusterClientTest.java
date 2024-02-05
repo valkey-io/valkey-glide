@@ -52,7 +52,7 @@ public class RedisClusterClientTest {
 
         var client = new TestClient(commandManager, "TEST");
 
-        var value = client.customCommand("test").get();
+        var value = client.customCommand(new String[] {"test"}).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertEquals("TEST", value.getSingleValue()));
@@ -66,7 +66,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand("test").get();
+        var value = client.customCommand(new String[] {"test"}).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -80,7 +80,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(RANDOM, "Test").get();
+        var value = client.customCommand(new String[] {"Test"}, RANDOM).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
     }
@@ -93,7 +93,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(ALL_NODES, "Test").get();
+        var value = client.customCommand(new String[] {"Test"}, ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -153,13 +153,6 @@ public class RedisClusterClientTest {
         assertTrue(clusterValue.hasSingleData());
         String payload = (String) clusterValue.getSingleValue();
         assertEquals(value, payload);
-    }
-
-    @Test
-    @SneakyThrows
-    public void customCommand_requires_args() {
-        assertThrows(IllegalArgumentException.class, () -> service.customCommand());
-        assertThrows(IllegalArgumentException.class, () -> service.customCommand(RANDOM));
     }
 
     @SneakyThrows
