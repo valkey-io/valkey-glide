@@ -123,6 +123,29 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
+class InfBound(Enum):
+    """
+    Enumeration representing positive and negative infinity bounds for sorted set scores.
+    """
+
+    POS_INF = "+inf"
+    NEG_INF = "-inf"
+
+
+class ScoreLimit:
+    """
+    Represents a score limit in a sorted set.
+
+    Args:
+        value (float): The score value.
+        is_inclusive (bool): Whether the score value is inclusive. Defaults to False.
+    """
+
+    def __init__(self, value: float, is_inclusive: bool = True):
+        """Convert the score limit to the Redis protocol format."""
+        self.value = str(value) if is_inclusive else f"({value}"
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -1220,6 +1243,45 @@ class CoreCommands(Protocol):
                 0
         """
         return cast(int, await self._execute_command(RequestType.Zcard, [key]))
+
+    async def zcount(
+        self,
+        key: str,
+        min_score: Union[InfBound, ScoreLimit],
+        max_score: Union[InfBound, ScoreLimit],
+    ) -> int:
+        """
+        Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
+
+        See https://redis.io/commands/zcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_score (Union[InfBound, ScoreLimit]): The minimum score to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreLimit representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreLimit]): The maximum score to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreLimit representing a specific score and inclusivity.
+
+        Returns:
+            int: The number of members in the specified score range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `max_score` < `min_score`, 0 is returned.
+            If `key` holds a value that is not a sorted set, an error is returned.
+
+        Examples:
+            >>> await zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
+                2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set "my_sorted_set".
+            >>> await zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , ScoreLimit(10.0 , is_inclusive=false))
+                1  # Indicates that there is one ScoreLimit with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.Zcount, [key, min_score.value, max_score.value]
+            ),
+        )
 
     async def zrem(
         self,
