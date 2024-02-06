@@ -71,9 +71,9 @@ import { redis_request } from "./ProtobufMessage";
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new BaseTransaction();
- *       transaction.set("key", "value");
- *       transaction.get("key");
+ *       transaction = new BaseTransaction()
+ *          .set("key", "value")
+ *          .get("key");
  *       await client.exec(transaction);
  *       [OK , "value"]
  */
@@ -848,10 +848,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new Transaction();
- *       transaction.set("key", "value");
- *       transaction.select(1);  /// Standalone command
- *       transaction.get("key");
+ *       transaction = new Transaction()
+ *          .set("key", "value")
+ *          .select(1)  /// Standalone command
+ *          .get("key");
  *       await RedisClient.exec(transaction);
  *       [OK , OK , null]
  */

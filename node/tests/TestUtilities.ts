@@ -5,8 +5,7 @@
 import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import { Logger, ReturnType } from "..";
-import { BaseTransaction } from "../build-ts/src/Transaction";
+import { ClusterTransaction, Logger, ReturnType, Transaction } from "..";
 
 beforeAll(() => {
     Logger.init("info");
@@ -52,7 +51,7 @@ export function getFirstResult(
 }
 
 export function transactionTest(
-    baseTransaction: BaseTransaction<any>
+    baseTransaction: Transaction | ClusterTransaction
 ): ReturnType[] {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
