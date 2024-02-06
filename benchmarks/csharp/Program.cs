@@ -5,9 +5,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
-using Glide;
+
 using CommandLine;
+
+using Glide;
+
 using LinqStatistics;
+
 using StackExchange.Redis;
 
 public static class MainClass
@@ -258,7 +262,7 @@ public static class MainClass
         internal Func<string, Task<string?>> get;
         internal Func<string, string, Task> set;
 
-        private Action disposalFunction;
+        private readonly Action disposalFunction;
     }
 
     private async static Task<ClientWrapper[]> createClients(int clientCount,

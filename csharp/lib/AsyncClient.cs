@@ -79,11 +79,11 @@ public class AsyncClient : IDisposable
 
     /// Held as a measure to prevent the delegate being garbage collected. These are delegated once
     /// and held in order to prevent the cost of marshalling on each function call.
-    private FailureAction failureCallbackDelegate;
+    private readonly FailureAction failureCallbackDelegate;
 
     /// Held as a measure to prevent the delegate being garbage collected. These are delegated once
     /// and held in order to prevent the cost of marshalling on each function call.
-    private StringAction successCallbackDelegate;
+    private readonly StringAction successCallbackDelegate;
 
     /// Raw pointer to the underlying native client.
     private IntPtr clientPointer;

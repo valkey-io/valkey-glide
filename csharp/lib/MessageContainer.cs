@@ -54,9 +54,9 @@ internal class MessageContainer<T>
     /// This list allows us random-access to the message in each index,
     /// which means that once we receive a callback with an index, we can
     /// find the message to resolve in constant time.
-    private List<Message<T>> messages = new();
+    private readonly List<Message<T>> messages = new();
 
     /// This queue contains the messages that were created and are currently unused by any task,
     /// so they can be reused y new tasks instead of allocating new messages.
-    private ConcurrentQueue<Message<T>> availableMessages = new();
+    private readonly ConcurrentQueue<Message<T>> availableMessages = new();
 }

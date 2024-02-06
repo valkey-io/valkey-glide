@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using Glide;
 
 /// Reusable source of ValueTask. This object can be allocated once and then reused
@@ -21,7 +22,7 @@ internal class Message<T> : INotifyCompletion
 
     /// The pointer to the unmanaged memory that contains the operation's key.
     public IntPtr ValuePtr { get; private set; }
-    private MessageContainer<T> container;
+    private readonly MessageContainer<T> container;
 
     public Message(int index, MessageContainer<T> container)
     {
