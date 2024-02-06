@@ -17,7 +17,7 @@ import {
     createPing,
 } from "./Commands";
 import { connection_request, redis_request } from "./ProtobufMessage";
-import { BaseTransaction, ClusterTransaction } from "./Transaction";
+import { ClusterTransaction } from "./Transaction";
 
 export type ClusterClientConfiguration = BaseClientConfiguration;
 
@@ -196,7 +196,7 @@ export class RedisClusterClient extends BaseClient {
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
     public exec(
-        transaction: ClusterTransaction | BaseTransaction,
+        transaction: ClusterTransaction,
         route?: SingleNodeRoute
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise(
