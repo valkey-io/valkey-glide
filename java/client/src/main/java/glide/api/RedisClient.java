@@ -35,7 +35,7 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Object> customCommand(String... args) {
+    public CompletableFuture<Object> customCommand(String[] args) {
         return commandManager.submitNewCommand(CustomCommand, args, this::handleStringResponse);
     }
 

@@ -101,12 +101,12 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf command request object with routing options.<br>
+     * Build a protobuf command request object with routing options.
      *
      * @param requestType Redis command type
      * @param arguments Redis command arguments
      * @param route Command routing parameters
-     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
@@ -128,7 +128,7 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf command request object with routing options.<br>
+     * Build a protobuf command request object.
      *
      * @param requestType Redis command type
      * @param arguments Redis command arguments

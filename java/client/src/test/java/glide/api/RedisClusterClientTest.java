@@ -11,7 +11,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
@@ -48,7 +47,7 @@ public class RedisClusterClientTest {
 
     @Test
     @SneakyThrows
-    public void customCommand_returns_single_value() {
+    public void custom_command_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
         var client = new TestClient(commandManager, "TEST");
@@ -61,7 +60,7 @@ public class RedisClusterClientTest {
 
     @Test
     @SneakyThrows
-    public void customCommand_returns_multi_value() {
+    public void custom_command_returns_multi_value() {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
@@ -75,7 +74,7 @@ public class RedisClusterClientTest {
     @Test
     @SneakyThrows
     // test checks that even a map returned as a single value when single node route is used
-    public void customCommand_with_single_node_route_returns_single_value() {
+    public void custom_command_with_single_node_route_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
@@ -88,7 +87,7 @@ public class RedisClusterClientTest {
 
     @Test
     @SneakyThrows
-    public void customCommand_with_multi_node_route_returns_multi_value() {
+    public void custom_command_with_multi_node_route_returns_multi_value() {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
@@ -129,31 +128,6 @@ public class RedisClusterClientTest {
                 RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
-    }
-
-    @SneakyThrows
-    @Test
-    public void customCommand_success() {
-        // setup
-        String key = "testKey";
-        String value = "testValue";
-        String cmd = "GETSTRING";
-        String[] arguments = new String[] {cmd, key};
-        CompletableFuture<ClusterValue<Object>> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(ClusterValue.of(value));
-        when(commandManager.<ClusterValue<Object>>submitNewCommand(
-                        eq(CustomCommand), eq(arguments), eq(Optional.empty()), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<ClusterValue<Object>> response = service.customCommand(arguments);
-
-        // verify
-        assertEquals(testResponse, response);
-        ClusterValue<Object> clusterValue = response.get();
-        assertTrue(clusterValue.hasSingleData());
-        String payload = (String) clusterValue.getSingleValue();
-        assertEquals(value, payload);
     }
 
     @SneakyThrows
