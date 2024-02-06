@@ -16,6 +16,14 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.sorted_set import (
+    InfBound,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
+    _create_zrange_args,
+)
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
@@ -121,29 +129,6 @@ class UpdateOptions(Enum):
 
     LESS_THAN = "LT"
     GREATER_THAN = "GT"
-
-
-class InfBound(Enum):
-    """
-    Enumeration representing positive and negative infinity bounds for sorted set scores.
-    """
-
-    POS_INF = "+inf"
-    NEG_INF = "-inf"
-
-
-class ScoreLimit:
-    """
-    Represents a score limit in a sorted set.
-
-    Args:
-        value (float): The score value.
-        is_inclusive (bool): Whether the score value is inclusive. Defaults to False.
-    """
-
-    def __init__(self, value: float, is_inclusive: bool = True):
-        """Convert the score limit to the Redis protocol format."""
-        self.value = str(value) if is_inclusive else f"({value}"
 
 
 class ExpirySet:
@@ -1367,8 +1352,8 @@ class CoreCommands(Protocol):
     async def zcount(
         self,
         key: str,
-        min_score: Union[InfBound, ScoreLimit],
-        max_score: Union[InfBound, ScoreLimit],
+        min_score: Union[InfBound, ScoreBoundary],
+        max_score: Union[InfBound, ScoreBoundary],
     ) -> int:
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
@@ -1377,12 +1362,12 @@ class CoreCommands(Protocol):
 
         Args:
             key (str): The key of the sorted set.
-            min_score (Union[InfBound, ScoreLimit]): The minimum score to count from.
+            min_score (Union[InfBound, ScoreBoundary]): The minimum score to count from.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
-            max_score (Union[InfBound, ScoreLimit]): The maximum score to count up to.
+                or ScoreBoundary representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreBoundary]): The maximum score to count up to.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
+                or ScoreBoundary representing a specific score and inclusivity.
 
         Returns:
             int: The number of members in the specified score range.
@@ -1390,15 +1375,25 @@ class CoreCommands(Protocol):
             If `max_score` < `min_score`, 0 is returned.
 
         Examples:
-            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
+            >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , InfBound.POS_INF)
                 2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set "my_sorted_set".
-            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , ScoreLimit(10.0 , is_inclusive=false))
-                1  # Indicates that there is one ScoreLimit with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
+            >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , ScoreBoundary(10.0 , is_inclusive=false))
+                1  # Indicates that there is one ScoreBoundary with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
         """
+        score_min = (
+            min_score.value
+            if not type(min_score) == InfBound
+            else min_score.value["default_arg"]
+        )
+        score_max = (
+            max_score.value
+            if not type(max_score) == InfBound
+            else max_score.value["default_arg"]
+        )
         return cast(
             int,
             await self._execute_command(
-                RequestType.Zcount, [key, min_score.value, max_score.value]
+                RequestType.Zcount, [key, score_min, score_max]
             ),
         )
 
@@ -1464,6 +1459,77 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZPopMin, [key, str(count)] if count else [key]
             ),
+        )
+
+    async def zrange(
+        self,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> List[str]:
+        """
+        Returns the specified range of elements in the sorted set stored at `key`.
+
+        ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            List[str]: A list of elements within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+
+        Examples:
+            >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
+                ['member1', 'member2', 'member3']  # Returns all members in ascending order.
+            >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop= ScoreBoundary(3), limit= Limit(0 , 2)))
+                ['member2', 'member3']
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=False)
+
+        return cast(List[str], await self._execute_command(RequestType.Zrange, args))
+
+    async def zrange_withscores(
+        self,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByScore],
+        reverse: bool = False,
+    ) -> Mapping[str, float]:
+        """
+        Returns the specified range of elements with their scores in the sorted set stored at `key`.
+        Similar to ZRANGE but with a WTHISCORE flag.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            Map[str , float]: A map of elements and their scores within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+
+        Examples:
+            >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
+                {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
+            >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop= ScoreBoundary(3), limit= Limit(0 , 2)))
+                {'member4': -2.0, 'member7': 1.5}
+
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=True)
+
+        return cast(
+            Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
         )
 
     async def zrem(

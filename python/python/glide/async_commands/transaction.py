@@ -7,10 +7,16 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
-    InfBound,
     InfoSection,
-    ScoreLimit,
     UpdateOptions,
+)
+from glide.async_commands.sorted_set import (
+    InfBound,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
+    _create_zrange_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1082,8 +1088,8 @@ class BaseTransaction:
     def zcount(
         self: TTransaction,
         key: str,
-        min_score: Union[InfBound, ScoreLimit],
-        max_score: Union[InfBound, ScoreLimit],
+        min_score: Union[InfBound, ScoreBoundary],
+        max_score: Union[InfBound, ScoreBoundary],
     ) -> TTransaction:
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
@@ -1104,9 +1110,17 @@ class BaseTransaction:
             If key does not exist, 0 is returned.
             If `max_score` < `min_score`, 0 is returned.
         """
-        return self.append_command(
-            RequestType.Zcount, [key, min_score.value, max_score.value]
+        score_min = (
+            min_score.value
+            if not type(min_score) == InfBound
+            else min_score.value["default_arg"]
         )
+        score_max = (
+            max_score.value
+            if not type(max_score) == InfBound
+            else max_score.value["default_arg"]
+        )
+        return self.append_command(RequestType.Zcount, [key, score_min, score_max])
 
     def zpopmax(
         self: TTransaction, key: str, count: Optional[int] = None
@@ -1153,6 +1167,62 @@ class BaseTransaction:
         return self.append_command(
             RequestType.ZPopMin, [key, str(count)] if count else [key]
         )
+
+    def zrange(
+        self: TTransaction,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> TTransaction:
+        """
+        Returns the specified range of elements in the sorted set stored at `key`.
+
+        ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Commands response:
+            List[str]: A list of elements within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=False)
+
+        return self.append_command(RequestType.Zrange, args)
+
+    def zrange_withscores(
+        self: TTransaction,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByScore],
+        reverse: bool = False,
+    ) -> TTransaction:
+        """
+        Returns the specified range of elements with their scores in the sorted set stored at `key`.
+        Similar to ZRANGE but with a WTHISCORE flag.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Commands response:
+            Map[str , float]: A map of elements and their scores within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=True)
+
+        return self.append_command(RequestType.Zrange, args)
 
     def zrem(
         self: TTransaction,
