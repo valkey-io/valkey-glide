@@ -67,7 +67,7 @@ function runNodeBenchmark(){
 function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
-  dotnet build --configuration Release
+  dotnet build --configuration Release /warnaserror
   dotnet run --framework net6.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 

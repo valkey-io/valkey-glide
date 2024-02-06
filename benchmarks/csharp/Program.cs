@@ -23,7 +23,7 @@ public static class MainClass
         public int dataSize { get; set; }
 
         [Option('c', "concurrentTasks", Required = false, HelpText = "The number of concurrent operations to perform.", Default = new[] { 1, 10, 100, 1000 })]
-        public IEnumerable<int> concurrentTasks { get; set; }
+        public IEnumerable<int> concurrentTasks { get; set; } = Enumerable.Empty<int>();
 
         [Option('l', "clients", Required = false, HelpText = "Which clients should run", Default = "all")]
         public string clientsToRun { get; set; }
@@ -32,7 +32,7 @@ public static class MainClass
         public string host { get; set; }
 
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
-        public IEnumerable<int> clientCount { get; set; }
+        public IEnumerable<int> clientCount { get; set; } = Enumerable.Empty<int>();
 
         [Option('t', "tls", HelpText = "Should benchmark a TLS server", Default = false)]
         public bool tls { get; set; }
@@ -335,7 +335,7 @@ public static class MainClass
 
     public static async Task Main(string[] args)
     {
-        CommandLineOptions options = new ();
+        CommandLineOptions options = new();
         Parser.Default
             .ParseArguments<CommandLineOptions>(args).WithParsed<CommandLineOptions>(parsed => { options = parsed; });
 
