@@ -52,7 +52,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        var data = regularClient.customCommand("info").get(10, SECONDS);
+        var data = regularClient.customCommand(new String[] {"info"}).get(10, SECONDS);
         assertTrue(((String) data).contains("# Stats"));
     }
 
