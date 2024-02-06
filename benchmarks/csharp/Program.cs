@@ -21,7 +21,7 @@ public static class MainClass
     public class CommandLineOptions
     {
         [Option('r', "resultsFile", Required = false, HelpText = "Set the file to which the JSON results are written.", Default = "../results/csharp-results.json")]
-        public string resultsFile { get; set; }
+        public string resultsFile { get; set; } = string.Empty;
 
         [Option('d', "dataSize", Required = false, HelpText = "The size of the sent data in bytes.", Default = 100)]
         public int dataSize { get; set; }
@@ -30,10 +30,10 @@ public static class MainClass
         public IEnumerable<int> concurrentTasks { get; set; } = Enumerable.Empty<int>();
 
         [Option('l', "clients", Required = false, HelpText = "Which clients should run", Default = "all")]
-        public string clientsToRun { get; set; }
+        public string clientsToRun { get; set; } = string.Empty;
 
         [Option('h', "host", Required = false, HelpText = "What host to target", Default = "localhost")]
-        public string host { get; set; }
+        public string host { get; set; } = string.Empty;
 
         [Option('C', "clientCount", Required = false, HelpText = "Number of clients to run concurrently", Default = new[] { 1 })]
         public IEnumerable<int> clientCount { get; set; } = Enumerable.Empty<int>();
