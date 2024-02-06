@@ -54,7 +54,7 @@ jobs:
 
             - name: Test
               working-directory: ./csharp
-              run: dotnet test --framework net6.0
+              run: dotnet test --framework net6.0 /warnaserror
 
             - uses: ./.github/workflows/test-benchmark
               with:
