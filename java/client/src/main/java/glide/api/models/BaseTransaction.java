@@ -33,7 +33,7 @@ import redis_request.RedisRequestOuterClass.Transaction;
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Command class to send a single request to Redis. */
-    protected final Transaction.Builder transactionBuilder = Transaction.newBuilder();
+    protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
     protected abstract T getThis();
 
@@ -41,12 +41,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in args.
      *
-     * @remarks This function should only be used for single-response commands. Commands that don't
+     * @Remarks: This function should only be used for single-response commands. Commands that don't
      *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
-     * @example Returns a list of all pub/sub clients:
+     * @Example: Returns a list of all pub/sub clients:
      *     <pre>
      * Object result = client.customCommand("CLIENT","LIST","TYPE", "PUBSUB").get();
      * </pre>
@@ -55,9 +55,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return A response from Redis with an <code>Object</code>.
      */
     public T customCommand(String... args) {
+        
         ArgsArray commandArgs = buildArgs(args);
-
-        transactionBuilder.addCommands(buildCommand(CustomCommand, commandArgs));
+        protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));
         return getThis();
     }
 
@@ -68,7 +68,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return A response from Redis with a <code>String</code>.
      */
     public T ping() {
-        transactionBuilder.addCommands(buildCommand(Ping));
+        protobufTransaction.addCommands(buildCommand(Ping));
         return getThis();
     }
 
@@ -82,7 +82,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T ping(String msg) {
         ArgsArray commandArgs = buildArgs(msg);
 
-        transactionBuilder.addCommands(buildCommand(Ping, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
         return getThis();
     }
 
@@ -94,7 +94,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return A response from Redis with a <code>String</code>.
      */
     public T info() {
-        transactionBuilder.addCommands(buildCommand(Info));
+        protobufTransaction.addCommands(buildCommand(Info));
         return getThis();
     }
 
@@ -110,7 +110,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T info(InfoOptions options) {
         ArgsArray commandArgs = buildArgs(options.toArgs());
 
-        transactionBuilder.addCommands(buildCommand(Info, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Info, commandArgs));
         return getThis();
     }
 
@@ -125,7 +125,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T get(String key) {
         ArgsArray commandArgs = buildArgs(key);
 
-        transactionBuilder.addCommands(buildCommand(GetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
         return getThis();
     }
 
@@ -140,7 +140,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T set(String key, String value) {
         ArgsArray commandArgs = buildArgs(key, value);
 
-        transactionBuilder.addCommands(buildCommand(SetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
         return getThis();
     }
 
@@ -161,7 +161,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
-        transactionBuilder.addCommands(buildCommand(SetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
         return getThis();
     }
 
