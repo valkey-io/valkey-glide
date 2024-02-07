@@ -15,6 +15,8 @@ public interface GenericClusterCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in {@code args}.
      *
+     * <p>The command will be routed to all primaries.
+     *
      * @remarks This function should only be used for single-response commands. Commands that don't
      *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
@@ -32,6 +34,8 @@ public interface GenericClusterCommands {
     /**
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in {@code args}.
+     *
+     * <p>Client will route the command to the nodes defined by <code>route</code>.
      *
      * @remarks This function should only be used for single-response commands. Commands that don't
      *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single

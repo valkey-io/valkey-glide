@@ -73,9 +73,9 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> ping(@NonNull String msg, @NonNull Route route) {
+    public CompletableFuture<String> ping(@NonNull String str, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                Ping, new String[] {msg}, Optional.of(route), this::handleStringResponse);
+                Ping, new String[] {str}, Optional.of(route), this::handleStringResponse);
     }
 
     @Override

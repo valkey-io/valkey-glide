@@ -14,7 +14,8 @@ public interface ConnectionManagementClusterCommands {
     /**
      * Ping the Redis server.
      *
-     * @param route Routing configuration for the command
+     * @param route Routing configuration for the command. Client will route the command to the nodes
+     *     defined.
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @return Response from Redis containing a <code>String</code>.
      */
@@ -24,9 +25,10 @@ public interface ConnectionManagementClusterCommands {
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
-     * @param msg The ping argument that will be returned.
-     * @param route Routing configuration for the command
+     * @param str The ping argument that will be returned.
+     * @param route Routing configuration for the command. Client will route the command to the nodes
+     *     defined.
      * @return Response from Redis containing a <code>String</code>.
      */
-    CompletableFuture<String> ping(String msg, Route route);
+    CompletableFuture<String> ping(String str, Route route);
 }
