@@ -77,13 +77,14 @@ public interface GenericClusterCommands {
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
-     * @param route Routing configuration for the command
+     * @param route Routing configuration for the command. The client will route the command to the
+     *     nodes defined by <code>route</code>.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
      *       <li>If a command returns a value, it will be included in the list. If a command doesn't
      *           return a value, the list entry will be empty.
-     *       <li>If the transaction failed due to a <em>WATCH</em> command, <code>exec</code> will
+     *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
      *           return <code>null</code>.
      *     </ul>
      */

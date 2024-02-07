@@ -29,6 +29,9 @@ public interface GenericCommands {
     /**
      * Execute a transaction by processing the queued commands.
      *
+     * <p>For clustered nodes, the transaction will be routed to the slot owner of the first key found
+     * in the transaction. If no key is found, the command will be sent to a random node.
+     *
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
