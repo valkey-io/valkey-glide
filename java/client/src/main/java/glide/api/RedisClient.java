@@ -8,6 +8,7 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
@@ -25,12 +26,13 @@ public class RedisClient extends BaseClient implements GenericCommands {
      * @param config Redis client Configuration
      * @return A Future to connect and return a RedisClient
      */
-    public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
+    public static CompletableFuture<RedisClient> CreateClient(
+            @NonNull RedisClientConfiguration config) {
         return CreateClient(config, RedisClient::new);
     }
 
     @Override
-    public CompletableFuture<Object> customCommand(String[] args) {
+    public CompletableFuture<Object> customCommand(@NonNull String[] args) {
         return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectResponse);
     }
 }

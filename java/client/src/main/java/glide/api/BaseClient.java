@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
+import lombok.NonNull;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
@@ -128,7 +129,7 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
     }
 
     @Override
-    public CompletableFuture<String> ping(String str) {
+    public CompletableFuture<String> ping(@NonNull String str) {
         return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
     }
 }
