@@ -8,7 +8,6 @@ import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringCommands;
-import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
@@ -161,10 +160,8 @@ public final class SetOptions {
         if (expiry != null) {
             optionArgs.add(expiry.type.redisApi);
             if (expiry.type != KEEP_EXISTING) {
-                if (expiry.count == null) {
-                    throw new RequestException(
-                            "Set command received expiry type " + expiry.type + ", but count was not set.");
-                }
+                assert expiry.count != null
+                        : "Set command received expiry type " + expiry.type + ", but count was not set.";
                 optionArgs.add(expiry.count.toString());
             }
         }
