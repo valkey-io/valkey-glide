@@ -107,7 +107,7 @@ public class CommandManager {
                                         .setArgsArray(commandArgs.build())
                                         .build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareRedisRequestRoute(builder, Optional.of(route));
     }
 
     /**
