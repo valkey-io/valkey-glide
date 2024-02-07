@@ -4,6 +4,7 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
@@ -17,26 +18,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
+import response.ResponseOuterClass;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient implements AutoCloseable {
 
+    /** Redis simple string response with "OK" */
+    public static final String OK = ResponseOuterClass.ConstantResponse.OK.toString();
+
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
-
-    /**
-     * Extracts the response from the Protobuf response and either throws an exception or returns the
-     * appropriate response as an Object
-     *
-     * @param response Redis protobuf message
-     * @return Response Object
-     */
-    protected Object handleObjectResponse(Response response) {
-        // convert protobuf response into Object and then Object into T
-        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
-    }
 
     /**
      * Async request for an async (non-blocking) Redis client.
@@ -74,8 +67,8 @@ public abstract class BaseClient implements AutoCloseable {
      * Closes this resource, relinquishing any underlying resources. This method is invoked
      * automatically on objects managed by the try-with-resources statement.
      *
-     * <p>see: <a
-     * href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
+     * @see <a
+     *     href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
      */
     @Override
     public void close() throws ExecutionException {
@@ -99,5 +92,36 @@ public abstract class BaseClient implements AutoCloseable {
 
     protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
         return new CommandManager(channelHandler);
+    }
+
+    /**
+     * Extracts the response from the Protobuf response and either throws an exception or returns the
+     * appropriate response as an <code>Object</code>.
+     *
+     * @param response Redis protobuf message
+     * @return Response <code>Object</code>
+     */
+    protected Object handleObjectResponse(Response response) {
+        // convert protobuf response into Object
+        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+    }
+
+    /**
+     * Extracts the response value from the Redis response and either throws an exception or returns
+     * the value as a <code>String</code>.
+     *
+     * @param response Redis protobuf message
+     * @return Response as a <code>String</code>
+     * @throws RedisException if there's a type mismatch
+     */
+    protected String handleStringResponse(Response response) {
+        Object value = handleObjectResponse(response);
+        if (value instanceof String || value == null) {
+            return (String) value;
+        }
+        throw new RedisException(
+                "Unexpected return type from Redis: got "
+                        + value.getClass().getSimpleName()
+                        + " expected String");
     }
 }
