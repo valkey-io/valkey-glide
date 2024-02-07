@@ -45,7 +45,7 @@ public class CommandManager {
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
-        return submitNewCommand(command, responseHandler);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
@@ -60,11 +60,11 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
-            Optional<Route> route,
+            Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
-        return submitNewCommand(command, responseHandler);
+        return submitCommandToChannel(command, responseHandler);
     }
 
     /**
@@ -74,7 +74,7 @@ public class CommandManager {
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
-    protected <T> CompletableFuture<T> submitNewCommand(
+    protected <T> CompletableFuture<T> submitCommandToChannel(
             RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
@@ -82,23 +82,6 @@ public class CommandManager {
                 .write(command, true)
                 .exceptionally(this::exceptionHandler)
                 .thenApplyAsync(responseHandler::apply);
-    }
-
-    /**
-     * Exception handler for future pipeline.
-     *
-     * @param e An exception thrown in the pipeline before
-     * @return Nothing, it rethrows the exception
-     */
-    private Response exceptionHandler(Throwable e) {
-        if (e instanceof ClosingException) {
-            channel.close();
-        }
-        if (e instanceof RuntimeException) {
-            // RedisException also goes here
-            throw (RuntimeException) e;
-        }
-        throw new RuntimeException(e);
     }
 
     /**
@@ -111,7 +94,7 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-            RequestType requestType, String[] arguments, Optional<Route> route) {
+            RequestType requestType, String[] arguments, Route route) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
             commandArgs.addArgs(arg);
@@ -125,7 +108,7 @@ public class CommandManager {
                                         .setArgsArray(commandArgs.build())
                                         .build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareRedisRequestRoute(builder, Optional.of(route));
     }
 
     /**
@@ -186,5 +169,22 @@ public class CommandManager {
             throw new IllegalArgumentException("Unknown type of route");
         }
         return builder;
+    }
+
+    /**
+     * Exception handler for future pipeline.
+     *
+     * @param e An exception thrown in the pipeline before
+     * @return Nothing, it rethrows the exception
+     */
+    private Response exceptionHandler(Throwable e) {
+        if (e instanceof ClosingException) {
+            channel.close();
+        }
+        if (e instanceof RuntimeException) {
+            // RedisException also goes here
+            throw (RuntimeException) e;
+        }
+        throw new RuntimeException(e);
     }
 }

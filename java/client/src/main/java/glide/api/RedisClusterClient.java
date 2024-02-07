@@ -10,7 +10,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -38,10 +37,7 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
     public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
         return commandManager.submitNewCommand(
-                CustomCommand,
-                args,
-                Optional.empty(),
-                response -> ClusterValue.of(handleObjectResponse(response)));
+                CustomCommand, args, response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
     @Override
@@ -50,7 +46,7 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,
-                Optional.of(route),
+                route,
                 response ->
                         route.isSingleNodeRoute()
                                 ? ClusterValue.ofSingleValue(handleObjectResponse(response))

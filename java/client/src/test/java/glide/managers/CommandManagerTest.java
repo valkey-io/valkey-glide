@@ -20,7 +20,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +62,6 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        Optional.empty(),
                         new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
 
@@ -85,7 +83,6 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        Optional.empty(),
                         new BaseCommandResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
 
@@ -112,7 +109,6 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        Optional.empty(),
                         new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();
 
@@ -130,7 +126,7 @@ public class CommandManagerTest {
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(CustomCommand, new String[0], Optional.of(routeType), r -> null);
+        service.submitNewCommand(CustomCommand, new String[0], routeType, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -161,7 +157,7 @@ public class CommandManagerTest {
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
         service.submitNewCommand(
-                CustomCommand, new String[0], Optional.of(new SlotIdRoute(42, slotType)), r -> null);
+                CustomCommand, new String[0], new SlotIdRoute(42, slotType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -193,7 +189,7 @@ public class CommandManagerTest {
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
         service.submitNewCommand(
-                CustomCommand, new String[0], Optional.of(new SlotKeyRoute("TEST", slotType)), r -> null);
+                CustomCommand, new String[0], new SlotKeyRoute("TEST", slotType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -223,9 +219,7 @@ public class CommandManagerTest {
         var exception =
                 assertThrows(
                         IllegalArgumentException.class,
-                        () ->
-                                service.submitNewCommand(
-                                        CustomCommand, new String[0], Optional.of(() -> false), r -> null));
+                        () -> service.submitNewCommand(CustomCommand, new String[0], () -> false, r -> null));
         assertEquals("Unknown type of route", exception.getMessage());
     }
 }

@@ -96,7 +96,7 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        public <T> CompletableFuture<T> submitNewCommand(
+        public <T> CompletableFuture<T> submitCommandToChannel(
                 RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
