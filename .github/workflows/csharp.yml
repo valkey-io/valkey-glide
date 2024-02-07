@@ -52,6 +52,10 @@ jobs:
             - name: Start redis server
               run: redis-server &
 
+            - name: Format
+              working-directory: ./csharp
+              run: dotnet format --verify-no-changes --verbosity diagnostic
+
             - name: Test
               working-directory: ./csharp
               run: dotnet test --framework net6.0 /warnaserror
