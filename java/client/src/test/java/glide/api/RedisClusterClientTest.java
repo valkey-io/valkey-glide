@@ -2,23 +2,45 @@
 package glide.api;
 
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
+import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 public class RedisClusterClientTest {
 
+    RedisClusterClient service;
+
+    ConnectionManager connectionManager;
+
+    CommandManager commandManager;
+
     private final String[] TEST_ARGS = new String[0];
+
+    @BeforeEach
+    public void setUp() {
+        connectionManager = mock(ConnectionManager.class);
+        commandManager = mock(CommandManager.class);
+        service = new RedisClusterClient(connectionManager, commandManager);
+    }
 
     @Test
     @SneakyThrows
@@ -102,5 +124,51 @@ public class RedisClusterClientTest {
                 RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("PONG");
+
+        Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(new String[0]), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(route);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("PONG", payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_message_returns_success() {
+        // setup
+        String message = "RETURN OF THE PONG";
+        String[] arguments = new String[] {message};
+        CompletableFuture<String> testResponse = new CompletableFuture();
+        testResponse.complete(message);
+
+        Route route = ALL_PRIMARIES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(arguments), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(message, route);
+        String pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
     }
 }

@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,7 +31,7 @@ public class CommandTests {
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get(10, SECONDS);
     }
 
     @AfterAll
@@ -53,5 +55,33 @@ public class CommandTests {
     public void custom_command_ping() {
         var data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
         assertEquals("PONG", data.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping() {
+        String data = clusterClient.ping().get(10, SECONDS);
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message() {
+        String data = clusterClient.ping("H3LL0").get(10, SECONDS);
+        assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_route() {
+        String data = clusterClient.ping(ALL_NODES).get(10, SECONDS);
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message_with_route() {
+        String data = clusterClient.ping("H3LL0", ALL_PRIMARIES).get(10, SECONDS);
+        assertEquals("H3LL0", data);
     }
 }
