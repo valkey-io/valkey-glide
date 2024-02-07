@@ -1,0 +1,170 @@
+name: Go CI
+
+on:
+    workflow_dispatch:
+    push:
+        branches: [ "main" ]
+        paths:
+            - glide-core/**
+            - submodules/**
+            - go/**
+            - .github/workflows/go.yml
+    pull_request:
+        paths:
+            - glide-core/**
+            - submodules/**
+            - go/**
+            - .github/workflows/go.yml
+
+# Run only the latest job on a branch and cancel previous ones
+concurrency:
+    group: ${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build-and-test-go-client:
+        timeout-minutes: 10
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                go:
+                    - '1.18'
+                    - '1.21'
+                redis:
+                    - 6.2.14
+                    - 7.2.3
+                os:
+                    - ubuntu-latest
+                    - macos-latest
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+            -   uses: actions/checkout@v4
+                with:
+                    submodules: recursive
+
+            -   name: Set up Go ${{ matrix.go }}
+                uses: actions/setup-go@v5
+                with:
+                    go-version: ${{ matrix.go }}
+
+            -   name: Install shared software dependencies
+                uses: ./.github/workflows/install-shared-dependencies
+                with:
+                    os: ${{ matrix.os }}
+                    target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            -   name: Install redis
+                # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
+                if: ${{ matrix.os == 'ubuntu-latest' }}
+                uses: ./.github/workflows/install-redis
+                with:
+                    redis-version: ${{ matrix.redis }}
+
+            -   name: Install client dependencies
+                working-directory: ./go
+                run: make install-tools
+
+            -   name: Build client
+                working-directory: ./go
+                run: |
+                    go mod edit -go=${{ matrix.go }}
+                    make build
+
+            -   name: Run linters
+                working-directory: ./go
+                run: make lint
+
+            -   name: Upload test reports
+                if: always()
+                continue-on-error: true
+                uses: actions/upload-artifact@v4
+                with:
+                    name: test-reports-go-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                    path: |
+                        go/reports/unit-test-report.html
+
+    build-amazonlinux-latest:
+        if: github.repository_owner == 'aws'
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                go:
+                    - 1.18.10
+                    - 1.21.6
+        runs-on: ubuntu-latest
+        container: amazonlinux:latest
+        timeout-minutes: 15
+        steps:
+            -   name: Install git
+                run: |
+                    yum -y remove git
+                    yum -y remove git-*
+                    yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+                    yum update
+                    yum install -y git
+                    git --version
+
+            -   uses: actions/checkout@v4
+
+            -   name: Checkout submodules
+                run: |
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                    git submodule update --init --recursive
+
+            -   name: Install shared software dependencies
+                uses: ./.github/workflows/install-shared-dependencies
+                with:
+                    os: "amazon-linux"
+                    target: "x86_64-unknown-linux-gnu"
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            -   name: Create a symbolic Link for redis6 binaries
+                run: |
+                    ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                    ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
+            -   name: Install Go
+                run: |
+                    wget https://go.dev/dl/go${{ matrix.go }}.linux-amd64.tar.gz
+                    sudo tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
+                    export PATH=$PATH:/usr/local/go/bin
+                    export GOPATH=$HOME/go
+                    export PATH=$PATH:$GOPATH/bin
+
+            -   name: Build client
+                working-directory: ./go
+                run: |
+                    cargo build --release
+                    go mod edit -go=${{ matrix.go }}
+                    make build
+
+            -   name: Run unit tests
+                working-directory: ./go
+                run: make unit-test-report
+
+            -   name: Upload test reports
+                if: always()
+                continue-on-error: true
+                uses: actions/upload-artifact@v4
+                with:
+                    name: test-reports-go-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                    path: |
+                        go/reports/unit-test-report.html
+
+    lint-rust:
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v4
+                with:
+                    submodules: recursive
+
+            -   uses: ./.github/workflows/lint-rust
+                with:
+                    cargo-toml-folder: ./go
+                name: lint go rust
