@@ -16,7 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
@@ -137,7 +137,7 @@ public class RedisClusterClientTest {
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn("PONG");
 
-        RequestRoutingConfiguration.Route route = ALL_NODES;
+        Route route = ALL_NODES;
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -162,7 +162,7 @@ public class RedisClusterClientTest {
         CompletableFuture<String> testResponse = new CompletableFuture();
         testResponse.complete(message);
 
-        RequestRoutingConfiguration.Route route = ALL_PRIMARIES;
+        Route route = ALL_PRIMARIES;
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -208,7 +208,7 @@ public class RedisClusterClientTest {
         // setup
         CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
-        RequestRoutingConfiguration.Route route = RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+        Route route = ALL_NODES;
         when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
         when(commandManager.<ClusterValue<String>>submitNewCommand(
                         eq(Info), eq(new String[0]), eq(Optional.of(route)), any()))
@@ -233,7 +233,7 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
         when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
-        RequestRoutingConfiguration.Route route = RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
+        Route route = ALL_PRIMARIES;
         when(commandManager.<ClusterValue<String>>submitNewCommand(
                         eq(Info), eq(infoArguments), eq(Optional.of(route)), any()))
                 .thenReturn(testResponse);
