@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using Glide;
 
 /// Reusable source of ValueTask. This object can be allocated once and then reused
@@ -21,7 +22,7 @@ internal class Message<T> : INotifyCompletion
 
     /// The pointer to the unmanaged memory that contains the operation's key.
     public IntPtr ValuePtr { get; private set; }
-    private MessageContainer<T> container;
+    private readonly MessageContainer<T> container;
 
     public Message(int index, MessageContainer<T> container)
     {
@@ -38,7 +39,7 @@ internal class Message<T> : INotifyCompletion
     private T? result;
     private Exception? exception;
 
-    /// Triggers a succesful completion of the task returned from the latest call 
+    /// Triggers a succesful completion of the task returned from the latest call
     /// to CreateTask.
     public void SetResult(T? result)
     {
@@ -78,10 +79,7 @@ internal class Message<T> : INotifyCompletion
         }
     }
 
-    public Message<T> GetAwaiter()
-    {
-        return this;
-    }
+    public Message<T> GetAwaiter() => this;
 
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
@@ -124,20 +122,7 @@ internal class Message<T> : INotifyCompletion
         CheckRaceAndCallContinuation();
     }
 
-    public bool IsCompleted
-    {
-        get
-        {
-            return completionState == COMPLETION_STAGE_CONTINUATION_EXECUTED;
-        }
-    }
+    public bool IsCompleted => completionState == COMPLETION_STAGE_CONTINUATION_EXECUTED;
 
-    public T? GetResult()
-    {
-        if (this.exception != null)
-        {
-            throw this.exception;
-        }
-        return this.result;
-    }
+    public T? GetResult() => this.exception is null ? this.result : throw this.exception;
 }
