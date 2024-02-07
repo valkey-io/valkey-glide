@@ -10,9 +10,9 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
-import static glide.api.models.commands.SetOptions.TimeToLiveType.KEEP_EXISTING;
-import static glide.api.models.commands.SetOptions.TimeToLiveType.MILLISECONDS;
-import static glide.api.models.commands.SetOptions.TimeToLiveType.UNIX_SECONDS;
+import static glide.api.models.commands.SetOptions.Expiry.KeepExisting;
+import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
+import static glide.api.models.commands.SetOptions.Expiry.UnixSeconds;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
@@ -28,7 +28,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SetOptions.TimeToLive;
+import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration;
@@ -264,13 +264,12 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_value_with_ttl_and_update_value_with_keeping_ttl() {
-        var options = SetOptions.builder().expiry(
-            SetOptions.TimeToLive.builder().count(2000).type(MILLISECONDS).build()).build();
+        SetOptions options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
         clusterClient.set("set_value_with_ttl_and_update_value_with_keeping_ttl", INITIAL_VALUE, options).get(10, SECONDS);
         var data = clusterClient.get("set_value_with_ttl_and_update_value_with_keeping_ttl").get(10, SECONDS);
         assertEquals(INITIAL_VALUE, data);
 
-        options = SetOptions.builder().expiry(TimeToLive.builder().type(KEEP_EXISTING).build()).build();
+        options = SetOptions.builder().expiry(KeepExisting()).build();
         clusterClient.set("set_value_with_ttl_and_update_value_with_keeping_ttl", ANOTHER_VALUE, options).get(10, SECONDS);
         data = clusterClient.get("set_value_with_ttl_and_update_value_with_keeping_ttl").get(10, SECONDS);
         assertEquals(ANOTHER_VALUE, data);
@@ -284,12 +283,12 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_value_with_ttl_and_update_value_with_new_ttl() {
-        var options = SetOptions.builder().expiry(TimeToLive.builder().count(100500).type(MILLISECONDS).build()).build();
+        SetOptions options = SetOptions.builder().expiry(Milliseconds(100500L)).build();
         clusterClient.set("set_value_with_ttl_and_update_value_with_new_ttl", INITIAL_VALUE, options).get(10, SECONDS);
-        var data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
+        String data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
         assertEquals(INITIAL_VALUE, data);
 
-        options = SetOptions.builder().expiry(TimeToLive.builder().count(2000).type(MILLISECONDS).build()).build();
+        options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
         clusterClient.set("set_value_with_ttl_and_update_value_with_new_ttl", ANOTHER_VALUE, options).get(10, SECONDS);
         data = clusterClient.get("set_value_with_ttl_and_update_value_with_new_ttl").get(10, SECONDS);
         assertEquals(ANOTHER_VALUE, data);
@@ -303,9 +302,9 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void set_expired_value() { // expiration is in the past
-        var options = SetOptions.builder().expiry(TimeToLive.builder().count(100500).type(UNIX_SECONDS).build()).build();
+        SetOptions options = SetOptions.builder().expiry(UnixSeconds(100500L)).build();
         clusterClient.set("set_expired_value", INITIAL_VALUE, options).get(10, SECONDS);
-        var data = clusterClient.get("set_expired_value").get(10, SECONDS);
+        String data = clusterClient.get("set_expired_value").get(10, SECONDS);
         assertNull(data);
     }
 }

@@ -4,8 +4,6 @@ package glide.api;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
-import static glide.api.models.commands.SetOptions.TimeToLiveType.KEEP_EXISTING;
-import static glide.api.models.commands.SetOptions.TimeToLiveType.UNIX_SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -21,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SetOptions.Expiry;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
@@ -223,13 +222,9 @@ public class RedisClientTest {
                 SetOptions.builder()
                         .conditionalSet(ONLY_IF_EXISTS)
                         .returnOldValue(false)
-                        .expiry(
-                                SetOptions.TimeToLive.builder()
-                                        .type(SetOptions.TimeToLiveType.KEEP_EXISTING)
-                                        .build())
+                        .expiry(Expiry.KeepExisting())
                         .build();
-        String[] arguments =
-                new String[] {key, value, ONLY_IF_EXISTS.getRedisApi(), KEEP_EXISTING.getRedisApi()};
+        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getRedisApi(), "KEEPTTL"};
 
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(null);
@@ -254,16 +249,11 @@ public class RedisClientTest {
                 SetOptions.builder()
                         .conditionalSet(ONLY_IF_DOES_NOT_EXIST)
                         .returnOldValue(true)
-                        .expiry(SetOptions.TimeToLive.builder().type(UNIX_SECONDS).count(60).build())
+                        .expiry(Expiry.UnixSeconds(60L))
                         .build();
         String[] arguments =
                 new String[] {
-                    key,
-                    value,
-                    ONLY_IF_DOES_NOT_EXIST.getRedisApi(),
-                    RETURN_OLD_VALUE,
-                    UNIX_SECONDS.getRedisApi(),
-                    "60"
+                    key, value, ONLY_IF_DOES_NOT_EXIST.getRedisApi(), RETURN_OLD_VALUE, "EXAT", "60"
                 };
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);

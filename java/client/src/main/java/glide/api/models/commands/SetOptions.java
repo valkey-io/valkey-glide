@@ -1,13 +1,18 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
+import static glide.api.models.commands.SetOptions.ExpiryType.KEEP_EXISTING;
+import static glide.api.models.commands.SetOptions.ExpiryType.MILLISECONDS;
+import static glide.api.models.commands.SetOptions.ExpiryType.SECONDS;
+import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
+import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
+
 import glide.api.commands.StringCommands;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass.Command;
 
@@ -33,7 +38,7 @@ public final class SetOptions {
     private final boolean returnOldValue;
 
     /** If not set, no expiry time will be set for the value. */
-    private final TimeToLive expiry;
+    private final Expiry expiry;
 
     /** Conditions which define whether new value should be set or not. */
     @RequiredArgsConstructor
@@ -51,45 +56,85 @@ public final class SetOptions {
     }
 
     /** Configuration of value lifetime. */
-    @Builder
-    public static final class TimeToLive {
+    public static final class Expiry {
+
         /** Expiry type for the time to live */
-        @NonNull private TimeToLiveType type;
+        private final ExpiryType type;
 
         /**
          * The amount of time to live before the key expires. Ignored when {@link
-         * TimeToLiveType#KEEP_EXISTING} type is set.
+         * ExpiryType#KEEP_EXISTING} type is set.
          */
-        private Integer count;
-    }
+        private Long count;
 
-    /** Types of value expiration configuration. */
-    @RequiredArgsConstructor
-    @Getter
-    public enum TimeToLiveType {
+        private Expiry(ExpiryType type) {
+            this.type = type;
+        }
+
+        private Expiry(ExpiryType type, Long count) {
+            this.type = type;
+            this.count = count;
+        }
+
         /**
          * Retain the time to live associated with the key. Equivalent to <code>KEEPTTL</code> in the
          * Redis API.
          */
-        KEEP_EXISTING("KEEPTTL"),
+        public static Expiry KeepExisting() {
+            return new Expiry(KEEP_EXISTING);
+        }
+
         /**
          * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Redis API.
+         *
+         * @param seconds time to expire, in seconds
+         * @return Expiry
          */
-        SECONDS("EX"),
+        public static Expiry Seconds(Long seconds) {
+            return new Expiry(SECONDS, seconds);
+        }
+
         /**
          * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis
          * API.
+         *
+         * @param milliseconds time to expire, in milliseconds
+         * @return Expiry
          */
-        MILLISECONDS("PX"),
+        public static Expiry Milliseconds(Long milliseconds) {
+            return new Expiry(MILLISECONDS, milliseconds);
+        }
+
         /**
          * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
          * EXAT</code> in the Redis API.
+         *
+         * @param unixSeconds unix time to expire, in seconds
+         * @return Expiry
          */
-        UNIX_SECONDS("EXAT"),
+        public static Expiry UnixSeconds(Long unixSeconds) {
+            return new Expiry(UNIX_SECONDS, unixSeconds);
+        }
+
         /**
          * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to
          * <code>PXAT</code> in the Redis API.
+         *
+         * @param unixMilliseconds unix time to expire, in milliseconds
+         * @return Expiry
          */
+        public static Expiry UnixMilliseconds(Long unixMilliseconds) {
+            return new Expiry(UNIX_MILLISECONDS, unixMilliseconds);
+        }
+    }
+
+    /** Types of value expiration configuration. */
+    @RequiredArgsConstructor
+    protected enum ExpiryType {
+        KEEP_EXISTING("KEEPTTL"),
+        SECONDS("EX"),
+        MILLISECONDS("PX"),
+        UNIX_SECONDS("EXAT"),
         UNIX_MILLISECONDS("PXAT");
 
         private final String redisApi;
@@ -115,7 +160,7 @@ public final class SetOptions {
 
         if (expiry != null) {
             optionArgs.add(expiry.type.redisApi);
-            if (expiry.type != TimeToLiveType.KEEP_EXISTING) {
+            if (expiry.type != KEEP_EXISTING) {
                 if (expiry.count == null) {
                     throw new RequestException(
                             "Set command received expiry type " + expiry.type + ", but count was not set.");
