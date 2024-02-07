@@ -18,6 +18,7 @@ import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.RequestType;
 import redis_request.RedisRequestOuterClass.Routes;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
+import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -170,7 +171,7 @@ public class CommandManager {
                                     RedisRequestOuterClass.SlotIdRoute.newBuilder()
                                             .setSlotId(((SlotIdRoute) route.get()).getSlotId())
                                             .setSlotType(
-                                                    RedisRequestOuterClass.SlotTypes.forNumber(
+                                                    SlotTypes.forNumber(
                                                             ((SlotIdRoute) route.get()).getSlotType().ordinal()))));
         } else if (route.get() instanceof SlotKeyRoute) {
             builder.setRoute(
@@ -179,7 +180,7 @@ public class CommandManager {
                                     RedisRequestOuterClass.SlotKeyRoute.newBuilder()
                                             .setSlotKey(((SlotKeyRoute) route.get()).getSlotKey())
                                             .setSlotType(
-                                                    RedisRequestOuterClass.SlotTypes.forNumber(
+                                                    SlotTypes.forNumber(
                                                             ((SlotKeyRoute) route.get()).getSlotType().ordinal()))));
         } else {
             throw new IllegalArgumentException("Unknown type of route");
