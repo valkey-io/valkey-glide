@@ -57,15 +57,18 @@ public interface GenericClusterCommands {
     /**
      * Execute a transaction by processing the queued commands.
      *
+     * <p>The transaction will be routed to the slot owner of the first key found in the transaction.
+     * If no key is found, the command will be sent to a random node.
+     *
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
-     *       <li>If a command returns a value, it will be included in the list. If a command doesn't
-     *           return a value, the list entry will be empty.
-     *       <li>If the transaction failed due to a <em>WATCH</em> command, <code>exec</code> will
+     *       <li>If a command returns a value, it will be included in the list.
+     *       <li>If a command doesn't return a value, the list entry will be empty.
+     *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
      *           return <code>null</code>.
      *     </ul>
      */
@@ -82,8 +85,8 @@ public interface GenericClusterCommands {
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
-     *       <li>If a command returns a value, it will be included in the list. If a command doesn't
-     *           return a value, the list entry will be empty.
+     *       <li>If a command returns a value, it will be included in the list.
+     *       <li>If a command doesn't return a value, the list entry will be empty.
      *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
      *           return <code>null</code>.
      *     </ul>
