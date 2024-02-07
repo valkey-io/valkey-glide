@@ -4,7 +4,6 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 
 import glide.api.models.configuration.BaseClientConfiguration;
-import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
@@ -18,15 +17,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
-import response.ResponseOuterClass;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient implements AutoCloseable {
-
-    /** Redis simple string response with "OK" */
-    public static final String OK = ResponseOuterClass.ConstantResponse.OK.toString();
 
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
@@ -104,24 +99,5 @@ public abstract class BaseClient implements AutoCloseable {
     protected Object handleObjectResponse(Response response) {
         // convert protobuf response into Object
         return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
-    }
-
-    /**
-     * Extracts the response value from the Redis response and either throws an exception or returns
-     * the value as a <code>String</code>.
-     *
-     * @param response Redis protobuf message
-     * @return Response as a <code>String</code>
-     * @throws RedisException if there's a type mismatch
-     */
-    protected String handleStringResponse(Response response) {
-        Object value = handleObjectResponse(response);
-        if (value instanceof String || value == null) {
-            return (String) value;
-        }
-        throw new RedisException(
-                "Unexpected return type from Redis: got "
-                        + value.getClass().getSimpleName()
-                        + " expected String");
     }
 }

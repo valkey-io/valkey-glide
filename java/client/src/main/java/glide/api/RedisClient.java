@@ -31,6 +31,6 @@ public class RedisClient extends BaseClient implements GenericCommands {
 
     @Override
     public CompletableFuture<Object> customCommand(String[] args) {
-        return commandManager.submitNewCommand(CustomCommand, args, this::handleStringResponse);
+        return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectResponse);
     }
 }

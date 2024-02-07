@@ -16,10 +16,6 @@ import org.junit.jupiter.api.Test;
 public class CommandTests {
     private static RedisClient regularClient = null;
 
-    private static final String KEY_NAME = "key";
-    private static final String INITIAL_VALUE = "VALUE";
-    private static final String ANOTHER_VALUE = "VALUE2";
-
     @BeforeAll
     @SneakyThrows
     public static void init() {

@@ -6,33 +6,17 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleR
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass;
 import response.ResponseOuterClass.Response;
 
 public class RedisClusterClientTest {
-
-    RedisClusterClient service;
-
-    ConnectionManager connectionManager;
-
-    CommandManager commandManager;
-
-    @BeforeEach
-    public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
-        commandManager = mock(CommandManager.class);
-        service = new RedisClusterClient(connectionManager, commandManager);
-    }
 
     @Test
     @SneakyThrows
