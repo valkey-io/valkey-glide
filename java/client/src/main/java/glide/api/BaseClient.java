@@ -16,7 +16,6 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -126,43 +125,6 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
                 "Unexpected return type from Redis: got "
                         + value.getClass().getSimpleName()
                         + " expected String");
-    }
-
-    /**
-     * Extracts the response value from the Redis response and either throws an exception or returns
-     * the value as an <code>Object[]</code>.
-     *
-     * @param response Redis protobuf message
-     * @return Response as an <code>Object[]</code>
-     * @throws RedisException if there's a type mismatch
-     */
-    protected Object[] handleArrayResponse(Response response) {
-        Object value = handleObjectResponse(response);
-        if (value instanceof Object[]) {
-            return (Object[]) value;
-        }
-        String className = (value == null) ? "null" : value.getClass().getSimpleName();
-        throw new RedisException(
-                "Unexpected return type from Redis: got " + className + " expected Object[]");
-    }
-
-    /**
-     * Extracts the response value from the Redis response and either throws an exception or returns
-     * the value as a <code>Map</code>.
-     *
-     * @param response Redis protobuf message
-     * @return Response as a <code>Map</code>
-     * @throws RedisException if there's a type mismatch
-     */
-    @SuppressWarnings("unchecked")
-    protected Map<Object, Object> handleMapResponse(Response response) {
-        Object value = handleObjectResponse(response);
-        if (value instanceof Map) {
-            return (Map<Object, Object>) value;
-        }
-        String className = (value == null) ? "null" : value.getClass().getSimpleName();
-        throw new RedisException(
-                "Unexpected return type from Redis: got " + className + " expected Map");
     }
 
     @Override
