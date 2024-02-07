@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import glide.api.models.ClusterTransaction;
+import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
@@ -8,6 +10,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
@@ -106,6 +109,38 @@ public class CommandManager {
                                         .setRequestType(requestType)
                                         .setArgsArray(commandArgs.build())
                                         .build());
+
+        return prepareRedisRequestRoute(builder, route);
+    }
+
+    /**
+     * Build a protobuf transaction request object with routing options.<br>
+     *
+     * @param transaction Redis transaction with commands
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
+
+        var builder =
+            RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+
+        return prepareRedisRequestRoute(builder, Optional.empty());
+    }
+
+    /**
+     * Build a protobuf transaction request object with routing options.<br>
+     *
+     * @param transaction Redis transaction with commands
+     * @param route Command routing parameters
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(
+        ClusterTransaction transaction, Optional<Route> route) {
+
+        var builder =
+            RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
         return prepareRedisRequestRoute(builder, route);
     }

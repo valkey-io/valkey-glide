@@ -12,7 +12,7 @@ import lombok.AllArgsConstructor;
  * the <code>Transaction</code>. The response for each command depends on the executed Redis
  * command. Specific response types are documented alongside each method.
  *
- * @Examples:
+ * @example
  *     <pre>
  *  Transaction transaction = new Transaction()
  *    .transaction.set("key", "value");

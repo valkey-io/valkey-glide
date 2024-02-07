@@ -56,7 +56,7 @@ public class TransactionTests {
                         Info,
                         ArgsArray.newBuilder().addArgs(InfoOptions.Section.EVERYTHING.toString()).build()));
 
-        var protobufTransaction = transaction.getTransactionBuilder().build();
+        var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
             Command protobuf = protobufTransaction.getCommands(idx);

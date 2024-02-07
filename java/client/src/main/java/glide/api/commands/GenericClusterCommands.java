@@ -87,5 +87,5 @@ public interface GenericClusterCommands {
      *           return <code>null</code>.
      *     </ul>
      */
-    CompletableFuture<ClusterValue[]> exec(ClusterTransaction transaction, Route route);
+    CompletableFuture<ClusterValue<Object>[]> exec(ClusterTransaction transaction, Route route);
 }
