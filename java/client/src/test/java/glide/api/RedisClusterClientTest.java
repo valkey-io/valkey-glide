@@ -1,18 +1,19 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.managers.CommandManager;
 import glide.managers.RedisExceptionCheckedFunction;
-import glide.managers.models.Command;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
+import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 public class RedisClusterClientTest {
@@ -24,7 +25,7 @@ public class RedisClusterClientTest {
 
         var client = new TestClient(commandManager, "TEST");
 
-        var value = client.customCommand(new String[0]).get();
+        var value = client.customCommand(new String[] {"test"}).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertEquals("TEST", value.getSingleValue()));
@@ -38,7 +39,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[0]).get();
+        var value = client.customCommand(new String[] {"test"}).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -52,7 +53,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[0], SimpleRoute.RANDOM).get();
+        var value = client.customCommand(new String[] {"Test"}, RANDOM).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
     }
@@ -65,7 +66,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[0], SimpleRoute.ALL_NODES).get();
+        var value = client.customCommand(new String[] {"Test"}, ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -96,7 +97,7 @@ public class RedisClusterClientTest {
 
         @Override
         public <T> CompletableFuture<T> submitNewCommand(
-                Command command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+                RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }
