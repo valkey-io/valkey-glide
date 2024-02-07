@@ -18,17 +18,17 @@ public interface StringCommands {
      * exists.
      *
      * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
-     * @param key The key to retrieve from the database.
+     * @param key The <code>key</code> to retrieve from the database.
      * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
      */
     CompletableFuture<String> get(String key);
 
     /**
-     * Set the given key with the given value.
+     * Set the given <code>key</code> with the given value.
      *
      * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
-     * @param key The key to store.
+     * @param key The <code>key</code> to store.
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis containing <code>"OK"</code>.
      */

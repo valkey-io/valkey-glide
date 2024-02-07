@@ -17,7 +17,8 @@ public interface ServerManagementCommands {
      * Section#DEFAULT} option is assumed.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
-     * @return Response from Redis containing a <code>String</code>.
+     * @return Response from Redis containing a <code>String</code> with the information for the
+     *     default sections.
      */
     CompletableFuture<String> info();
 
@@ -27,7 +28,8 @@ public interface ServerManagementCommands {
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @param options A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
-     * @return Response from Redis containing a <code>String</code> with the requested sections.
+     * @return Response from Redis containing a <code>String</code> with the information for the
+     *     sections requested.
      */
     CompletableFuture<String> info(InfoOptions options);
 }

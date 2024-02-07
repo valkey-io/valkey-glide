@@ -175,8 +175,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> ping(String msg) {
-        return commandManager.submitNewCommand(Ping, new String[] {msg}, this::handleStringResponse);
+    public CompletableFuture<String> ping(String str) {
+        return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
     }
 
     @Override
