@@ -34,6 +34,7 @@ APPROVED_LICENSES = [
     "PSF-2.0",
 ]
 
+
 class OrtResults:
     def __init__(self, name: str, ort_results_folder: str) -> None:
         """
@@ -61,10 +62,10 @@ for ort_result in ort_results_per_lang:
         ort_result.notice_file, "r"
     ) as notice_file:
         json_file = json.load(ort_results)
-        notice_file = notice_file.read()
+        notice_file_text = notice_file.read()
         for package in json_file["analyzer"]["result"]["packages"]:
             package_name = package["id"].split(":")[2]
-            if package_name not in notice_file:
+            if package_name not in notice_file_text:
                 # skip packages not in the final report
                 print(f"Skipping package {package_name}")
                 continue
@@ -79,11 +80,13 @@ for ort_result in ort_results_per_lang:
                     else:
                         licenses_set.add(license)
             except Exception:
-                print(f"Received error for package {package} used by {ort_result.name}\n Found license={license}")
+                print(
+                    f"Received error for package {package} used by {ort_result.name}\n Found license={license}"
+                )
                 raise
 
 print("\n\n#### Found Licenses #####\n")
-licenses_set = sorted(licenses_set)
+licenses_set = set(sorted(licenses_set))
 for license in licenses_set:
     print(f"{license}")
 
