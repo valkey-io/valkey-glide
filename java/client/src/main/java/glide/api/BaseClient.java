@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
+import response.ResponseOuterClass;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
@@ -33,7 +34,8 @@ import response.ResponseOuterClass.Response;
 public abstract class BaseClient
         implements AutoCloseable, StringCommands, ConnectionManagementCommands {
 
-    public static final String OK = "OK";
+    /** Redis simple string response with "OK" */
+    public static final String OK = ResponseOuterClass.ConstantResponse.OK.toString();
 
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
