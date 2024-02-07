@@ -26,10 +26,6 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient implements AutoCloseable, ConnectionManagementCommands {
-
-    /** Redis simple string response with "OK" */
-    public static final String OK = ResponseOuterClass.ConstantResponse.OK.toString();
-
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
 
