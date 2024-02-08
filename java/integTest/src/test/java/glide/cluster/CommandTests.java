@@ -1,11 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.TestConfiguration;
 import glide.api.RedisClusterClient;
+import glide.api.models.ClusterValue;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.util.concurrent.TimeUnit;
@@ -32,14 +34,15 @@ public class CommandTests {
 
     @AfterAll
     @SneakyThrows
-    public static void deinit() {
+    public static void teardown() {
         clusterClient.close();
     }
 
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        var data = clusterClient.customCommand(new String[] {"info"}).get(10, TimeUnit.SECONDS);
+        ClusterValue<Object> data = clusterClient.customCommand(new String[] {"info"}).get(10, SECONDS);
+        assertTrue(data.hasMultiData());
         for (var info : data.getMultiValue().values()) {
             assertTrue(((String) info).contains("# Stats"));
         }
