@@ -3,7 +3,7 @@ package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
-import glide.api.commands.ClusterBaseCommands;
+import glide.api.commands.GenericClusterCommands;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
  * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
  * client to Redis.
  */
-public class RedisClusterClient extends BaseClient implements ClusterBaseCommands {
+public class RedisClusterClient extends BaseClient implements GenericClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -26,7 +26,7 @@ public class RedisClusterClient extends BaseClient implements ClusterBaseCommand
      * Async request for an async (non-blocking) Redis client in Cluster mode.
      *
      * @param config Redis cluster client Configuration
-     * @return a Future to connect and return a ClusterClient
+     * @return A Future to connect and return a RedisClusterClient
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             RedisClusterClientConfiguration config) {
