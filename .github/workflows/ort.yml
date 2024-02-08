@@ -34,7 +34,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                   submodules: "true"
-                  ref: ${{ env.BASE_BRANCH }}
+                  # ref: ${{ env.BASE_BRANCH }}
 
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v3
@@ -174,13 +174,14 @@ jobs:
               run: |
                 export BRANCH_NAME=`if ${{ github.event_name == 'schedule' }}  ]; then echo "scheduled-ort"; else echo "ort-v${{ env.RELEASE_VERSION }}"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
-                git config --global user.email "barshaul@amazon.com"
-                git config --global user.name "barshaul"
+                git config --global user.email "glide-for-redis@amazon.com"
+                git config --global user.name "ort-bot"
                 git checkout -b ${BRANCH_NAME}
 
                 git add $PYTHON_ATTRIBUIOTNS $NODE_ATTRIBUIOTNS $RUST_ATTRIBUIOTNS
                 git commit -m "Updated attribution files"
                 git push --set-upstream origin ${BRANCH_NAME} -f
-                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title 'Updated attribution files for ${BRANCH_NAME}' --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
+                title="Updated attribution files for ${BRANCH_NAME}"
+                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title $title --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
