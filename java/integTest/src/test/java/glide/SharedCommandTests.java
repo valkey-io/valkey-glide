@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
+import static glide.TestConfiguration.STANDALONE_PORTS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
