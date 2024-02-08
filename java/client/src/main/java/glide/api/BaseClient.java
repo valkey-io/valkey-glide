@@ -151,19 +151,20 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
     }
 
     @Override
-    public CompletableFuture<String> get(String key) {
+    public CompletableFuture<String> get(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetString, new String[] {key}, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> set(String key, String value) {
+    public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
                 SetString, new String[] {key, value}, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> set(String key, String value, SetOptions options) {
+    public CompletableFuture<String> set(
+            @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(SetString, arguments, this::handleStringResponse);
     }
