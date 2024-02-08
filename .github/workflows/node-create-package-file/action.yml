@@ -1,0 +1,66 @@
+name: Create the package.json main file for the Node wrapper
+
+inputs:
+    release_version:
+        description: "The package release version"
+        required: true
+        type: string
+    os:
+        description: "The current operating system"
+        required: true
+        type: string
+        options:
+            - amazon-linux
+            - macos-latest
+            - ubuntu-latest
+    named_os:
+        description: "The name of the current operating system"
+        required: false
+        default: "linux"
+        type: string
+        options:
+            - linux
+            - darwin
+    arch:
+        description: "The current architecture"
+        required: false
+        default: "x64"
+        type: string
+        options:
+            - x64
+            - arm64
+    npm_scope:
+        description: "The NPM scope"
+        required: false
+        type: string
+        default: "@aws"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Create package.json file
+          shell: bash
+          working-directory: ./node
+          run: |
+              # set the package name
+              name="glide-for-redis"
+              # derive the OS and architecture from the inputs
+              export node_os="${{ inputs.named_os }}"
+              export node_arch="${{ inputs.arch }}"
+              # set the version
+              export package_version="${{ inputs.release_version }}"
+              # set the package name
+              export pkg_name="${name}-${node_os}-${node_arch}"
+              # set the scope
+              export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
+              # set the registry scope
+              export registry_scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}:"; fi`
+              # remove the current name section
+              SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+              sed -i $SED_FOR_MACOS '/"name":/d' ./package.json
+              # Remove all `///` occurrences to enable the commented out sections
+              sed -i -e 's|///||g' package.json
+              # generate package.json from the template
+              mv package.json package.json.tmpl
+              envsubst < package.json.tmpl > "package.json"
+              cat package.json
