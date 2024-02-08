@@ -71,7 +71,7 @@ public class CommandTests {
     public void custom_command_info() {
         ClusterValue<Object> data = clusterClient.customCommand(new String[] {"info"}).get();
         assertTrue(data.hasMultiData());
-        for (var info : data.getMultiValue().values()) {
+        for (Object info : data.getMultiValue().values()) {
             assertTrue(((String) info).contains("# Stats"));
         }
     }
@@ -79,7 +79,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_ping() {
-        var data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
+        ClusterValue<Object> data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
         assertEquals("PONG", data.getSingleValue());
     }
 
@@ -113,8 +113,8 @@ public class CommandTests {
     public void info_without_options() {
         ClusterValue<String> data = clusterClient.info().get(10, SECONDS);
         assertTrue(data.hasMultiData());
-        for (var info : data.getMultiValue().values()) {
-            for (var section : DEFAULT_INFO_SECTIONS) {
+        for (String info : data.getMultiValue().values()) {
+            for (String section : DEFAULT_INFO_SECTIONS) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
@@ -126,7 +126,7 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(RANDOM).get(10, SECONDS);
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
-        for (var section : DEFAULT_INFO_SECTIONS) {
+        for (String section : DEFAULT_INFO_SECTIONS) {
             assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
         }
     }
@@ -134,14 +134,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        var builder = InfoOptions.builder().section(CLUSTER);
+        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
         if (REDIS_VERSION.feature() >= 7) {
             builder.section(CPU).section(MEMORY);
         }
-        var options = builder.build();
-        var data = clusterClient.info(options).get(10, SECONDS);
-        for (var info : data.getMultiValue().values()) {
-            for (var section :  options.toArgs()) {
+        InfoOptions options = builder.build();
+        ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
+        for (String info : data.getMultiValue().values()) {
+            for (String section :  options.toArgs()) {
                 assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
             }
         }
@@ -153,8 +153,8 @@ public class CommandTests {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
         ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
         assertTrue(data.hasMultiData());
-        for (var info : data.getMultiValue().values()) {
-            for (var section : EVERYTHING_INFO_SECTIONS) {
+        for (String info : data.getMultiValue().values()) {
+            for (String section : EVERYTHING_INFO_SECTIONS) {
                 assertTrue(info.contains("# " + section), "Section " + section + " is missing");
             }
         }
@@ -163,7 +163,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_routing_and_options() {
-        var slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get(10, SECONDS);
+        ClusterValue<Object> slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get(10, SECONDS);
         /*
         Nested Object arrays like
         1) 1) (integer) 0
@@ -176,15 +176,15 @@ public class CommandTests {
         // Extracting first slot key
         var slotKey = (String)((Object[])((Object[])((Object[])slotData.getSingleValue())[0])[2])[2];
 
-        var builder = InfoOptions.builder().section(CLIENTS);
+        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
         if (REDIS_VERSION.feature() >= 7) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
-        var options = builder.build();
-        var routing = new SlotKeyRoute(slotKey, PRIMARY);
-        var data = clusterClient.info(options, routing).get(10, SECONDS);
+        InfoOptions options = builder.build();
+        SlotKeyRoute routing = new SlotKeyRoute(slotKey, PRIMARY);
+        ClusterValue<String> data = clusterClient.info(options, routing).get(10, SECONDS);
 
-        for (var section : options.toArgs()) {
+        for (String section : options.toArgs()) {
             assertTrue(data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
         }
     }

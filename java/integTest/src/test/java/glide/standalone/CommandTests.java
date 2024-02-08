@@ -70,7 +70,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get(10, SECONDS);
-        for (var section : DEFAULT_INFO_SECTIONS) {
+        for (String section : DEFAULT_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
@@ -82,9 +82,9 @@ public class CommandTests {
         if (REDIS_VERSION.feature() >= 7) {
             builder.section(CPU).section(MEMORY);
         }
-        var options = builder.build();
+        InfoOptions options = builder.build();
         String data = regularClient.info(options).get(10, SECONDS);
-        for (var section : options.toArgs()) {
+        for (String section : options.toArgs()) {
             assertTrue(
                     data.toLowerCase().contains("# " + section.toLowerCase()),
                     "Section " + section + " is missing");
@@ -96,7 +96,7 @@ public class CommandTests {
     public void info_with_everything_option() {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
         String data = regularClient.info(options).get(10, SECONDS);
-        for (var section : EVERYTHING_INFO_SECTIONS) {
+        for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
     }
