@@ -8,7 +8,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
@@ -108,7 +107,7 @@ public class CommandManager {
                                         .setArgsArray(commandArgs.build())
                                         .build());
 
-        return prepareRedisRequestRoute(builder, Optional.of(route));
+        return prepareRedisRequestRoute(builder, route);
     }
 
     /**
@@ -133,38 +132,32 @@ public class CommandManager {
                                         .setArgsArray(commandArgs.build())
                                         .build());
 
-        return prepareRedisRequestRoute(builder, Optional.empty());
+        return builder;
     }
 
-    private RedisRequest.Builder prepareRedisRequestRoute(
-            RedisRequest.Builder builder, Optional<Route> route) {
-        if (route.isEmpty()) {
-            return builder;
-        }
+    private RedisRequest.Builder prepareRedisRequestRoute(RedisRequest.Builder builder, Route route) {
 
-        if (route.get() instanceof SimpleRoute) {
+        if (route instanceof SimpleRoute) {
             builder.setRoute(
                     Routes.newBuilder()
-                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleRoute) route.get()).ordinal()))
+                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleRoute) route).ordinal()))
                             .build());
-        } else if (route.get() instanceof SlotIdRoute) {
+        } else if (route instanceof SlotIdRoute) {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotIdRoute(
                                     RedisRequestOuterClass.SlotIdRoute.newBuilder()
-                                            .setSlotId(((SlotIdRoute) route.get()).getSlotId())
+                                            .setSlotId(((SlotIdRoute) route).getSlotId())
                                             .setSlotType(
-                                                    SlotTypes.forNumber(
-                                                            ((SlotIdRoute) route.get()).getSlotType().ordinal()))));
-        } else if (route.get() instanceof SlotKeyRoute) {
+                                                    SlotTypes.forNumber(((SlotIdRoute) route).getSlotType().ordinal()))));
+        } else if (route instanceof SlotKeyRoute) {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotKeyRoute(
                                     RedisRequestOuterClass.SlotKeyRoute.newBuilder()
-                                            .setSlotKey(((SlotKeyRoute) route.get()).getSlotKey())
+                                            .setSlotKey(((SlotKeyRoute) route).getSlotKey())
                                             .setSlotType(
-                                                    SlotTypes.forNumber(
-                                                            ((SlotKeyRoute) route.get()).getSlotType().ordinal()))));
+                                                    SlotTypes.forNumber(((SlotKeyRoute) route).getSlotType().ordinal()))));
         } else {
             throw new IllegalArgumentException("Unknown type of route");
         }

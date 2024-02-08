@@ -18,6 +18,8 @@ import response.ResponseOuterClass.Response;
 
 public class RedisClusterClientTest {
 
+    private final String[] TEST_ARGS = new String[0];
+
     @Test
     @SneakyThrows
     public void custom_command_returns_single_value() {
@@ -25,7 +27,7 @@ public class RedisClusterClientTest {
 
         var client = new TestClient(commandManager, "TEST");
 
-        var value = client.customCommand(new String[] {"test"}).get();
+        var value = client.customCommand(TEST_ARGS).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()),
                 () -> assertEquals("TEST", value.getSingleValue()));
@@ -39,7 +41,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[] {"test"}).get();
+        var value = client.customCommand(TEST_ARGS).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
@@ -53,7 +55,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[] {"Test"}, RANDOM).get();
+        var value = client.customCommand(TEST_ARGS, RANDOM).get();
         assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
     }
@@ -66,7 +68,7 @@ public class RedisClusterClientTest {
         var data = Map.of("key1", "value1", "key2", "value2");
         var client = new TestClient(commandManager, data);
 
-        var value = client.customCommand(new String[] {"Test"}, ALL_NODES).get();
+        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
