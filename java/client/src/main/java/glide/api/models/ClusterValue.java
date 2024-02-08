@@ -5,8 +5,8 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 
 /**
- * Represents a returned value object from a Redis server with cluster-mode enabled. The response type may
- * depend on the submitted {@link Route}.
+ * Represents a returned value object from a Redis server with cluster-mode enabled. The response
+ * type may depend on the submitted {@link Route}.
  *
  * @remark ClusterValue stores values in a union-like object. It contains a single-value or
  *     multi-value response from Redis. If the command's routing is to a single node use {@link
