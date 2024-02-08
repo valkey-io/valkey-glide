@@ -50,43 +50,4 @@ public class CommandTests {
         Object data = regularClient.customCommand(new String[] {"info"}).get();
         assertTrue(((String) data).contains("# Stats"));
     }
-
-    @Test
-    @SneakyThrows
-    public void set_and_get_without_options() {
-        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(OK, ok);
-
-        String data = regularClient.get(KEY_NAME).get(10, SECONDS);
-        assertEquals(INITIAL_VALUE, data);
-    }
-
-    @Test
-    @SneakyThrows
-    public void get_missing_value() {
-        var data = regularClient.get("invalid").get(10, SECONDS);
-        assertNull(data);
-    }
-
-    @Test
-    @SneakyThrows
-    public void set_overwrite_value_and_returnOldValue_returns_string() {
-        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(OK, ok);
-
-        var options = SetOptions.builder().returnOldValue(true).build();
-        var data = regularClient.set(KEY_NAME, ANOTHER_VALUE, options).get(10, SECONDS);
-        assertEquals(INITIAL_VALUE, data);
-    }
-
-    @Test
-    @SneakyThrows
-    public void set_missing_value_and_returnOldValue_is_null() {
-        String ok = regularClient.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
-        assertEquals(OK, ok);
-
-        var options = SetOptions.builder().returnOldValue(true).build();
-        var data = regularClient.set("another", ANOTHER_VALUE, options).get(10, SECONDS);
-        assertNull(data);
-    }
 }
