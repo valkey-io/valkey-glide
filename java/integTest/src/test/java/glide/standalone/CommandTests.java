@@ -2,14 +2,10 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.STANDALONE_PORTS;
-import static glide.api.BaseClient.OK;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import lombok.SneakyThrows;
