@@ -243,7 +243,7 @@ async fn get_connection(args: &Args) -> Client {
 }
 
 async fn single_benchmark_task(
-    connections: &Vec<Client>,
+    connections: &[Client],
     counter: Arc<AtomicUsize>,
     number_of_operations: usize,
     number_of_concurrent_tasks: usize,
