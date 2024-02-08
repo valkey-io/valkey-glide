@@ -1,0 +1,186 @@
+
+name: The OSS Review Toolkit (ORT)
+
+on:
+    schedule:
+      - cron: "0 0 * * *"
+    push:
+        tags:
+            - "ort-for-v*.*"
+jobs:
+    run-ort:
+        name: Create attribution files
+        runs-on: ubuntu-latest
+        strategy:
+          fail-fast: false
+        env: 
+          PYTHON_ATTRIBUIOTNS: "python/THIRD_PARTY_LICENSES_PYTHON"
+          NODE_ATTRIBUIOTNS: "node/THIRD_PARTY_LICENSES_NODE"
+          RUST_ATTRIBUIOTNS: "glide-core/THIRD_PARTY_LICENSES_RUST"
+        steps:
+            - name: Set the release version
+              shell: bash
+              run: |
+                  export version=`if ${{ github.event_name == 'schedule' }}; then echo '255.255.255'; else echo ${GITHUB_REF:19}; fi`
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+              
+            - name: Set the base branch
+              run: |
+                export BASE_BRANCH=`if ${{ github.event_name == 'schedule' }}; then echo "main"; else echo "v${{ env.RELEASE_VERSION }}"; fi`
+                echo "Base branch is: ${BASE_BRANCH}"
+                echo "BASE_BRANCH=${BASE_BRANCH}" >> $GITHUB_ENV
+
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+                  ref: ${{ env.BASE_BRANCH }}
+
+            - name: Set up JDK 11 for the ORT package
+              uses: actions/setup-java@v3
+              with:
+                  distribution: "temurin"
+                  java-version: 11
+
+            - name: Cache ORT and Gradle packages
+              uses: actions/cache@v4
+              id: cache-ort
+              with:
+                path: |
+                  ./ort
+                  ~/.gradle/caches
+                  ~/.gradle/wrapper
+                key: ${{ runner.os }}-ort
+
+            - name: Checkout ORT Repository
+              if: steps.cache-ort.outputs.cache-hit != 'true'
+              uses: actions/checkout@v4
+              with: 
+                  repository: "oss-review-toolkit/ort"
+                  path: "./ort"
+                  ref: main
+                  submodules: recursive
+
+            - name: Checkout ORT latest release tag
+              if: steps.cache-ort.outputs.cache-hit != 'true'
+              working-directory: ./ort/
+              run: |
+                # Get new tags from remote
+                git fetch --tags
+                # Get latest tag name
+                LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+                # Checkout latest tag
+                git checkout $LATEST_TAG
+
+            - name: Install ORT
+              if: steps.cache-ort.outputs.cache-hit != 'true'
+              working-directory: ./ort/
+              run: |
+                export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
+                ./gradlew installDist
+
+            - name: Create ORT config file
+              run: |
+                mkdir -p ~/.ort/config
+                cat << EOF > ~/.ort/config/config.yml
+                ort:
+                  analyzer:
+                    allowDynamicVersions: true
+                    enabledPackageManagers: [Cargo, NPM, PIP]
+                EOF
+                cat ~/.ort/config/config.yml
+
+          ### NODE ###
+
+            - name: Set up Node.js 16.x
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 16.x
+
+            - name: Create package.json file for the Node wrapper 
+              uses: ./.github/workflows/node-create-package-file
+              with:
+                release_version: ${{ env.RELEASE_VERSION }}
+                os: "ubuntu-latest"
+
+            - name: Fix Node base NPM package.json file for ORT
+              working-directory: ./node/npm/glide
+              run: |
+                # Remove the glide-rs dependency to avoid duplication 
+                sed -i '/ "glide-rs":/d' ../../package.json
+                export pkg_name=glide-for-redis-base
+                export package_version="${{ env.RELEASE_VERSION }}"
+                export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                mv package.json package.json.tmpl
+                envsubst < package.json.tmpl > "package.json"
+                cat package.json
+            
+            - name: Run ORT tools for Node
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                folder_name: "node"
+            
+          ### Python ###
+
+            - name: Set up Python 3.10
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.10"
+
+            - name: Install python-inspector
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install git+https://github.com/nexB/python-inspector
+
+            - name: Run ORT tools for Python
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                folder_name: "python"
+
+            ### Rust ###
+
+            - name: Run ORT tools for Rust
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                folder_name: "glide-core"
+            
+            - name: Check for diff
+              run: |
+                cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUIOTNS
+                cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUIOTNS
+                cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUIOTNS
+                GIT_DIFF=`git diff $PYTHON_ATTRIBUIOTNS $NODE_ATTRIBUIOTNS $RUST_ATTRIBUIOTNS`
+                if [ -n "$GIT_DIFF" ]; then
+                echo "FOUND_DIFF=true" >> $GITHUB_ENV
+                else
+                echo "FOUND_DIFF=false" >> $GITHUB_ENV
+                fi
+                echo "FOUND_DIFF == ${{ env.FOUND_DIFF }}"
+
+            - name: Retrieve licenses list
+              working-directory: ./utils
+              run: |
+                {
+                  echo 'LICENSES_LIST<<EOF'
+                  python3 get_licenses_from_ort.py
+                  echo EOF
+                } >> "$GITHUB_ENV"
+
+            ### Create PR ###
+
+            - name: Create pull request
+              if: ${{ env.FOUND_DIFF  == 'true' }}
+              run: |
+                export BRANCH_NAME=`if ${{ github.event_name == 'schedule' }}  ]; then echo "scheduled-ort"; else echo "ort-v${{ env.RELEASE_VERSION }}"; fi`
+                echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
+                git config --global user.email "barshaul@amazon.com"
+                git config --global user.name "barshaul"
+                git checkout -b ${BRANCH_NAME}
+
+                git add $PYTHON_ATTRIBUIOTNS $NODE_ATTRIBUIOTNS $RUST_ATTRIBUIOTNS
+                git commit -m "Updated attribution files"
+                git push --set-upstream origin ${BRANCH_NAME} -f
+                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title 'Updated attribution files for ${BRANCH_NAME}' --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

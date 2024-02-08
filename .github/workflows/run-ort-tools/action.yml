@@ -1,0 +1,23 @@
+name: Run the OSS review tool
+
+inputs:
+    folder_name:
+        description: "The folder to run the ORT tool in"
+        required: true
+        type: string
+
+runs:
+    using: "composite"
+    steps:
+        - name: Run ORT tools
+          working-directory: ./ort/
+          shell: bash
+          run: |
+            echo "Running ORT tools for ${{ inputs.folder_name }}"
+            FOLDER=${{ inputs.folder_name }}
+            mkdir $GITHUB_WORKSPACE/$FOLDER/ort_results
+            # Analyzer (analyzer-result.json)
+            ./gradlew cli:run --args="analyze -i $GITHUB_WORKSPACE/$FOLDER -o $GITHUB_WORKSPACE/$FOLDER/ort_results -f JSON"
+            
+            # NOTICE DEFAULT
+            ./gradlew cli:run --args="report -i $GITHUB_WORKSPACE/$FOLDER/ort_results/analyzer-result.json -o $GITHUB_WORKSPACE/$FOLDER/ort_results/ -f PlainTextTemplate"
