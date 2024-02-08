@@ -27,18 +27,6 @@ public abstract class BaseClient implements AutoCloseable {
     protected final CommandManager commandManager;
 
     /**
-     * Extracts the response from the Protobuf response and either throws an exception or returns the
-     * appropriate response as an Object
-     *
-     * @param response Redis protobuf message
-     * @return Response Object
-     */
-    protected Object handleObjectResponse(Response response) {
-        // convert protobuf response into Object and then Object into T
-        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
-    }
-
-    /**
      * Async request for an async (non-blocking) Redis client.
      *
      * @param config Redis client Configuration
@@ -74,8 +62,8 @@ public abstract class BaseClient implements AutoCloseable {
      * Closes this resource, relinquishing any underlying resources. This method is invoked
      * automatically on objects managed by the try-with-resources statement.
      *
-     * <p>see: <a
-     * href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
+     * @see <a
+     *     href="https://docs.oracle.com/javase/8/docs/api/java/lang/AutoCloseable.html#close--">AutoCloseable::close()</a>
      */
     @Override
     public void close() throws ExecutionException {
@@ -99,5 +87,17 @@ public abstract class BaseClient implements AutoCloseable {
 
     protected static CommandManager buildCommandManager(ChannelHandler channelHandler) {
         return new CommandManager(channelHandler);
+    }
+
+    /**
+     * Extracts the response from the Protobuf response and either throws an exception or returns the
+     * appropriate response as an <code>Object</code>.
+     *
+     * @param response Redis protobuf message
+     * @return Response <code>Object</code>
+     */
+    protected Object handleObjectResponse(Response response) {
+        // convert protobuf response into Object
+        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
     }
 }

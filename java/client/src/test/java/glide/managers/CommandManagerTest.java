@@ -12,13 +12,13 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.connectors.handlers.ChannelHandler;
-import glide.managers.models.Command;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
@@ -38,12 +38,8 @@ public class CommandManagerTest {
 
     CommandManager service;
 
-    Command command;
-
     @BeforeEach
     void init() {
-        command = Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).build();
-
         channelHandler = mock(ChannelHandler.class);
         service = new CommandManager(channelHandler);
     }
@@ -64,7 +60,9 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture<Object> result =
                 service.submitNewCommand(
-                        command, new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
+                        CustomCommand,
+                        new String[0],
+                        new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
 
         // verify
@@ -83,7 +81,9 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture<Object> result =
                 service.submitNewCommand(
-                        command, new BaseCommandResponseResolver((p) -> new RuntimeException("")));
+                        CustomCommand,
+                        new String[0],
+                        new BaseCommandResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
 
         // verify
@@ -107,7 +107,9 @@ public class CommandManagerTest {
         // exercise
         CompletableFuture<Object> result =
                 service.submitNewCommand(
-                        command, new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
+                        CustomCommand,
+                        new String[0],
+                        new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();
 
         // verify
@@ -120,21 +122,19 @@ public class CommandManagerTest {
     public void prepare_request_with_simple_routes(SimpleRoute routeType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-        var command =
-                Command.builder().requestType(Command.RequestType.CUSTOM_COMMAND).route(routeType).build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
+
+        service.submitNewCommand(CustomCommand, new String[0], routeType, r -> null);
+        verify(channelHandler).write(captor.capture(), anyBoolean());
+        var requestBuilder = captor.getValue();
 
         var protobufToClientRouteMapping =
                 Map.of(
                         SimpleRoutes.AllNodes, SimpleRoute.ALL_NODES,
                         SimpleRoutes.AllPrimaries, SimpleRoute.ALL_PRIMARIES,
                         SimpleRoutes.Random, SimpleRoute.RANDOM);
-
-        service.submitNewCommand(command, r -> null);
-        verify(channelHandler).write(captor.capture(), anyBoolean());
-        var requestBuilder = captor.getValue();
 
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
@@ -152,16 +152,12 @@ public class CommandManagerTest {
     public void prepare_request_with_slot_id_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-        var command =
-                Command.builder()
-                        .requestType(Command.RequestType.CUSTOM_COMMAND)
-                        .route(new SlotIdRoute(42, slotType))
-                        .build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(command, r -> null);
+        service.submitNewCommand(
+                CustomCommand, new String[0], new SlotIdRoute(42, slotType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -188,16 +184,12 @@ public class CommandManagerTest {
     public void prepare_request_with_slot_key_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-        var command =
-                Command.builder()
-                        .requestType(Command.RequestType.CUSTOM_COMMAND)
-                        .route(new SlotKeyRoute("TEST", slotType))
-                        .build();
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(command, r -> null);
+        service.submitNewCommand(
+                CustomCommand, new String[0], new SlotKeyRoute("TEST", slotType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
@@ -223,15 +215,11 @@ public class CommandManagerTest {
     public void prepare_request_with_unknown_route_type() {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
-        var command =
-                Command.builder()
-                        .requestType(Command.RequestType.CUSTOM_COMMAND)
-                        .route(() -> false)
-                        .build();
 
         var exception =
                 assertThrows(
-                        IllegalArgumentException.class, () -> service.submitNewCommand(command, r -> null));
+                        IllegalArgumentException.class,
+                        () -> service.submitNewCommand(CustomCommand, new String[0], () -> false, r -> null));
         assertEquals("Unknown type of route", exception.getMessage());
     }
 }
