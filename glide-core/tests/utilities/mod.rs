@@ -260,7 +260,7 @@ impl Drop for RedisServer {
     }
 }
 
-fn encode_iter<W>(values: &Vec<Value>, writer: &mut W, prefix: &str) -> io::Result<()>
+fn encode_iter<W>(values: &[Value], writer: &mut W, prefix: &str) -> io::Result<()>
 where
     W: io::Write,
 {
@@ -271,7 +271,7 @@ where
     Ok(())
 }
 
-fn encode_map<W>(values: &Vec<(Value, Value)>, writer: &mut W, prefix: &str) -> io::Result<()>
+fn encode_map<W>(values: &[(Value, Value)], writer: &mut W, prefix: &str) -> io::Result<()>
 where
     W: io::Write,
 {
