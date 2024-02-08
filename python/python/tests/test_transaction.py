@@ -146,10 +146,8 @@ def transaction_test(
 
 @pytest.mark.asyncio
 class TestTransaction:
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [(True, ProtocolVersion.RESP2), (True, ProtocolVersion.RESP3)],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
         transaction = (
             Transaction()
@@ -162,15 +160,8 @@ class TestTransaction:
             await redis_client.exec(transaction)
         assert "Moved" in str(e)
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [
-            (True, ProtocolVersion.RESP3),
-            (True, ProtocolVersion.RESP2),
-            (False, ProtocolVersion.RESP3),
-            (False, ProtocolVersion.RESP2),
-        ],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = (
@@ -183,15 +174,8 @@ class TestTransaction:
         result = await redis_client.exec(transaction)
         assert result == [1, "bar"]
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [
-            (True, ProtocolVersion.RESP3),
-            (True, ProtocolVersion.RESP2),
-            (False, ProtocolVersion.RESP3),
-            (False, ProtocolVersion.RESP2),
-        ],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_unsupported_command(
         self, redis_client: TRedisClient
     ):
@@ -208,15 +192,8 @@ class TestTransaction:
             e
         )  # TODO : add an assert on EXEC ABORT
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [
-            (True, ProtocolVersion.RESP3),
-            (True, ProtocolVersion.RESP2),
-            (False, ProtocolVersion.RESP3),
-            (False, ProtocolVersion.RESP2),
-        ],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_discard_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         await redis_client.set(key, "1")
@@ -234,15 +211,8 @@ class TestTransaction:
         value = await redis_client.get(key)
         assert value == "1"
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [
-            (True, ProtocolVersion.RESP3),
-            (True, ProtocolVersion.RESP2),
-            (False, ProtocolVersion.RESP3),
-            (False, ProtocolVersion.RESP2),
-        ],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_exec_abort(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = BaseTransaction()
@@ -253,10 +223,8 @@ class TestTransaction:
             e
         )  # TODO : add an assert on EXEC ABORT
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [(True, ProtocolVersion.RESP2), (True, ProtocolVersion.RESP3)],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_transaction(self, redis_client: RedisClusterClient):
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
@@ -268,15 +236,8 @@ class TestTransaction:
         assert "# Memory" in result[0]
         assert result[1:] == expected
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [
-            (True, ProtocolVersion.RESP3),
-            (True, ProtocolVersion.RESP2),
-            (False, ProtocolVersion.RESP3),
-            (False, ProtocolVersion.RESP2),
-        ],
-    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_return_null_on_watch_transaction_failures(
         self, redis_client: TRedisClient, request
     ):
@@ -299,10 +260,8 @@ class TestTransaction:
 
         await client2.close()
 
-    @pytest.mark.parametrize(
-        "cluster_mode,protocol",
-        [(False, ProtocolVersion.RESP2), (False, ProtocolVersion.RESP3)],
-    )
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_transaction(self, redis_client: RedisClient):
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
