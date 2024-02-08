@@ -34,7 +34,16 @@ jobs:
               uses: actions/checkout@v4
               with:
                   submodules: "true"
-                  ref: ${{ env.BASE_BRANCH }}
+                  # ref: ${{ env.BASE_BRANCH }}
+
+            # - name: TODO delete after PR is merged
+            #   run: |
+            #     git config --global user.email "barshaul@amazon.com"
+            #     git config --global user.name "barshaul"
+            #     git fetch --no-recurse-submodules
+            #     git cherry-pick d999f7c6e8fb7616fdb537d5a5c070e0d332e417
+            #     git cherry-pick ca22957e9df51f599dbcad94ca1f448f819a9b1f
+            #     git cherry-pick 48e563fbe54d9ca656944c912fa38cccc031ba78
 
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v3
@@ -174,8 +183,8 @@ jobs:
               run: |
                 export BRANCH_NAME=`if ${{ github.event_name == 'schedule' }}  ]; then echo "scheduled-ort"; else echo "ort-v${{ env.RELEASE_VERSION }}"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
-                git config --global user.email "barshaul@amazon.com"
-                git config --global user.name "barshaul"
+                git config --global user.email "glide-for-redis@amazon.com"
+                git config --global user.name "ort-bot"
                 git checkout -b ${BRANCH_NAME}
 
                 git add $PYTHON_ATTRIBUIOTNS $NODE_ATTRIBUIOTNS $RUST_ATTRIBUIOTNS
