@@ -23,7 +23,8 @@ public interface ConnectionManagementCommands {
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param str The ping argument that will be returned.
-     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>str</code>.
+     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>
+     *     str</code>.
      */
     CompletableFuture<String> ping(String str);
 }

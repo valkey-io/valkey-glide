@@ -28,7 +28,8 @@ public interface ConnectionManagementClusterCommands {
      * @param str The ping argument that will be returned.
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
-     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>str</code>.
+     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>
+     *     str</code>.
      */
     CompletableFuture<String> ping(String str, Route route);
 }
