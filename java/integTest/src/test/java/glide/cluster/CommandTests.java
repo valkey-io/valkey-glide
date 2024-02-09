@@ -5,6 +5,7 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClusterClient;
@@ -22,6 +23,8 @@ import org.junit.jupiter.api.Timeout;
 public class CommandTests {
 
     private static RedisClusterClient clusterClient = null;
+
+    private static final String INITIAL_VALUE = "VALUE";
 
     @BeforeAll
     @SneakyThrows
@@ -56,6 +59,17 @@ public class CommandTests {
     public void custom_command_ping() {
         var data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
         assertEquals("PONG", data.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_del_returns_a_number() {
+        String key = "custom_command_del_returns_a_number";
+        clusterClient.set(key, INITIAL_VALUE).get();
+        var del = clusterClient.customCommand(new String[] {"DEL", key}).get();
+        assertEquals(1L, del.getSingleValue());
+        var data = clusterClient.get(key).get();
+        assertNull(data);
     }
 
     @Test

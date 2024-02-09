@@ -2,9 +2,13 @@
 package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.commands.ConnectionManagementCommands;
+import glide.api.commands.StringCommands;
+import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -21,11 +25,17 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
+import org.apache.commons.lang3.ArrayUtils;
+import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
-public abstract class BaseClient implements AutoCloseable, ConnectionManagementCommands {
+public abstract class BaseClient
+        implements AutoCloseable, ConnectionManagementCommands, StringCommands {
+    /** Redis simple string response with "OK" */
+    public static final String OK = ConstantResponse.OK.toString();
+
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
 
@@ -123,12 +133,16 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
                         + classType.getSimpleName());
     }
 
-    protected Object handleObjectOrNullResponse(Response response) {
+    protected Object handleObjectOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object.class, true, response);
     }
 
-    protected String handleStringResponse(Response response) {
+    protected String handleStringResponse(Response response) throws RedisException {
         return handleRedisResponse(String.class, false, response);
+    }
+
+    protected String handleStringOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(String.class, true, response);
     }
 
     @Override
@@ -139,5 +153,24 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
     @Override
     public CompletableFuture<String> ping(@NonNull String str) {
         return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> get(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                GetString, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                SetString, new String[] {key, value}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(
+            @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
+        String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
+        return commandManager.submitNewCommand(SetString, arguments, this::handleStringOrNullResponse);
     }
 }

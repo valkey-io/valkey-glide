@@ -1,14 +1,23 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
+import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
+import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
+import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SetOptions.Expiry;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.concurrent.CompletableFuture;
@@ -95,5 +104,101 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void get_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<String>submitNewCommand(eq(GetString), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.get(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Void> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(null);
+        when(commandManager.<Void>submitNewCommand(eq(SetString), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.set(key, value);
+        Object okResponse = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertNull(okResponse);
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_OnlyIfExists_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        SetOptions setOptions =
+                SetOptions.builder()
+                        .conditionalSet(ONLY_IF_EXISTS)
+                        .returnOldValue(false)
+                        .expiry(Expiry.KeepExisting())
+                        .build();
+        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getRedisApi(), "KEEPTTL"};
+
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(null);
+        when(commandManager.<String>submitNewCommand(eq(SetString), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.set(key, value, setOptions);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void set_with_SetOptions_OnlyIfDoesNotExist_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        SetOptions setOptions =
+                SetOptions.builder()
+                        .conditionalSet(ONLY_IF_DOES_NOT_EXIST)
+                        .returnOldValue(true)
+                        .expiry(Expiry.UnixSeconds(60L))
+                        .build();
+        String[] arguments =
+                new String[] {
+                    key, value, ONLY_IF_DOES_NOT_EXIST.getRedisApi(), RETURN_OLD_VALUE, "EXAT", "60"
+                };
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<String>submitNewCommand(eq(SetString), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.set(key, value, setOptions);
+
+        // verify
+        assertNotNull(response);
+        assertEquals(value, response.get());
     }
 }
