@@ -140,6 +140,10 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
         return handleRedisResponse(String.class, false, response);
     }
 
+    protected String handleStringOrNullResponse(Response response) {
+        return handleRedisResponse(String.class, true, response);
+    }
+
     @Override
     public CompletableFuture<String> ping() {
         return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
@@ -153,7 +157,7 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
     @Override
     public CompletableFuture<String> get(@NonNull String key) {
         return commandManager.submitNewCommand(
-                GetString, new String[] {key}, this::handleStringResponse);
+                GetString, new String[] {key}, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -166,6 +170,6 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
-        return commandManager.submitNewCommand(SetString, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(SetString, arguments, this::handleStringOrNullResponse);
     }
 }
