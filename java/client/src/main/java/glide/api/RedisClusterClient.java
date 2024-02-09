@@ -13,7 +13,6 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import lombok.NonNull;
 
 /**
  * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
@@ -33,12 +32,12 @@ public class RedisClusterClient extends BaseClient
      * @return A Future to connect and return a RedisClusterClient
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
-            @NonNull RedisClusterClientConfiguration config) {
+            RedisClusterClientConfiguration config) {
         return CreateClient(config, RedisClusterClient::new);
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
         return commandManager.submitNewCommand(
                 CustomCommand, args, response -> ClusterValue.of(handleObjectOrNullResponse(response)));
@@ -46,8 +45,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(
-            @NonNull String[] args, @NonNull Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,
