@@ -1,10 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
-
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.examples.clients.GlideClient;
@@ -16,7 +12,9 @@ public class ExamplesApp {
     // main application entrypoint
     public static void main(String[] args) {
         runGlideExamples();
-        runGlideClusterModeExamples();
+
+        // uncomment to test against a Redis instance with cluster-mode enabled
+        // runGlideClusterModeExamples();
     }
 
     private static void runGlideExamples() {

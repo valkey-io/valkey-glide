@@ -1,10 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.glide;
 
-import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
@@ -21,7 +19,7 @@ public class GlideAsyncClusterClient implements AsyncClient<String> {
             throw new RuntimeException("Use client GlideAsyncClient");
         }
         RedisClusterClientConfiguration config =
-            RedisClusterClientConfiguration.builder()
+                RedisClusterClientConfiguration.builder()
                         .address(
                                 NodeAddress.builder()
                                         .host(connectionSettings.host)
@@ -44,7 +42,9 @@ public class GlideAsyncClusterClient implements AsyncClient<String> {
 
     @Override
     public CompletableFuture<String> asyncGet(String key) {
-        return redisClient.customCommand(new String[] {"Get", key}).thenApply(r -> (String) r.getSingleValue());
+        return redisClient
+                .customCommand(new String[] {"Get", key})
+                .thenApply(r -> (String) r.getSingleValue());
     }
 
     @Override
