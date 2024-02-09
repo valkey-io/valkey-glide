@@ -25,7 +25,6 @@ public class CommandTests {
     private static RedisClusterClient clusterClient = null;
 
     private static final String INITIAL_VALUE = "VALUE";
-    private static final String ANOTHER_VALUE = "VALUE2";
 
     @BeforeAll
     @SneakyThrows
@@ -64,6 +63,16 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void custom_command_del_returns_a_number() {
+        clusterClient.set("DELME", INITIAL_VALUE).get();
+        var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get();
+        assertEquals(1L, del.getSingleValue());
+        var data = clusterClient.get("DELME").get();
+        assertNull(data);
+    }
+
+    @Test
+    @SneakyThrows
     public void ping_with_route() {
         String data = clusterClient.ping(ALL_NODES).get();
         assertEquals("PONG", data);
@@ -74,15 +83,5 @@ public class CommandTests {
     public void ping_with_message_with_route() {
         String data = clusterClient.ping("H3LL0", ALL_PRIMARIES).get();
         assertEquals("H3LL0", data);
-    }
-
-    @Test
-    @SneakyThrows
-    public void custom_command_del_returns_a_number() {
-        clusterClient.set("DELME", INITIAL_VALUE).get();
-        var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get();
-        assertEquals(1L, del.getSingleValue());
-        var data = clusterClient.get("DELME").get();
-        assertNull(data);
     }
 }

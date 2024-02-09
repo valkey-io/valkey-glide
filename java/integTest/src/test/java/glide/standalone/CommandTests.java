@@ -2,11 +2,14 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -15,12 +18,9 @@ import org.junit.jupiter.api.Timeout;
 
 @Timeout(10)
 public class CommandTests {
-
-    private static final String KEY_NAME = "key";
-    private static final String INITIAL_VALUE = "VALUE";
-    private static final String ANOTHER_VALUE = "VALUE2";
-
     private static RedisClient regularClient = null;
+
+    private static final String INITIAL_VALUE = "VALUE";
 
     @BeforeAll
     @SneakyThrows
@@ -44,5 +44,22 @@ public class CommandTests {
     public void custom_command_info() {
         Object data = regularClient.customCommand(new String[] {"info"}).get();
         assertTrue(((String) data).contains("# Stats"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_ping() {
+        var data = regularClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_del_returns_a_number() {
+        regularClient.set("DELME", INITIAL_VALUE).get();
+        var del = regularClient.customCommand(new String[] {"DEL", "DELME"}).get();
+        assertEquals(1L, del);
+        var data = regularClient.get("DELME").get();
+        assertNull(data);
     }
 }
