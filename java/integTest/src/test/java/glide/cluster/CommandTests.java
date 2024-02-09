@@ -111,7 +111,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_without_options() {
-        ClusterValue<String> data = clusterClient.info().get(10, SECONDS);
+        ClusterValue<String> data = clusterClient.info().get();
         assertTrue(data.hasMultiData());
         for (String info : data.getMultiValue().values()) {
             for (String section : DEFAULT_INFO_SECTIONS) {
@@ -123,7 +123,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_route() {
-        ClusterValue<String> data = clusterClient.info(RANDOM).get(10, SECONDS);
+        ClusterValue<String> data = clusterClient.info(RANDOM).get();
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
         for (String section : DEFAULT_INFO_SECTIONS) {
@@ -139,7 +139,7 @@ public class CommandTests {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();
-        ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
+        ClusterValue<String> data = clusterClient.info(options).get();
         for (String info : data.getMultiValue().values()) {
             for (String section :  options.toArgs()) {
                 assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
@@ -151,7 +151,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_everything_option() {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        ClusterValue<String> data = clusterClient.info(options).get(10, SECONDS);
+        ClusterValue<String> data = clusterClient.info(options).get();
         assertTrue(data.hasMultiData());
         for (String info : data.getMultiValue().values()) {
             for (String section : EVERYTHING_INFO_SECTIONS) {
@@ -163,7 +163,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_routing_and_options() {
-        ClusterValue<Object> slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get(10, SECONDS);
+        ClusterValue<Object> slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get();
         /*
         Nested Object arrays like
         1) 1) (integer) 0
@@ -182,7 +182,7 @@ public class CommandTests {
         }
         InfoOptions options = builder.build();
         SlotKeyRoute routing = new SlotKeyRoute(slotKey, PRIMARY);
-        ClusterValue<String> data = clusterClient.info(options, routing).get(10, SECONDS);
+        ClusterValue<String> data = clusterClient.info(options, routing).get();
 
         for (String section : options.toArgs()) {
             assertTrue(data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");

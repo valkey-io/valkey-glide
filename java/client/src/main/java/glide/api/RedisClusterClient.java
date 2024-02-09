@@ -43,7 +43,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
         return commandManager.submitNewCommand(
                 CustomCommand, args, response -> ClusterValue.of(handleObjectOrNullResponse(response)));
@@ -51,8 +51,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(
-            @NonNull String[] args, @NonNull Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,

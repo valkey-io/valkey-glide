@@ -11,7 +11,6 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
@@ -69,7 +68,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_without_options() {
-        String data = regularClient.info().get(10, SECONDS);
+        String data = regularClient.info().get();
         for (String section : DEFAULT_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
@@ -83,7 +82,7 @@ public class CommandTests {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();
-        String data = regularClient.info(options).get(10, SECONDS);
+        String data = regularClient.info(options).get();
         for (String section : options.toArgs()) {
             assertTrue(
                     data.toLowerCase().contains("# " + section.toLowerCase()),
@@ -95,7 +94,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_everything_option() {
         InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        String data = regularClient.info(options).get(10, SECONDS);
+        String data = regularClient.info(options).get();
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
