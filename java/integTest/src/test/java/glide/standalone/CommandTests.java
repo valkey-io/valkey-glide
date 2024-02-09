@@ -2,7 +2,6 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.STANDALONE_PORTS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
@@ -12,7 +11,9 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10)
 public class CommandTests {
     private static RedisClient regularClient = null;
 
@@ -24,7 +25,7 @@ public class CommandTests {
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, SECONDS);
+                        .get();
     }
 
     @AfterAll
@@ -36,7 +37,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        var data = regularClient.customCommand(new String[] {"info"}).get(10, SECONDS);
+        Object data = regularClient.customCommand(new String[] {"info"}).get();
         assertTrue(((String) data).contains("# Stats"));
     }
 }

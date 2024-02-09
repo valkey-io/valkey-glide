@@ -3,7 +3,6 @@ package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.STANDALONE_PORTS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.BaseClient;
@@ -17,10 +16,12 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+@Timeout(10)
 public class SharedCommandTests {
 
     private static RedisClient standaloneClient = null;
@@ -36,7 +37,7 @@ public class SharedCommandTests {
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, SECONDS);
+                        .get();
 
         clusterClient =
                 RedisClusterClient.CreateClient(
@@ -44,7 +45,7 @@ public class SharedCommandTests {
                                         .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
                                         .build())
-                        .get(10, SECONDS);
+                        .get();
 
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
     }
@@ -60,15 +61,15 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void ping(BaseClient client) {
-        var data = client.ping("H3LL0").get(10, SECONDS);
-        assertEquals("H3LL0", data);
+        String data = client.ping().get();
+        assertEquals("PING", data);
     }
 
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
     public void ping_with_message(BaseClient client) {
-        var data = client.ping("H3LL0").get(10, SECONDS);
+        String data = client.ping("H3LL0").get();
         assertEquals("H3LL0", data);
     }
 }
