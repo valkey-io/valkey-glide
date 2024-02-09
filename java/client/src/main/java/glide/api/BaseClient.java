@@ -123,8 +123,8 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
                         + classType.getSimpleName());
     }
 
-    protected Object handleObjectResponse(Response response) {
-        return handleRedisResponse(Object.class, false, response);
+    protected Object handleObjectOrNullResponse(Response response) {
+        return handleRedisResponse(Object.class, true, response);
     }
 
     protected String handleStringResponse(Response response) {

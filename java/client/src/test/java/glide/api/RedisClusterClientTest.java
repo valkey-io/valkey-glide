@@ -105,7 +105,7 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        protected Object handleObjectResponse(Response response) {
+        protected Object handleObjectOrNullResponse(Response response) {
             return object;
         }
     }
