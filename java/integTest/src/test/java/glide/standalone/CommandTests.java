@@ -2,6 +2,8 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
@@ -15,6 +17,9 @@ import org.junit.jupiter.api.Timeout;
 
 @Timeout(10)
 public class CommandTests {
+
+    private static final String INITIAL_VALUE = "VALUE";
+
     private static RedisClient regularClient = null;
 
     @BeforeAll
@@ -39,5 +44,15 @@ public class CommandTests {
     public void custom_command_info() {
         Object data = regularClient.customCommand(new String[] {"info"}).get();
         assertTrue(((String) data).contains("# Stats"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_del_returns_a_number() {
+        regularClient.set("DELME", INITIAL_VALUE).get();
+        var del = regularClient.customCommand(new String[] {"DEL", "DELME"}).get();
+        assertEquals(1L, del);
+        var data = regularClient.get("DELME").get();
+        assertNull(data);
     }
 }
