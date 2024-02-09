@@ -62,7 +62,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void ping(BaseClient client) {
         String data = client.ping().get();
-        assertEquals("PING", data);
+        assertEquals("PONG", data);
     }
 
     @SneakyThrows
