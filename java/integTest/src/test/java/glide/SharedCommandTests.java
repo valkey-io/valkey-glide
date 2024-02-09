@@ -7,7 +7,6 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -89,10 +88,10 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void set_and_get_without_options(BaseClient client) {
-        String ok = client.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
         assertEquals(OK, ok);
 
-        String data = client.get(KEY_NAME).get(10, SECONDS);
+        String data = client.get(KEY_NAME).get();
         assertEquals(INITIAL_VALUE, data);
     }
 
@@ -100,7 +99,7 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void get_missing_value(BaseClient client) {
-        String data = client.get("invalid").get(10, SECONDS);
+        String data = client.get("invalid").get();
         assertNull(data);
     }
 
@@ -108,11 +107,11 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void set_overwrite_value_and_returnOldValue_returns_string(BaseClient client) {
-        String ok = client.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
         assertEquals(OK, ok);
 
         SetOptions options = SetOptions.builder().returnOldValue(true).build();
-        String data = client.set(KEY_NAME, ANOTHER_VALUE, options).get(10, SECONDS);
+        String data = client.set(KEY_NAME, ANOTHER_VALUE, options).get();
         assertEquals(INITIAL_VALUE, data);
     }
 
@@ -140,9 +139,9 @@ public class SharedCommandTests {
     public void set_only_if_exists_overwrite(BaseClient client) {
         String key = "set_only_if_exists_overwrite";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
-        client.set(key, INITIAL_VALUE).get(10, SECONDS);
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, INITIAL_VALUE).get();
+        client.set(key, ANOTHER_VALUE, options).get();
+        String data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
     }
 
@@ -152,8 +151,8 @@ public class SharedCommandTests {
     public void set_only_if_exists_missing_key(BaseClient client) {
         String key = "set_only_if_exists_missing_key";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, ANOTHER_VALUE, options).get();
+        String data = client.get(key).get();
         assertNull(data);
     }
 
@@ -163,8 +162,8 @@ public class SharedCommandTests {
     public void set_only_if_does_not_exists_missing_key(BaseClient client) {
         String key = "set_only_if_does_not_exists_missing_key";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, ANOTHER_VALUE, options).get();
+        String data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
     }
 
@@ -174,9 +173,9 @@ public class SharedCommandTests {
     public void set_only_if_does_not_exists_existing_key(BaseClient client) {
         String key = "set_only_if_does_not_exists_existing_key";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
-        client.set(key, INITIAL_VALUE).get(10, SECONDS);
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, INITIAL_VALUE).get();
+        client.set(key, ANOTHER_VALUE, options).get();
+        String data = client.get(key).get();
         assertEquals(INITIAL_VALUE, data);
     }
 
@@ -186,18 +185,18 @@ public class SharedCommandTests {
     public void set_value_with_ttl_and_update_value_with_keeping_ttl(BaseClient client) {
         String key = "set_value_with_ttl_and_update_value_with_keeping_ttl";
         SetOptions options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
-        client.set(key, INITIAL_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, INITIAL_VALUE, options).get();
+        String data = client.get(key).get();
         assertEquals(INITIAL_VALUE, data);
 
         options = SetOptions.builder().expiry(SetOptions.Expiry.KeepExisting()).build();
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        data = client.get(key).get(10, SECONDS);
+        client.set(key, ANOTHER_VALUE, options).get();
+        data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
 
         Thread.sleep(2222); // sleep a bit more than TTL
 
-        data = client.get(key).get(10, SECONDS);
+        data = client.get(key).get();
         assertNull(data);
     }
 
@@ -207,18 +206,18 @@ public class SharedCommandTests {
     public void set_value_with_ttl_and_update_value_with_new_ttl(BaseClient client) {
         String key = "set_value_with_ttl_and_update_value_with_new_ttl";
         SetOptions options = SetOptions.builder().expiry(Milliseconds(100500L)).build();
-        client.set(key, INITIAL_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+        client.set(key, INITIAL_VALUE, options).get();
+        String data = client.get(key).get();
         assertEquals(INITIAL_VALUE, data);
 
         options = SetOptions.builder().expiry(Milliseconds(2000L)).build();
-        client.set(key, ANOTHER_VALUE, options).get(10, SECONDS);
-        data = client.get(key).get(10, SECONDS);
+        client.set(key, ANOTHER_VALUE, options).get();
+        data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
 
         Thread.sleep(2222); // sleep a bit more than new TTL
 
-        data = client.get(key).get(10, SECONDS);
+        data = client.get(key).get();
         assertNull(data);
     }
 
@@ -228,12 +227,12 @@ public class SharedCommandTests {
     public void set_expired_value(BaseClient client) {
         String key = "set_expired_value";
         SetOptions options =
-            SetOptions.builder()
-                // expiration is in the past
-                .expiry(SetOptions.Expiry.UnixSeconds(100500L))
-                .build();
-        client.set(key, INITIAL_VALUE, options).get(10, SECONDS);
-        String data = client.get(key).get(10, SECONDS);
+                SetOptions.builder()
+                        // expiration is in the past
+                        .expiry(SetOptions.Expiry.UnixSeconds(100500L))
+                        .build();
+        client.set(key, INITIAL_VALUE, options).get();
+        String data = client.get(key).get();
         assertNull(data);
     }
 
@@ -241,11 +240,11 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void set_missing_value_and_returnOldValue_is_null(BaseClient client) {
-        String ok = client.set(KEY_NAME, INITIAL_VALUE).get(10, SECONDS);
+        String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
         assertEquals(OK, ok);
 
         SetOptions options = SetOptions.builder().returnOldValue(true).build();
-        String data = client.set("another", ANOTHER_VALUE, options).get(10, SECONDS);
+        String data = client.set("another", ANOTHER_VALUE, options).get();
         assertNull(data);
     }
 }

@@ -2,7 +2,6 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.STANDALONE_PORTS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;

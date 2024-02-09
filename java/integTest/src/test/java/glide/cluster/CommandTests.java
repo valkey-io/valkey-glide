@@ -85,10 +85,10 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_del_returns_a_number() {
-        clusterClient.set("DELME", INITIAL_VALUE).get(10, SECONDS);
-        var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get(10, SECONDS);
+        clusterClient.set("DELME", INITIAL_VALUE).get();
+        var del = clusterClient.customCommand(new String[] {"DEL", "DELME"}).get();
         assertEquals(1L, del.getSingleValue());
-        var data = clusterClient.get("DELME").get(10, SECONDS);
+        var data = clusterClient.get("DELME").get();
         assertNull(data);
     }
 }
