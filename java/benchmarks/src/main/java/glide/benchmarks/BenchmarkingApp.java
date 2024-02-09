@@ -6,7 +6,6 @@ import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 import glide.benchmarks.clients.glide.GlideAsyncClient;
 import glide.benchmarks.clients.jedis.JedisClient;
 import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
-import glide.benchmarks.clients.glide.GlideAsyncClient;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
