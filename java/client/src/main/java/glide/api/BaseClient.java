@@ -104,7 +104,9 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
      * @param <T> return type
      * @throws RedisException on a type mismatch
      */
-    private <T> T handleRedisResponse(Class classType, boolean isNullable, Response response) {
+    @SuppressWarnings("unchecked")
+    private <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
+            throws RedisException {
         Object value =
                 new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
         if (isNullable && (value == null)) {
@@ -118,7 +120,7 @@ public abstract class BaseClient implements AutoCloseable, ConnectionManagementC
                 "Unexpected return type from Redis: got "
                         + className
                         + " expected "
-                        + classType.toGenericString());
+                        + classType.getSimpleName());
     }
 
     protected Object handleObjectResponse(Response response) {
