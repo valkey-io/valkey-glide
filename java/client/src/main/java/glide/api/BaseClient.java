@@ -2,8 +2,11 @@
 package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
+import glide.api.commands.ConnectionManagementCommands;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
@@ -17,12 +20,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
+import lombok.NonNull;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
 @AllArgsConstructor
-public abstract class BaseClient implements AutoCloseable {
-
+public abstract class BaseClient implements AutoCloseable, ConnectionManagementCommands {
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
 
@@ -90,14 +93,51 @@ public abstract class BaseClient implements AutoCloseable {
     }
 
     /**
-     * Extracts the response from the Protobuf response and either throws an exception or returns the
-     * appropriate response as an <code>Object</code>.
+     * Extracts the value from a Redis response message and either throws an exception or returns the
+     * value as an object of type {@link T}. If <code>isNullable</code>, than also returns <code>null
+     * </code>.
      *
      * @param response Redis protobuf message
-     * @return Response <code>Object</code>
+     * @param classType Parameter {@link T} class type
+     * @param isNullable Accepts null values in the protobuf message
+     * @return Response as an object of type {@link T} or <code>null</code>
+     * @param <T> return type
+     * @throws RedisException on a type mismatch
      */
-    protected Object handleObjectResponse(Response response) {
-        // convert protobuf response into Object
-        return new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+    @SuppressWarnings("unchecked")
+    private <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
+            throws RedisException {
+        Object value =
+                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+        if (isNullable && (value == null)) {
+            return null;
+        }
+        if (classType.isInstance(value)) {
+            return (T) value;
+        }
+        String className = value == null ? "null" : value.getClass().getSimpleName();
+        throw new RedisException(
+                "Unexpected return type from Redis: got "
+                        + className
+                        + " expected "
+                        + classType.getSimpleName());
+    }
+
+    protected Object handleObjectOrNullResponse(Response response) {
+        return handleRedisResponse(Object.class, true, response);
+    }
+
+    protected String handleStringResponse(Response response) {
+        return handleRedisResponse(String.class, false, response);
+    }
+
+    @Override
+    public CompletableFuture<String> ping() {
+        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> ping(@NonNull String str) {
+        return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
     }
 }

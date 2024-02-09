@@ -39,7 +39,7 @@ public class CommandManager {
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
-            RedisRequestOuterClass.RequestType requestType,
+            RequestType requestType,
             String[] arguments,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
