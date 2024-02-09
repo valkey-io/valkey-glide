@@ -9,8 +9,10 @@ to develop this Java wrapper.
 
 The Java client contains the following parts:
 
-1. A Java client (lib folder): wrapper to rust client.
-2. A benchmark app: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Redis and other Java clients.
+1. `client`: A Java-wrapper around the rust-core client.
+2. `examples`: An examples app to test the client against a Redis localhost
+3. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Redis and other Java clients.
+4. `integTest`: An integration test sub-project for API and E2E testing
 
 ## Installation and Setup
 
@@ -82,8 +84,10 @@ $ ./gradlew :client:test
 
 Other useful gradle developer commands:
 * `./gradlew :client:test` to run client unit tests
+* `./gradlew :integTest:test` to run client examples
 * `./gradlew spotlessCheck` to check for codestyle issues
 * `./gradlew spotlessApply` to apply codestyle recommendations
+* `./gradlew :examples:run` to run client examples
 * `./gradlew :benchmarks:run` to run performance benchmarks
 
 ## Basic Examples
@@ -91,19 +95,15 @@ Other useful gradle developer commands:
 ### Standalone Redis:
 
 ```java
-import glide.Client;
-import glide.Client.SingleResponse;
+import glide.api.RedisClient;
 
-Client client = new Client();
+RedisClient client = RedisClient.CreateClient();
 
-SingleResponse connect = client.asyncConnectToRedis("localhost", 6379);
-connect.await().isSuccess();
+CompletableFuture<String> setResponse = client.set("key", "foobar");
+setResponse.get() == "OK";
 
-SingleResponse set = client.asyncSet("key", "foobar");
-set.await().isSuccess();
-
-SingleResponse get = client.asyncGet("key");
-get.await().getValue() == "foobar";
+CompletableFuture<String> getResponse = client.get("key");
+getResponse.get() == "foobar";
 ```
 
 ### Benchmarks
@@ -115,7 +115,7 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 ./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
 ```
 
-The following arguments are accepted: 
+The following arguments are accepted:
 * `resultsFile`: the results output file
 * `concurrentTasks`: Number of concurrent tasks
 * `clients`: one of: all|jedis|lettuce|glide
