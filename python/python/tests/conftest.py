@@ -95,10 +95,10 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.fixture()
 async def redis_client(
-    request, cluster_mode: bool
+    request, cluster_mode: bool, protocol: ProtocolVersion
 ) -> AsyncGenerator[TRedisClient, None]:
     "Get async socket client for tests"
-    client = await create_client(request, cluster_mode)
+    client = await create_client(request, cluster_mode, protocol=protocol)
     yield client
     await client.close()
 
