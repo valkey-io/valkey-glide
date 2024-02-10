@@ -21,12 +21,12 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if ${{ github.event_name == 'schedule' }}; then echo '255.255.255'; else echo ${GITHUB_REF:19}; fi`
+                  export version=`if true; then echo '255.255.255'; else echo ${GITHUB_REF:19}; fi`
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
               
             - name: Set the base branch
               run: |
-                export BASE_BRANCH=`if ${{ github.event_name == 'schedule' }}; then echo "main"; else echo "v${{ env.RELEASE_VERSION }}"; fi`
+                export BASE_BRANCH=`if true; then echo "main"; else echo "v${{ env.RELEASE_VERSION }}"; fi`
                 echo "Base branch is: ${BASE_BRANCH}"
                 echo "BASE_BRANCH=${BASE_BRANCH}" >> $GITHUB_ENV
 
@@ -172,7 +172,7 @@ jobs:
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' }}
               run: |
-                export BRANCH_NAME=`if ${{ github.event_name == 'schedule' }}  ]; then echo "scheduled-ort"; else echo "ort-v${{ env.RELEASE_VERSION }}"; fi`
+                export BRANCH_NAME=`if true; then echo "scheduled-ort"; else echo "ort-v${{ env.RELEASE_VERSION }}"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
                 git config --global user.email "glide-for-redis@amazon.com"
                 git config --global user.name "ort-bot"
@@ -182,6 +182,6 @@ jobs:
                 git commit -m "Updated attribution files"
                 git push --set-upstream origin ${BRANCH_NAME} -f
                 title="Updated attribution files for ${BRANCH_NAME}"
-                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title $title --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
+                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
