@@ -147,6 +147,7 @@ def transaction_test(
 @pytest.mark.asyncio
 class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
         transaction = (
             Transaction()
@@ -160,6 +161,7 @@ class TestTransaction:
         assert "Moved" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = (
@@ -173,6 +175,7 @@ class TestTransaction:
         assert result == [1, "bar"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_unsupported_command(
         self, redis_client: TRedisClient
     ):
@@ -190,6 +193,7 @@ class TestTransaction:
         )  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_discard_command(self, redis_client: TRedisClient):
         key = get_random_string(10)
         await redis_client.set(key, "1")
@@ -208,6 +212,7 @@ class TestTransaction:
         assert value == "1"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_exec_abort(self, redis_client: TRedisClient):
         key = get_random_string(10)
         transaction = BaseTransaction()
@@ -219,6 +224,7 @@ class TestTransaction:
         )  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_transaction(self, redis_client: RedisClusterClient):
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
@@ -231,6 +237,7 @@ class TestTransaction:
         assert result[1:] == expected
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_return_null_on_watch_transaction_failures(
         self, redis_client: TRedisClient, request
     ):
@@ -254,34 +261,8 @@ class TestTransaction:
         await client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_transaction(self, redis_client: RedisClient):
-        keyslot = get_random_string(3)
-        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-        value = get_random_string(5)
-        transaction = Transaction()
-        transaction.info()
-        transaction.select(1)
-        transaction.set(key, value)
-        transaction.get(key)
-        transaction.select(0)
-        transaction.get(key)
-        expected = transaction_test(transaction, keyslot)
-        result = await redis_client.exec(transaction)
-        assert isinstance(result, list)
-        assert isinstance(result[0], str)
-        assert "# Memory" in result[0]
-        assert result[1:6] == [OK, OK, value, OK, None]
-        assert result[6:] == expected
-
-    # this test ensures that all types in RESP2 are converted to their RESP3 equivalent.
-    @pytest.mark.parametrize("cluster_mode", [False])
-    async def test_standalone_transaction_on_resp2(self, cluster_mode, request):
-        redis_client = await create_client(
-            request,
-            cluster_mode,
-            protocol=ProtocolVersion.RESP2,
-        )
-
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         value = get_random_string(5)
