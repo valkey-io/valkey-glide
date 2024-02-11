@@ -41,7 +41,7 @@ export type BaseClient = RedisClient | RedisClusterClient;
 
 export function runBaseTests<Context>(config: {
     init: (
-        protocol?: ProtocolVersion,
+        protocol: ProtocolVersion,
         clientName?: string
     ) => Promise<{
         context: Context;
@@ -50,11 +50,15 @@ export function runBaseTests<Context>(config: {
     close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
 }) {
-    runCommonTests(config);
+    runCommonTests({
+        init: () => config.init(ProtocolVersion.RESP2),
+        close: config.close,
+        timeout: config.timeout,
+    });
 
     const runTest = async (
         test: (client: BaseClient) => Promise<void>,
-        protocol?: ProtocolVersion,
+        protocol: ProtocolVersion,
         clientName?: string
     ) => {
         const { context, client } = await config.init(protocol, clientName);
@@ -68,9 +72,9 @@ export function runBaseTests<Context>(config: {
         }
     };
 
-    it(
-        "should register client library name and version",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `should register client library name and version_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const version = await getVersion();
 
@@ -82,14 +86,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(result).toContain("lib-name=GlideJS");
                 expect(result).toContain("lib-ver=0.1.0");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "closed client raises error",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `closed client raises error_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 client.close();
 
@@ -100,26 +104,26 @@ export function runBaseTests<Context>(config: {
                         "Unable to execute requests; the client is closed. Please create a new client."
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
     it(
-        "Check protocol version is RESP3",
+        `Check protocol version is RESP3`,
         async () => {
             await runTest(async (client: BaseClient) => {
                 const result = (await client.customCommand(["HELLO"])) as {
                     proto: number;
                 };
                 expect(result?.proto).toEqual(3);
-            });
+            }, ProtocolVersion.RESP3);
         },
         config.timeout
     );
 
     it(
-        "Check possible to opt-in to RESP2",
+        `Check possible to opt-in to RESP2`,
         async () => {
             await runTest(async (client: BaseClient) => {
                 const result = (await client.customCommand(["HELLO"])) as {
@@ -131,23 +135,23 @@ export function runBaseTests<Context>(config: {
         config.timeout
     );
 
-    it(
-        "Check client name is configured correctly",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `Check client name is configured correctly_%p`,
+        async (protocol) => {
             await runTest(
                 async (client: BaseClient) => {
                     expect(await client.clientGetName()).toBe("TEST_CLIENT");
                 },
-                undefined,
+                protocol,
                 "TEST_CLIENT"
             );
         },
         config.timeout
     );
 
-    it(
-        "set with return of old value works",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `set with return of old value works_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -163,14 +167,14 @@ export function runBaseTests<Context>(config: {
 
                 result = await client.get(key);
                 expect(result).toEqual("");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "conditional set works",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `conditional set works_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -197,14 +201,14 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual("OK");
 
                 expect(await client.get(key)).toEqual("foobar");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "custom command works",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `custom command works_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
@@ -217,14 +221,14 @@ export function runBaseTests<Context>(config: {
                 expect(setResult).toEqual("OK");
                 const result = await client.customCommand(["GET", key]);
                 expect(result).toEqual(value);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "getting array return value works",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getting array return value works_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}" + uuidv4();
                 const key2 = "{key}" + uuidv4();
@@ -251,14 +255,14 @@ export function runBaseTests<Context>(config: {
                     key3,
                 ]);
                 expect(mget_result).toEqual([value1, value2, null]);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "delete multiple existing keys and an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delete multiple existing keys and an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}" + uuidv4();
                 const key2 = "{key}" + uuidv4();
@@ -274,24 +278,24 @@ export function runBaseTests<Context>(config: {
                 expect(deletedKeysNum).toEqual(3);
                 deletedKeysNum = await client.del([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "testing clientGetName",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `testing clientGetName_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(await client.clientGetName()).toBeNull();
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "test config rewrite",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `test config rewrite_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const serverInfo = await client.info([InfoOptions.Server]);
                 const conf_file = parseInfoResponse(
@@ -310,14 +314,14 @@ export function runBaseTests<Context>(config: {
                         );
                     }
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "info stats before and after Config ResetStat is different",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info stats before and after Config ResetStat is different_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 /// we execute set and info so the total_commands_processed will be greater than 1
                 /// after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
@@ -337,14 +341,14 @@ export function runBaseTests<Context>(config: {
                         "total_commands_processed"
                     ]
                 ).toEqual("1");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "testing mset and mget with multiple existing keys and one non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `testing mset and mget with multiple existing keys and one non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -359,14 +363,14 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.mget([key1, key2, "nonExistingKey", key3])
                 ).toEqual([value, value, null, value]);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "incr, incrBy and incrByFloat with existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `incr, incrBy and incrByFloat with existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "10")).toEqual("OK");
@@ -376,14 +380,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("15");
                 expect(await client.incrByFloat(key, 1.5)).toEqual(16.5);
                 expect(await client.get(key)).toEqual("16.5");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "incr, incrBy and incrByFloat with non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `incr, incrBy and incrByFloat with non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -395,14 +399,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key2)).toEqual("2");
                 expect(await client.incrByFloat(key3, -0.5)).toEqual(-0.5);
                 expect(await client.get(key3)).toEqual("-0.5");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "incr, incrBy and incrByFloat with a key that contains a value of string that can not be represented as integer",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `incr, incrBy and incrByFloat with a key that contains a value of string that can not be represented as integer_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -430,37 +434,37 @@ export function runBaseTests<Context>(config: {
                         "value is not a valid float"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "ping test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `ping test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping("Hello")).toEqual("Hello");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "clientId test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `clientId test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(getFirstResult(await client.clientId())).toBeGreaterThan(
                     0
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "decr and decrBy existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `decr and decrBy existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "10")).toEqual("OK");
@@ -468,14 +472,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("9");
                 expect(await client.decrBy(key, 4)).toEqual(5);
                 expect(await client.get(key)).toEqual("5");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "decr and decrBy with non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `decr and decrBy with non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -486,14 +490,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key2)).toBeNull();
                 expect(await client.decrBy(key2, 3)).toEqual(-3);
                 expect(await client.get(key2)).toEqual("-3");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "decr and decrBy with a key that contains a value of string that can not be represented as integer",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `decr and decrBy with a key that contains a value of string that can not be represented as integer_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -513,14 +517,14 @@ export function runBaseTests<Context>(config: {
                         "value is not an integer"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "config get and config set with timeout parameter",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `config get and config set with timeout parameter_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
@@ -538,14 +542,14 @@ export function runBaseTests<Context>(config: {
                         timeout: prevTimeout["timeout"],
                     })
                 ).toEqual("OK");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "testing hset and hget with multiple existing fields and one non existing field",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `testing hset and hget with multiple existing fields and one non existing field_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field1 = uuidv4();
@@ -561,14 +565,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hget(key, "nonExistingField")).toEqual(
                     null
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hdel multiple existing fields, an non existing field and an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hdel multiple existing fields, an non existing field and an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field1 = uuidv4();
@@ -587,14 +591,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hdel("nonExistingKey", [field3])).toEqual(
                     0
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "testing hmget with multiple existing fields, an non existing field and an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `testing hmget with multiple existing fields, an non existing field and an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field1 = uuidv4();
@@ -615,14 +619,14 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.hmget("nonExistingKey", [field1, field2])
                 ).toEqual([null, null]);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hexists existing field, an non existing field and an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexists existing field, an non existing field and an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field1 = uuidv4();
@@ -639,14 +643,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hexists("nonExistingKey", field2)).toEqual(
                     false
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hgetall with multiple fields in an existing key and one non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hgetall with multiple fields in an existing key and one non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field1 = uuidv4();
@@ -662,14 +666,14 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 });
                 expect(await client.hgetall("nonExistingKey")).toEqual({});
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hincrBy and hincrByFloat with existing key and field",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hincrBy and hincrByFloat with existing key and field_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
@@ -682,14 +686,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hincrByFloat(key, field, 1.5)).toEqual(
                     16.5
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hincrBy and hincrByFloat with non existing key and non existing field",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hincrBy and hincrByFloat with non existing key and non existing field_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -708,14 +712,14 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.hincrByFloat(key2, "nonExistingField", -0.5)
                 ).toEqual(-0.5);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "hincrBy and hincrByFloat with a field that contains a value of string that can not be represented as as integer or float",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hincrBy and hincrByFloat with a field that contains a value of string that can not be represented as as integer or float_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
@@ -741,14 +745,14 @@ export function runBaseTests<Context>(config: {
                         "hash value is not a float"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "lpush, lpop and lrange with existing and non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpush, lpop and lrange with existing and non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const valueList = ["value4", "value3", "value2", "value1"];
@@ -767,14 +771,14 @@ export function runBaseTests<Context>(config: {
                     []
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "lpush, lpop and lrange with key that holds a value that is not a list",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpush, lpop and lrange with key that holds a value that is not a list_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -802,14 +806,14 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "llen with existing, non-existing key and key that holds a value that is not a list",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `llen with existing, non-existing key and key that holds a value that is not a list_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -828,14 +832,14 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "ltrim with existing key and key that holds a value that is not a list",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `ltrim with existing key and key that holds a value that is not a list_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const valueList = ["value4", "value3", "value2", "value1"];
@@ -859,14 +863,14 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "lrem with existing key and non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lrem with existing key and non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const valueList = [
@@ -893,14 +897,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lrem("nonExistingKey", 2, "value")).toEqual(
                     0
                 );
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "rpush and rpop with existing and non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `rpush and rpop with existing and non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const valueList = ["value1", "value2", "value3", "value4"];
@@ -911,14 +915,14 @@ export function runBaseTests<Context>(config: {
                     "value2",
                 ]);
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "rpush and rpop with key that holds a value that is not a list",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `rpush and rpop with key that holds a value that is not a list_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -938,14 +942,14 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "sadd, srem, scard and smembers with existing set",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sadd, srem, scard and smembers with existing set_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const valueList = ["member1", "member2", "member3", "member4"];
@@ -961,28 +965,28 @@ export function runBaseTests<Context>(config: {
                 ]);
                 expect(await client.srem(key, ["member1"])).toEqual(1);
                 expect(await client.scard(key)).toEqual(2);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "srem, scard and smembers with non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `srem, scard and smembers with non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(await client.srem("nonExistingKey", ["member"])).toEqual(
                     0
                 );
                 expect(await client.scard("nonExistingKey")).toEqual(0);
                 expect(await client.smembers("nonExistingKey")).toEqual([]);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "sadd, srem, scard and smembers with with key that holds a value that is not a set",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sadd, srem, scard and smembers with with key that holds a value that is not a set_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -1018,14 +1022,14 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value"
                     );
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "exists with existing keys, an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `exists with existing keys, an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -1037,14 +1041,14 @@ export function runBaseTests<Context>(config: {
                     await client.exists([key1, "nonExistingKey", key2])
                 ).toEqual(2);
                 expect(await client.exists([key1, key1])).toEqual(2);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "unlink multiple existing keys and an non existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `unlink multiple existing keys and an non existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}" + uuidv4();
                 const key2 = "{key}" + uuidv4();
@@ -1056,14 +1060,14 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.unlink([key1, key2, "nonExistingKey", key3])
                 ).toEqual(3);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "expire, pexpire and ttl with positive timeout",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `expire, pexpire and ttl with positive timeout_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -1101,14 +1105,14 @@ export function runBaseTests<Context>(config: {
                 }
 
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "expireAt, pexpireAt and ttl with positive timeout",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `expireAt, pexpireAt and ttl with positive timeout_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -1152,14 +1156,14 @@ export function runBaseTests<Context>(config: {
                         )
                     ).toEqual(false);
                 }
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
@@ -1185,14 +1189,14 @@ export function runBaseTests<Context>(config: {
                     )
                 ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "expire, pexpire, expireAt, pexpireAt and ttl with non-existing key",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `expire, pexpire, expireAt, pexpireAt and ttl with non-existing key_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 expect(await client.expire(key, 10)).toEqual(false);
@@ -1210,14 +1214,14 @@ export function runBaseTests<Context>(config: {
                     )
                 ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "script test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
@@ -1251,28 +1255,28 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.invokeScript(script, { keys: [key2] })
                 ).toEqual("value2");
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "zadd and zaddIncr test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zadd and zaddIncr test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "zadd and zaddIncr with NX XX test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zadd and zaddIncr with NX XX test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
@@ -1299,14 +1303,14 @@ export function runBaseTests<Context>(config: {
                         conditionalChange: "onlyIfExists",
                     })
                 ).toEqual(6.0);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "zadd and zaddIncr with GT LT test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zadd and zaddIncr with GT LT test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: -3, two: 2, three: 3 };
@@ -1347,14 +1351,14 @@ export function runBaseTests<Context>(config: {
                         updateOptions: "scoreGreaterThanCurrent",
                     })
                 ).toEqual(null);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "zrem test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrem test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
@@ -1366,14 +1370,14 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zrem("non_existing_set", ["member"])
                 ).toEqual(0);
-            });
+            }, protocol);
         },
         config.timeout
     );
 
-    it(
-        "zcard test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zcard test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
@@ -1381,7 +1385,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zcard(key)).toEqual(3);
                 expect(await client.zrem(key, ["one"])).toEqual(1);
                 expect(await client.zcard(key)).toEqual(2);
-            });
+            }, protocol);
         },
         config.timeout
     );
