@@ -62,9 +62,13 @@ describe("RedisClient", () => {
         return [{ host: "localhost", port }];
     };
 
-    const getOptions = (port: number): BaseClientConfiguration => {
+    const getOptions = (
+        port: number,
+        protocol: ProtocolVersion
+    ): BaseClientConfiguration => {
         return {
             addresses: getAddress(port),
+            protocol,
         };
     };
 
@@ -113,39 +117,53 @@ describe("RedisClient", () => {
         ]);
     });
 
-    it("info without parameters", async () => {
-        const client = await RedisClient.createClient(getOptions(port));
-        const result = await client.info();
-        expect(result).toEqual(expect.stringContaining("# Server"));
-        expect(result).toEqual(expect.stringContaining("# Replication"));
-        expect(result).toEqual(expect.not.stringContaining("# Latencystats"));
-        client.close();
-    });
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "info without parameters",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getOptions(port, protocol)
+            );
+            const result = await client.info();
+            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(result).toEqual(expect.stringContaining("# Replication"));
+            expect(result).toEqual(
+                expect.not.stringContaining("# Latencystats")
+            );
+            client.close();
+        }
+    );
 
-    it("simple select test", async () => {
-        const client = await RedisClient.createClient(getOptions(port));
-        let selectResult = await client.select(0);
-        expect(selectResult).toEqual("OK");
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "simple select test",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getOptions(port, protocol)
+            );
+            let selectResult = await client.select(0);
+            expect(selectResult).toEqual("OK");
 
-        const key = uuidv4();
-        const value = uuidv4();
-        const result = await client.set(key, value);
-        expect(result).toEqual("OK");
+            const key = uuidv4();
+            const value = uuidv4();
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
 
-        selectResult = await client.select(1);
-        expect(selectResult).toEqual("OK");
-        expect(await client.get(key)).toEqual(null);
+            selectResult = await client.select(1);
+            expect(selectResult).toEqual("OK");
+            expect(await client.get(key)).toEqual(null);
 
-        selectResult = await client.select(0);
-        expect(selectResult).toEqual("OK");
-        expect(await client.get(key)).toEqual(value);
-        client.close();
-    });
+            selectResult = await client.select(0);
+            expect(selectResult).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
+            client.close();
+        }
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
-        async () => {
-            const client = await RedisClient.createClient(getOptions(port));
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getOptions(port, protocol)
+            );
             const transaction = new Transaction();
             const expectedRes = transactionTest(transaction);
             transaction.select(0);
@@ -156,28 +174,35 @@ describe("RedisClient", () => {
         }
     );
 
-    it("can return null on WATCH transaction failures", async () => {
-        const client1 = await RedisClient.createClient(getOptions(port));
-        const client2 = await RedisClient.createClient(getOptions(port));
-        const transaction = new Transaction();
-        transaction.get("key");
-        const result1 = await client1.customCommand(["WATCH", "key"]);
-        expect(result1).toEqual("OK");
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "can return null on WATCH transaction failures",
+        async (protocol) => {
+            const client1 = await RedisClient.createClient(
+                getOptions(port, protocol)
+            );
+            const client2 = await RedisClient.createClient(
+                getOptions(port, protocol)
+            );
+            const transaction = new Transaction();
+            transaction.get("key");
+            const result1 = await client1.customCommand(["WATCH", "key"]);
+            expect(result1).toEqual("OK");
 
-        const result2 = await client2.set("key", "foo");
-        expect(result2).toEqual("OK");
+            const result2 = await client2.set("key", "foo");
+            expect(result2).toEqual("OK");
 
-        const result3 = await client1.exec(transaction);
-        expect(result3).toBeNull();
+            const result3 = await client1.exec(transaction);
+            expect(result3).toBeNull();
 
-        client1.close();
-        client2.close();
-    });
+            client1.close();
+            client2.close();
+        }
+    );
 
     runBaseTests<Context>({
-        init: async (protocol?, clientName?) => {
-            const options = getOptions(port);
-            options.serverProtocol = protocol;
+        init: async (protocol, clientName?) => {
+            const options = getOptions(port, protocol);
+            options.protocol = protocol;
             options.clientName = clientName;
             const client = await RedisClient.createClient(options);
 
