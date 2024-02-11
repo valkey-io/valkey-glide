@@ -1,13 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import glide.api.models.Transaction;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.Transaction;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;

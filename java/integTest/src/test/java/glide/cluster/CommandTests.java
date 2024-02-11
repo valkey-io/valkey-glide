@@ -1,7 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;

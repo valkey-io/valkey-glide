@@ -1,7 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import glide.api.models.ClusterTransaction;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -9,6 +8,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
+import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;

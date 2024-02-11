@@ -77,7 +77,7 @@ public class CommandManager {
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
-        Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(transaction);
         return submitCommandToChannel(command, responseHandler);
@@ -92,9 +92,9 @@ public class CommandManager {
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
-        ClusterTransaction transaction,
-        Optional<Route> route,
-        RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            ClusterTransaction transaction,
+            Optional<Route> route,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(transaction, route);
         return submitCommandToChannel(command, responseHandler);
@@ -154,7 +154,7 @@ public class CommandManager {
     protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
 
         RedisRequest.Builder builder =
-            RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
         return builder;
     }
@@ -168,10 +168,10 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-        ClusterTransaction transaction, Optional<Route> route) {
+            ClusterTransaction transaction, Optional<Route> route) {
 
         RedisRequest.Builder builder =
-            RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
         return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
     }
