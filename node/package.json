@@ -70,12 +70,8 @@
     "//": [
         "The fields below have been commented out and are only necessary for publishing the package."
     ],
-    "///cpu": [
-        "${node_arch}"
-    ],
-    "///os": [
-        "${node_os}"
-    ],
+    "///cpu": ["${node_arch}"],
+    "///os": ["${node_os}"],
     "///name": "${scope}${pkg_name}",
     "///version": "${package_version}"
 }
