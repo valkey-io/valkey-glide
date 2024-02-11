@@ -8,6 +8,7 @@ on:
       paths:
         - .github/workflows/ort.yml
         - .github/workflows/run-ort-tools/action.yml
+        - utils/get_licenses_from_ort.py
     workflow_dispatch:
       inputs:
         branch:
@@ -172,9 +173,11 @@ jobs:
               if: ${{ env.FOUND_DIFF  == 'true'}}
               working-directory: ./utils
               run: |
+                list_result=`python3 get_licenses_from_ort.py`
+                echo $list_result
                 {
                   echo 'LICENSES_LIST<<EOF'
-                  python3 get_licenses_from_ort.py
+                  echo ${list_result}
                   echo EOF
                 } >> "$GITHUB_ENV"
 
