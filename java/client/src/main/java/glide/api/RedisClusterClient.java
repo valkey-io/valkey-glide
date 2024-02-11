@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-\import glide.api.models.ClusterTransaction;
+import glide.api.models.ClusterTransaction;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -69,7 +69,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
         return commandManager.submitNewCommand(
-            transaction, Optional.empty(), this::handleArrayResponse);
+                transaction, Optional.empty(), this::handleArrayResponse);
     }
 
     @Override

@@ -70,6 +70,37 @@ public class CommandManager {
     }
 
     /**
+     * Build a Transaction and send.
+     *
+     * @param transaction Redis Transaction request with multiple commands
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+        Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(transaction);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Build a Transaction and send.
+     *
+     * @param transaction Redis Transaction request with multiple commands
+     * @param route Command routing parameters
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+        ClusterTransaction transaction,
+        Optional<Route> route,
+        RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(transaction, route);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
      * Take a redis request and send to channel.
      *
      * @param command The Redis command request as a builder to execute
@@ -114,7 +145,7 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf transaction request object with routing options.<br>
+     * Build a protobuf transaction request object with routing options.
      *
      * @param transaction Redis transaction with commands
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
@@ -122,14 +153,14 @@ public class CommandManager {
      */
     protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
 
-        var builder =
+        RedisRequest.Builder builder =
             RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
-        return prepareRedisRequestRoute(builder, Optional.empty());
+        return builder;
     }
 
     /**
-     * Build a protobuf transaction request object with routing options.<br>
+     * Build a protobuf transaction request object with routing options.
      *
      * @param transaction Redis transaction with commands
      * @param route Command routing parameters
@@ -139,10 +170,10 @@ public class CommandManager {
     protected RedisRequest.Builder prepareRedisRequest(
         ClusterTransaction transaction, Optional<Route> route) {
 
-        var builder =
+        RedisRequest.Builder builder =
             RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
     }
 
     /**
