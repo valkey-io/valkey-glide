@@ -86,7 +86,17 @@ jobs:
               shell: bash
               working-directory: ./node
               run: |
-                  npm publish --access public
+                  set +e
+                  # Redirect only stderr
+                  { npm_publish_err=$(npm publish --access public 2>&1 >&3 3>&-); } 3>&1
+                  if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
+                  then
+                    echo "Skipping publishing, package already published"
+                  elif [[ ! -z "$npm_publish_err" ]]
+                  then
+                    echo "Failed to publish with error: ${npm_publish_err}"
+                    exit 1
+                  fi
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
