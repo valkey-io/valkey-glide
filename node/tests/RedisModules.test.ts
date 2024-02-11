@@ -59,7 +59,7 @@ describe("RedisModules", () => {
     runBaseTests<Context>({
         init: async (protocol, clientName) => {
             const options = getOptions(cluster.ports());
-            options.serverProtocol = protocol;
+            options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;
             const client = await RedisClusterClient.createClient(options);

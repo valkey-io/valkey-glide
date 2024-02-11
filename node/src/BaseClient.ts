@@ -160,7 +160,7 @@ export type BaseClientConfiguration = {
      * Choose the Redis protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
-    serverProtocol?: ProtocolVersion;
+    protocol?: ProtocolVersion;
     /**
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
@@ -1087,7 +1087,7 @@ export class BaseClient {
                       username: options.credentials.username,
                   }
                 : undefined;
-        const protocol = options.serverProtocol as
+        const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
         return {

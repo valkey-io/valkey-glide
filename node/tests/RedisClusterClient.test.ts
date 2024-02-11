@@ -48,19 +48,23 @@ describe("RedisClusterClient", () => {
         }
     });
 
-    const getOptions = (ports: number[]): BaseClientConfiguration => {
+    const getOptions = (
+        ports: number[],
+        protocol: ProtocolVersion
+    ): BaseClientConfiguration => {
         return {
             addresses: ports.map((port) => ({
                 host: "localhost",
                 port,
             })),
+            protocol,
         };
     };
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
-            const options = getOptions(cluster.ports());
-            options.serverProtocol = protocol;
+            const options = getOptions(cluster.ports(), protocol);
+            options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;
             const client = await RedisClusterClient.createClient(options);
@@ -81,11 +85,11 @@ describe("RedisClusterClient", () => {
         timeout: TIMEOUT,
     });
 
-    it(
-        "info with server and replication",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with server and replication_%p`,
+        async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server])
@@ -113,11 +117,11 @@ describe("RedisClusterClient", () => {
         TIMEOUT
     );
 
-    it(
-        "info with server and randomNode route",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with server and randomNode route_%p`,
+        async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const result = await client.info(
                 [InfoOptions.Server],
@@ -131,11 +135,11 @@ describe("RedisClusterClient", () => {
         TIMEOUT
     );
 
-    it(
-        "config get and config set transactions test",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `config get and config set transactions test_%p`,
+        async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const transaction = new ClusterTransaction();
             transaction.configSet({ timeout: "1000" });
@@ -149,9 +153,9 @@ describe("RedisClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
-        async () => {
+        async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const transaction = new ClusterTransaction();
             const expectedRes = transactionTest(transaction);
@@ -162,14 +166,14 @@ describe("RedisClusterClient", () => {
         TIMEOUT
     );
 
-    it(
-        "can return null on WATCH transaction failures",
-        async () => {
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can return null on WATCH transaction failures_%p`,
+        async (protocol) => {
             const client1 = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const client2 = await RedisClusterClient.createClient(
-                getOptions(cluster.ports())
+                getOptions(cluster.ports(), protocol)
             );
             const transaction = new ClusterTransaction();
             transaction.get("key");
