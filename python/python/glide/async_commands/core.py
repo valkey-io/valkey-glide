@@ -1382,7 +1382,7 @@ class CoreCommands(Protocol):
             message (str): Incoming message.
             channel (str): Name of an channel that triggered the message.
             pattern (Optional[str]): Pattern that triggered the message.
-            context (Optional[str]): User-provided context for this subscription.
+            context (Optional[Any]): User-provided context for this subscription.
         """
 
         message: str
@@ -1408,14 +1408,14 @@ class CoreCommands(Protocol):
         context: Optional[Any],
     ) -> None:
         """
-        Add specific channels or set of channels defined by a pattern to active subscriptions.
+        Add specific channels or channel patterns to active subscriptions.
         The callback is associated with each channel/pattern,
         meaning subsequent subsciption for the same channel/pattern will override the previous association,
         dereferencing the original callback object.
         Note1: Overlapping subscriptions produced by combinations of Exact and Pattern modes
-        count as distinc subscriptions and will produce duplicated messages.
+        count as distinct subscriptions and will produce duplicated messages.
         Note2: Patterns are not applicable in Sharded mode. That is, it is not possible to create a sharded subscription with a pattern,
-        and pattern/exact subscriptions won't receive messages which were published with using Sharded mode.
+        and pattern/exact subscriptions won't receive messages which were published in Sharded mode.
         See https://redis.io/docs/interact/pubsub for more details.
 
         Args:
