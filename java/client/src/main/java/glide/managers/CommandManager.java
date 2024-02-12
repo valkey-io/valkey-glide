@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import glide.api.models.ClusterTransaction;
+import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
@@ -8,6 +10,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
@@ -67,6 +70,37 @@ public class CommandManager {
     }
 
     /**
+     * Build a Transaction and send.
+     *
+     * @param transaction Redis Transaction request with multiple commands
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+            Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(transaction);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Build a Transaction and send.
+     *
+     * @param transaction Redis Transaction request with multiple commands
+     * @param route Transaction routing parameters
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+            ClusterTransaction transaction,
+            Optional<Route> route,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(transaction, route);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
      * Take a redis request and send to channel.
      *
      * @param command The Redis command request as a builder to execute
@@ -108,6 +142,38 @@ public class CommandManager {
                                         .build());
 
         return prepareRedisRequestRoute(builder, route);
+    }
+
+    /**
+     * Build a protobuf transaction request object with routing options.
+     *
+     * @param transaction Redis transaction with commands
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
+
+        RedisRequest.Builder builder =
+                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+
+        return builder;
+    }
+
+    /**
+     * Build a protobuf transaction request object with routing options.
+     *
+     * @param transaction Redis transaction with commands
+     * @param route Command routing parameters
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(
+            ClusterTransaction transaction, Optional<Route> route) {
+
+        RedisRequest.Builder builder =
+                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+
+        return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
     }
 
     /**

@@ -149,6 +149,10 @@ public abstract class BaseClient
         return handleRedisResponse(String.class, true, response);
     }
 
+    protected Object[] handleArrayResponse(Response response) {
+        return handleRedisResponse(Object[].class, true, response);
+    }
+
     @Override
     public CompletableFuture<String> ping() {
         return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);

@@ -8,13 +8,16 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
+import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
@@ -64,6 +67,24 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
+        return commandManager.submitNewCommand(
+                transaction, Optional.empty(), this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>[]> exec(
+            ClusterTransaction transaction, Route route) {
+        return commandManager
+                .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayResponse)
+                .thenApply(
+                        objects ->
+                                Arrays.stream(objects)
+                                        .map(ClusterValue::of)
+                                        .<ClusterValue<Object>>toArray(ClusterValue[]::new));
+    }
+
+    @Override
     public CompletableFuture<String> ping(@NonNull Route route) {
         return commandManager.submitNewCommand(Ping, new String[0], route, this::handleStringResponse);
     }
@@ -80,7 +101,6 @@ public class RedisClusterClient extends BaseClient
                 Info, new String[0], response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info, new String[0], route, response -> ClusterValue.of(handleObjectResponse(response)));
