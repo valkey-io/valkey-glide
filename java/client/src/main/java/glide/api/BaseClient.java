@@ -133,6 +133,10 @@ public abstract class BaseClient
                         + classType.getSimpleName());
     }
 
+    protected Object handleObjectResponse(Response response) throws RedisException {
+        return handleRedisResponse(Object.class, false, response);
+    }
+
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object.class, true, response);
     }

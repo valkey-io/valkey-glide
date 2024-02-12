@@ -13,9 +13,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
+import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.managers.CommandManager;
@@ -200,5 +202,69 @@ public class RedisClientTest {
         // verify
         assertNotNull(response);
         assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void info_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        String testPayload = "Key: Value";
+        when(testResponse.get()).thenReturn(testPayload);
+        when(commandManager.<String>submitNewCommand(eq(Info), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.info();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(testPayload, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void info_with_multiple_InfoOptions_returns_success() {
+        // setup
+        String[] arguments =
+                new String[] {InfoOptions.Section.ALL.toString(), InfoOptions.Section.DEFAULT.toString()};
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        String testPayload = "Key: Value";
+        when(testResponse.get()).thenReturn(testPayload);
+        when(commandManager.<String>submitNewCommand(eq(Info), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        InfoOptions options =
+                InfoOptions.builder()
+                        .section(InfoOptions.Section.ALL)
+                        .section(InfoOptions.Section.DEFAULT)
+                        .build();
+        CompletableFuture<String> response = service.info(options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(testPayload, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void info_with_empty_InfoOptions_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        String testPayload = "Key: Value";
+        when(testResponse.get()).thenReturn(testPayload);
+        when(commandManager.<String>submitNewCommand(eq(Info), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.info(InfoOptions.builder().build());
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(testPayload, payload);
     }
 }
