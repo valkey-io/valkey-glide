@@ -170,14 +170,11 @@ jobs:
                 fi
 
             - name: Retrieve licenses list
-              if: ${{ env.FOUND_DIFF  == 'true'}}
               working-directory: ./utils
               run: |
-                list_result=`python3 get_licenses_from_ort.py`
-                echo $list_result
                 {
                   echo 'LICENSES_LIST<<EOF'
-                  echo ${list_result}
+                  python3 get_licenses_from_ort.py
                   echo EOF
                 } >> "$GITHUB_ENV"
 
@@ -196,6 +193,6 @@ jobs:
                 git commit -m "Updated attribution files"
                 git push --set-upstream origin ${BRANCH_NAME} -f
                 title="Updated attribution files for ${BRANCH_NAME}"
-                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{env.LICENSES_LIST}}'
+                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
