@@ -2,11 +2,14 @@
 package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
@@ -20,7 +23,9 @@ import lombok.NonNull;
  * client to Redis.
  */
 public class RedisClusterClient extends BaseClient
-        implements ConnectionManagementClusterCommands, GenericClusterCommands {
+        implements ConnectionManagementClusterCommands,
+                GenericClusterCommands,
+                ServerManagementClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -67,5 +72,30 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> ping(@NonNull String str, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Ping, new String[] {str}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info() {
+        return commandManager.submitNewCommand(
+                Info, new String[0], response -> ClusterValue.of(handleObjectResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Info, new String[0], route, response -> ClusterValue.of(handleObjectResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(@NonNull InfoOptions options) {
+        return commandManager.submitNewCommand(
+                Info, options.toArgs(), response -> ClusterValue.of(handleObjectResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(
+            @NonNull InfoOptions options, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Info, options.toArgs(), route, response -> ClusterValue.of(handleObjectResponse(response)));
     }
 }
