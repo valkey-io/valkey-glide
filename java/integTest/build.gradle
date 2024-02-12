@@ -27,17 +27,25 @@ dependencies {
 
 def standaloneRedisPorts = []
 def clusterRedisPorts = []
+def redisVersion = ""
 
 ext {
-    extractPortsFromClusterManagerOutput = { String output, ArrayList dest ->
+    extractPortsFromClusterManagerOutput = { String output ->
+        var res = []
         for (def line : output.split("\n")) {
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
             def addresses = line.split("=")[1].split(",")
             for (def address : addresses)
-                dest << address.split(":")[1]
+                res << address.split(":")[1]
         }
+        return res
+    }
+    extractRedisVersion = { String output ->
+        // Line in format like
+        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
+        return output.split(" ")[2].split("=")[1]
     }
 }
 
@@ -68,7 +76,7 @@ tasks.register('startCluster') {
                 commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
                 standardOutput = os
             }
-            extractPortsFromClusterManagerOutput(os.toString(), clusterRedisPorts)
+            clusterRedisPorts = extractPortsFromClusterManagerOutput(os.toString())
         }
     }
 }
@@ -81,12 +89,25 @@ tasks.register('startStandalone') {
                 commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
                 standardOutput = os
             }
-            extractPortsFromClusterManagerOutput(os.toString(), standaloneRedisPorts)
+            standaloneRedisPorts = extractPortsFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
+tasks.register('getRedisVersion') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                commandLine 'redis-server', '-v'
+                standardOutput = os
+            }
+            redisVersion = extractRedisVersion(os.toString())
         }
     }
 }
 
 test.dependsOn 'stopAllBeforeTests'
+test.dependsOn 'getRedisVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
@@ -97,8 +118,10 @@ tasks.withType(Test) {
     doFirst {
         println "Cluster ports = ${clusterRedisPorts}"
         println "Standalone ports = ${standaloneRedisPorts}"
+        println "Redis version = ${redisVersion}"
         systemProperty 'test.redis.standalone.ports', standaloneRedisPorts.join(',')
         systemProperty 'test.redis.cluster.ports', clusterRedisPorts.join(',')
+        systemProperty 'test.redis.version', redisVersion
     }
 
     testLogging {

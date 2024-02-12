@@ -2,8 +2,11 @@
 package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.Info;
 
 import glide.api.commands.GenericCommands;
+import glide.api.commands.ServerManagementCommands;
+import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -14,7 +17,7 @@ import lombok.NonNull;
  * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
  * client to Redis.
  */
-public class RedisClient extends BaseClient implements GenericCommands {
+public class RedisClient extends BaseClient implements GenericCommands, ServerManagementCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -33,5 +36,15 @@ public class RedisClient extends BaseClient implements GenericCommands {
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
         return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> info() {
+        return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> info(@NonNull InfoOptions options) {
+        return commandManager.submitNewCommand(Info, options.toArgs(), this::handleStringResponse);
     }
 }
