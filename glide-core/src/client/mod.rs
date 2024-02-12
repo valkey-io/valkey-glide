@@ -122,7 +122,7 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         let expected_type = expected_type_for_cmd(cmd);
-        run_with_timeout(self.request_timeout, async {
+        run_with_timeout(self.request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
 
