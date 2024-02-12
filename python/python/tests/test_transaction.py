@@ -35,6 +35,7 @@ def transaction_test(
 
     transaction.set(key, value)
     transaction.get(key)
+    transaction.type(key)
 
     transaction.exists([key])
 
@@ -98,6 +99,7 @@ def transaction_test(
     return [
         OK,
         value,
+        "string",
         1,
         1,
         None,
