@@ -102,6 +102,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
+        return commandManager.submitNewCommand(
                 Info, new String[0], route, response -> ClusterValue.of(handleObjectResponse(response)));
     }
 
@@ -116,4 +117,5 @@ public class RedisClusterClient extends BaseClient
             @NonNull InfoOptions options, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info, options.toArgs(), route, response -> ClusterValue.of(handleObjectResponse(response)));
+    }
 }
