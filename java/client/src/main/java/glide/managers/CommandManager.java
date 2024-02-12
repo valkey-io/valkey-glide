@@ -87,7 +87,7 @@ public class CommandManager {
      * Build a Transaction and send.
      *
      * @param transaction Redis Transaction request with multiple commands
-     * @param route Command routing parameters
+     * @param route Transaction routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */

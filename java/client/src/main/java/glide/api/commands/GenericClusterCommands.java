@@ -80,8 +80,8 @@ public interface GenericClusterCommands {
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
-     * @param route Routing configuration for the command. The client will route the command to the
-     *     nodes defined by <code>route</code>.
+     * @param route Routing configuration for the transaction. The client will route the transaction
+     *     to the nodes defined by <code>route</code>.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
