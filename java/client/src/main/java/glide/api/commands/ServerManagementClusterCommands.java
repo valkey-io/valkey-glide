@@ -19,8 +19,12 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details. {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
-     * @return Response from Redis cluster with a <code>String</code> containing the information for
-     *     the sections requested.
+     * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
+     *     each address as the key and its corresponding value is the information for the node.
+     * @example
+     *     <p><code>
+     *     {@literal Map<String, String>} routedInfoResult = clusterClient.info().get().getMultiValue();
+     *     </code>
      */
     CompletableFuture<ClusterValue<String>> info();
 
@@ -31,8 +35,9 @@ public interface ServerManagementClusterCommands {
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
      * @return Response from Redis cluster with a <code>String</code> with the requested Sections.
-     *     When specifying a <code>route</code> other than a single node, it returns a dictionary
-     *     where each address is the key and its corresponding node response is the value.
+     *     When specifying a <code>route</code> other than a single node, it returns a <code>
+     *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
+     *     value is the information for the node.
      */
     CompletableFuture<ClusterValue<String>> info(Route route);
 
@@ -44,8 +49,9 @@ public interface ServerManagementClusterCommands {
      * @param options - A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
-     * @return Response from Redis cluster with a <code>String</code> containing the information for
-     *     the sections requested. Sections.
+     * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
+     *     each address as the key and its corresponding value is the information of the sections
+     *     requested for the node.
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
 
@@ -58,9 +64,10 @@ public interface ServerManagementClusterCommands {
      *     InfoOptions.Section#DEFAULT} option is assumed.
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
-     * @return Response from Redis cluster with a <code>String</code> with the requested Sections.
-     *     When specifying a <code>route</code> other than a single node, it returns a dictionary
-     *     where each address is the key and its corresponding node response is the value.
+     * @return Response from Redis cluster with a <code>String</code> with the requested sections.
+     *     When specifying a <code>route</code> other than a single node, it returns a <code>
+     *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
+     *     value is the information of the sections requested for the node.
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route);
 }
