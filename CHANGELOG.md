@@ -6,9 +6,9 @@
 * Python, Node: Added ZREM command ([#834](https://github.com/aws/glide-for-redis/pull/834), [#831](https://github.com/aws/glide-for-redis/pull/831))
 * Python, Node: Added ZSCORE command ([#885](https://github.com/aws/glide-for-redis/pull/885), [#871](https://github.com/aws/glide-for-redis/pull/871))
 * Use jemalloc as default allocator. ([#847](https://github.com/aws/glide-for-redis/pull/847))
-* Python: Added RPOPCOUNT and LPOPCOUNT to transaction ([#874](https://github.com/aws/glide-for-redis/pull/874))
+* Python, Node: Added RPOPCOUNT and LPOPCOUNT to transaction ([#874](https://github.com/aws/glide-for-redis/pull/874))
 * Standalone client: Improve connection errors. ([#854](https://github.com/aws/glide-for-redis/pull/854))
-* Python: When recieving LPOP/RPOP with count, convert result to Array. ([#811](https://github.com/aws/glide-for-redis/pull/811))
+* Python, Node: When recieving LPOP/RPOP with count, convert result to Array. ([#811](https://github.com/aws/glide-for-redis/pull/811))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))
