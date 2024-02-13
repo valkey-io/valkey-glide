@@ -803,6 +803,21 @@ class BaseTransaction:
         """
         self.append_command(RequestType.TTL, [key])
 
+    def type(self, key: str):
+        """
+         Returns the string representation of the type of the value stored at `key`.
+
+         See https://redis.io/commands/type/ for more details.
+
+         Args:
+             key (str): The key to check its data type.
+
+        Commands response:
+            str: If the key exists, the type of the stored value is returned.
+            Otherwise, a "none" string is returned.
+        """
+        self.append_command(RequestType.Type, [key])
+
     def zadd(
         self,
         key: str,

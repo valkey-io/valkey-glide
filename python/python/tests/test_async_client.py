@@ -1174,6 +1174,36 @@ class TestCommands:
             await redis_client.zscore("non_existing_key", "non_existing_member") == None
         )
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_type(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "value") == OK
+        assert (await redis_client.type(key)).lower() == "string"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.lpush(key, ["value"]) == 1
+        assert (await redis_client.type(key)).lower() == "list"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.sadd(key, ["value"]) == 1
+        assert (await redis_client.type(key)).lower() == "set"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.zadd(key, {"member": 1.0}) == 1
+        assert (await redis_client.type(key)).lower() == "zset"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.hset(key, {"field": "value"}) == 1
+        assert (await redis_client.type(key)).lower() == "hash"
+        assert await redis_client.delete([key]) == 1
+
+        await redis_client.custom_command(["XADD", key, "*", "field", "value"])
+        assert await redis_client.type(key) == "stream"
+        assert await redis_client.delete([key]) == 1
+
+        assert (await redis_client.type(key)).lower() == "none"
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
