@@ -103,4 +103,29 @@ public interface StringCommands {
      * @return The value of <code>key</code> after the increment.
      */
     CompletableFuture<Double> incrByFloat(String key, double amount);
+
+    /**
+     * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
+     *     </code> contains a value of the wrong type or contains a string that cannot be represented
+     *     as integer.
+     */
+    CompletableFuture<Long> decr(String key);
+
+    /**
+     * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @param amount The amount to decrement.
+     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
+     *     </code> contains a value of the wrong type or contains a string that cannot be represented
+     *     as integer.
+     */
+    CompletableFuture<Long> decrBy(String key, long amount);
 }
