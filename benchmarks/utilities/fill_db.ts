@@ -5,7 +5,7 @@
 import {
     SIZE_SET_KEYSPACE,
     createRedisClient,
-    generate_value,
+    generateValue,
     receivedOptions,
 } from "./utils";
 
@@ -17,7 +17,7 @@ async function fill_database(
     port: number
 ) {
     const client = await createRedisClient(host, isCluster, tls, port);
-    const data = generate_value(data_size);
+    const data = generateValue(data_size);
     await client.connect();
 
     const CONCURRENT_SETS = 1000;
