@@ -97,13 +97,13 @@ Other useful gradle developer commands:
 ```java
 import glide.api.RedisClient;
 
-RedisClient client = RedisClient.CreateClient();
+RedisClient client = RedisClient.CreateClient().get();
 
 CompletableFuture<String> setResponse = client.set("key", "foobar");
-setResponse.get() == "OK";
+assert setResponse.get() == "OK" : "Failed on client.set("key", "foobar") request";
 
 CompletableFuture<String> getResponse = client.get("key");
-getResponse.get() == "foobar";
+assert getResponse.get() == "foobar" : "Failed on client.get("key") request";
 ```
 
 ### Benchmarks
