@@ -104,6 +104,7 @@ enum RequestType {
     ZIncrBy = 66;
     ZScore = 67;
     Type = 68;
+    HLen = 69;
 }
 
 message Command {
