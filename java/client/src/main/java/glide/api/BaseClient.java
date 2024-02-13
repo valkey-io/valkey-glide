@@ -7,6 +7,9 @@ import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Incr;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -160,6 +163,10 @@ public abstract class BaseClient
         return handleRedisResponse(Long.class, false, response);
     }
 
+    protected Double handleDoubleResponse(Response response) throws RedisException {
+        return handleRedisResponse(Double.class, false, response);
+    }
+
     protected Object[] handleArrayResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, false, response);
     }
@@ -244,5 +251,23 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+
+    @Override
+    public CompletableFuture<Long> incr(@NonNull String key) {
+        return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> incrBy(@NonNull String key, long amount) {
+        return commandManager.submitNewCommand(
+            IncrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
+        return commandManager.submitNewCommand(
+            IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
     }
 }
