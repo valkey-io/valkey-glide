@@ -123,6 +123,7 @@ enum RequestType {
     XTrim = 79;
     XGroupCreate = 80;
     XGroupDestroy = 81;
+    HSetNX = 82;
 }
 
 message Command {
