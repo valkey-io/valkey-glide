@@ -147,7 +147,6 @@ jobs:
             -   name: Build client
                 working-directory: ./go
                 run: |
-                    cargo build --release
                     go mod edit -go ${{ matrix.go }}
                     make build
 
