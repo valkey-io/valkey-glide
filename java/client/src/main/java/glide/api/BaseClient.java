@@ -3,6 +3,8 @@ package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.MGet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -27,9 +29,12 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -157,6 +162,10 @@ public abstract class BaseClient
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
+        return handleRedisResponse(Object[].class, false, response);
+    }
+
+    protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, true, response);
     }
 
@@ -224,5 +233,23 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> mget(@NonNull String[] keys) {
+        return commandManager
+                .submitNewCommand(MGet, keys, this::handleArrayResponse)
+                .thenApply(
+                        objectsArray ->
+                                Arrays.stream(objectsArray).map(object -> (String) object).toArray(String[]::new));
+    }
+
+    @Override
+    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args =
+                keyValueMap.entrySet().stream()
+                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 }

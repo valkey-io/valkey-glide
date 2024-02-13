@@ -4,6 +4,7 @@ package glide.api.commands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -48,4 +49,24 @@ public interface StringCommands {
      *     is set, return the old value as a <code>String</code>.
      */
     CompletableFuture<String> set(String key, String value, SetOptions options);
+
+    /**
+     * Retrieve the values of multiple <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     */
+    CompletableFuture<String[]> mget(String[] keys);
+
+    /**
+     * Set multiple keys to multiple values in a single operation.
+     *
+     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Always <code>"Ok"</code>.
+     */
+    CompletableFuture<String> mset(Map<String, String> keyValueMap);
 }

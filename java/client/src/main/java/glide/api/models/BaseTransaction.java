@@ -4,6 +4,8 @@ package glide.api.models;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.MGet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -16,7 +18,10 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import java.util.Map;
+import java.util.stream.Stream;
 import lombok.Getter;
+import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
@@ -233,6 +238,40 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Retrieve the values of multiple <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     */
+    public T mget(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Set multiple keys to multiple values in a single operation.
+     *
+     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Always <code>"Ok"</code>.
+     */
+    public T mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args =
+                keyValueMap.entrySet().stream()
+                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                        .toArray(String[]::new);
+        ArgsArray commandArgs = buildArgs(args);
+
+        protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
         return getThis();
     }
 

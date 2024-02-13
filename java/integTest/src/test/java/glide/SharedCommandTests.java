@@ -7,6 +7,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.Map;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -296,5 +298,22 @@ public class SharedCommandTests {
 
         e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
         assertTrue(e.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void mset_mget_existing_non_existing_key(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String nonExisting = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+        assertArrayEquals(
+                new String[] {value, value, null, value},
+                client.mget(new String[] {key1, key2, nonExisting, key3}).get());
     }
 }
