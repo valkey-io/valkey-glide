@@ -10,9 +10,9 @@ import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
 import {
-    generate_key_get,
-    generate_key_set,
-    generate_value,
+    generateKeyGet,
+    generateKeySet,
+    generateValue,
     getAddress,
     receivedOptions,
 } from "../utilities/utils";
@@ -29,16 +29,16 @@ enum ChosenAction {
 // and save the logs to a file with the name of the results file.
 Logger.setLoggerConfig("info", parse(receivedOptions.resultsFile).name);
 
-let started_tasks_counter = 0;
-const running_tasks: Promise<void>[] = [];
-const bench_json_results: object[] = [];
+let startedTasksCounter = 0;
+const runningTasks: Promise<void>[] = [];
+const benchJsonResults: object[] = [];
 
 interface IAsyncClient {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
 }
 
-function choose_action(): ChosenAction {
+function chooseAction(): ChosenAction {
     if (Math.random() > PROB_GET) {
         return ChosenAction.SET;
     }
@@ -50,77 +50,77 @@ function choose_action(): ChosenAction {
     return ChosenAction.GET_EXISTING;
 }
 
-function calculate_latency(latency_list: number[], percentile_point: number) {
-    const percentile_calculation = percentile(percentile_point, latency_list);
-    const percentile_value = Array.isArray(percentile_calculation)
-        ? percentile_calculation[0]
-        : percentile_calculation;
-    return Math.round(percentile_value * 100.0) / 100.0; // round to 2 decimal points
+function calculateLatency(latencyList: number[], percentile_point: number) {
+    const percentileCalculation = percentile(percentile_point, latencyList);
+    const percentileValue = Array.isArray(percentileCalculation)
+        ? percentileCalculation[0]
+        : percentileCalculation;
+    return Math.round(percentileValue * 100.0) / 100.0; // round to 2 decimal points
 }
 
-function print_results(resultsFile: string) {
-    writeFileSync(resultsFile, JSON.stringify(bench_json_results));
+function printResults(resultsFile: string) {
+    writeFileSync(resultsFile, JSON.stringify(benchJsonResults));
 }
 
-async function redis_benchmark(
+async function redisBenchmark(
     clients: IAsyncClient[],
-    total_commands: number,
+    totalCommands: number,
     data: string,
-    action_latencies: Record<ChosenAction, number[]>
+    actionLatencies: Record<ChosenAction, number[]>
 ) {
-    while (started_tasks_counter < total_commands) {
-        started_tasks_counter += 1;
-        const chosen_action = choose_action();
+    while (startedTasksCounter < totalCommands) {
+        startedTasksCounter += 1;
+        const chosen_action = chooseAction();
         const tic = process.hrtime();
-        const client = clients[started_tasks_counter % clients.length];
+        const client = clients[startedTasksCounter % clients.length];
 
         switch (chosen_action) {
             case ChosenAction.GET_EXISTING:
-                await client.get(generate_key_set());
+                await client.get(generateKeySet());
                 break;
             case ChosenAction.GET_NON_EXISTING:
-                await client.get(generate_key_get());
+                await client.get(generateKeyGet());
                 break;
             case ChosenAction.SET:
-                await client.set(generate_key_set(), data);
+                await client.set(generateKeySet(), data);
                 break;
         }
 
         const toc = process.hrtime(tic);
-        const latency_list = action_latencies[chosen_action];
-        latency_list.push(toc[0] * 1000 + toc[1] / 1000000);
+        const latencyList = actionLatencies[chosen_action];
+        latencyList.push(toc[0] * 1000 + toc[1] / 1000000);
     }
 }
 
-async function create_bench_tasks(
+async function createBenchTasks(
     clients: IAsyncClient[],
-    total_commands: number,
-    num_of_concurrent_tasks: number,
+    totalCommands: number,
+    numOfConcurrentTasks: number,
     data: string,
-    action_latencies: Record<ChosenAction, number[]>
+    actionLatencies: Record<ChosenAction, number[]>
 ) {
-    started_tasks_counter = 0;
+    startedTasksCounter = 0;
     const tic = process.hrtime();
 
-    for (let i = 0; i < num_of_concurrent_tasks; i++) {
-        running_tasks.push(
-            redis_benchmark(clients, total_commands, data, action_latencies)
+    for (let i = 0; i < numOfConcurrentTasks; i++) {
+        runningTasks.push(
+            redisBenchmark(clients, totalCommands, data, actionLatencies)
         );
     }
 
-    await Promise.all(running_tasks);
+    await Promise.all(runningTasks);
     const toc = process.hrtime(tic);
     return toc[0] + toc[1] / 1000000000;
 }
 
-function latency_results(
+function latencyResults(
     prefix: string,
     latencies: number[]
 ): Record<string, number> {
     const result: Record<string, number> = {};
-    result[prefix + "_p50_latency"] = calculate_latency(latencies, 50);
-    result[prefix + "_p90_latency"] = calculate_latency(latencies, 90);
-    result[prefix + "_p99_latency"] = calculate_latency(latencies, 99);
+    result[prefix + "_p50_latency"] = calculateLatency(latencies, 50);
+    result[prefix + "_p90_latency"] = calculateLatency(latencies, 90);
+    result[prefix + "_p99_latency"] = calculateLatency(latencies, 99);
     result[prefix + "_average_latency"] =
         latencies.reduce((a, b) => a + b, 0) / latencies.length;
     result[prefix + "_std_dev"] = stdev(latencies);
@@ -128,65 +128,65 @@ function latency_results(
     return result;
 }
 
-async function run_clients(
+async function runClients(
     clients: IAsyncClient[],
-    client_name: string,
-    total_commands: number,
-    num_of_concurrent_tasks: number,
-    data_size: number,
+    clientName: string,
+    totalCommands: number,
+    numOfConcurrentTasks: number,
+    dataSize: number,
     data: string,
     clientDisposal: (client: IAsyncClient) => void,
-    is_cluster: boolean
+    isCluster: boolean
 ) {
     const now = new Date();
     console.log(
-        `Starting ${client_name} data size: ${data_size} concurrency: ${num_of_concurrent_tasks} client count: ${
+        `Starting ${clientName} data size: ${dataSize} concurrency: ${numOfConcurrentTasks} client count: ${
             clients.length
-        } is_cluster: ${is_cluster} ${now.toLocaleTimeString()}`
+        } isCluster: ${isCluster} ${now.toLocaleTimeString()}`
     );
-    const action_latencies = {
+    const actionLatencies = {
         [ChosenAction.SET]: [],
         [ChosenAction.GET_NON_EXISTING]: [],
         [ChosenAction.GET_EXISTING]: [],
     };
 
-    const time = await create_bench_tasks(
+    const time = await createBenchTasks(
         clients,
-        total_commands,
-        num_of_concurrent_tasks,
+        totalCommands,
+        numOfConcurrentTasks,
         data,
-        action_latencies
+        actionLatencies
     );
-    const tps = Math.round(started_tasks_counter / time);
+    const tps = Math.round(startedTasksCounter / time);
 
-    const get_non_existing_latencies =
-        action_latencies[ChosenAction.GET_NON_EXISTING];
-    const get_non_existing_latency_results = latency_results(
+    const getNonExistingLatencies =
+        actionLatencies[ChosenAction.GET_NON_EXISTING];
+    const getNonExistingLatencyResults = latencyResults(
         "get_non_existing",
-        get_non_existing_latencies
+        getNonExistingLatencies
     );
 
-    const get_existing_latencies = action_latencies[ChosenAction.GET_EXISTING];
-    const get_existing_latency_results = latency_results(
+    const getExistingLatencies = actionLatencies[ChosenAction.GET_EXISTING];
+    const getExistingLatencyResults = latencyResults(
         "get_existing",
-        get_existing_latencies
+        getExistingLatencies
     );
 
-    const set_latencies = action_latencies[ChosenAction.SET];
-    const set_latency_results = latency_results("set", set_latencies);
+    const setLatencies = actionLatencies[ChosenAction.SET];
+    const setLatencyResults = latencyResults("set", setLatencies);
 
-    const json_res = {
-        client: client_name,
-        num_of_tasks: num_of_concurrent_tasks,
-        data_size,
+    const jsonRes = {
+        client: clientName,
+        num_of_tasks: numOfConcurrentTasks,
+        data_size: dataSize,
         tps,
         client_count: clients.length,
-        is_cluster,
-        ...set_latency_results,
-        ...get_existing_latency_results,
-        ...get_non_existing_latency_results,
+        is_cluster: isCluster,
+        ...setLatencyResults,
+        ...getExistingLatencyResults,
+        ...getNonExistingLatencyResults,
     };
-    bench_json_results.push(json_res);
+    benchJsonResults.push(jsonRes);
 
     Promise.all(clients.map((client) => clientDisposal(client)));
 }
@@ -202,19 +202,19 @@ function createClients(
 }
 
 async function main(
-    total_commands: number,
-    num_of_concurrent_tasks: number,
-    data_size: number,
-    clients_to_run: "all" | "glide",
+    totalCommands: number,
+    numOfConcurrentTasks: number,
+    dataSize: number,
+    clientsToRun: "all" | "glide",
     host: string,
     clientCount: number,
     useTLS: boolean,
     clusterModeEnabled: boolean,
     port: number
 ) {
-    const data = generate_value(data_size);
+    const data = generateValue(dataSize);
 
-    if (clients_to_run == "all" || clients_to_run == "glide") {
+    if (clientsToRun == "all" || clientsToRun == "glide") {
         const clientClass = clusterModeEnabled
             ? RedisClusterClient
             : RedisClient;
@@ -224,12 +224,12 @@ async function main(
                 useTLS,
             })
         );
-        await run_clients(
+        await runClients(
             clients,
             "glide",
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
+            totalCommands,
+            numOfConcurrentTasks,
+            dataSize,
             data,
             (client) => {
                 (client as RedisClient).close();
@@ -239,34 +239,31 @@ async function main(
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    if (clients_to_run == "all") {
-        const node_redis_clients = await createClients(
-            clientCount,
-            async () => {
-                const node = {
-                    url: getAddress(host, useTLS, port),
-                };
-                const node_redis_client = clusterModeEnabled
-                    ? createCluster({
-                          rootNodes: [{ socket: { host, port, tls: useTLS } }],
-                          defaults: {
-                              socket: {
-                                  tls: useTLS,
-                              },
+    if (clientsToRun == "all") {
+        const nodeRedisClients = await createClients(clientCount, async () => {
+            const node = {
+                url: getAddress(host, useTLS, port),
+            };
+            const nodeRedisClient = clusterModeEnabled
+                ? createCluster({
+                      rootNodes: [{ socket: { host, port, tls: useTLS } }],
+                      defaults: {
+                          socket: {
+                              tls: useTLS,
                           },
-                          useReplicas: true,
-                      })
-                    : createClient(node);
-                await node_redis_client.connect();
-                return node_redis_client;
-            }
-        );
-        await run_clients(
-            node_redis_clients,
+                      },
+                      useReplicas: true,
+                  })
+                : createClient(node);
+            await nodeRedisClient.connect();
+            return nodeRedisClient;
+        });
+        await runClients(
+            nodeRedisClients,
             "node_redis",
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
+            totalCommands,
+            numOfConcurrentTasks,
+            dataSize,
             data,
             (client) => {
                 (client as RedisClientType).disconnect();
@@ -276,8 +273,8 @@ async function main(
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         const tls = useTLS ? {} : undefined;
-        const ioredis_clients = await createClients(clientCount, async () => {
-            const ioredis_client = clusterModeEnabled
+        const ioredisClients = await createClients(clientCount, async () => {
+            const ioredisClient = clusterModeEnabled
                 ? new Cluster([{ host, port }], {
                       dnsLookup: (address, callback) => callback(null, address),
                       scaleReads: "all",
@@ -288,14 +285,14 @@ async function main(
                 : new Redis(port, host, {
                       tls,
                   });
-            return ioredis_client;
+            return ioredisClient;
         });
-        await run_clients(
-            ioredis_clients,
+        await runClients(
+            ioredisClients,
             "ioredis",
-            total_commands,
-            num_of_concurrent_tasks,
-            data_size,
+            totalCommands,
+            numOfConcurrentTasks,
+            dataSize,
             data,
             (client) => {
                 (client as RedisClientType).disconnect();
@@ -305,14 +302,14 @@ async function main(
     }
 }
 
-const number_of_iterations = (num_of_concurrent_tasks: number) =>
-    Math.min(Math.max(100000, num_of_concurrent_tasks * 10000), 10000000);
+const numberOfIterations = (numOfConcurrentTasks: number) =>
+    Math.min(Math.max(100000, numOfConcurrentTasks * 10000), 10000000);
 
 Promise.resolve() // just added to clean the indentation of the rest of the calls
     .then(async () => {
-        const data_size = parseInt(receivedOptions.dataSize);
-        const concurrent_tasks: string[] = receivedOptions.concurrentTasks;
-        const clients_to_run = receivedOptions.clients;
+        const dataSize = parseInt(receivedOptions.dataSize);
+        const concurrentTasks: string[] = receivedOptions.concurrentTasks;
+        const clientsToRun = receivedOptions.clients;
         const clientCount: string[] = receivedOptions.clientCount;
         const lambda: (
             numOfClients: string,
@@ -320,27 +317,27 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
         ) => [number, number, number] = (
             numOfClients: string,
             concurrentTasks: string
-        ) => [parseInt(concurrentTasks), data_size, parseInt(numOfClients)];
-        const product: [number, number, number][] = concurrent_tasks
+        ) => [parseInt(concurrentTasks), dataSize, parseInt(numOfClients)];
+        const product: [number, number, number][] = concurrentTasks
             .flatMap((concurrentTasks: string) =>
                 clientCount.map((clientCount) =>
                     lambda(clientCount, concurrentTasks)
                 )
             )
             .filter(
-                ([concurrent_tasks, , clientCount]) =>
-                    clientCount <= concurrent_tasks
+                ([concurrentTasks, , clientCount]) =>
+                    clientCount <= concurrentTasks
             );
 
-        for (const [concurrent_tasks, data_size, clientCount] of product) {
+        for (const [concurrentTasks, dataSize, clientCount] of product) {
             const iterations = receivedOptions.minimal
                 ? 1000
-                : number_of_iterations(concurrent_tasks);
+                : numberOfIterations(concurrentTasks);
             await main(
                 iterations,
-                concurrent_tasks,
-                data_size,
-                clients_to_run,
+                concurrentTasks,
+                dataSize,
+                clientsToRun,
                 receivedOptions.host,
                 clientCount,
                 receivedOptions.tls,
@@ -349,7 +346,7 @@ Promise.resolve() // just added to clean the indentation of the rest of the call
             );
         }
 
-        print_results(receivedOptions.resultsFile);
+        printResults(receivedOptions.resultsFile);
     })
     .then(() => {
         process.exit(0);
