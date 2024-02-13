@@ -135,7 +135,6 @@ jobs:
                     wget https://go.dev/dl/go${{ matrix.go }}.linux-amd64.tar.gz
                     tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
                     echo "/usr/local/go/bin" >> $GITHUB_PATH
-                    go version
 
             -   name: Build client
                 working-directory: ./go
