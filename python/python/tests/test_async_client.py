@@ -720,6 +720,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hlen(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hlen(key) == 2
+        assert await redis_client.hdel(key, [field]) == 1
+        assert await redis_client.hlen(key) == 1
+        assert await redis_client.hlen("non_existing_hash") == 0
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hlen(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]

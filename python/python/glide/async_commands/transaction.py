@@ -366,6 +366,21 @@ class BaseTransaction:
         """
         self.append_command(RequestType.HashExists, [key, field])
 
+    def hlen(self, key: str):
+        """
+        Returns the number of fields contained in the hash stored at `key`.
+
+        See https://redis.io/commands/hlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            int: The number of fields in the hash, or 0 when the key does not exist.
+            If `key` holds a value that is not a hash, the transaction fails with an error.
+        """
+        self.append_command(RequestType.HLen, [key])
+
     def client_getname(self):
         """
         Get the name of the connection on which the transaction is being executed.

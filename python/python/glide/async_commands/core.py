@@ -589,6 +589,27 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.HashDel, [key] + fields)
         )
 
+    async def hlen(self, key: str) -> int:
+        """
+        Returns the number of fields contained in the hash stored at `key`.
+
+        See https://redis.io/commands/hlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Returns:
+            int: The number of fields in the hash, or 0 when the key does not exist.
+            If `key` holds a value that is not a hash, an error is returned.
+
+        Examples:
+            >>> await client.hlen("my_hash")
+                3
+            >>> await client.hlen("non_existing_key")
+                0
+        """
+        return cast(int, await self._execute_command(RequestType.HLen, [key]))
+
     async def lpush(self, key: str, elements: List[str]) -> int:
         """Insert all the specified values at the head of the list stored at `key`.
         `elements` are inserted one after the other to the head of the list, from the leftmost element
