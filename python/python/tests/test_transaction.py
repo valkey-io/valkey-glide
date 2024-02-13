@@ -40,6 +40,8 @@ def transaction_test(
     args.append(value)
     transaction.type(key)
     args.append("string")
+    transaction.echo(value)
+    args.append(value)
 
     transaction.exists([key])
     args.append(1)
