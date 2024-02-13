@@ -130,7 +130,8 @@ jobs:
 
             -   name: Install Go
                 run: |
-                    yum install wget -y
+                    yum -y install wget
+                    yum -y install tar
                     wget https://go.dev/dl/go${{ matrix.go }}.linux-amd64.tar.gz
                     tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
                     export PATH=$PATH:/usr/local/go/bin
