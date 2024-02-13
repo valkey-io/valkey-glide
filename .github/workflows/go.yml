@@ -139,6 +139,7 @@ jobs:
                     wget https://go.dev/dl/go${{ matrix.go }}.linux-amd64.tar.gz
                     tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
                     echo "/usr/local/go/bin" >> $GITHUB_PATH
+                    echo "$HOME/go/bin" >> $GITHUB_PATH
 
             -   name: Install client dependencies
                 working-directory: ./go
@@ -146,8 +147,12 @@ jobs:
 
             -   name: Build client
                 working-directory: ./go
+                # The go mod edit command sets the Go version in the go.mod file.
+                # For Go 1.18, the command does not allow specifying a patch version.
                 run: |
-                    go mod edit -go ${{ matrix.go }}
+                    FULL_VERSION=${{ matrix.go }}
+                    MOD_VERSION=${FULL_VERSION%.*}
+                    go mod edit -go $MOD_VERSION
                     make build
 
             -   name: Run linters
