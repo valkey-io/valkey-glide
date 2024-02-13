@@ -10,6 +10,7 @@
 * Standalone client: Improve connection errors. ([#854](https://github.com/aws/glide-for-redis/pull/854))
 * Python, Node: When recieving LPOP/RPOP with count, convert result to Array. ([#811](https://github.com/aws/glide-for-redis/pull/811))
 * Python: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945))
+* Python: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))
