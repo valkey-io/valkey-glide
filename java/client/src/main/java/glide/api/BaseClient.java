@@ -4,9 +4,14 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.commands.ConnectionManagementCommands;
+import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -20,6 +25,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -32,7 +38,7 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, ConnectionManagementCommands, StringCommands {
+        implements AutoCloseable, ConnectionManagementCommands, StringCommands, SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -149,8 +155,16 @@ public abstract class BaseClient
         return handleRedisResponse(String.class, true, response);
     }
 
+    protected Long handleLongResponse(Response response) throws RedisException {
+        return handleRedisResponse(Long.class, false, response);
+    }
+
     protected Object[] handleArrayResponse(Response response) {
         return handleRedisResponse(Object[].class, true, response);
+    }
+
+    protected Set<String> handleSetResponse(Response response) {
+        return handleRedisResponse(Set.class, false, response);
     }
 
     @Override
@@ -180,5 +194,27 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(SetString, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sadd(String key, String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> srem(String key, String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> smembers(String key) {
+        return commandManager.submitNewCommand(SMembers, new String[] {key}, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> scard(String key) {
+        return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
     }
 }
