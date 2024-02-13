@@ -1100,6 +1100,26 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
 
+    async def type(self, key: str) -> str:
+        """
+        Returns the string representation of the type of the value stored at `key`.
+
+        See https://redis.io/commands/type/ for more details.
+
+        Args:
+            key (str): The key to check its data type.
+
+        Returns:
+            str: If the key exists, the type of the stored value is returned.
+            Otherwise, a "none" string is returned.
+
+        Examples:
+            >>> await client.set("key", "value")
+            >>> await client.type("key")
+                'string'
+        """
+        return cast(str, await self._execute_command(RequestType.Type, [key]))
+
     async def zadd(
         self,
         key: str,
