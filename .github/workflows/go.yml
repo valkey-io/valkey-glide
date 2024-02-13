@@ -71,12 +71,16 @@ jobs:
             -   name: Build client
                 working-directory: ./go
                 run: |
-                    go mod edit -go=${{ matrix.go }}
+                    go mod edit -go ${{ matrix.go }}
                     make build
 
             -   name: Run linters
                 working-directory: ./go
                 run: make lint
+
+            -   name: Run unit tests
+                working-directory: ./go
+                run: make unit-test-report
 
             -   name: Upload test reports
                 if: always()
@@ -136,12 +140,20 @@ jobs:
                     tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
                     echo "/usr/local/go/bin" >> $GITHUB_PATH
 
+            -   name: Install client dependencies
+                working-directory: ./go
+                run: make install-tools
+
             -   name: Build client
                 working-directory: ./go
                 run: |
                     cargo build --release
-                    go mod edit -go=${{ matrix.go }}
+                    go mod edit -go ${{ matrix.go }}
                     make build
+
+            -   name: Run linters
+                working-directory: ./go
+                run: make lint
 
             -   name: Run unit tests
                 working-directory: ./go
