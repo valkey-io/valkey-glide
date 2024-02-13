@@ -33,7 +33,7 @@ public class RedisClusterClient extends BaseClient
      * @return A Future to connect and return a RedisClusterClient
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
-        @NonNull RedisClusterClientConfiguration config) {
+            @NonNull RedisClusterClientConfiguration config) {
         return CreateClient(config, RedisClusterClient::new);
     }
 
@@ -46,7 +46,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args, @NonNull Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(
+            @NonNull String[] args, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand,
                 args,
