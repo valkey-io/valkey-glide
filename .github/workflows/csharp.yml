@@ -28,6 +28,9 @@ jobs:
                 redis:
                     - 6.2.14
                     - 7.2.3
+                dotnet:
+                    - 6.0
+                    - 8.0
 
         steps:
             - uses: actions/checkout@v4
@@ -44,10 +47,10 @@ jobs:
               with:
                   version: "25.1"
 
-            - name: Set up dotnet
+            - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v3
               with:
-                  dotnet-version: 6.0.x
+                  dotnet-version: ${{ matrix.dotnet }}
 
             - name: Start redis server
               run: redis-server &
@@ -56,9 +59,9 @@ jobs:
               working-directory: ./csharp
               run: dotnet format --verify-no-changes --verbosity diagnostic
 
-            - name: Test
+            - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: ./csharp
-              run: dotnet test --framework net6.0 /warnaserror
+              run: dotnet test --framework net${{ matrix.dotnet }} /warnaserror
 
             - uses: ./.github/workflows/test-benchmark
               with:

@@ -69,6 +69,7 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release /warnaserror
   dotnet run --framework net6.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework net8.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 
 function runJavaBenchmark(){
@@ -230,7 +231,7 @@ do
             ;;
         -minimal)
             minimalFlag="--minimal"
-            ;;            
+            ;;
     esac
     shift
 done
@@ -241,7 +242,7 @@ do
     then
         echo "Minimal run, not filling database"
         flushDB
-    else 
+    else
         fillDB $currentDataSize
     fi
 
