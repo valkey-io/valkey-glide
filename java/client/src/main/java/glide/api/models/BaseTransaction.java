@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.utils.CommandUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
@@ -19,7 +20,6 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.Map;
-import java.util.stream.Stream;
 import lombok.Getter;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -246,7 +246,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
      * @param keys A list of keys to retrieve values for.
-     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     * @return Command Response - An array of values corresponding to the provided <code>keys</code>.
+     *     <br>
      *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
      *     </code>.
      */
@@ -262,13 +263,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
-     * @return Always <code>"Ok"</code>.
+     * @return Command Response - Always <code>OK</code>.
      */
     public T mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args =
-                keyValueMap.entrySet().stream()
-                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                        .toArray(String[]::new);
+        String[] args = convertMapToArgArray(keyValueMap);
         ArgsArray commandArgs = buildArgs(args);
 
         protobufTransaction.addCommands(buildCommand(MSet, commandArgs));

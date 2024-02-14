@@ -66,7 +66,7 @@ public interface StringCommands {
      *
      * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
-     * @return Always <code>"Ok"</code>.
+     * @return Always <code>OK</code>.
      */
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 }

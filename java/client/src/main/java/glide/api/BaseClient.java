@@ -2,6 +2,8 @@
 package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+import static glide.utils.CommandUtils.convertMapToArgArray;
+import static glide.utils.CommandUtils.objectArrayToTypedArray;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -34,7 +36,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
-import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -239,17 +240,12 @@ public abstract class BaseClient
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
         return commandManager
                 .submitNewCommand(MGet, keys, this::handleArrayResponse)
-                .thenApply(
-                        objectsArray ->
-                                Arrays.stream(objectsArray).map(object -> (String) object).toArray(String[]::new));
+                .thenApply(objectArray -> objectArrayToTypedArray(objectArray, String.class));
     }
 
     @Override
     public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args =
-                keyValueMap.entrySet().stream()
-                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                        .toArray(String[]::new);
+        String[] args = convertMapToArgArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 }
