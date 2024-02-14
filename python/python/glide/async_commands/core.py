@@ -229,12 +229,14 @@ class CoreCommands(Protocol):
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
     ) -> Optional[str]:
-        """Set the given key with the given value. Return value is dependent on the passed options.
+        """
+        Set the given key with the given value. Return value is dependent on the passed options.
             See https://redis.io/commands/set/ for details.
 
             @example - Set "foo" to "bar" only if "foo" already exists, and set the key expiration to 5 seconds:
 
                 connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+
         Args:
             key (str): the key to store.
             value (str): the value to store with the given key.
@@ -245,6 +247,7 @@ class CoreCommands(Protocol):
             return_old_value (bool, optional): Return the old string stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
+
         Returns:
             Optional[str]:
                 If the value is successfully set, return OK.
@@ -263,11 +266,12 @@ class CoreCommands(Protocol):
         )
 
     async def get(self, key: str) -> Optional[str]:
-        """Get the value associated with the given key, or null if no such value exists.
-         See https://redis.io/commands/get/ for details.
+        """
+        Get the value associated with the given key, or null if no such value exists.
+        See https://redis.io/commands/get/ for details.
 
         Args:
-            key (str): the key to retrieve from the database
+            key (str): The key to retrieve from the database.
 
         Returns:
             Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
@@ -277,7 +281,8 @@ class CoreCommands(Protocol):
         )
 
     async def delete(self, keys: List[str]) -> int:
-        """Delete one or more keys from the database. A key is ignored if it does not exist.
+        """
+        Delete one or more keys from the database. A key is ignored if it does not exist.
         See https://redis.io/commands/del/ for details.
 
         Args:
@@ -289,48 +294,48 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
     async def incr(self, key: str) -> int:
-        """Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        """
+        Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
         See https://redis.io/commands/incr/ for more details.
 
         Args:
           key (str): The key to increment it's value.
 
-          Returns:
-              int: The value of `key` after the increment. An error is returned if the key contains a value
-              of the wrong type or contains a string that can not be represented as integer.
+        Returns:
+            int: The value of `key` after the increment.
         """
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
     async def incrby(self, key: str, amount: int) -> int:
-        """Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+        """
+        Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
           key (str): The key to increment it's value.
           amount (int) : The amount to increment.
 
-          Returns:
-              int: The value of key after the increment. An error is returned if the key contains a value
-              of the wrong type or contains a string that can not be represented as integer.
+        Returns:
+            int: The value of key after the increment.
         """
         return cast(
             int, await self._execute_command(RequestType.IncrBy, [key, str(amount)])
         )
 
     async def incrbyfloat(self, key: str, amount: float) -> float:
-        """Increment the string representing a floating point number stored at `key` by `amount`.
-           By using a negative increment value, the value stored at the `key` is decremented.
-           If the key does not exist, it is set to 0 before performing the operation.
-           See https://redis.io/commands/incrbyfloat/ for more details.
+        """
+        Increment the string representing a floating point number stored at `key` by `amount`.
+        By using a negative increment value, the value stored at the `key` is decremented.
+        If the key does not exist, it is set to 0 before performing the operation.
+        See https://redis.io/commands/incrbyfloat/ for more details.
 
         Args:
           key (str): The key to increment it's value.
           amount (float) : The amount to increment.
 
-          Returns:
-              float: The value of key after the increment. An error is returned if the key contains a value
-              of the wrong type.
+        Returns:
+            float: The value of key after the increment.
         """
         return cast(
             float,
@@ -338,7 +343,8 @@ class CoreCommands(Protocol):
         )
 
     async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
-        """Set multiple keys to multiple values in a single operation.
+        """
+        Set multiple keys to multiple values in a single atomic operation.
         See https://redis.io/commands/mset/ for more details.
 
         Args:
@@ -353,7 +359,8 @@ class CoreCommands(Protocol):
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
     async def mget(self, keys: List[str]) -> List[str]:
-        """Retrieve the values of multiple keys.
+        """
+        Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
 
         Args:
@@ -366,21 +373,22 @@ class CoreCommands(Protocol):
         return cast(List[str], await self._execute_command(RequestType.MGet, keys))
 
     async def decr(self, key: str) -> int:
-        """Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
+        """
+        Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
         See https://redis.io/commands/decr/ for more details.
 
         Args:
           key (str): The key to increment it's value.
 
-          Returns:
-              int: The value of key after the decrement. An error is returned if the key contains a value
-              of the wrong type or contains a string that can not be represented as integer.
+        Returns:
+            int: The value of key after the decrement.
         """
         return cast(int, await self._execute_command(RequestType.Decr, [key]))
 
     async def decrby(self, key: str, amount: int) -> int:
-        """Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
+        """
+        Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
         See https://redis.io/commands/decrby/ for more details.
 
@@ -388,16 +396,16 @@ class CoreCommands(Protocol):
           key (str): The key to decrement it's value.
           amount (int) : The amount to decrement.
 
-          Returns:
-              int: The value of key after the decrement. An error is returned if the key contains a value
-              of the wrong type or contains a string that can not be represented as integer.
+        Returns:
+            int: The value of key after the decrement.
         """
         return cast(
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
 
     async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
-        """Sets the specified fields to their respective values in the hash stored at `key`.
+        """
+        Sets the specified fields to their respective values in the hash stored at `key`.
         See https://redis.io/commands/hset/ for more details.
 
         Args:
@@ -406,7 +414,7 @@ class CoreCommands(Protocol):
             to be set in the hash stored at the specified key.
 
         Returns:
-            int: The number of fields that were added or modified in the hash.
+            int: The number of fields that were added to the hash.
 
         Example:
             >>> hset("my_hash", {"field": "value", "field2": "value2"})
@@ -421,7 +429,8 @@ class CoreCommands(Protocol):
         )
 
     async def hget(self, key: str, field: str) -> Optional[str]:
-        """Retrieves the value associated with field in the hash stored at `key`.
+        """
+        Retrieves the value associated with `field` in the hash stored at `key`.
         See https://redis.io/commands/hget/ for more details.
 
         Args:
@@ -429,8 +438,8 @@ class CoreCommands(Protocol):
             field (str): The field whose value should be retrieved.
 
         Returns:
-            Optional[str]: The value associated with the specified field in the hash.
-            Returns None if the field or key does not exist.
+            Optional[str]: The value associated `field` in the hash.
+            Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
             >>> hget("my_hash", "field")
@@ -444,7 +453,8 @@ class CoreCommands(Protocol):
         )
 
     async def hincrby(self, key: str, field: str, amount: int) -> int:
-        """Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
+        """
+        Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
         See https://redis.io/commands/hincrby/ for more details.
@@ -457,13 +467,10 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The value of the specified field in the hash stored at `key` after the increment or decrement.
-                An error will be returned if `key` holds a value of an incorrect type (not a string) or if it contains a string
-                that cannot be represented as an integer.
 
         Examples:
             >>> await client.hincrby("my_hash", "field1", 5)
                 5
-
         """
         return cast(
             int,
@@ -473,7 +480,8 @@ class CoreCommands(Protocol):
         )
 
     async def hincrbyfloat(self, key: str, field: str, amount: float) -> float:
-        """Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
+        """
+        Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
         amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
@@ -487,8 +495,6 @@ class CoreCommands(Protocol):
 
         Returns:
             float: The value of the specified field in the hash stored at `key` after the increment as a string.
-                An error is returned if `key` contains a value of the wrong type or the current field content is not
-                parsable as a double precision floating point number.
 
         Examples:
             >>> await client.hincrbyfloat("my_hash", "field1", 2.5)
@@ -502,7 +508,8 @@ class CoreCommands(Protocol):
         )
 
     async def hexists(self, key: str, field: str) -> bool:
-        """Check if a field exists in the hash stored at `key`.
+        """
+        Check if a field exists in the hash stored at `key`.
         See https://redis.io/commands/hexists/ for more details.
 
         Args:
@@ -512,20 +519,20 @@ class CoreCommands(Protocol):
         Returns:
             bool: Returns 'True' if the hash contains the specified field. If the hash does not contain the field,
                 or if the key does not exist, it returns 'False'.
-                If `key` holds a value that is not a hash, an error is returned.
 
         Examples:
             >>> await client.hexists("my_hash", "field1")
-                1
+                True
             >>> await client.hexists("my_hash", "nonexistent_field")
-                0
+                False
         """
         return cast(
             bool, await self._execute_command(RequestType.HashExists, [key, field])
         )
 
     async def hgetall(self, key: str) -> Dict[str, str]:
-        """Returns all fields and values of the hash stored at `key`.
+        """
+        Returns all fields and values of the hash stored at `key`.
         See https://redis.io/commands/hgetall/ for details.
 
         Args:
@@ -533,8 +540,8 @@ class CoreCommands(Protocol):
 
         Returns:
             Dict[str, str]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
-            its value. If `key` does not exist, it returns an empty dictionary.
-            If `key` holds a value that is not a hash, an error is returned.
+            its value.
+            If `key` does not exist, it returns an empty dictionary.
 
         Examples:
             >>> await client.hgetall("my_hash")
@@ -545,7 +552,8 @@ class CoreCommands(Protocol):
         )
 
     async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
-        """Retrieve the values associated with specified fields in the hash stored at `key`.
+        """
+        Retrieve the values associated with specified fields in the hash stored at `key`.
         See https://redis.io/commands/hmget/ for details.
 
         Args:
@@ -555,8 +563,7 @@ class CoreCommands(Protocol):
         Returns:
             List[Optional[str]]: A list of values associated with the given fields, in the same order as they are requested.
             For every field that does not exist in the hash, a null value is returned.
-            If the key does not exist, it is treated as an empty hash, and the function returns a list of null values.
-            If `key` holds a value that is not a hash, an error is returned.
+            If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
 
         Examples:
             >>> await client.hmget("my_hash", ["field1", "field2"])
@@ -568,7 +575,8 @@ class CoreCommands(Protocol):
         )
 
     async def hdel(self, key: str, fields: List[str]) -> int:
-        """Remove specified fields from the hash stored at `key`.
+        """
+        Remove specified fields from the hash stored at `key`.
         See https://redis.io/commands/hdel/ for more details.
 
         Args:
@@ -577,9 +585,7 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
-            If the key does not exist, it is treated as an empty hash, and the function returns 0.
-            If `key` holds a value that is not a hash, an error is returned.
-
+            If `key` does not exist, it is treated as an empty hash, and the function returns 0.
 
         Examples:
             >>> await client.hdel("my_hash", ["field1", "field2"])
@@ -611,7 +617,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.HLen, [key]))
 
     async def lpush(self, key: str, elements: List[str]) -> int:
-        """Insert all the specified values at the head of the list stored at `key`.
+        """
+        Insert all the specified values at the head of the list stored at `key`.
         `elements` are inserted one after the other to the head of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
         See https://redis.io/commands/lpush/ for more details.
@@ -622,7 +629,6 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The length of the list after the push operations.
-                If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.lpush("my_list", ["value1", "value2"])
@@ -635,7 +641,8 @@ class CoreCommands(Protocol):
         )
 
     async def lpop(self, key: str) -> Optional[str]:
-        """Remove and return the first elements of the list stored at `key`.
+        """
+        Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
         See https://redis.io/commands/lpop/ for details.
 
@@ -645,7 +652,6 @@ class CoreCommands(Protocol):
         Returns:
             Optional[str]: The value of the first element.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.lpop("my_list")
@@ -653,14 +659,14 @@ class CoreCommands(Protocol):
             >>> await client.lpop("non_exiting_key")
                 None
         """
-
         return cast(
             Optional[str],
             await self._execute_command(RequestType.LPop, [key]),
         )
 
     async def lpop_count(self, key: str, count: int) -> Optional[List[str]]:
-        """Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
+        """
+        Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
         See https://redis.io/commands/lpop/ for details.
 
         Args:
@@ -670,23 +676,21 @@ class CoreCommands(Protocol):
         Returns:
             Optional[List[str]]: A a list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, an error is returned.
 
         Examples:
-
             >>> await client.lpop("my_list", 2)
                 ["value1", "value2"]
             >>> await client.lpop("non_exiting_key" , 3)
                 None
         """
-
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.LPop, [key, str(count)]),
         )
 
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
-        """Retrieve the specified elements of the list stored at `key` within the given range.
+        """
+        Retrieve the specified elements of the list stored at `key` within the given range.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
         element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
         with -1 being the last element of the list, -2 being the penultimate, and so on.
@@ -702,7 +706,6 @@ class CoreCommands(Protocol):
             If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
             If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
             If `key` does not exist an empty list will be returned.
-            If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.lrange("my_list", 0, 2)
@@ -712,7 +715,6 @@ class CoreCommands(Protocol):
             >>> await client.lrange("non_exiting_key", 0, 2)
                 []
         """
-
         return cast(
             List[str],
             await self._execute_command(
@@ -721,7 +723,8 @@ class CoreCommands(Protocol):
         )
 
     async def rpush(self, key: str, elements: List[str]) -> int:
-        """Inserts all the specified values at the tail of the list stored at `key`.
+        """
+        Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
         See https://redis.io/commands/rpush/ for more details.
@@ -732,7 +735,6 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The length of the list after the push operations.
-                If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.rpush("my_list", ["value1", "value2"])
@@ -745,7 +747,8 @@ class CoreCommands(Protocol):
         )
 
     async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
-        """Removes and returns the last elements of the list stored at `key`.
+        """
+        Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
         See https://redis.io/commands/rpop/ for details.
 
@@ -755,7 +758,6 @@ class CoreCommands(Protocol):
         Returns:
             Optional[str]: The value of the last element.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.rpop("my_list")
@@ -763,14 +765,14 @@ class CoreCommands(Protocol):
             >>> await client.rpop("non_exiting_key")
                 None
         """
-
         return cast(
             Optional[str],
             await self._execute_command(RequestType.RPop, [key]),
         )
 
     async def rpop_count(self, key: str, count: int) -> Optional[List[str]]:
-        """Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
+        """
+        Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
         See https://redis.io/commands/rpop/ for details.
 
         Args:
@@ -780,7 +782,6 @@ class CoreCommands(Protocol):
         Returns:
             Optional[List[str]: A list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
-            If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.rpop("my_list", 2)
@@ -788,14 +789,14 @@ class CoreCommands(Protocol):
             >>> await client.rpop("non_exiting_key" , 7)
                 None
         """
-
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
     async def sadd(self, key: str, members: List[str]) -> int:
-        """Add specified members to the set stored at `key`.
+        """
+        Add specified members to the set stored at `key`.
         Specified members that are already a member of this set are ignored.
         If `key` does not exist, a new set is created before adding `members`.
         See https://redis.io/commands/sadd/ for more details.
@@ -806,7 +807,6 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The number of members that were added to the set, excluding members already present.
-                If `key` holds a value that is not a set, an error is returned.
 
         Examples:
             >>> await client.sadd("my_set", ["member1", "member2"])
@@ -815,7 +815,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
 
     async def srem(self, key: str, members: List[str]) -> int:
-        """Remove specified members from the set stored at `key`.
+        """
+        Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
         See https://redis.io/commands/srem/ for details.
 
@@ -826,7 +827,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of members that were removed from the set, excluding non-existing members.
                 If `key` does not exist, it is treated as an empty set and this command returns 0.
-                If `key` holds a value that is not a set, an error is returned.
 
         Examples:
             >>> await client.srem("my_set", ["member1", "member2"])
@@ -835,7 +835,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
 
     async def smembers(self, key: str) -> Set[str]:
-        """Retrieve all the members of the set value stored at `key`.
+        """
+        Retrieve all the members of the set value stored at `key`.
         See https://redis.io/commands/smembers/ for details.
 
         Args:
@@ -844,7 +845,6 @@ class CoreCommands(Protocol):
         Returns:
             Set[str]: A set of all members of the set.
                 If `key` does not exist an empty list will be returned.
-                If `key` holds a value that is not a set, an error is returned.
 
         Examples:
             >>> await client.smembers("my_set")
@@ -853,7 +853,8 @@ class CoreCommands(Protocol):
         return cast(Set[str], await self._execute_command(RequestType.SMembers, [key]))
 
     async def scard(self, key: str) -> int:
-        """Retrieve the set cardinality (number of elements) of the set stored at `key`.
+        """
+        Retrieve the set cardinality (number of elements) of the set stored at `key`.
         See https://redis.io/commands/scard/ for details.
 
         Args:
@@ -861,7 +862,6 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
-                If `key` holds a value that is not a set, an error is returned.
 
         Examples:
             >>> await client.scard("my_set")
@@ -870,7 +870,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
-        """Trim an existing list so that it will contain only the specified range of elements specified.
+        """
+        Trim an existing list so that it will contain only the specified range of elements specified.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
         element and so on.
         These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last
@@ -888,7 +889,6 @@ class CoreCommands(Protocol):
                 (which causes `key` to be removed).
                 If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
                 If `key` does not exist, "OK" will be returned without changes to the database.
-                If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.ltrim("my_list", 0, 1)
@@ -900,7 +900,8 @@ class CoreCommands(Protocol):
         )
 
     async def lrem(self, key: str, count: int, element: str) -> int:
-        """Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
+        """
+        Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
         If `count` is positive, it removes elements equal to `element` moving from head to tail.
         If `count` is negative, it removes elements equal to `element` moving from tail to head.
         If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
@@ -915,7 +916,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of removed elements.
                 If `key` does not exist, 0 is returned.
-                If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.lrem("my_list", 2, "value")
@@ -927,7 +927,8 @@ class CoreCommands(Protocol):
         )
 
     async def llen(self, key: str) -> int:
-        """Get the length of the list stored at `key`.
+        """
+        Get the length of the list stored at `key`.
         See https://redis.io/commands/llen/ for details.
 
         Args:
@@ -936,7 +937,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The length of the list at the specified key.
                 If `key` does not exist, it is interpreted as an empty list and 0 is returned.
-                If `key` holds a value that is not a list, an error is returned.
 
         Examples:
             >>> await client.llen("my_list")
@@ -945,7 +945,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.LLen, [key]))
 
     async def exists(self, keys: List[str]) -> int:
-        """Returns the number of keys in `keys` that exist in the database.
+        """
+        Returns the number of keys in `keys` that exist in the database.
         See https://redis.io/commands/exists/ for more details.
 
         Args:
@@ -962,7 +963,8 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.Exists, keys))
 
     async def unlink(self, keys: List[str]) -> int:
-        """Unlink (delete) multiple keys from the database.
+        """
+        Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
         However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
@@ -1169,7 +1171,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of elements added to the sorted set.
             If `changed` is set, returns the number of elements updated in the sorted set.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
@@ -1233,7 +1234,6 @@ class CoreCommands(Protocol):
         Returns:
             Optional[float]: The score of the member.
             If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zaddIncr("my_sorted_set", member , 5.0)
@@ -1275,7 +1275,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of elements in the sorted set.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zcard("my_sorted_set")
@@ -1309,7 +1308,6 @@ class CoreCommands(Protocol):
             int: The number of members in the specified score range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
             If `max_score` < `min_score`, 0 is returned.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
@@ -1342,7 +1340,6 @@ class CoreCommands(Protocol):
         Returns:
             int: The number of members that were removed from the sorted set, not including non-existing members.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zrem("my_sorted_set", ["member1", "member2"])
@@ -1369,7 +1366,6 @@ class CoreCommands(Protocol):
             Optional[float]: The score of the member.
             If `member` does not exist in the sorted set, None is returned.
             If `key` does not exist,  None is returned.
-            If `key` holds a value that is not a sorted set, an error is returned.
 
         Examples:
             >>> await zscore("my_sorted_set", "member")
