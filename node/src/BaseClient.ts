@@ -54,6 +54,7 @@ import {
     createZadd,
     createZcard,
     createZrem,
+    createZscore,
 } from "./Commands";
 import {
     ClosingError,
@@ -1060,6 +1061,20 @@ export class BaseClient {
      */
     public zcard(key: string): Promise<number> {
         return this.createWritePromise(createZcard(key));
+    }
+
+    /** Returns the score of `member` in the sorted set stored at `key`.
+     * See https://redis.io/commands/zscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose score is to be retrieved.
+     * @returns The score of the member.
+     * If `member` does not exist in the sorted set, null is returned.
+     * If `key` does not exist, null is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zscore(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZscore(key, member));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
