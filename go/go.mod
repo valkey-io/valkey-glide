@@ -1,9 +1,9 @@
 module github.com/aws/glide-for-redis/go/glide
 
-go 1.21
+go 1.18
 
 require (
-	github.com/DarkDrim/go-test-report v1.5.0
+	github.com/vakenbolt/go-test-report v0.9.3
 	google.golang.org/protobuf v1.32.0
 	honnef.co/go/tools v0.3.3
 )
