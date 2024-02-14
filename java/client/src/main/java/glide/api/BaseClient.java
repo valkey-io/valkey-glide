@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
@@ -27,6 +28,7 @@ import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
+import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -55,7 +57,6 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
-                GenericBaseCommands,
                 ConnectionManagementCommands,
                 StringCommands,
                 HashCommands,
@@ -316,5 +317,10 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> exists(String[] keys) {
+        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
     }
 }

@@ -20,4 +20,14 @@ public interface GenericBaseCommands {
      * @return The number of keys that were removed.
      */
     CompletableFuture<Long> del(String[] keys);
+
+    /**
+     * Returns the number of keys in <code>keys</code> that exist in the database.
+     *
+     * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
+     * @param keys The keys list to check.
+     * @return the number of keys that exist. If the same existing key is mentioned in <code>keys
+     *     </code> multiple times, it will be counted multiple times.
+     */
+    CompletableFuture<Long> exists(String[] keys);
 }

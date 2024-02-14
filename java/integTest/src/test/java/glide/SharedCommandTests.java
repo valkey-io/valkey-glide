@@ -468,4 +468,29 @@ public class SharedCommandTests {
         e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
         assertTrue(e.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void exists_multiple_keys(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+
+        Long existsKeysNum = client.exists(new String[] {key1, key2, key1}).get();
+        assertEquals(3L, existsKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void del_non_existent_key(BaseClient client) {
+        Long existsKeysNum = client.exists(new String[] {UUID.randomUUID().toString()}).get();
+        assertEquals(0L, existsKeysNum);
+    }
 }
