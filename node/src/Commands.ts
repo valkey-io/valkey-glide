@@ -760,3 +760,10 @@ export function createZrem(
 export function createZcard(key: string): redis_request.Command {
     return createCommand(RequestType.Zcard, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createZscore(key: string, member: string): redis_request.Command {
+    return createCommand(RequestType.ZScore, [key, member]);
+}

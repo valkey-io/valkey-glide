@@ -1389,6 +1389,30 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zscore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key1, membersScores)).toEqual(3);
+                expect(await client.zscore(key1, "one")).toEqual(1.0);
+                expect(await client.zscore(key1, "nonExistingMember")).toEqual(
+                    null
+                );
+                expect(
+                    await client.zscore("nonExistingKey", "nonExistingMember")
+                ).toEqual(null);
+
+                expect(await client.set(key2, "foo")).toEqual("OK");
+                await expect(client.zscore(key2, "foo")).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
