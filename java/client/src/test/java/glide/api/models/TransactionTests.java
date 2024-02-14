@@ -4,6 +4,9 @@ package glide.api.models;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Incr;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -80,6 +83,16 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.incr("key");
+        results.add(Pair.of(Incr, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.incrBy("key", 1);
+        results.add(Pair.of(IncrBy, ArgsArray.newBuilder().addArgs("key").addArgs("1").build()));
+
+        transaction.incrByFloat("key", 2.5);
+        results.add(Pair.of(IncrByFloat, ArgsArray.newBuilder().addArgs("key").addArgs("2.5").build()));
+
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
