@@ -3,6 +3,7 @@ package glide.api.models;
 
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
@@ -127,6 +128,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(options.toArgs());
 
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified <code>keys</code>. A key is ignored if it does not exist.
+     *
+     * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
+     * @param keys the keys we wanted to remove.
+     * @return the number of keys that were removed.
+     */
+    public T del(String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Del, commandArgs));
         return getThis();
     }
 

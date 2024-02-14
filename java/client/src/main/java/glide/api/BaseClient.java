@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -25,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
+import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -53,6 +55,7 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
+    GenericBaseCommands,
                 ConnectionManagementCommands,
                 StringCommands,
                 HashCommands,
@@ -208,6 +211,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> ping(@NonNull String str) {
         return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> del(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
     }
 
     @Override
