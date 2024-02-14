@@ -1,0 +1,19 @@
+[package]
+name = "glide-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Amazon Web Services"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tls", "tokio-native-tls-comp", "tls-rustls-insecure"] }
+glide-core = { path = "../glide-core" }
+tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+protobuf = { version = "3.3.0", features = [] }
+
+[profile.release]
+lto = true
+debug = true
