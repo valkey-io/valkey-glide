@@ -489,7 +489,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void del_non_existent_key(BaseClient client) {
+    public void exists_non_existent_key(BaseClient client) {
         Long existsKeysNum = client.exists(new String[] {UUID.randomUUID().toString()}).get();
         assertEquals(0L, existsKeysNum);
     }
