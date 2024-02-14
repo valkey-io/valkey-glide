@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.glide;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
@@ -11,6 +13,7 @@ import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 /** A Glide client with async capabilities */
 public class GlideAsyncClient implements AsyncClient<String> {
@@ -30,8 +33,8 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             .useTLS(connectionSettings.useSsl)
                             .build();
             try {
-                redisClient = RedisClusterClient.CreateClient(config).get();
-            } catch (InterruptedException | ExecutionException e) {
+                redisClient = RedisClusterClient.CreateClient(config).get(10, SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
             }
 
@@ -47,8 +50,8 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             .build();
 
             try {
-                redisClient = RedisClient.CreateClient(config).get();
-            } catch (InterruptedException | ExecutionException e) {
+                redisClient = RedisClient.CreateClient(config).get(10, SECONDS);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
             }
         }
