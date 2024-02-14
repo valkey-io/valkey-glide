@@ -6,6 +6,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -24,6 +27,8 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import java.util.Map;
+import java.util.stream.Stream;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -289,6 +294,65 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
         return getThis();
     }
+
+
+    /**
+     * Retrieve the value associated with <code>field</code> in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
+     * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
+     *     </code> is not present in the hash or <code>key</code> does not exist.
+     */
+    public T hget(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @return The number of fields that were added.
+     */
+    public T hset(@NonNull String key, @NonNull Map<String, String> fieldValueMap) {
+        ArgsArray commandArgs =
+            buildArgs(
+                Stream.concat(
+                        Stream.of(key),
+                        fieldValueMap.entrySet().stream()
+                            .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue())))
+                    .toArray(String[]::new));
+
+        protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
+     * not exist within this hash are ignored.
+     *
+     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove from the hash stored at <code>key</code>.
+     * @return The number of fields that were removed from the hash, not including specified but
+     *     non-existing fields.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is raised.<br>
+     */
+    public T hdel(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
 
     /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already

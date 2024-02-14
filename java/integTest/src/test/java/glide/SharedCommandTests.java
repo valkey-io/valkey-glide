@@ -27,6 +27,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.Map;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -361,6 +363,39 @@ public class SharedCommandTests {
         assertNull(client.get(key2).get(10, SECONDS));
         assertEquals(-3, client.decrBy(key2, 3).get());
         assertEquals("-3", client.get(key2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertEquals(value, client.hget(key, field1).get());
+        assertEquals(value, client.hget(key, field2).get());
+        assertNull(client.hget(key, "non_existing_field").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hdel_multiple_existing_fields_non_existing_field_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String field3 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value, field3, value);
+
+        assertEquals(3, client.hset(key, fieldValueMap).get());
+        assertEquals(2, client.hdel(key, new String[] {field1, field2}).get());
+        assertEquals(0, client.hdel(key, new String[] {"non_existing_field"}).get());
+        assertEquals(0, client.hdel("non_existing_key", new String[] {field3}).get());
     }
 
     @SneakyThrows

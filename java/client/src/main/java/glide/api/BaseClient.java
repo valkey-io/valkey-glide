@@ -7,6 +7,9 @@ import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -20,6 +23,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.commands.ConnectionManagementCommands;
+import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
@@ -36,9 +40,11 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -48,7 +54,7 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, ConnectionManagementCommands, StringCommands, SetCommands {
+        implements AutoCloseable, ConnectionManagementCommands, StringCommands, HashCommands, SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -259,6 +265,30 @@ public abstract class BaseClient
     public CompletableFuture<Long> decrBy(@NonNull String key, long amount) {
         return commandManager.submitNewCommand(
                 DecrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> hget(@NonNull String key, @NonNull String field) {
+        return commandManager.submitNewCommand(
+                HashGet, new String[] {key, field}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hset(
+            @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
+        String[] args =
+                Stream.concat(
+                                Stream.of(key),
+                                fieldValueMap.entrySet().stream()
+                                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue())))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
+        String[] args = ArrayUtils.addFirst(fields, key);
+        return commandManager.submitNewCommand(HashDel, args, this::handleLongResponse);
     }
 
     @Override
