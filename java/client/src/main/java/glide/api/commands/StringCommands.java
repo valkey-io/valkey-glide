@@ -71,7 +71,7 @@ public interface StringCommands {
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 
     /**
-     * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * Increment the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
@@ -83,7 +83,7 @@ public interface StringCommands {
     CompletableFuture<Long> incr(String key);
 
     /**
-     * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * Increment the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
