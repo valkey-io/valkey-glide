@@ -105,7 +105,7 @@ public interface StringCommands {
     CompletableFuture<Double> incrByFloat(String key, double amount);
 
     /**
-     * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * Decrement the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
@@ -117,7 +117,7 @@ public interface StringCommands {
     CompletableFuture<Long> decr(String key);
 
     /**
-     * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * Decrement the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.

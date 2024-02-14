@@ -260,12 +260,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * Decrement the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
      * @param key The key to decrement its value.
-     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
+     * @apiNote Command Response - The value of <code>key</code> after the decrement. An error is
+     *     raised if <code>key
      *     </code> contains a value of the wrong type or contains a string that cannot be represented
      *     as integer.
      */
@@ -277,13 +278,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * Decrement the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
      * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
      * @param key The key to decrement its value.
      * @param amount The amount to decrement.
-     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
+     * @apiNote Command Response - The value of <code>key</code> after the decrement. An error is
+     *     raised if <code>key
      *     </code> contains a value of the wrong type or contains a string that cannot be represented
      *     as integer.
      */
