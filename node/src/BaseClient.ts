@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     ExpireOptions,
+    ScoreLimit,
     SetOptions,
     ZaddOptions,
     createDecr,
@@ -53,6 +54,7 @@ import {
     createUnlink,
     createZadd,
     createZcard,
+    createZcount,
     createZrem,
     createZscore,
 } from "./Commands";
@@ -1075,6 +1077,25 @@ export class BaseClient {
      */
     public zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZscore(key, member));
+    }
+
+    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+     * See https://redis.io/commands/zcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+     * @returns The number of members in the specified score range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zcount(
+        key: string,
+        minScore: ScoreLimit,
+        maxScore: ScoreLimit
+    ): Promise<number> {
+        return this.createWritePromise(createZcount(key, minScore, maxScore));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
