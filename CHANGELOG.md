@@ -1,10 +1,10 @@
 ## 0.2.0 (2024-02-11)
 
 #### Changes
-* Python, Node: Added ZCARD command ([#877](https://github.com/aws/glide-for-redis/pull/885), [#885](https://github.com/aws/glide-for-redis/pull/885))
+* Python, Node: Added ZCARD command ([#871](https://github.com/aws/glide-for-redis/pull/871), [#885](https://github.com/aws/glide-for-redis/pull/885))
 * Python, Node: Added ZADD and ZADDINCR commands ([#814](https://github.com/aws/glide-for-redis/pull/814), [#830](https://github.com/aws/glide-for-redis/pull/830))
 * Python, Node: Added ZREM command ([#834](https://github.com/aws/glide-for-redis/pull/834), [#831](https://github.com/aws/glide-for-redis/pull/831))
-* Python, Node: Added ZSCORE command ([#885](https://github.com/aws/glide-for-redis/pull/885), [#871](https://github.com/aws/glide-for-redis/pull/871))
+* Python, Node: Added ZSCORE command ([#877](https://github.com/aws/glide-for-redis/pull/877), [#889](https://github.com/aws/glide-for-redis/pull/889))
 * Use jemalloc as default allocator. ([#847](https://github.com/aws/glide-for-redis/pull/847))
 * Python, Node: Added RPOPCOUNT and LPOPCOUNT to transaction ([#874](https://github.com/aws/glide-for-redis/pull/874))
 * Standalone client: Improve connection errors. ([#854](https://github.com/aws/glide-for-redis/pull/854))
