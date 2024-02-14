@@ -15,8 +15,8 @@ import java.util.concurrent.CompletableFuture;
 public interface ServerManagementClusterCommands {
 
     /**
-     * Get information and statistics about the Redis server. If no argument is provided, so the
-     * {@link Section#DEFAULT} option is assumed. The command will be routed to all primary nodes.
+     * Get information and statistics about the Redis server using the {@link Section#DEFAULT} option.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
