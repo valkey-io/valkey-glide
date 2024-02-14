@@ -19,6 +19,8 @@ public class TestUtilities {
         baseTransaction.set(key1, "bar");
         baseTransaction.set(key2, "baz", SetOptions.builder().returnOldValue(true).build());
         baseTransaction.set(key1, value1);
+        baseTransaction.get(key1);
+
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.customCommand("MGET", key1, key2);
 
@@ -36,6 +38,7 @@ public class TestUtilities {
     public static Object[] transactionTestResult() {
         return new Object[] {
             "OK",
+            value1,
             null,
             new String[] {value1, value2},
             2L,
