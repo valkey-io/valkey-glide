@@ -44,39 +44,42 @@ To install GLIDE for Redis using `pip`, follow these steps:
 #### Cluster Redis:
 
 ```python:
->>> from glide import (
-...     NodeAddress,
-...     ClusterClientConfiguration,
-...     RedisClusterClient,
-... )
->>> addresses = [NodeAddress("redis.example.com", 6379)]
->>> config = ClusterClientConfiguration(
-...     addresses=addresses
-... )
->>> client = await RedisClusterClient.create(config)
->>> await client.set("foo", "bar")
-'OK'
->>> await client.get("foo")
-'bar'
+>>> import asyncio
+>>> from glide import ClusterClientConfiguration, NodeAddress, RedisClusterClient
+>>> async def test_cluster_client():
+...     addresses = [NodeAddress("redis.example.com", 6379)]
+...     config = ClusterClientConfiguration(addresses)
+...     client = await RedisClusterClient.create(config)
+...     set_result = await client.set("foo", "bar")
+...     print(f"Set response is {set_result}")
+...     get_result = await client.get("foo")
+...     print(f"Get response is {get_result}")
+... 
+>>> asyncio.run(test_cluster_client())
+Set response is OK
+Get response is bar
 ```
 
 #### Standalone Redis:
 
 ```python:
->>> from glide import (
-...     NodeAddress,
-...     RedisClientConfiguration,
-...     RedisClient,
-... )
->>> addresses = [NodeAddress("redis_primary.example.com", 6379), NodeAddress("redis_replica.example.com", 6379)]
->>> config = RedisClientConfiguration(
-...     addresses=addresses
-... )
->>> client = await RedisClient.create(config)
->>> await client.set("foo", "bar")
-'OK'
->>> await client.get("foo")
-'bar'
+>>> import asyncio
+>>> from glide import RedisClientConfiguration, NodeAddress, RedisClient
+>>> async def test_standalone_client():
+...     addresses = [
+...             NodeAddress("redis_primary.example.com", 6379),
+...             NodeAddress("redis_replica.example.com", 6379)
+...     ]
+...     config = RedisClientConfiguration(addresses)
+...     client = await RedisClient.create(config)
+...     set_result = await client.set("foo", "bar")
+...     print(f"Set response is {set_result}")
+...     get_result = await client.get("foo")
+...     print(f"Get response is {get_result}")
+... 
+>>> asyncio.run(test_standalone_client())
+Set response is OK
+Get response is bar
 ```
 
 ## Documentation
