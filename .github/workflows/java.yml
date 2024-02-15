@@ -68,6 +68,10 @@ jobs:
               working-directory: java
               run: ./gradlew --continue build
 
+            - name: Ensure no skipped files by linter
+              working-directory: java
+              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
