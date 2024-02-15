@@ -302,7 +302,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
-     * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
+     * @return Command Response - The value associated with <code>field</code>, or <code>null</code>
+     *     when <code>field
      *     </code> is not present in the hash or <code>key</code> does not exist.
      */
     public T hget(@NonNull String key, @NonNull String field) {
@@ -319,7 +320,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
-     * @return The number of fields that were added.
+     * @return Command Response - The number of fields that were added.
      */
     public T hset(@NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         ArgsArray commandArgs =
@@ -341,8 +342,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove from the hash stored at <code>key</code>.
-     * @return The number of fields that were removed from the hash, not including specified but
-     *     non-existing fields.<br>
+     * @return Command Response - The number of fields that were removed from the hash, not including
+     *     specified but non-existing fields.<br>
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
      *     If <code>key</code> holds a value that is not a hash, an error is raised.<br>
      */

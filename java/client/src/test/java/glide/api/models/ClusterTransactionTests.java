@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -89,6 +92,18 @@ public class ClusterTransactionTests {
 
         transaction.decrBy("key", 2);
         results.add(Pair.of(DecrBy, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.hset("key", Map.of("field", "value"));
+        results.add(
+                Pair.of(
+                        HashSet,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
+
+        transaction.hget("key", "field");
+        results.add(Pair.of(HashGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hdel("key", new String[] {"field"});
+        results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
