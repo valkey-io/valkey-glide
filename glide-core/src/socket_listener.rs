@@ -361,6 +361,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::XGroupDestroy => Some(get_two_word_command("XGROUP", "DESTROY")),
         RequestType::XTrim => Some(cmd("XTRIM")),
         RequestType::HSetNX => Some(cmd("HSETNX")),
+        RequestType::SIsMember => Some(cmd("SISMEMBER")),
     }
 }
 

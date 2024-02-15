@@ -859,6 +859,17 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sismember(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert await redis_client.sadd(key, [member]) == 1
+        assert await redis_client.sismember(key, member) == True
+
+        assert await redis_client.sismember(key, get_random_string(5)) == False
+        assert await redis_client.sismember("non_existing_key", member) == False
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
