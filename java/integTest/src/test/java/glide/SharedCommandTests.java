@@ -10,6 +10,7 @@ import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.BaseClient;
 import glide.api.RedisClient;
@@ -18,7 +19,11 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.exceptions.RequestException;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -246,5 +251,50 @@ public class SharedCommandTests {
         SetOptions options = SetOptions.builder().returnOldValue(true).build();
         String data = client.set("another", ANOTHER_VALUE, options).get();
         assertNull(data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(
+                4, client.sadd(key, new String[] {"member1", "member2", "member3", "member4"}).get());
+        assertEquals(1, client.srem(key, new String[] {"member3", "nonExistingMember"}).get());
+
+        Set<String> expectedMembers = Set.of("member1", "member2", "member4");
+        assertEquals(expectedMembers, client.smembers(key).get());
+        assertEquals(1, client.srem(key, new String[] {"member1"}).get());
+        assertEquals(2, client.scard(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void srem_scard_smembers_non_existing_key(BaseClient client) {
+        assertEquals(0, client.srem("nonExistingKey", new String[] {"member"}).get());
+        assertEquals(0, client.scard("nonExistingKey").get());
+        assertEquals(Set.of(), client.smembers("nonExistingKey").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_key_with_non_set_value(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception e =
+                assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
+        assertTrue(e.getCause() instanceof RequestException);
     }
 }
