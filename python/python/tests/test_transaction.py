@@ -32,120 +32,120 @@ def transaction_test(
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
+    args: List[TResult] = []
 
     transaction.set(key, value)
+    args.append(OK)
     transaction.get(key)
+    args.append(value)
     transaction.type(key)
+    args.append("string")
 
     transaction.exists([key])
+    args.append(1)
 
     transaction.delete([key])
+    args.append(1)
     transaction.get(key)
+    args.append(None)
 
     transaction.mset({key: value, key2: value2})
+    args.append(OK)
     transaction.mget([key, key2])
+    args.append([value, value2])
 
     transaction.incr(key3)
+    args.append(1)
     transaction.incrby(key3, 2)
+    args.append(3)
 
     transaction.decr(key3)
+    args.append(2)
     transaction.decrby(key3, 2)
+    args.append(0)
 
     transaction.incrbyfloat(key3, 0.5)
+    args.append(0.5)
 
     transaction.unlink([key3])
+    args.append(1)
 
     transaction.ping()
+    args.append("PONG")
 
     transaction.config_set({"timeout": "1000"})
+    args.append(OK)
     transaction.config_get(["timeout"])
+    args.append({"timeout": "1000"})
 
     transaction.hset(key4, {key: value, key2: value2})
+    args.append(2)
     transaction.hget(key4, key2)
+    args.append(value2)
     transaction.hlen(key4)
+    args.append(2)
 
     transaction.hincrby(key4, key3, 5)
+    args.append(5)
     transaction.hincrbyfloat(key4, key3, 5.5)
+    args.append(10.5)
 
     transaction.hexists(key4, key)
+    args.append(True)
     transaction.hmget(key4, [key, "nonExistingField", key2])
+    args.append([value, None, value2])
     transaction.hgetall(key4)
+    args.append({key: value, key2: value2, key3: "10.5"})
     transaction.hdel(key4, [key, key2])
+    args.append(2)
 
     transaction.client_getname()
+    args.append(None)
 
     transaction.lpush(key5, [value, value, value2, value2])
+    args.append(4)
     transaction.llen(key5)
+    args.append(4)
     transaction.lpop(key5)
+    args.append(value2)
     transaction.lrem(key5, 1, value)
+    args.append(1)
     transaction.ltrim(key5, 0, 1)
+    args.append(OK)
     transaction.lrange(key5, 0, -1)
+    args.append([value2, value])
     transaction.lpop_count(key5, 2)
+    args.append([value2, value])
 
     transaction.rpush(key6, [value, value2, value2])
+    args.append(3)
     transaction.rpop(key6)
+    args.append(value2)
     transaction.rpop_count(key6, 2)
+    args.append([value2, value])
 
     transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
     transaction.srem(key7, ["foo"])
+    args.append(1)
     transaction.smembers(key7)
+    args.append({"bar"})
     transaction.scard(key7)
+    args.append(1)
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
+    args.append(3)
     transaction.zadd_incr(key8, "one", 3)
+    args.append(4)
     transaction.zrem(key8, ["one"])
+    args.append(1)
     transaction.zcard(key8)
+    args.append(2)
     transaction.zcount(key8, ScoreLimit(2, True), InfBound.POS_INF)
+    args.append(2)
     transaction.zscore(key8, "two")
-    return [
-        OK,
-        value,
-        "string",
-        1,
-        1,
-        None,
-        OK,
-        [value, value2],
-        1,
-        3,
-        2,
-        0,
-        0.5,
-        1,
-        "PONG",
-        OK,
-        {"timeout": "1000"},
-        2,
-        value2,
-        2,
-        5,
-        10.5,
-        True,
-        [value, None, value2],
-        {key: value, key2: value2, key3: "10.5"},
-        2,
-        None,
-        4,
-        4,
-        value2,
-        1,
-        OK,
-        [value2, value],
-        [value2, value],
-        3,
-        value2,
-        [value2, value],
-        2,
-        1,
-        {"bar"},
-        1,
-        3,
-        4,
-        1,
-        2,
-        2,
-        2.0,
-    ]
+    args.append(2.0)
+    return args
 
 
 @pytest.mark.asyncio
