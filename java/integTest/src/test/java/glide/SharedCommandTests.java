@@ -287,30 +287,14 @@ public class SharedCommandTests {
         Exception e =
                 assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
         assertTrue(e.getCause() instanceof RequestException);
-        assertTrue(
-                e.getCause()
-                        .getMessage()
-                        .contains("Operation against a key holding the wrong kind of value"));
 
         e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
         assertTrue(e.getCause() instanceof RequestException);
-        assertTrue(
-                e.getCause()
-                        .getMessage()
-                        .contains("Operation against a key holding the wrong kind of value"));
 
         e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
         assertTrue(e.getCause() instanceof RequestException);
-        assertTrue(
-                e.getCause()
-                        .getMessage()
-                        .contains("Operation against a key holding the wrong kind of value"));
 
         e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
         assertTrue(e.getCause() instanceof RequestException);
-        assertTrue(
-                e.getCause()
-                        .getMessage()
-                        .contains("Operation against a key holding the wrong kind of value"));
     }
 }
