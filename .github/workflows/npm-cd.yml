@@ -3,6 +3,10 @@
 name: Continuous Deployment
 
 on:
+    pull_request:
+      paths:
+        - .github/workflows/npm-cd.yml
+        - .github/workflows/build-node-wrapper/action.yml
     push:
         tags:
             - "v*.*"
@@ -56,7 +60,8 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+                export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
+                echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Setup node
               if: matrix.build.NPM_PUBLISH == true
@@ -68,7 +73,13 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
-
+            
+            - name: Update package version in config.toml
+              uses: ./.github/workflows/update-glide-version
+              with:
+                  folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
+                  named_os: ${{ matrix.build.NAMED_OS }}
+                
             - name: Build Node wrapper
               if: matrix.build.NPM_PUBLISH == true
               uses: ./.github/workflows/build-node-wrapper
@@ -82,7 +93,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Publish to NPM
-              if: matrix.build.NPM_PUBLISH == true
+              if: matrix.build.NPM_PUBLISH == true && github.event_name != 'pull_request'
               shell: bash
               working-directory: ./node
               run: |
@@ -190,6 +201,7 @@ jobs:
                   done
 
             - name: Publish the base package
+              if: github.event_name != 'pull_request'
               shell: bash
               working-directory: ./node/npm/glide
               run: |

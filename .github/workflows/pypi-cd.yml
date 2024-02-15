@@ -3,6 +3,10 @@
 name: Continuous Deployment
 
 on:
+    pull_request:
+      paths:
+        - .github/workflows/pypi-cd.yml
+        - .github/workflows/build-python-wrapper/action.yml
     push:
         tags:
             - "v*.*"
@@ -56,7 +60,8 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the package version for Python
               if: matrix.build.PYPI_PUBLISH == true
@@ -85,6 +90,12 @@ jobs:
                   sudo apt upgrade -y
                   sudo apt install python3 python3-venv python3-pip -y
 
+            - name: Update package version in config.toml
+              uses: ./.github/workflows/update-glide-version
+              with:
+                  folder_path: "${{ github.workspace }}/python/.cargo"
+                  named_os: ${{ matrix.build.NAMED_OS }}
+
             - name: Build Python wrapper
               if: matrix.build.PYPI_PUBLISH == true
               uses: ./.github/workflows/build-python-wrapper
@@ -104,7 +115,7 @@ jobs:
                   cat .gitignore
 
             - name: Build Python wheels (linux)
-              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'linux')
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'linux') && github.event_name != 'pull_request'
               uses: PyO3/maturin-action@v1
               with:
                   working-directory: ./python
@@ -125,7 +136,7 @@ jobs:
                       fi
 
             - name: Build Python wheels (macos)
-              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
+              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin') && github.event_name != 'pull_request'
               uses: PyO3/maturin-action@v1
               with:
                   working-directory: ./python
@@ -133,7 +144,7 @@ jobs:
                   args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
 
             - name: Upload Python wheels
-              if: matrix.build.PYPI_PUBLISH == true
+              if: matrix.build.PYPI_PUBLISH == true && github.event_name != 'pull_request'
               uses: actions/upload-artifact@v3
               with:
                   name: wheels
@@ -141,6 +152,7 @@ jobs:
                   if-no-files-found: error
 
     publish-to-pypi:
+        if: github.event_name != 'pull_request'
         name: Publish the base PyPi package
         runs-on: ubuntu-latest
         needs: publish-binaries
