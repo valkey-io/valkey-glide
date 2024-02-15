@@ -69,11 +69,12 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release /warnaserror
   dotnet run --framework net6.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework net8.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  ./gradlew run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
+  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
 }
 
 function runRustBenchmark(){
@@ -230,7 +231,7 @@ do
             ;;
         -minimal)
             minimalFlag="--minimal"
-            ;;            
+            ;;
     esac
     shift
 done
@@ -241,7 +242,7 @@ do
     then
         echo "Minimal run, not filling database"
         flushDB
-    else 
+    else
         fillDB $currentDataSize
     fi
 

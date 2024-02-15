@@ -3,9 +3,6 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
-import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
@@ -13,9 +10,10 @@ import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,12 +39,49 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
-    public static final List<String>
-        DEFAULT_INFO_SECTIONS = List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Errorstats", "Cluster", "Keyspace");
-    public static final List<String> EVERYTHING_INFO_SECTIONS = REDIS_VERSION.feature() >= 7
-        // Latencystats was added in redis 7
-        ? List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Latencystats", "Cluster", "Keyspace")
-        : List.of("Server", "Clients", "Memory", "Persistence", "Stats", "Replication", "CPU", "Modules", "Commandstats", "Errorstats", "Cluster", "Keyspace");
+    public static final List<String> DEFAULT_INFO_SECTIONS =
+            List.of(
+                    "Server",
+                    "Clients",
+                    "Memory",
+                    "Persistence",
+                    "Stats",
+                    "Replication",
+                    "CPU",
+                    "Modules",
+                    "Errorstats",
+                    "Cluster",
+                    "Keyspace");
+    public static final List<String> EVERYTHING_INFO_SECTIONS =
+            REDIS_VERSION.feature() >= 7
+                    // Latencystats was added in redis 7
+                    ? List.of(
+                            "Server",
+                            "Clients",
+                            "Memory",
+                            "Persistence",
+                            "Stats",
+                            "Replication",
+                            "CPU",
+                            "Modules",
+                            "Commandstats",
+                            "Errorstats",
+                            "Latencystats",
+                            "Cluster",
+                            "Keyspace")
+                    : List.of(
+                            "Server",
+                            "Clients",
+                            "Memory",
+                            "Persistence",
+                            "Stats",
+                            "Replication",
+                            "CPU",
+                            "Modules",
+                            "Commandstats",
+                            "Errorstats",
+                            "Cluster",
+                            "Keyspace");
 
     @BeforeAll
     @SneakyThrows
@@ -79,7 +114,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void custom_command_ping() {
-        ClusterValue<Object> data = clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
+        ClusterValue<Object> data =
+                clusterClient.customCommand(new String[] {"ping"}).get(10, TimeUnit.SECONDS);
         assertEquals("PONG", data.getSingleValue());
     }
 
@@ -153,8 +189,10 @@ public class CommandTests {
         InfoOptions options = builder.build();
         ClusterValue<String> data = clusterClient.info(options).get();
         for (String info : data.getMultiValue().values()) {
-            for (String section :  options.toArgs()) {
-                assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+            for (String section : options.toArgs()) {
+                assertTrue(
+                        info.toLowerCase().contains("# " + section.toLowerCase()),
+                        "Section " + section + " is missing");
             }
         }
     }
@@ -175,18 +213,19 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_single_node_route_and_options() {
-        ClusterValue<Object> slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get();
-        /*
-        Nested Object arrays like
-        1) 1) (integer) 0
-           2) (integer) 5460
-           3) 1) "127.0.0.1"
-              2) (integer) 7000
-              3) "92d73b6eb847604b63c7f7cbbf39b148acdd1318"
-              4) (empty array)
-        */
+        ClusterValue<Object> slotData =
+                clusterClient.customCommand(new String[] {"cluster", "slots"}).get();
+
+        // Nested Object arrays like
+        // 1) 1) (integer) 0
+        //    2) (integer) 5460
+        //    3) 1) "127.0.0.1"
+        //       2) (integer) 7000
+        //       3) "92d73b6eb847604b63c7f7cbbf39b148acdd1318"
+        //       4) (empty array)
         // Extracting first slot key
-        var slotKey = (String)((Object[])((Object[])((Object[])slotData.getSingleValue())[0])[2])[2];
+        var slotKey =
+                (String) ((Object[]) ((Object[]) ((Object[]) slotData.getSingleValue())[0])[2])[2];
 
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
         if (REDIS_VERSION.feature() >= 7) {
@@ -197,7 +236,9 @@ public class CommandTests {
         ClusterValue<String> data = clusterClient.info(options, routing).get();
 
         for (String section : options.toArgs()) {
-            assertTrue(data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+            assertTrue(
+                    data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()),
+                    "Section " + section + " is missing");
         }
     }
 
@@ -213,7 +254,9 @@ public class CommandTests {
 
         for (String info : data.getMultiValue().values()) {
             for (String section : options.toArgs()) {
-                assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+                assertTrue(
+                        info.toLowerCase().contains("# " + section.toLowerCase()),
+                        "Section " + section + " is missing");
             }
         }
     }

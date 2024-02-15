@@ -5,6 +5,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.models.commands.InfoOptions;
@@ -161,6 +165,74 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Add specified members to the set stored at <code>key</code>. Specified members that are already
+     * a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/sadd/">redis.io</a> for details.
+     * @param key The <code>key</code> where members will be added to its set.
+     * @param members A list of members to add to the set stored at <code>key</code>.
+     * @return Command Response - The number of members that were added to the set, excluding members
+     *     already present.
+     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     *     </code>.
+     */
+    public T sadd(String key, String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+
+        protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Remove specified members from the set stored at <code>key</code>. Specified members that are
+     * not a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/srem/">redis.io</a> for details.
+     * @param key The <code>key</code> from which members will be removed.
+     * @param members A list of members to remove from the set stored at <code>key</code>.
+     * @return Command Response - The number of members that were removed from the set, excluding
+     *     non-existing members.
+     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     *     returns 0.
+     */
+    public T srem(String key, String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+
+        protobufTransaction.addCommands(buildCommand(SRem, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Retrieve all the members of the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smembers/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @return Command Response - A <code>Set</code> of all members of the set.
+     * @remarks If <code>key</code> does not exist an empty set will be returned.
+     */
+    public T smembers(String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(SMembers, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Retrieve the set cardinality (number of elements) of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/scard/">redis.io</a> for details.
+     * @param key The key from which to retrieve the number of set members.
+     * @return Command Response - The cardinality (number of elements) of the set, or 0 if the key
+     *     does not exist.
+     */
+    public T scard(String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
         return getThis();
     }
 

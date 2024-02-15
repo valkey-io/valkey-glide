@@ -5,6 +5,7 @@
 import {
     ExpireOptions,
     InfoOptions,
+    ScoreLimit,
     SetOptions,
     ZaddOptions,
     createClientGetName,
@@ -56,7 +57,9 @@ import {
     createUnlink,
     createZadd,
     createZcard,
+    createZcount,
     createZrem,
+    createZscore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -819,6 +822,37 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcard(key: string): T {
         return this.addAndReturn(createZcard(key));
+    }
+
+    /** Returns the score of `member` in the sorted set stored at `key`.
+     * See https://redis.io/commands/zscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose score is to be retrieved.
+     *
+     * Command Response - The score of the member.
+     * If `member` does not exist in the sorted set, null is returned.
+     * If `key` does not exist, null is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zscore(key: string, member: string): T {
+        return this.addAndReturn(createZscore(key, member));
+    }
+
+    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+     * See https://redis.io/commands/zcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+     *
+     * Command Response - The number of members in the specified score range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` holds a value that is not a sorted set, an error is returned.
+     */
+    public zcount(key: string, minScore: ScoreLimit, maxScore: ScoreLimit): T {
+        return this.addAndReturn(createZcount(key, minScore, maxScore));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
