@@ -30,7 +30,8 @@ public class RedisClient extends BaseClient implements GenericCommands, ServerMa
      * @param config Redis client Configuration
      * @return A Future to connect and return a RedisClient
      */
-    public static CompletableFuture<RedisClient> CreateClient(RedisClientConfiguration config) {
+    public static CompletableFuture<RedisClient> CreateClient(
+            @NonNull RedisClientConfiguration config) {
         return CreateClient(config, RedisClient::new);
     }
 
