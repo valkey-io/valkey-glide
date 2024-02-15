@@ -122,12 +122,24 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void info_with_route() {
+    public void info_with_single_node_route() {
         ClusterValue<String> data = clusterClient.info(RANDOM).get();
         assertTrue(data.hasSingleData());
         String infoData = data.getSingleValue();
         for (String section : DEFAULT_INFO_SECTIONS) {
             assertTrue(infoData.contains("# " + section), "Section " + section + " is missing");
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_multi_node_route() {
+        ClusterValue<String> data = clusterClient.info(ALL_NODES).get();
+        assertTrue(data.hasMultiData());
+        for (String info : data.getMultiValue().values()) {
+            for (String section : DEFAULT_INFO_SECTIONS) {
+                assertTrue(info.contains("# " + section), "Section " + section + " is missing");
+            }
         }
     }
 
@@ -162,7 +174,7 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void info_with_routing_and_options() {
+    public void info_with_single_node_route_and_options() {
         ClusterValue<Object> slotData = clusterClient.customCommand(new String[] {"cluster", "slots"}).get();
         /*
         Nested Object arrays like
@@ -186,6 +198,23 @@ public class CommandTests {
 
         for (String section : options.toArgs()) {
             assertTrue(data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_multi_node_route_and_options() {
+        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
+        if (REDIS_VERSION.feature() >= 7) {
+            builder.section(COMMANDSTATS).section(REPLICATION);
+        }
+        InfoOptions options = builder.build();
+        ClusterValue<String> data = clusterClient.info(options, ALL_NODES).get();
+
+        for (String info : data.getMultiValue().values()) {
+            for (String section : options.toArgs()) {
+                assertTrue(info.toLowerCase().contains("# " + section.toLowerCase()), "Section " + section + " is missing");
+            }
         }
     }
 }

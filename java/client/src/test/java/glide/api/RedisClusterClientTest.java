@@ -108,9 +108,9 @@ public class RedisClusterClientTest {
             object = objectToReturn;
         }
 
-        @Override
-        protected Object handleObjectOrNullResponse(Response response) {
-            return object;
+        @SuppressWarnings("unchecked")
+        protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
+            return (T) object;
         }
     }
 
@@ -250,5 +250,57 @@ public class RedisClusterClientTest {
         Map<String, String> clusterMap = clusterValue.getMultiValue();
         assertEquals("addr1 result", clusterMap.get("addr1"));
         assertEquals("addr2 result", clusterMap.get("addr2"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_single_node_route_returns_single_value() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = "info string";
+        var client = new TestClient(commandManager, data);
+
+        var value = client.info(RANDOM).get();
+        assertAll(
+                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_multi_node_route_returns_multi_value() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("key1", "value1", "key2", "value2");
+        var client = new TestClient(commandManager, data);
+
+        var value = client.info(ALL_NODES).get();
+        assertAll(
+                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_options_and_single_node_route_returns_single_value() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = "info string";
+        var client = new TestClient(commandManager, data);
+
+        var value = client.info(InfoOptions.builder().build(), RANDOM).get();
+        assertAll(
+                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+    }
+
+    @Test
+    @SneakyThrows
+    public void info_with_options_and_multi_node_route_returns_multi_value() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("key1", "value1", "key2", "value2");
+        var client = new TestClient(commandManager, data);
+
+        var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
+        assertAll(
+                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
     }
 }
