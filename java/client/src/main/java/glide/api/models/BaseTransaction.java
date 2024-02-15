@@ -178,7 +178,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return Command Response - The number of members that were added to the set, excluding members
      *     already present.
-     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members</code>.
+     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     *     </code>.
      */
     public T sadd(String key, String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
@@ -196,7 +197,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return Command Response - The number of members that were removed from the set, excluding
      *     non-existing members.
-     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command returns 0.
+     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     *     returns 0.
      */
     public T srem(String key, String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
