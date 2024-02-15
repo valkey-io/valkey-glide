@@ -720,6 +720,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hlen(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hlen(key) == 2
+        assert await redis_client.hdel(key, [field]) == 1
+        assert await redis_client.hlen(key) == 1
+        assert await redis_client.hlen("non_existing_hash") == 0
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hlen(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1173,6 +1192,36 @@ class TestCommands:
         assert (
             await redis_client.zscore("non_existing_key", "non_existing_member") == None
         )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_type(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "value") == OK
+        assert (await redis_client.type(key)).lower() == "string"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.lpush(key, ["value"]) == 1
+        assert (await redis_client.type(key)).lower() == "list"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.sadd(key, ["value"]) == 1
+        assert (await redis_client.type(key)).lower() == "set"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.zadd(key, {"member": 1.0}) == 1
+        assert (await redis_client.type(key)).lower() == "zset"
+        assert await redis_client.delete([key]) == 1
+
+        assert await redis_client.hset(key, {"field": "value"}) == 1
+        assert (await redis_client.type(key)).lower() == "hash"
+        assert await redis_client.delete([key]) == 1
+
+        await redis_client.custom_command(["XADD", key, "*", "field", "value"])
+        assert await redis_client.type(key) == "stream"
+        assert await redis_client.delete([key]) == 1
+
+        assert (await redis_client.type(key)).lower() == "none"
 
 
 class TestCommandsUnitTests:

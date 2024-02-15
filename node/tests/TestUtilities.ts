@@ -95,7 +95,9 @@ export function transactionTest(
         .zadd(key8, { member1: 1, member2: 2 })
         .zaddIncr(key8, "member2", 1)
         .zrem(key8, ["member1"])
-        .zcard(key8);
+        .zcard(key8)
+        .zscore(key8, "member2")
+        .zcount(key8, { bound: 2 }, "positiveInfinity");
     return [
         "OK",
         null,
@@ -126,6 +128,8 @@ export function transactionTest(
         2,
         3,
         1,
+        1,
+        3.0,
         1,
     ];
 }

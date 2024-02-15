@@ -12,7 +12,8 @@ from glide.protobuf.redis_request_pb2 import RequestType
 
 class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[str]) -> TResult:
-        """Executes a single command, without checking inputs.
+        """
+        Executes a single command, without checking inputs.
             @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
             @example - Return a list of all pub/sub clients:
 
@@ -30,7 +31,8 @@ class StandaloneCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
     ) -> str:
-        """Get information and statistics about the Redis server.
+        """
+        Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
 
         Args:
@@ -48,7 +50,8 @@ class StandaloneCommands(CoreCommands):
         self,
         transaction: BaseTransaction | Transaction,
     ) -> Optional[List[TResult]]:
-        """Execute a transaction by processing the queued commands.
+        """
+        Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
         Args:
@@ -64,7 +67,8 @@ class StandaloneCommands(CoreCommands):
         return await self._execute_transaction(commands)
 
     async def select(self, index: int) -> TOK:
-        """Change the currently selected Redis database.
+        """
+        Change the currently selected Redis database.
         See https://redis.io/commands/select/ for details.
 
         Args:
@@ -76,26 +80,30 @@ class StandaloneCommands(CoreCommands):
         return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
 
     async def config_resetstat(self) -> TOK:
-        """Reset the statistics reported by Redis.
+        """
+        Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
         See https://redis.io/commands/config-resetstat/ for details.
+
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
         return cast(TOK, await self._execute_command(RequestType.ConfigResetStat, []))
 
     async def config_rewrite(self) -> TOK:
-        """Rewrite the configuration file with the current configuration.
+        """
+        Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
 
         Returns:
-            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
+            OK: OK is returned when the configuration was rewritten properly. Otherwise, an error is raised.
         """
         return cast(TOK, await self._execute_command(RequestType.ConfigRewrite, []))
 
     async def client_id(
         self,
     ) -> int:
-        """Returns the current connection id.
+        """
+        Returns the current connection id.
         See https://redis.io/commands/client-id/ for more information.
 
         Returns:
@@ -104,26 +112,29 @@ class StandaloneCommands(CoreCommands):
         return cast(int, await self._execute_command(RequestType.ClientId, []))
 
     async def ping(self, message: Optional[str] = None) -> str:
-        """Ping the Redis server.
+        """
+        Ping the Redis server.
         See https://redis.io/commands/ping/ for more details.
+
         Args:
            message (Optional[str]): An optional message to include in the PING command. If not provided,
             the server will respond with "PONG". If provided, the server will respond with a copy of the message.
 
         Returns:
-           str: "PONG" if 'message' is not provided, otherwise return a copy of 'message'.
+           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
-            >>> ping()
+            >>> await client.ping()
             "PONG"
-            >>> ping("Hello")
+            >>> await client.ping("Hello")
             "Hello"
         """
         argument = [] if message is None else [message]
         return cast(str, await self._execute_command(RequestType.Ping, argument))
 
     async def config_get(self, parameters: List[str]) -> Dict[str, str]:
-        """Get the values of configuration parameters.
+        """
+        Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
 
         Args:
@@ -145,7 +156,8 @@ class StandaloneCommands(CoreCommands):
         )
 
     async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:
-        """Set configuration parameters to the specified values.
+        """
+        Set configuration parameters to the specified values.
         See https://redis.io/commands/config-set/ for details.
 
         Args:
@@ -174,7 +186,7 @@ class StandaloneCommands(CoreCommands):
             or None if no name is assigned.
 
         Examples:
-            >>> client_getname()
+            >>> await client.client_getname()
             'Connection Name'
         """
         return cast(

@@ -35,6 +35,7 @@ def transaction_test(
 
     transaction.set(key, value)
     transaction.get(key)
+    transaction.type(key)
 
     transaction.exists([key])
 
@@ -61,6 +62,7 @@ def transaction_test(
 
     transaction.hset(key4, {key: value, key2: value2})
     transaction.hget(key4, key2)
+    transaction.hlen(key4)
 
     transaction.hincrby(key4, key3, 5)
     transaction.hincrbyfloat(key4, key3, 5.5)
@@ -98,6 +100,7 @@ def transaction_test(
     return [
         OK,
         value,
+        "string",
         1,
         1,
         None,
@@ -114,6 +117,7 @@ def transaction_test(
         {"timeout": "1000"},
         2,
         value2,
+        2,
         5,
         10.5,
         True,
