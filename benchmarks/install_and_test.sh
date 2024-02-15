@@ -74,7 +74,7 @@ function runCSharpBenchmark(){
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  ./gradlew run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
+  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
 }
 
 function runRustBenchmark(){

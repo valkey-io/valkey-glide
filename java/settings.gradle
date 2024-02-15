@@ -2,4 +2,5 @@ rootProject.name = 'glide'
 
 include 'client'
 include 'integTest'
+include 'examples'
 include 'benchmarks'

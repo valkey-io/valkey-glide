@@ -30,7 +30,7 @@ public class LettuceAsyncClient implements AsyncClient<String> {
                         .withPort(connectionSettings.port)
                         .withSsl(connectionSettings.useSsl)
                         .build();
-        if (connectionSettings.clusterMode) {
+        if (!connectionSettings.clusterMode) {
             client = RedisClient.create(uri);
             connection = ((RedisClient) client).connect();
             asyncCommands = ((StatefulRedisConnection<String, String>) connection).async();
