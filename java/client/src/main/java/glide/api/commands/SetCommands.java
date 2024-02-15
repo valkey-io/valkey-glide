@@ -18,8 +18,8 @@ public interface SetCommands {
      * @param key The <code>key</code> where members will be added to its set.
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return The number of members that were added to the set, excluding members already present.
-     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members</code>.
-     *
+     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     *     </code>.
      * @example
      *     <p><code>
      *  int result = client.sadd("my_set", new String[]{"member1", "member2"}).get();
@@ -36,8 +36,8 @@ public interface SetCommands {
      * @param key The <code>key</code> from which members will be removed.
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return The number of members that were removed from the set, excluding non-existing members.
-     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command returns 0.
-     *
+     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     *     returns 0.
      * @example
      *     <p><code>
      *  int result = client.srem("my_set", new String[]{"member1", "member2"}).get();
@@ -53,7 +53,6 @@ public interface SetCommands {
      * @param key The key from which to retrieve the set members.
      * @return A <code>Set</code> of all members of the set.
      * @remarks If <code>key</code> does not exist an empty set will be returned.
-     *
      * @example
      *     <p><code>
      *  {@literal Set<String>} result = client.smembers("my_set").get();
@@ -68,7 +67,6 @@ public interface SetCommands {
      * @see <a href="https://redis.io/commands/scard/">redis.io</a> for details.
      * @param key The key from which to retrieve the number of set members.
      * @return The cardinality (number of elements) of the set, or 0 if the key does not exist.
-     *
      * @example
      *     <p><code>
      *  int result = client.scard("my_set").get();
