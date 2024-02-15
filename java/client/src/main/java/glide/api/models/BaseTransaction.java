@@ -178,12 +178,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return Command Response - The number of members that were added to the set, excluding members
      *     already present.
-     * @remarks
-     *     <ul>
-     *       <li>If <code>key</code> does not exist, a new set is created before adding <code>members
-     *           </code>.
-     *       <li>If <code>key</code> holds a value that is not a set, the transaction fails.
-     *     </ul>
+     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members</code>.
      */
     public T sadd(String key, String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
@@ -201,12 +196,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return Command Response - The number of members that were removed from the set, excluding
      *     non-existing members.
-     * @remarks
-     *     <ul>
-     *       <li>If <code>key</code> does not exist, it is treated as an empty set and this command
-     *           returns 0.
-     *       <li>If <code>key</code> holds a value that is not a set, the transaction fails.
-     *     </ul>
+     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command returns 0.
      */
     public T srem(String key, String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
@@ -221,11 +211,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/smembers/">redis.io</a> for details.
      * @param key The key from which to retrieve the set members.
      * @return Command Response - A <code>Set</code> of all members of the set.
-     * @remarks
-     *     <ul>
-     *       <li>If <code>key</code> does not exist an empty set will be returned.
-     *       <li>If <code>key</code> holds a value that is not a set, the transaction fails.
-     *     </ul>
+     * @remarks If <code>key</code> does not exist an empty set will be returned.
      */
     public T smembers(String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -241,7 +227,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key from which to retrieve the number of set members.
      * @return Command Response - The cardinality (number of elements) of the set, or 0 if the key
      *     does not exist.
-     * @remarks If <code>key</code> holds a value that is not a set, the transaction fails.
      */
     public T scard(String key) {
         ArgsArray commandArgs = buildArgs(key);
