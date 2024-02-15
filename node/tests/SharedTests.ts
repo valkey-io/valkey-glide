@@ -85,7 +85,7 @@ export function runBaseTests<Context>(config: {
                 const result = await client.customCommand(["CLIENT", "INFO"]);
 
                 expect(result).toContain("lib-name=GlideJS");
-                expect(result).toContain("lib-ver=0.1.0");
+                expect(result).toContain("lib-ver=unknown");
             }, protocol);
         },
         config.timeout

@@ -116,7 +116,7 @@ class TestRedisClients:
         info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert type(info) is str
         assert "lib-name=GlidePy" in info
-        assert "lib-ver=0.1.0" in info
+        assert "lib-ver=unknown" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
