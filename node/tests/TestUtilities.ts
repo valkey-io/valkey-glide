@@ -63,75 +63,79 @@ export function transactionTest(
     const key8 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
-    baseTransaction
-        .set(key1, "bar")
-        .set(key2, "baz", {
-            returnOldValue: true,
-        })
-        .customCommand(["MGET", key1, key2])
-        .mset({ [key3]: value })
-        .mget([key1, key2])
-        .del([key1])
-        .hset(key4, { [field]: value })
-        .hget(key4, field)
-        .hgetall(key4)
-        .hdel(key4, [field])
-        .hmget(key4, [field])
-        .hexists(key4, field)
-        .lpush(key5, [field + "1", field + "2", field + "3", field + "4"])
-        .lpop(key5)
-        .llen(key5)
-        .lrem(key5, 1, field + "1")
-        .ltrim(key5, 0, 1)
-        .lrange(key5, 0, -1)
-        .lpopCount(key5, 2)
-        .rpush(key6, [field + "1", field + "2", field + "3"])
-        .rpop(key6)
-        .rpopCount(key6, 2)
-        .sadd(key7, ["bar", "foo"])
-        .srem(key7, ["foo"])
-        .scard(key7)
-        .smembers(key7)
-        .zadd(key8, { member1: 1, member2: 2 })
-        .zaddIncr(key8, "member2", 1)
-        .zrem(key8, ["member1"])
-        .zcard(key8)
-        .zscore(key8, "member2")
-        .zcount(key8, { bound: 2 }, "positiveInfinity");
-    return [
-        "OK",
-        null,
-        ["bar", "baz"],
-        "OK",
-        ["bar", "baz"],
-        1,
-        1,
-        value,
-        { [field]: value },
-        1,
-        [null],
-        false,
-        4,
-        field + "4",
-        3,
-        1,
-        "OK",
-        [field + "3", field + "2"],
-        [field + "3", field + "2"],
-        3,
+    const args: ReturnType[] = [];
+    baseTransaction.set(key1, "bar");
+    args.push("OK");
+    baseTransaction.set(key2, "baz", {
+        returnOldValue: true,
+    });
+    args.push(null);
+    baseTransaction.customCommand(["MGET", key1, key2]);
+    args.push(["bar", "baz"]);
+    baseTransaction.mset({ [key3]: value });
+    args.push("OK");
+    baseTransaction.mget([key1, key2]);
+    args.push(["bar", "baz"]);
+    baseTransaction.del([key1]);
+    args.push(1);
+    baseTransaction.hset(key4, { [field]: value });
+    args.push(1);
+    baseTransaction.hget(key4, field);
+    args.push(value);
+    baseTransaction.hgetall(key4);
+    args.push({ [field]: value });
+    baseTransaction.hdel(key4, [field]);
+    args.push(1);
+    baseTransaction.hmget(key4, [field]);
+    args.push([null]);
+    baseTransaction.hexists(key4, field);
+    args.push(false);
+    baseTransaction.lpush(key5, [
+        field + "1",
+        field + "2",
         field + "3",
-        [field + "2", field + "1"],
-        2,
-        1,
-        1,
-        ["bar"],
-        2,
-        3,
-        1,
-        1,
-        3.0,
-        1,
-    ];
+        field + "4",
+    ]);
+    args.push(4);
+    baseTransaction.lpop(key5);
+    args.push(field + "4");
+    baseTransaction.llen(key5);
+    args.push(3);
+    baseTransaction.lrem(key5, 1, field + "1");
+    args.push(1);
+    baseTransaction.ltrim(key5, 0, 1);
+    args.push("OK");
+    baseTransaction.lrange(key5, 0, -1);
+    args.push([field + "3", field + "2"]);
+    baseTransaction.lpopCount(key5, 2);
+    args.push([field + "3", field + "2"]);
+    baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
+    args.push(3);
+    baseTransaction.rpop(key6);
+    args.push(field + "3");
+    baseTransaction.rpopCount(key6, 2);
+    args.push([field + "2", field + "1"]);
+    baseTransaction.sadd(key7, ["bar", "foo"]);
+    args.push(2);
+    baseTransaction.srem(key7, ["foo"]);
+    args.push(1);
+    baseTransaction.scard(key7);
+    args.push(1);
+    baseTransaction.smembers(key7);
+    args.push(["bar"]);
+    baseTransaction.zadd(key8, { member1: 1, member2: 2 });
+    args.push(2);
+    baseTransaction.zaddIncr(key8, "member2", 1);
+    args.push(3);
+    baseTransaction.zrem(key8, ["member1"]);
+    args.push(1);
+    baseTransaction.zcard(key8);
+    args.push(1);
+    baseTransaction.zscore(key8, "member2");
+    args.push(3.0);
+    baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
+    args.push(1);
+    return args;
 }
 
 export class RedisCluster {
