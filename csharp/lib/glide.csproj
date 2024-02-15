@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="cargo build --release" />
+    <Exec Command="cargo build --release" EnvironmentVariables="CARGO_TERM_COLOR=always" />
   </Target>
 
   <ItemGroup>

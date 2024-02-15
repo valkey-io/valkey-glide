@@ -5,6 +5,11 @@ inputs:
         description: "flag that tells the benchmark to run a certain language"
         required: true
         type: string
+    run-glide-only:
+        description: "flag that tells the Benchmark to measure only GLIDE client"
+        required: false
+        default: true
+        type: boolean
 
 runs:
     using: "composite"
@@ -15,4 +20,4 @@ runs:
 
         - shell: bash
           working-directory: ./benchmarks
-          run: ./install_and_test.sh -no-tls -minimal -only-glide -data 1 -tasks 10 ${{ inputs.language-flag }}
+          run: ./install_and_test.sh -no-tls -minimal ${{ inputs.run-glide-only == 'true' && '-only-glide' || '' }} -data 1 -tasks 10 ${{ inputs.language-flag }}

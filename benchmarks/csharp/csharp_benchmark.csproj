@@ -5,9 +5,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="BeetleX.Redis" Version="1.4.9.1803" />
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="FreeRedis" Version="1.2.13" />
     <PackageReference Include="LinqStatistics" Version="2.3.0" />
-    <PackageReference Include="StackExchange.Redis" Version="2.6.48" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.17" />
   </ItemGroup>
 
   <PropertyGroup>

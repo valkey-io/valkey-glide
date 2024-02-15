@@ -6,6 +6,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 
+using BeetleX.Redis;
+
 using CommandLine;
 
 using Glide;
@@ -13,6 +15,8 @@ using Glide;
 using LinqStatistics;
 
 using StackExchange.Redis;
+
+using FreeRedisClient = FreeRedis.RedisClient;
 
 public static class MainClass
 {
@@ -310,6 +314,7 @@ public static class MainClass
 
         if (clientsToRun == "all")
         {
+            // https://github.com/StackExchange/StackExchange.Redis
             var clients = await createClients(clientCount, () =>
                 {
                     var connection = ConnectionMultiplexer.Connect(getAddressForStackExchangeRedis(host, useTLS));
@@ -331,6 +336,47 @@ public static class MainClass
             {
                 client.Dispose();
             }
+
+            // https://github.com/beetlex-io/BeetleX.Redis
+            clients = await createClients(clientCount, () =>
+            {
+                var DB = new RedisDB();
+                DB.Host.AddWriteHost(host, PORT, useTLS);
+                return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
+                    (async (key) => await DB.Get<string>(key),
+                     async (key, value) => await DB.Set(key, value),
+                     () => { }
+                ));
+            });
+            await run_clients(
+                clients,
+                "BeetleX.Redis",
+                total_commands,
+                data_size,
+                num_of_concurrent_tasks
+            );
+
+            // https://github.com/2881099/FreeRedis
+            clients = await createClients(clientCount, () =>
+            {
+                var config = new FreeRedis.ConnectionStringBuilder();
+                config.Host = $"{host}:{PORT}";
+                config.Ssl = useTLS;
+                var client = new FreeRedisClient(config);
+
+                return Task.FromResult<(Func<string, Task<string?>>, Func<string, string, Task>, Action)>(
+                    (async (key) => await client.GetAsync(key),
+                     async (key, value) => await client.SetAsync(key, value),
+                     () => client.Dispose()
+                ));
+            });
+            await run_clients(
+                clients,
+                "FreeRedis",
+                total_commands,
+                data_size,
+                num_of_concurrent_tasks
+            );
         }
     }
 

@@ -1,0 +1,65 @@
+name: C# client benchmarks
+
+on:
+    workflow_dispatch:
+        inputs:
+            name:
+                required: false
+                type: string
+            run-glide-only:
+                description: "flag that tells the Benchmark to measure only GLIDE client"
+                required: false
+                default: true
+                type: boolean
+
+run-name: ${{ inputs.name == '' && format('{0} @ {1}', github.ref_name, github.sha) || inputs.name }}
+
+jobs:
+    csharp-benchmark:
+        timeout-minutes: 25
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                redis:
+                    - 6.2.14
+                    - 7.2.3
+                dotnet:
+                    - 6.0
+                    - 8.0
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install redis
+              uses: ./.github/workflows/install-redis
+              with:
+                  redis-version: ${{ matrix.redis }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v2.1.0
+              with:
+                  version: "25.1"
+
+            - name: Set up dotnet ${{ matrix.dotnet }}
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: ${{ matrix.dotnet }}
+
+            - name: benchmark
+              uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -csharp
+                  run-glide-only: ${{ inputs.run-glide-only }}
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-redis-${{ matrix.redis }}-dotnet-${{ matrix.dotnet }}
+                  path: |
+                      benchmarks/results/**
