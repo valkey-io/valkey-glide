@@ -27,6 +27,7 @@ import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
