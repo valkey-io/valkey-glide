@@ -435,7 +435,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
      * @param keys The keys list to check.
-     * @return Command Response - the number of keys that exist. If the same existing key is mentioned
+     * @return Command Response - The number of keys that exist. If the same existing key is mentioned
      *     in <code>keys
      *     </code> multiple times, it will be counted multiple times.
      */

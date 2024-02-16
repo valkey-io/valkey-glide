@@ -26,7 +26,7 @@ public interface GenericBaseCommands {
      *
      * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
      * @param keys The keys list to check.
-     * @return the number of keys that exist. If the same existing key is mentioned in <code>keys
+     * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
      *     </code> multiple times, it will be counted multiple times.
      */
     CompletableFuture<Long> exists(String[] keys);
