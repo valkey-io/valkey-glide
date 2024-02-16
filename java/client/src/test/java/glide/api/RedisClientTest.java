@@ -383,7 +383,6 @@ public class RedisClientTest {
         String[] values = {"value1", null, "value2"};
 
         CompletableFuture testResponse = mock(CompletableFuture.class);
-        when(testResponse.thenApply(any())).thenReturn(testResponse);
         when(testResponse.get()).thenReturn(values);
 
         // match on protobuf request
