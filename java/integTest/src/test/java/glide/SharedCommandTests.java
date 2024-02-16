@@ -482,15 +482,8 @@ public class SharedCommandTests {
         setResult = client.set(key2, value).get();
         assertEquals(OK, setResult);
 
-        Long existsKeysNum = client.exists(new String[] {key1, key2, key1}).get();
+        Long existsKeysNum =
+                client.exists(new String[] {key1, key2, key1, UUID.randomUUID().toString()}).get();
         assertEquals(3L, existsKeysNum);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void exists_non_existent_key(BaseClient client) {
-        Long existsKeysNum = client.exists(new String[] {UUID.randomUUID().toString()}).get();
-        assertEquals(0L, existsKeysNum);
     }
 }
