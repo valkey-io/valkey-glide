@@ -3,8 +3,8 @@ package glide;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.SetOptions;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class TestUtilities {
@@ -16,8 +16,6 @@ public class TestUtilities {
 
     public static BaseTransaction transactionTest(BaseTransaction baseTransaction) {
 
-        baseTransaction.set(key1, "bar");
-        baseTransaction.set(key2, "baz", SetOptions.builder().returnOldValue(true).build());
         baseTransaction.set(key1, value1);
         baseTransaction.get(key1);
 
