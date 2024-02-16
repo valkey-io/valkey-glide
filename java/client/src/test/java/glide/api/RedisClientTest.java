@@ -426,7 +426,6 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
-
     @SneakyThrows
     @Test
     public void incr_returns_success() {
@@ -439,7 +438,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(Incr), eq(new String[] {key}), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.incr(key);
@@ -463,8 +462,8 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-            eq(IncrBy), eq(new String[] {key, Long.toString(amount)}), any()))
-            .thenReturn(testResponse);
+                        eq(IncrBy), eq(new String[] {key, Long.toString(amount)}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.incrBy(key, amount);
@@ -488,8 +487,8 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-            eq(IncrByFloat), eq(new String[] {key, Double.toString(amount)}), any()))
-            .thenReturn(testResponse);
+                        eq(IncrByFloat), eq(new String[] {key, Double.toString(amount)}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Double> response = service.incrByFloat(key, amount);

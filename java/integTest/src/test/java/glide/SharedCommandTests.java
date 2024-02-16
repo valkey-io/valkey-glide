@@ -26,8 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -319,7 +317,6 @@ public class SharedCommandTests {
         assertTrue(e.getCause() instanceof RequestException);
     }
 
-
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
@@ -372,12 +369,12 @@ public class SharedCommandTests {
         assertTrue(incrException.getCause().getMessage().contains("value is not an integer"));
 
         Exception incrByException =
-            assertThrows(ExecutionException.class, () -> client.incrBy(key1, 3).get());
+                assertThrows(ExecutionException.class, () -> client.incrBy(key1, 3).get());
         assertTrue(incrByException.getCause() instanceof RequestException);
         assertTrue(incrByException.getCause().getMessage().contains("value is not an integer"));
 
         Exception incrByFloatException =
-            assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
+                assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
         assertTrue(incrByFloatException.getCause() instanceof RequestException);
         assertTrue(incrByFloatException.getCause().getMessage().contains("value is not a valid float"));
     }

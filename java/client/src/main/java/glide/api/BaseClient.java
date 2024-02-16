@@ -253,7 +253,6 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
     }
 
-
     @Override
     public CompletableFuture<Long> incr(@NonNull String key) {
         return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
@@ -262,12 +261,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> incrBy(@NonNull String key, long amount) {
         return commandManager.submitNewCommand(
-            IncrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
+                IncrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
         return commandManager.submitNewCommand(
-            IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
+                IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
     }
 }

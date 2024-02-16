@@ -85,7 +85,6 @@ public class ClusterTransactionTests {
         transaction.incrByFloat("key", 2.5);
         results.add(Pair.of(IncrByFloat, ArgsArray.newBuilder().addArgs("key").addArgs("2.5").build()));
 
-
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
