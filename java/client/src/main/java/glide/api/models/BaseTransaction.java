@@ -91,8 +91,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Get information and statistics about the Redis server. No argument is provided, so the {@link
-     * Section#DEFAULT} option is assumed.
+     * Get information and statistics about the Redis server using the {@link Section#DEFAULT} option.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @return A response from Redis with a <code>String</code>.

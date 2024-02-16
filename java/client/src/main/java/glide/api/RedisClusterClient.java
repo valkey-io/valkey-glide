@@ -99,24 +99,36 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> info() {
         return commandManager.submitNewCommand(
-                Info, new String[0], response -> ClusterValue.of(handleObjectResponse(response)));
+                Info, new String[0], response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     public CompletableFuture<ClusterValue<String>> info(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                Info, new String[0], route, response -> ClusterValue.of(handleObjectResponse(response)));
+                Info,
+                new String[0],
+                route,
+                response ->
+                        route.isSingleNodeRoute()
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(@NonNull InfoOptions options) {
         return commandManager.submitNewCommand(
-                Info, options.toArgs(), response -> ClusterValue.of(handleObjectResponse(response)));
+                Info, options.toArgs(), response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(
             @NonNull InfoOptions options, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                Info, options.toArgs(), route, response -> ClusterValue.of(handleObjectResponse(response)));
+                Info,
+                options.toArgs(),
+                route,
+                response ->
+                        route.isSingleNodeRoute()
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 }
