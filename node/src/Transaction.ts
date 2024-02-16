@@ -28,6 +28,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHLen,
     createHMGet,
     createHSet,
     createIncr,
@@ -407,6 +408,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hincrByFloat(key: string, field: string, amount: number): T {
         return this.addAndReturn(createHIncrByFloat(key, field, amount));
+    }
+
+    /** Returns the number of fields contained in the hash stored at `key`.
+     * See https://redis.io/commands/hlen/ for more details.
+     * 
+     * @param key - The key of the hash.
+     * 
+     * Command Response - The number of fields in the hash, or 0 when the key does not exist.
+     */
+    public hlen(key: string): T {
+        return this.addAndReturn(createHLen(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
