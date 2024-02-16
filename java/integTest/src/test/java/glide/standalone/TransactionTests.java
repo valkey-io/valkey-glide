@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.api.BaseClient.OK;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -16,6 +17,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -91,6 +93,9 @@ public class TransactionTests {
     public void test_standalone_transactions() {
         Transaction transaction = (Transaction) transactionTest(new Transaction());
         Object[] expectedResult = transactionTestResult();
+
+        transaction.select(0);
+        expectedResult = ArrayUtils.add(expectedResult, OK);
 
         Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
         assertArrayEquals(expectedResult, result);

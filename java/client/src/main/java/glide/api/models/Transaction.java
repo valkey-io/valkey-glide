@@ -1,7 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static redis_request.RedisRequestOuterClass.RequestType.Select;
+
 import lombok.AllArgsConstructor;
+import redis_request.RedisRequestOuterClass;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -26,5 +29,19 @@ public class Transaction extends BaseTransaction<Transaction> {
     @Override
     protected Transaction getThis() {
         return this;
+    }
+
+    /**
+     * Change the currently selected Redis database.
+     *
+     * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
+     * @param index - The index of the database to select.
+     * @returns A simple <code>OK</code> response.
+     */
+    public Transaction select(long index) {
+        RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
+
+        protobufTransaction.addCommands(buildCommand(Select, commandArgs));
+        return getThis();
     }
 }
