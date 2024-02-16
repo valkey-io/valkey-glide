@@ -29,7 +29,7 @@ public class TestUtilities {
         baseTransaction.scard(key3);
         baseTransaction.smembers(key3);
 
-        baseTransaction.mset(Map.of(key1, value1, key2, value2));
+        baseTransaction.mset(Map.of(key1, value2, key2, value1));
         baseTransaction.mget(new String[] {key1, key2});
 
         return baseTransaction;
@@ -46,7 +46,7 @@ public class TestUtilities {
             1L,
             Set.of("baz"),
             "OK",
-            new String[] {value1, value2}
+            new String[] {value2, value1}
         };
     }
 }

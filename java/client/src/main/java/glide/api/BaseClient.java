@@ -238,9 +238,10 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
-        return commandManager
-                .submitNewCommand(MGet, keys, this::handleArrayResponse)
-                .thenApply(objectArray -> objectArrayToTypedArray(objectArray, String.class));
+        return commandManager.submitNewCommand(
+                MGet,
+                keys,
+                response -> objectArrayToTypedArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
