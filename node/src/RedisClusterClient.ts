@@ -305,9 +305,9 @@ export class RedisClusterClient extends BaseClient {
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
-     *  If `route` is not provided, the command will be sent to the all nodes.
+     *  If `route` is not provided, the command will be sent to a random node.
      *
      * @returns A map of values corresponding to the configuration parameters. When specifying a route other than a single node,
      *  it returns a dictionary where each address is the key and its corresponding node response is the value.
