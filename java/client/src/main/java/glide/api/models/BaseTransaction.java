@@ -209,6 +209,69 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Increment the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @return Command Response - The value of <code>key</code> after the increment. An error is
+     *     raised if <code>key
+     *     </code> contains a value of the wrong type or contains a string that cannot be represented
+     *     as integer.
+     */
+    public T incr(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return Command Response - The value of <code>key</code> after the increment, An error is
+     *     raised if <code>key
+     *     </code> contains a value of the wrong type or contains a string that cannot be represented
+     *     as integer.
+     */
+    public T incrBy(@NonNull String key, long amount) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the string representing a floating point number stored at <code>key</code> by <code>
+     * amount</code>. By using a negative increment value, the result is that the value stored at
+     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
+     * performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return Command Response - The value of <code>key</code> after the increment. An error is
+     *     raised if <code>key
+     *     </code> contains a value of the wrong type, or the current key content is not parsable as a
+     *     double precision floating point number.
+     */
+    public T incrByFloat(@NonNull String key, double amount) {
+        ArgsArray commandArgs = buildArgs(key, Double.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /** Build protobuf {@link Command} object for given command and arguments. */
+    protected Command buildCommand(RequestType requestType) {
+        return buildCommand(requestType, buildArgs());
+    }
+
+    /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
      *
@@ -274,69 +337,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
         return getThis();
-    }
-
-    /**
-     * Increment the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
-     * is set to 0 before performing the operation.
-     *
-     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
-     * @param key The key to increment its value.
-     * @return Command Response - The value of <code>key</code> after the increment. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
-     */
-    public T incr(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-
-        protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Increment the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
-     * does not exist, it is set to 0 before performing the operation.
-     *
-     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
-     * @param key The key to increment its value.
-     * @param amount The amount to increment.
-     * @return Command Response - The value of <code>key</code> after the increment, An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
-     */
-    public T incrBy(@NonNull String key, long amount) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
-
-        protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Increment the string representing a floating point number stored at <code>key</code> by <code>
-     * amount</code>. By using a negative increment value, the result is that the value stored at
-     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
-     * performing the operation.
-     *
-     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
-     * @param key The key to increment its value.
-     * @param amount The amount to increment.
-     * @return Command Response - The value of <code>key</code> after the increment. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type, or the current key content is not parsable as a
-     *     double precision floating point number.
-     */
-    public T incrByFloat(@NonNull String key, double amount) {
-        ArgsArray commandArgs = buildArgs(key, Double.toString(amount));
-
-        protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
-        return getThis();
-    }
-
-    /** Build protobuf {@link Command} object for given command and arguments. */
-    protected Command buildCommand(RequestType requestType) {
-        return buildCommand(requestType, buildArgs());
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */

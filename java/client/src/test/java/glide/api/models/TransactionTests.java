@@ -72,6 +72,15 @@ public class TransactionTests {
         transaction.mget(new String[] {"key"});
         results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
 
+        transaction.incr("key");
+        results.add(Pair.of(Incr, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.incrBy("key", 1);
+        results.add(Pair.of(IncrBy, ArgsArray.newBuilder().addArgs("key").addArgs("1").build()));
+
+        transaction.incrByFloat("key", 2.5);
+        results.add(Pair.of(IncrByFloat, ArgsArray.newBuilder().addArgs("key").addArgs("2.5").build()));
+
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
 
@@ -83,15 +92,6 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
-
-        transaction.incr("key");
-        results.add(Pair.of(Incr, ArgsArray.newBuilder().addArgs("key").build()));
-
-        transaction.incrBy("key", 1);
-        results.add(Pair.of(IncrBy, ArgsArray.newBuilder().addArgs("key").addArgs("1").build()));
-
-        transaction.incrByFloat("key", 2.5);
-        results.add(Pair.of(IncrByFloat, ArgsArray.newBuilder().addArgs("key").addArgs("2.5").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

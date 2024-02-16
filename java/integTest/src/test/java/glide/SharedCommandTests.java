@@ -275,51 +275,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        assertEquals(
-                4, client.sadd(key, new String[] {"member1", "member2", "member3", "member4"}).get());
-        assertEquals(1, client.srem(key, new String[] {"member3", "nonExistingMember"}).get());
-
-        Set<String> expectedMembers = Set.of("member1", "member2", "member4");
-        assertEquals(expectedMembers, client.smembers(key).get());
-        assertEquals(1, client.srem(key, new String[] {"member1"}).get());
-        assertEquals(2, client.scard(key).get());
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void srem_scard_smembers_non_existing_key(BaseClient client) {
-        assertEquals(0, client.srem("nonExistingKey", new String[] {"member"}).get());
-        assertEquals(0, client.scard("nonExistingKey").get());
-        assertEquals(Set.of(), client.smembers("nonExistingKey").get());
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void sadd_srem_scard_smembers_key_with_non_set_value(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        assertEquals(OK, client.set(key, "foo").get());
-
-        Exception e =
-                assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
-
-        e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
-
-        e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
-
-        e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
     public void incr_commands_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
@@ -377,5 +332,50 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
         assertTrue(incrByFloatException.getCause() instanceof RequestException);
         assertTrue(incrByFloatException.getCause().getMessage().contains("value is not a valid float"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(
+                4, client.sadd(key, new String[] {"member1", "member2", "member3", "member4"}).get());
+        assertEquals(1, client.srem(key, new String[] {"member3", "nonExistingMember"}).get());
+
+        Set<String> expectedMembers = Set.of("member1", "member2", "member4");
+        assertEquals(expectedMembers, client.smembers(key).get());
+        assertEquals(1, client.srem(key, new String[] {"member1"}).get());
+        assertEquals(2, client.scard(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void srem_scard_smembers_non_existing_key(BaseClient client) {
+        assertEquals(0, client.srem("nonExistingKey", new String[] {"member"}).get());
+        assertEquals(0, client.scard("nonExistingKey").get());
+        assertEquals(Set.of(), client.smembers("nonExistingKey").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_key_with_non_set_value(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception e =
+                assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
+        assertTrue(e.getCause() instanceof RequestException);
+
+        e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
+        assertTrue(e.getCause() instanceof RequestException);
     }
 }
