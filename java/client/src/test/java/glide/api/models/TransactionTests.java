@@ -29,17 +29,30 @@ import glide.api.models.commands.SetOptions;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import lombok.Getter;
+import lombok.SneakyThrows;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
 
 public class TransactionTests {
-    @Test
-    public void transaction_builds_protobuf_request() {
-        Transaction transaction = new Transaction();
+    @Getter private static List<Arguments> transactionBuilders;
 
+    @BeforeAll
+    @SneakyThrows
+    public static void init() {
+        transactionBuilders =
+                List.of(Arguments.of(new Transaction()), Arguments.of(new ClusterTransaction()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getTransactionBuilders")
+    public void transaction_builds_protobuf_request(BaseTransaction<?> transaction) {
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
         transaction.get("key");
