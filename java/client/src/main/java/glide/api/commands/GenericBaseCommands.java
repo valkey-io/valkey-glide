@@ -43,7 +43,7 @@ public interface GenericBaseCommands {
      *
      * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
      * @param keys The <code>keys</code> we wanted to unlink.
-     * @return the number of <code>keys</code> that were unlinked.
+     * @return The number of <code>keys</code> that were unlinked.
      */
     CompletableFuture<Long> unlink(String[] keys);
 }
