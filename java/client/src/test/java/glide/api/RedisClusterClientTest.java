@@ -54,9 +54,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, "TEST");
 
         var value = client.customCommand(TEST_ARGS).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()),
-                () -> assertEquals("TEST", value.getSingleValue()));
+        assertEquals("TEST", value.getSingleValue());
     }
 
     @Test
@@ -68,8 +66,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        assertEquals(data, value.getMultiValue());
     }
 
     @Test
@@ -82,8 +79,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS, RANDOM).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        assertEquals(data, value.getSingleValue());
     }
 
     @Test
@@ -95,8 +91,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        assertEquals(data, value.getMultiValue());
     }
 
     private static class TestClient extends RedisClusterClient {
@@ -109,6 +104,7 @@ public class RedisClusterClientTest {
         }
 
         @SuppressWarnings("unchecked")
+        @Override
         protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
             return (T) object;
         }
