@@ -35,7 +35,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Change the currently selected Redis database.
      *
      * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
-     * @param index - The index of the database to select.
+     * @param index The index of the database to select.
      * @returns Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {

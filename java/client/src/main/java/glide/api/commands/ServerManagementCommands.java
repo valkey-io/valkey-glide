@@ -36,7 +36,7 @@ public interface ServerManagementCommands {
      * Change the currently selected Redis database.
      *
      * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
-     * @param index - The index of the database to select.
+     * @param index The index of the database to select.
      * @returns A simple <code>OK</code> response.
      */
     CompletableFuture<String> select(long index);
