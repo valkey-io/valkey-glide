@@ -816,3 +816,10 @@ export function createZcount(
     
     return createCommand(RequestType.Zcount, args);
 }    
+
+/**
+ * @internal
+ */
+export function createType(key: string): redis_request.Command {
+    return createCommand(RequestType.Type, [key]);
+}
