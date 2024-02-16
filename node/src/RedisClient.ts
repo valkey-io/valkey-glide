@@ -121,11 +121,13 @@ export class RedisClient extends BaseClient {
     /** Ping the Redis server.
      * See https://redis.io/commands/ping/ for details.
      *
-     * @param str - the ping argument that will be returned.
-     * @returns PONG if no argument is provided, otherwise return a copy of the argument.
+     * @param message - An optional message to include in the PING command. 
+     * If not provided, the server will respond with "PONG".
+     * If provided, the server will respond with a copy of the message.
+     * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
-    public ping(str?: string): Promise<string> {
-        return this.createWritePromise(createPing(str));
+    public ping(message?: string): Promise<string> {
+        return this.createWritePromise(createPing(message));
     }
 
     /** Get information and statistics about the Redis server.
@@ -149,11 +151,10 @@ export class RedisClient extends BaseClient {
         return this.createWritePromise(createSelect(index));
     }
 
-    /** Get the name of the current connection.
+    /** Get the name of the primary's connection.
      *  See https://redis.io/commands/client-getname/ for more details.
      *
-     * @returns the name of the client connection as a string if a name is set,
-     *       or null if no name is assigned.
+     * @returns the name of the client connection as a string if a name is set, or null if no name is assigned.
      */
     public clientGetName(): Promise<string | null> {
         return this.createWritePromise(createClientGetName());
@@ -162,7 +163,7 @@ export class RedisClient extends BaseClient {
     /** Rewrite the configuration file with the current configuration.
      * See https://redis.io/commands/config-rewrite/ for details.
      *
-     * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
      */
     public configRewrite(): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite());
@@ -171,7 +172,7 @@ export class RedisClient extends BaseClient {
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
      * See https://redis.io/commands/config-resetstat/ for details.
      *
-     * @returns always "OK"
+     * @returns always "OK".
      */
     public configResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
@@ -203,7 +204,7 @@ export class RedisClient extends BaseClient {
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      *
-     * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
+     * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
      *  config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
