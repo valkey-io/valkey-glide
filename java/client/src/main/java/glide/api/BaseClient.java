@@ -2,8 +2,8 @@
 package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
-import static glide.utils.CommandUtils.convertMapToArgArray;
-import static glide.utils.CommandUtils.objectArrayToTypedArray;
+import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -240,9 +240,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
         return commandManager.submitNewCommand(
-                MGet,
-                keys,
-                response -> objectArrayToTypedArray(handleArrayOrNullResponse(response), String.class));
+                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override

@@ -407,7 +407,7 @@ public class RedisClientTest {
         keyValueMap.put("key2", "value2");
         String[] args = {"key1", "value1", "key2", "value2"};
 
-        CompletableFuture testResponse = mock(CompletableFuture.class);
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(OK);
 
         // match on protobuf request

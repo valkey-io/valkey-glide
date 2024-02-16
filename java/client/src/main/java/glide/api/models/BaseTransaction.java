@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.utils.CommandUtils.convertMapToArgArray;
+import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
