@@ -1469,6 +1469,47 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `type test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "value")).toEqual("OK");
+                expect(await client.type(key)).toEqual("string");
+                expect(await client.del([key])).toEqual(1);
+
+                expect(await client.lpush(key, ["value"])).toEqual(1);
+                expect(await client.type(key)).toEqual("list");
+                expect(await client.del([key])).toEqual(1);
+
+                expect(await client.sadd(key, ["value"])).toEqual(1);
+                expect(await client.type(key)).toEqual("set");
+                expect(await client.del([key])).toEqual(1);
+
+                expect(await client.zadd(key, { member: 1.0 })).toEqual(1);
+                expect(await client.type(key)).toEqual("zset");
+                expect(await client.del([key])).toEqual(1);
+
+                expect(await client.hset(key, { field: "value" })).toEqual(1);
+                expect(await client.type(key)).toEqual("hash");
+                expect(await client.del([key])).toEqual(1);
+
+                await client.customCommand([
+                    "XADD",
+                    key,
+                    "*",
+                    "field",
+                    "value",
+                ]);
+                expect(await client.type(key)).toEqual("stream");
+                expect(await client.del([key])).toEqual(1);
+
+                expect(await client.type(key)).toEqual("none");
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {

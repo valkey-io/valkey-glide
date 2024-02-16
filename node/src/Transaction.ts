@@ -54,6 +54,7 @@ import {
     createSelect,
     createSet,
     createTTL,
+    createType,
     createUnlink,
     createZadd,
     createZcard,
@@ -826,6 +827,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcount(key: string, minScore: ScoreLimit, maxScore: ScoreLimit): T {
         return this.addAndReturn(createZcount(key, minScore, maxScore));
+    }
+
+    /** Returns the string representation of the type of the value stored at `key`.
+     * See https://redis.io/commands/type/ for more details.
+     * 
+     * @param key - The key to check its data type.
+     * 
+     * Command Response - If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+     */
+    public type(key: string): T {
+        return this.addAndReturn(createType(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

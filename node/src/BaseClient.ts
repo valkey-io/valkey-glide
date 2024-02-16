@@ -51,6 +51,7 @@ import {
     createSRem,
     createSet,
     createTTL,
+    createType,
     createUnlink,
     createZadd,
     createZcard,
@@ -1063,6 +1064,16 @@ export class BaseClient {
         maxScore: ScoreLimit
     ): Promise<number> {
         return this.createWritePromise(createZcount(key, minScore, maxScore));
+    }
+
+    /** Returns the string representation of the type of the value stored at `key`.
+     * See https://redis.io/commands/type/ for more details.
+     * 
+     * @param key - The key to check its data type.
+     * @returns If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+     */
+    public type(key: string): Promise<string> {
+        return this.createWritePromise(createType(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

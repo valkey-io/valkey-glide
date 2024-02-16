@@ -66,6 +66,8 @@ export function transactionTest(
     const args: ReturnType[] = [];
     baseTransaction.set(key1, "bar");
     args.push("OK");
+    baseTransaction.type(key1);
+    args.push("string");
     baseTransaction.set(key2, "baz", {
         returnOldValue: true,
     });
