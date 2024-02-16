@@ -41,6 +41,7 @@ import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -54,7 +55,11 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, ConnectionManagementCommands, StringCommands, HashCommands, SetCommands {
+        implements AutoCloseable,
+                ConnectionManagementCommands,
+                StringCommands,
+                HashCommands,
+                SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 

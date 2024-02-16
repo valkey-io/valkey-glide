@@ -10,6 +10,7 @@ import java.util.UUID;
 public class TransactionTestUtilities {
     private static final String key1 = "{key}" + UUID.randomUUID();
     private static final String key2 = "{key}" + UUID.randomUUID();
+    private static final String key3 = "{key}" + UUID.randomUUID();
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String value1 = "{value}" + UUID.randomUUID();
