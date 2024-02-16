@@ -216,6 +216,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> mget(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(
+                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToArgArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> sadd(String key, String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(SAdd, arguments, this::handleLongResponse);
@@ -235,17 +247,5 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<String[]> mget(@NonNull String[] keys) {
-        return commandManager.submitNewCommand(
-                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToArgArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 }

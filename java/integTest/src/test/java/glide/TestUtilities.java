@@ -22,13 +22,13 @@ public class TestUtilities {
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.customCommand("MGET", key1, key2);
 
+        baseTransaction.mset(Map.of(key1, value2, key2, value1));
+        baseTransaction.mget(new String[] {key1, key2});
+
         baseTransaction.sadd(key3, new String[] {"baz", "foo"});
         baseTransaction.srem(key3, new String[] {"foo"});
         baseTransaction.scard(key3);
         baseTransaction.smembers(key3);
-
-        baseTransaction.mset(Map.of(key1, value2, key2, value1));
-        baseTransaction.mget(new String[] {key1, key2});
 
         return baseTransaction;
     }
@@ -39,12 +39,12 @@ public class TestUtilities {
             value1,
             null,
             new String[] {value1, value2},
+            "OK",
+            new String[] {value2, value1},
             2L,
             1L,
             1L,
             Set.of("baz"),
-            "OK",
-            new String[] {value2, value1}
         };
     }
 }

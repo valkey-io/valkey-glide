@@ -63,6 +63,12 @@ public class TransactionTests {
                         Info,
                         ArgsArray.newBuilder().addArgs(InfoOptions.Section.EVERYTHING.toString()).build()));
 
+        transaction.mset(Map.of("key", "value"));
+        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.mget(new String[] {"key"});
+        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
+
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
 
@@ -74,12 +80,6 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
-
-        transaction.mset(Map.of("key", "value"));
-        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
-
-        transaction.mget(new String[] {"key"});
-        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

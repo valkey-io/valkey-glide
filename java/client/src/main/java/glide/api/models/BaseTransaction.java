@@ -174,6 +174,38 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Retrieve the values of multiple <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return Command Response - An array of values corresponding to the provided <code>keys</code>.
+     *     <br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     */
+    public T mget(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Set multiple keys to multiple values in a single operation.
+     *
+     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Command Response - Always <code>OK</code>.
+     */
+    public T mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToArgArray(keyValueMap);
+        ArgsArray commandArgs = buildArgs(args);
+
+        protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
      *
@@ -238,38 +270,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Retrieve the values of multiple <code>keys</code>.
-     *
-     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
-     * @param keys A list of keys to retrieve values for.
-     * @return Command Response - An array of values corresponding to the provided <code>keys</code>.
-     *     <br>
-     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
-     *     </code>.
-     */
-    public T mget(@NonNull String[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-
-        protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Set multiple keys to multiple values in a single operation.
-     *
-     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
-     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
-     * @return Command Response - Always <code>OK</code>.
-     */
-    public T mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToArgArray(keyValueMap);
-        ArgsArray commandArgs = buildArgs(args);
-
-        protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
         return getThis();
     }
 
