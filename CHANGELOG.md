@@ -9,7 +9,7 @@
 * Python, Node: Added RPOPCOUNT and LPOPCOUNT to transaction ([#874](https://github.com/aws/glide-for-redis/pull/874))
 * Standalone client: Improve connection errors. ([#854](https://github.com/aws/glide-for-redis/pull/854))
 * Python, Node: When recieving LPOP/RPOP with count, convert result to Array. ([#811](https://github.com/aws/glide-for-redis/pull/811))
-* Python: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945))
+* Python, Node: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945), [#980](https://github.com/aws/glide-for-redis/pull/980))
 * Python: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944))
 * Node: Added ZCOUNT command ([#909](https://github.com/aws/glide-for-redis/pull/909))
 
