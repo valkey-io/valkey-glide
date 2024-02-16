@@ -182,7 +182,7 @@ class ClusterCommands(CoreCommands):
         Args:
             parameters (List[str]): A list of configuration parameter names to retrieve values for.
 
-            route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
