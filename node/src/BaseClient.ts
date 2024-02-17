@@ -51,6 +51,7 @@ import {
     createSRem,
     createSet,
     createTTL,
+    createType,
     createUnlink,
     createZadd,
     createZcard,
@@ -453,8 +454,7 @@ export class BaseClient {
      * See https://redis.io/commands/incr/ for details.
      *
      * @param key - The key to increment its value.
-     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the increment.
      */
     public incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
@@ -465,8 +465,7 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the increment.
      */
     public incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
@@ -480,8 +479,6 @@ export class BaseClient {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment.
-     * An error is raised if `key` contains a value of the wrong type,
-     * or the current key content is not parsable as a double precision floating point number.
      *
      */
     public incrByFloat(key: string, amount: number): Promise<number> {
@@ -492,8 +489,7 @@ export class BaseClient {
      * See https://redis.io/commands/decr/ for details.
      *
      * @param key - The key to decrement its value.
-     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the decrement.
      */
     public decr(key: string): Promise<number> {
         return this.createWritePromise(createDecr(key));
@@ -504,8 +500,7 @@ export class BaseClient {
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
-     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the decrement.
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
@@ -545,7 +540,6 @@ export class BaseClient {
      * @param fields - The fields to remove from the hash stored at `key`.
      * @returns the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
-     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
@@ -581,7 +575,6 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
      * If `key` does not exist, it returns an empty list.
-     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
@@ -596,8 +589,6 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
-     *  An error will be raised if `key` holds a value of an incorrect type (not a string)
-     *  or if it contains a string that cannot be represented as an integer.
      */
     public hincrBy(
         key: string,
@@ -616,9 +607,6 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
-     *  An error is raised if `key` contains a value of the wrong type
-     *  or the current field content is not parsable as a double precision floating point number.
-     *
      */
     public hincrByFloat(
         key: string,
@@ -636,7 +624,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
      * @returns the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
@@ -649,7 +636,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
@@ -662,7 +648,6 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
@@ -681,7 +666,6 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
      * If `key` does not exist an empty list will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
@@ -693,7 +677,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns the length of the list at `key`.
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
@@ -712,7 +695,6 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
@@ -728,7 +710,6 @@ export class BaseClient {
      * @param element - The element to remove from the list.
      * @returns the number of the removed elements.
      * If `key` does not exist, 0 is returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrem(key: string, count: number, element: string): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
@@ -742,7 +723,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
      * @returns the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
@@ -755,7 +735,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
@@ -768,7 +747,6 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
@@ -781,7 +759,6 @@ export class BaseClient {
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
      * @returns the number of members that were added to the set, not including all the members already present in the set.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public sadd(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
@@ -794,7 +771,6 @@ export class BaseClient {
      * @param members - A list of members to remove from the set stored at `key`.
      * @returns the number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
@@ -806,7 +782,6 @@ export class BaseClient {
      * @param key - The key to return its members.
      * @returns all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public smembers(key: string): Promise<string[]> {
         return this.createWritePromise(createSMembers(key));
@@ -817,7 +792,6 @@ export class BaseClient {
      *
      * @param key - The key to return the number of its members.
      * @returns the cardinality (number of elements) of the set, or 0 if key does not exist.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
@@ -982,7 +956,6 @@ export class BaseClient {
      * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      *
      * @example
      *      await zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
@@ -1019,7 +992,6 @@ export class BaseClient {
      * @param options - The Zadd options.
      * @returns The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      *
      * @example
      *      await zaddIncr("mySortedSet", member , 5.0)
@@ -1047,7 +1019,6 @@ export class BaseClient {
      * @param members - A list of members to remove from the sorted set.
      * @returns The number of members that were removed from the sorted set, not including non-existing members.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZrem(key, members));
@@ -1059,7 +1030,6 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zcard(key: string): Promise<number> {
         return this.createWritePromise(createZcard(key));
@@ -1073,7 +1043,6 @@ export class BaseClient {
      * @returns The score of the member.
      * If `member` does not exist in the sorted set, null is returned.
      * If `key` does not exist, null is returned.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZscore(key, member));
@@ -1088,7 +1057,6 @@ export class BaseClient {
      * @returns The number of members in the specified score range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minScore` is greater than `maxScore`, 0 is returned.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zcount(
         key: string,
@@ -1096,6 +1064,16 @@ export class BaseClient {
         maxScore: ScoreLimit
     ): Promise<number> {
         return this.createWritePromise(createZcount(key, minScore, maxScore));
+    }
+
+    /** Returns the string representation of the type of the value stored at `key`.
+     * See https://redis.io/commands/type/ for more details.
+     * 
+     * @param key - The key to check its data type.
+     * @returns If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+     */
+    public type(key: string): Promise<string> {
+        return this.createWritePromise(createType(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

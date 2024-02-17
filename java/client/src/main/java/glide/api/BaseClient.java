@@ -140,10 +140,6 @@ public abstract class BaseClient
                         + classType.getSimpleName());
     }
 
-    protected Object handleObjectResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object.class, false, response);
-    }
-
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object.class, true, response);
     }
@@ -160,11 +156,22 @@ public abstract class BaseClient
         return handleRedisResponse(Long.class, false, response);
     }
 
-    protected Object[] handleArrayResponse(Response response) {
+    protected Object[] handleArrayResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, true, response);
     }
 
-    protected Set<String> handleSetResponse(Response response) {
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>V</code>
+     * @param <V> Value type, could be even map too
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
+    protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
+        return handleRedisResponse(Map.class, false, response);
+    }
+
+    @SuppressWarnings("unchecked") // raw Set cast to Set<String>
+    protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, false, response);
     }
 
