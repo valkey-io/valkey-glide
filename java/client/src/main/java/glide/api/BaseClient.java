@@ -175,16 +175,6 @@ public abstract class BaseClient
         return handleRedisResponse(Set.class, false, response);
     }
 
-    /**
-     * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type, could be even map too
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, false, response);
-    }
-
     @Override
     public CompletableFuture<String> ping() {
         return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
