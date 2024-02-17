@@ -6,16 +6,16 @@ import glide.api.models.commands.SetOptions;
 import java.util.Set;
 import java.util.UUID;
 
-public class TestUtilities {
+public class TransactionTestUtilities {
 
-    public static BaseTransaction transactionTest(BaseTransaction baseTransaction) {
+    public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
         String key3 = "{key}" + UUID.randomUUID();
 
         baseTransaction.set(key1, "bar");
         baseTransaction.set(key2, "baz", SetOptions.builder().returnOldValue(true).build());
-        baseTransaction.customCommand("MGET", key1, key2);
+        baseTransaction.customCommand(new String[] {"MGET", key1, key2});
 
         baseTransaction.sadd(key3, new String[] {"baz", "foo"});
         baseTransaction.srem(key3, new String[] {"foo"});

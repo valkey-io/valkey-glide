@@ -52,13 +52,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     this function.
      * @example Returns a list of all pub/sub clients:
      *     <pre>
-     * Object result = client.customCommand("CLIENT","LIST","TYPE", "PUBSUB").get();
+     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
      * </pre>
      *
      * @param args Arguments for the custom command.
      * @return A response from Redis with an <code>Object</code>.
      */
-    public T customCommand(String... args) {
+    public T customCommand(String[] args) {
 
         ArgsArray commandArgs = buildArgs(args);
         protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));

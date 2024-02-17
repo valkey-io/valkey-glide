@@ -25,6 +25,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -121,7 +122,7 @@ public abstract class BaseClient
      * @throws RedisException on a type mismatch
      */
     @SuppressWarnings("unchecked")
-    private <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
+    protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
             throws RedisException {
         Object value =
                 new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
@@ -165,6 +166,16 @@ public abstract class BaseClient
 
     protected Set<String> handleSetResponse(Response response) {
         return handleRedisResponse(Set.class, false, response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>V</code>
+     * @param <V> Value type, could be even map too
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
+    protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
+        return handleRedisResponse(Map.class, false, response);
     }
 
     @Override

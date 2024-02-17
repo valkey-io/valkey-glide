@@ -27,8 +27,10 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass.RedisRequest;
+import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
+@SuppressWarnings("unchecked,resource")
 public class RedisClusterClientTest {
 
     RedisClusterClient service;
@@ -54,9 +56,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, "TEST");
 
         var value = client.customCommand(TEST_ARGS).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()),
-                () -> assertEquals("TEST", value.getSingleValue()));
+        assertEquals("TEST", value.getSingleValue());
     }
 
     @Test
@@ -68,8 +68,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        assertEquals(data, value.getMultiValue());
     }
 
     @Test
@@ -82,8 +81,7 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS, RANDOM).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        assertEquals(data, value.getSingleValue());
     }
 
     @Test
@@ -95,8 +93,21 @@ public class RedisClusterClientTest {
         var client = new TestClient(commandManager, data);
 
         var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+        assertEquals(data, value.getMultiValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_returns_single_value_on_constant_response() {
+        var commandManager =
+                new TestCommandManager(
+                        Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
+
+        var client = new TestClient(commandManager, "OK");
+
+        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
         assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+                () -> assertTrue(value.hasSingleData()), () -> assertEquals("OK", value.getSingleValue()));
     }
 
     private static class TestClient extends RedisClusterClient {
@@ -109,8 +120,8 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        protected Object handleObjectOrNullResponse(Response response) {
-            return object;
+        protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
+            return (T) object;
         }
     }
 
@@ -120,7 +131,7 @@ public class RedisClusterClientTest {
 
         public TestCommandManager(Response responseToReturn) {
             super(null);
-            response = responseToReturn;
+            response = responseToReturn != null ? responseToReturn : Response.newBuilder().build();
         }
 
         @Override
@@ -158,7 +169,7 @@ public class RedisClusterClientTest {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};
-        CompletableFuture<String> testResponse = new CompletableFuture();
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
 
         Route route = ALL_PRIMARIES;
