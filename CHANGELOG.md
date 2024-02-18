@@ -12,6 +12,7 @@
 * Python, Node: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945), [#980](https://github.com/aws/glide-for-redis/pull/980))
 * Python: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944))
 * Node: Added ZCOUNT command ([#909](https://github.com/aws/glide-for-redis/pull/909))
+* Python: Added ECHO command ([#953](https://github.com/aws/glide-for-redis/pull/953))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))

@@ -1223,6 +1223,12 @@ class TestCommands:
 
         assert (await redis_client.type(key)).lower() == "none"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_echo(self, redis_client: TRedisClient):
+        message = get_random_string(5)
+        assert await redis_client.echo(message) == message
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):

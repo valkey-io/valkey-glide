@@ -891,6 +891,20 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.TTL, [key])
 
+    def echo(self: TTransaction, message: str) -> TTransaction:
+        """
+        Echoes the provided `message` back.
+
+        See https://redis.io/commands/echo for more details.
+
+        Args:
+            message (str): The message to be echoed back.
+
+        Commands response:
+            str: The provided `message`.
+        """
+        return self.append_command(RequestType.Echo, [message])
+
     def type(self: TTransaction, key: str) -> TTransaction:
         """
          Returns the string representation of the type of the value stored at `key`.
