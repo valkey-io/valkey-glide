@@ -15,7 +15,7 @@
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))
-* Node: Allow chaining function calls on transaction. ([#902](https://github.com/aws/glide-for-redis/pull/902)) 
+* Python, Node: Allow chaining function calls on transaction. ([#902](https://github.com/aws/glide-for-redis/pull/902)), ([#987](https://github.com/aws/glide-for-redis/pull/987))
 
 #### Fixes
 * Core: Fixed `Connection Refused` error not to close the client ([#872](https://github.com/aws/glide-for-redis/pull/872))
