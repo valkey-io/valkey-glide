@@ -4138,7 +4138,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.14.0
+Package: bumpalo:3.15.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23838,7 +23838,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pemfile:2.0.0
+Package: rustls-pemfile:2.1.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27472,7 +27472,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.48
+Package: syn:2.0.49
 
 The following copyrights and licenses were found in the source code of this package:
 
