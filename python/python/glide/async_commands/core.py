@@ -358,7 +358,7 @@ class CoreCommands(Protocol):
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
-    async def mget(self, keys: List[str]) -> List[str]:
+    async def mget(self, keys: List[str]) -> List[Optional[str]]:
         """
         Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
@@ -367,10 +367,12 @@ class CoreCommands(Protocol):
             keys (List[str]): A list of keys to retrieve values for.
 
         Returns:
-            List[str]: A list of values corresponding to the provided keys. If a key is not found,
+            List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
         """
-        return cast(List[str], await self._execute_command(RequestType.MGet, keys))
+        return cast(
+            List[Optional[str]], await self._execute_command(RequestType.MGet, keys)
+        )
 
     async def decr(self, key: str) -> int:
         """
