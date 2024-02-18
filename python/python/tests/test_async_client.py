@@ -981,7 +981,7 @@ class TestCommands:
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
-        if not check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
             assert (
                 await redis_client.pexpireat(
                     key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
