@@ -223,7 +223,7 @@ class BaseTransaction:
             keys (List[str]): A list of keys to retrieve values for.
 
         Command response:
-            List[str]: A list of values corresponding to the provided keys. If a key is not found,
+            List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
         """
         return self.append_command(RequestType.MGet, keys)
