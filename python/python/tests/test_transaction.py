@@ -291,3 +291,14 @@ class TestTransaction:
         transaction.select(1)
         transaction.clear()
         assert len(transaction.commands) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_chaining_calls(self, redis_client: TRedisClient):
+        cluster_mode = isinstance(redis_client, RedisClusterClient)
+        key = get_random_string(3)
+
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.set(key, "value").get(key).delete([key])
+
+        assert await redis_client.exec(transaction) == [OK, "value", 1]
