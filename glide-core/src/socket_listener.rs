@@ -349,6 +349,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Type => Some(cmd("TYPE")),
         RequestType::HLen => Some(cmd("HLEN")),
         RequestType::Echo => Some(cmd("ECHO")),
+        RequestType::ZPopMin => Some(cmd("ZPOPMIN")),
     }
 }
 
