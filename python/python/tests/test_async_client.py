@@ -1195,6 +1195,22 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zpopmin(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await redis_client.zpopmin(key) == {"a": 1.0}
+
+        assert await redis_client.zpopmin(key, 3) == {"b": 2.0, "c": 3.0}
+        assert await redis_client.zpopmin(key) == {}
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zpopmin(key)
+
+        assert await redis_client.zpopmin("non_exisitng_key") == {}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
