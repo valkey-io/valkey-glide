@@ -12,6 +12,7 @@ on:
             - "v*.*"
 jobs:
     publish-binaries:
+        if: github.repository_owner == 'aws'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         strategy:
@@ -24,7 +25,6 @@ jobs:
                           RUNNER: ubuntu-latest,
                           ARCH: x64,
                           TARGET: x86_64-unknown-linux-gnu,
-                          PYPI_PUBLISH: true,
                       }
                     - {
                           OS: ubuntu-latest,
@@ -32,7 +32,6 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
                           TARGET: aarch64-unknown-linux-gnu,
-                          PYPI_PUBLISH: true,
                           CONTAINER: "2_28",
                       }
                     - {
@@ -41,7 +40,6 @@ jobs:
                           RUNNER: macos-latest,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
-                          PYPI_PUBLISH: true,
                       }
                     - {
                           OS: macos-latest,
@@ -49,7 +47,6 @@ jobs:
                           RUNNER: macos-13-xlarge,
                           arch: arm64,
                           TARGET: aarch64-apple-darwin,
-                          PYPI_PUBLISH: true,
                       }
         steps:
             - name: Checkout
@@ -64,7 +61,6 @@ jobs:
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the package version for Python
-              if: matrix.build.PYPI_PUBLISH == true
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
@@ -73,18 +69,18 @@ jobs:
                   cat Cargo.toml
 
             - name: Set up Python
-              if: matrix.build.PYPI_PUBLISH == true && !contains(matrix.build.RUNNER, 'self-hosted')
+              if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v4
               with:
                   python-version: "3.10"
 
             - name: Set up Python older versions for MacOS
-              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin')
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
                 brew install python@3.8 python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
-              if: matrix.build.PYPI_PUBLISH == true && contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
+              if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
               run: |
                   sudo apt update -y
                   sudo apt upgrade -y
@@ -97,7 +93,6 @@ jobs:
                   named_os: ${{ matrix.build.NAMED_OS }}
 
             - name: Build Python wrapper
-              if: matrix.build.PYPI_PUBLISH == true
               uses: ./.github/workflows/build-python-wrapper
               with:
                   os: ${{ matrix.build.OS }}
@@ -107,7 +102,6 @@ jobs:
 
             - name: Include protobuf files in the package
               working-directory: ./python
-              if: matrix.build.PYPI_PUBLISH == true
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
                   sed -i $SED_FOR_MACOS '/pb2.py/d' .gitignore
@@ -115,12 +109,12 @@ jobs:
                   cat .gitignore
 
             - name: Build Python wheels (linux)
-              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'linux') && github.event_name != 'pull_request'
+              if: startsWith(matrix.build.NAMED_OS, 'linux')
               uses: PyO3/maturin-action@v1
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }} 
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -136,15 +130,15 @@ jobs:
                       fi
 
             - name: Build Python wheels (macos)
-              if: matrix.build.PYPI_PUBLISH == true && startsWith(matrix.build.NAMED_OS, 'darwin') && github.event_name != 'pull_request'
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i python3.8 python3.9 python3.10 python3.11 python3.12
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
 
             - name: Upload Python wheels
-              if: matrix.build.PYPI_PUBLISH == true && github.event_name != 'pull_request'
+              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v3
               with:
                   name: wheels
