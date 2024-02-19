@@ -622,6 +622,8 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_manual_route_by_address() {
+        // We send a request to a random node, get that node's hostname & port, and then
+        // route the same request to the hostname & port, and verify that we've received the same value.
         let mut test_basics = setup_cluster_test_basics(false, true);
 
         const CALLBACK_INDEX: u32 = 100;
@@ -629,14 +631,14 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut request = get_command_request(
             CALLBACK_INDEX,
-            vec!["INFO".to_string(), "SERVER".to_string()],
+            vec!["CLUSTER".to_string(), "NODES".to_string()],
             RequestType::CustomCommand.into(),
             false,
         );
         let mut routes = redis_request::Routes::default();
         routes.set_simple_routes(redis_request::SimpleRoutes::Random);
         request.route = Some(routes).into();
-        write_message(&mut buffer, request);
+        write_message(&mut buffer, request.clone());
         test_basics.socket.write_all(&buffer).unwrap();
 
         let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
@@ -650,30 +652,20 @@ mod socket_listener {
         let pointer = pointer as *mut Value;
         let received_value = unsafe { Box::from_raw(pointer) };
         let first_value = String::from_redis_value(&received_value).unwrap();
-        let port = first_value
-            .split("\r\n")
-            .filter_map(|str| {
-                if str.starts_with("tcp_port:") {
-                    let split = str.split(':').nth(1).unwrap();
-                    split.parse::<u16>().ok()
-                } else {
-                    None
-                }
-            })
-            .next()
+        let (host, port) = first_value
+            .split('\n')
+            .find(|line| line.contains("myself"))
+            .and_then(|line| line.split_once(' '))
+            .and_then(|(_, second)| second.split_once('@'))
+            .and_then(|(first, _)| first.split_once(':'))
+            .and_then(|(host, port)| port.parse::<i32>().map(|port| (host, port)).ok())
             .unwrap();
 
         buffer.clear();
-        let mut request = get_command_request(
-            CALLBACK_INDEX,
-            vec!["INFO".to_string(), "SERVER".to_string()],
-            RequestType::CustomCommand.into(),
-            false,
-        );
         let mut routes = redis_request::Routes::default();
         let by_address_route = glide_core::redis_request::ByAddressRoute {
-            host: "127.0.0.1".into(),
-            port: port as i32,
+            host: host.into(),
+            port,
             ..Default::default()
         };
         routes.set_by_address_route(by_address_route);
@@ -692,8 +684,8 @@ mod socket_listener {
         let pointer = pointer as *mut Value;
         let received_value = unsafe { Box::from_raw(pointer) };
         let second_value = String::from_redis_value(&received_value).unwrap();
-        // 400 characters, because after that appears time-based values.
-        assert_eq!(&first_value[..400], &second_value[..400]);
+
+        assert_eq!(first_value, second_value);
     }
 
     #[rstest]
