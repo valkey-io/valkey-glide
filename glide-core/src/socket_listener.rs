@@ -352,6 +352,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::ZPopMin => Some(cmd("ZPOPMIN")),
         RequestType::Strlen => Some(cmd("STRLEN")),
         RequestType::Lindex => Some(cmd("LINDEX")),
+        RequestType::ZPopMax => Some(cmd("ZPOPMAX")),
     }
 }
 
