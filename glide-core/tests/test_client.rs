@@ -348,10 +348,25 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
+            // BLPOP doesn't block in transactions, so we'll pause the client instead.
+            let mut cmd = redis::cmd("CLIENT");
+            cmd.arg("PAUSE").arg(100);
+            let _ = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await;
+
             let mut pipeline = redis::pipe();
-            pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
+            pipeline.atomic();
+            pipeline.cmd("GET").arg("foo");
             let result = test_basics.client.send_transaction(&pipeline, None).await;
-            assert!(result.is_err());
+            assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
         });
