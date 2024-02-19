@@ -16,11 +16,6 @@ on:
             - go/**
             - .github/workflows/go.yml
 
-# Run only the latest job on a branch and cancel previous ones
-concurrency:
-    group: ${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
 jobs:
     build-and-test-go-client:
         timeout-minutes: 20
