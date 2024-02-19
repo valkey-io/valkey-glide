@@ -359,6 +359,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::PTTL => Some(cmd("PTTL")),
         RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
         RequestType::Persist => Some(cmd("PERSIST")),
+        RequestType::JsonSet => Some(cmd("JSON.SET")),
     }
 }
 
