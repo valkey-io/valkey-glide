@@ -173,14 +173,13 @@ class TestRedisClients:
                 ["CONFIG", "SET", "requirepass", password]
             )
 
-            with pytest.raises(ClosingError) as e:
+            with pytest.raises(ClosingError, match="NOAUTH"):
                 # Creation of a new client without password should fail
                 await create_client(
                     request,
                     is_cluster,
                     addresses=redis_client.config.addresses,
                 )
-            assert "NOAUTH" in str(e)
 
             auth_client = await create_client(
                 request,

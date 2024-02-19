@@ -7,6 +7,7 @@ use crate::connection_request::{
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::log_info;
+use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
 use redis::RedisResult;
@@ -206,14 +207,12 @@ impl Client {
                     client.send_pipeline(pipeline, offset, 1).await
                 }
 
-                ClientWrapper::Cluster { ref mut client } => {
-                    let route = match routing {
-                        Some(RoutingInfo::SingleNode(route)) => route,
-                        _ => SingleNodeRoutingInfo::Random,
-                    };
-
-                    client.route_pipeline(pipeline, offset, 1, route).await
-                }
+                ClientWrapper::Cluster { ref mut client } => match routing {
+                    Some(RoutingInfo::SingleNode(route)) => {
+                        client.route_pipeline(pipeline, offset, 1, route).await
+                    }
+                    _ => client.req_packed_commands(pipeline, offset, 1).await,
+                },
             }?;
 
             Self::get_transaction_values(pipeline, values, command_count, offset)
