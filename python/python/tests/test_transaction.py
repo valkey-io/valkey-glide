@@ -164,9 +164,8 @@ class TestTransaction:
         )
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
-        with pytest.raises(RequestError) as e:
+        with pytest.raises(RequestError, match="CrossSlot"):
             await redis_client.exec(transaction)
-        assert "Moved" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
