@@ -42,7 +42,7 @@ public class RedisClient extends BaseClient implements GenericCommands, ServerMa
 
     @Override
     public CompletableFuture<Object[]> exec(Transaction transaction) {
-        return commandManager.submitNewCommand(transaction, this::handleArrayResponse);
+        return commandManager.submitNewCommand(transaction, this::handleArrayOrNullResponse);
     }
 
     @Override
