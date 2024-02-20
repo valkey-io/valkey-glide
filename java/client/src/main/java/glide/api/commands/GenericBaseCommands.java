@@ -4,14 +4,16 @@ package glide.api.commands;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Generic Commands interface to handle generic commands for all server requests.
+ * Generic Commands interface to handle generic commands for all server requests for both standalone
+ * and cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
 
     /**
-     * Removes the specified <code>keys</code>. A key is ignored if it does not exist.
+     * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
+     * exist.
      *
      * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
      * @param keys The keys we wanted to remove.

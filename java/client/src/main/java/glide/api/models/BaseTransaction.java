@@ -132,7 +132,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Removes the specified <code>keys</code>. A key is ignored if it does not exist.
+     * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
+     * exist.
      *
      * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
      * @param keys The keys we wanted to remove.
