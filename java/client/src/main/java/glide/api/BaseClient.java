@@ -24,9 +24,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 
 import glide.api.commands.ConnectionManagementCommands;
-import glide.api.commands.HashCommands;
-import glide.api.commands.SetCommands;
 import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
@@ -56,7 +55,7 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
-    GenericBaseCommands,
+                GenericBaseCommands,
                 ConnectionManagementCommands,
                 StringCommands,
                 HashCommands,
