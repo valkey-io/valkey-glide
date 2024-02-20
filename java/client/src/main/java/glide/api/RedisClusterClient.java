@@ -16,10 +16,10 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
+import response.ResponseOuterClass.Response;
 
 /**
  * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
@@ -53,18 +53,19 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<Object>> customCommand(
-            @NonNull String[] args, @NonNull Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
         return commandManager.submitNewCommand(
-                CustomCommand,
-                args,
-                route,
-                response ->
-                        route.isSingleNodeRoute()
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(
-                                        (Map<String, Object>) handleObjectOrNullResponse(response)));
+                CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
+    }
+
+    protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
+        if (route.isSingleNodeRoute()) {
+            return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
+        }
+        if (response.hasConstantResponse()) {
+            return ClusterValue.ofSingleValue(handleStringResponse(response));
+        }
+        return ClusterValue.ofMultiValue(handleMapResponse(response));
     }
 
     @Override
