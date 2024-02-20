@@ -2,7 +2,16 @@
 package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Decr;
+import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Incr;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.MGet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -156,14 +165,22 @@ public abstract class BaseClient
         return handleRedisResponse(Long.class, false, response);
     }
 
+    protected Double handleDoubleResponse(Response response) throws RedisException {
+        return handleRedisResponse(Double.class, false, response);
+    }
+
     protected Object[] handleArrayResponse(Response response) throws RedisException {
+        return handleRedisResponse(Object[].class, false, response);
+    }
+
+    protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, true, response);
     }
 
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type, could be even map too
+     * @param <V> Value type could be even map too
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
@@ -202,6 +219,46 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(SetString, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> mget(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(
+                MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToArgArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> incr(@NonNull String key) {
+        return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> incrBy(@NonNull String key, long amount) {
+        return commandManager.submitNewCommand(
+                IncrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
+        return commandManager.submitNewCommand(
+                IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> decr(@NonNull String key) {
+        return commandManager.submitNewCommand(Decr, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> decrBy(@NonNull String key, long amount) {
+        return commandManager.submitNewCommand(
+                DecrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
     }
 
     @Override

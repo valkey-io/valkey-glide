@@ -40,6 +40,8 @@ def transaction_test(
     args.append(value)
     transaction.type(key)
     args.append("string")
+    transaction.echo(value)
+    args.append(value)
 
     transaction.exists([key])
     args.append(1)
@@ -145,6 +147,8 @@ def transaction_test(
     args.append(2)
     transaction.zscore(key8, "two")
     args.append(2.0)
+    transaction.zpopmin(key8)
+    args.append({"two": 2.0})
     return args
 
 
@@ -160,9 +164,8 @@ class TestTransaction:
         )
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
-        with pytest.raises(RequestError) as e:
+        with pytest.raises(RequestError, match="CrossSlot"):
             await redis_client.exec(transaction)
-        assert "Moved" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -291,3 +294,14 @@ class TestTransaction:
         transaction.select(1)
         transaction.clear()
         assert len(transaction.commands) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_chaining_calls(self, redis_client: TRedisClient):
+        cluster_mode = isinstance(redis_client, RedisClusterClient)
+        key = get_random_string(3)
+
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.set(key, "value").get(key).delete([key])
+
+        assert await redis_client.exec(transaction) == [OK, "value", 1]

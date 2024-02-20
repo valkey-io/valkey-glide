@@ -1,9 +1,17 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.Decr;
+import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Incr;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.MGet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -16,7 +24,9 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import java.util.Map;
 import lombok.Getter;
+import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
@@ -165,6 +175,118 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Retrieve the values of multiple <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return Command Response - An array of values corresponding to the provided <code>keys</code>.
+     *     <br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     */
+    public T mget(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Set multiple keys to multiple values in a single operation.
+     *
+     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Command Response - Always <code>OK</code>.
+     */
+    public T mset(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToArgArray(keyValueMap);
+        ArgsArray commandArgs = buildArgs(args);
+
+        protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @return Command Response - The value of <code>key</code> after the increment.
+     */
+    public T incr(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return Command Response - The value of <code>key</code> after the increment.
+     */
+    public T incrBy(@NonNull String key, long amount) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the string representing a floating point number stored at <code>key</code> by <code>
+     * amount</code>. By using a negative increment value, the result is that the value stored at
+     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
+     * performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return Command Response - The value of <code>key</code> after the increment.
+     */
+    public T incrByFloat(@NonNull String key, double amount) {
+        ArgsArray commandArgs = buildArgs(key, Double.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Decrement the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @return Command Response - The value of <code>key</code> after the decrement.
+     */
+    public T decr(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(Decr, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Decrement the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @param amount The amount to decrement.
+     * @return Command Response - The value of <code>key</code> after the decrement.
+     */
+    public T decrBy(@NonNull String key, long amount) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
         return getThis();
     }
 

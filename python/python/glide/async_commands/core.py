@@ -358,7 +358,7 @@ class CoreCommands(Protocol):
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
-    async def mget(self, keys: List[str]) -> List[str]:
+    async def mget(self, keys: List[str]) -> List[Optional[str]]:
         """
         Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
@@ -367,10 +367,12 @@ class CoreCommands(Protocol):
             keys (List[str]): A list of keys to retrieve values for.
 
         Returns:
-            List[str]: A list of values corresponding to the provided keys. If a key is not found,
+            List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
         """
-        return cast(List[str], await self._execute_command(RequestType.MGet, keys))
+        return cast(
+            List[Optional[str]], await self._execute_command(RequestType.MGet, keys)
+        )
 
     async def decr(self, key: str) -> int:
         """
@@ -1123,6 +1125,24 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
 
+    async def echo(self, message: str) -> str:
+        """
+        Echoes the provided `message` back.
+
+        See https://redis.io/commands/echo for more details.
+
+        Args:
+            message (str): The message to be echoed back.
+
+        Returns:
+            str: The provided `message`.
+
+        Examples:
+            >>> await client.echo("Glide-for-Redis")
+                'Glide-for-Redis'
+        """
+        return cast(str, await self._execute_command(RequestType.Echo, [message]))
+
     async def type(self, key: str) -> str:
         """
         Returns the string representation of the type of the value stored at `key`.
@@ -1310,15 +1330,47 @@ class CoreCommands(Protocol):
             If `max_score` < `min_score`, 0 is returned.
 
         Examples:
-            >>> await zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
+            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
                 2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set "my_sorted_set".
-            >>> await zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , ScoreLimit(10.0 , is_inclusive=false))
+            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , ScoreLimit(10.0 , is_inclusive=false))
                 1  # Indicates that there is one ScoreLimit with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
         """
         return cast(
             int,
             await self._execute_command(
                 RequestType.Zcount, [key, min_score.value, max_score.value]
+            ),
+        )
+
+    async def zpopmin(
+        self, key: str, count: Optional[int] = None
+    ) -> Mapping[str, float]:
+        """
+        Removes and returns the members with the lowest scores from the sorted set stored at `key`.
+        If `count` is provided, up to `count` members with the lowest scores are removed and returned.
+        Otherwise, only one member with the lowest score is removed and returned.
+
+        See https://redis.io/commands/zpopmin for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
+            If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+
+        Returns:
+            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+            If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
+
+        Examples:
+            >>> await client.zpopmin("my_sorted_set")
+                {'member1': 10.0}  # Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+            >>> await client.zpopmin("my_sorted_set", 2)
+                {'member2': 8.0, 'member3': 7.5}  # Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+        """
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(
+                RequestType.ZPopMin, [key, str(count)] if count else [key]
             ),
         )
 

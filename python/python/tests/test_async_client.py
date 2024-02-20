@@ -173,14 +173,13 @@ class TestRedisClients:
                 ["CONFIG", "SET", "requirepass", password]
             )
 
-            with pytest.raises(ClosingError) as e:
+            with pytest.raises(ClosingError, match="NOAUTH"):
                 # Creation of a new client without password should fail
                 await create_client(
                     request,
                     is_cluster,
                     addresses=redis_client.config.addresses,
                 )
-            assert "NOAUTH" in str(e)
 
             auth_client = await create_client(
                 request,
@@ -981,7 +980,7 @@ class TestCommands:
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
-        if not check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
             assert (
                 await redis_client.pexpireat(
                     key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
@@ -1195,6 +1194,22 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zpopmin(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await redis_client.zpopmin(key) == {"a": 1.0}
+
+        assert await redis_client.zpopmin(key, 3) == {"b": 2.0, "c": 3.0}
+        assert await redis_client.zpopmin(key) == {}
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zpopmin(key)
+
+        assert await redis_client.zpopmin("non_exisitng_key") == {}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
@@ -1222,6 +1237,12 @@ class TestCommands:
         assert await redis_client.delete([key]) == 1
 
         assert (await redis_client.type(key)).lower() == "none"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_echo(self, redis_client: TRedisClient):
+        message = get_random_string(5)
+        assert await redis_client.echo(message) == message
 
 
 class TestCommandsUnitTests:

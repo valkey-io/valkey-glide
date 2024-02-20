@@ -4138,7 +4138,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.14.0
+Package: bumpalo:3.15.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25653,7 +25653,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pemfile:2.0.0
+Package: rustls-pemfile:2.1.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26143,7 +26143,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: ryu:1.0.16
+Package: ryu:1.0.17
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29287,7 +29287,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.48
+Package: syn:2.0.50
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -41870,7 +41870,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: google-auth:2.27.0
+Package: google-auth:2.28.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43981,7 +43981,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: protobuf:4.25.2
+Package: protobuf:4.25.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -45321,7 +45321,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: urllib3:2.2.0
+Package: urllib3:2.2.1
 
 The following copyrights and licenses were found in the source code of this package:
 

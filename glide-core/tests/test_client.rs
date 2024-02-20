@@ -7,8 +7,10 @@ mod utilities;
 pub(crate) mod shared_client_tests {
     use super::*;
     use glide_core::client::Client;
-    use redis::RedisConnectionInfo;
-    use redis::Value;
+    use redis::{
+        cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
+        FromRedisValue, InfoDict, RedisConnectionInfo, Value,
+    };
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::BackingServer;
@@ -72,6 +74,85 @@ pub(crate) mod shared_client_tests {
             .await;
             let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_is_not_routed() {
+        // This test checks that a transaction without user routing isn't routed to a random node before reaching its target.
+        // This is tested by checking how many requests each node has received - one of the 6 nodes should have more requests than the others.
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    use_tls: false,
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // reset stats on all connections
+            let mut cmd = redis::cmd("CONFIG");
+            cmd.arg("RESETSTAT");
+            let _ = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            // Send a keyed transaction
+            let key = generate_random_string(6);
+            let mut pipe = redis::pipe();
+            pipe.cmd("GET").arg(key);
+            pipe.atomic();
+            let _ = test_basics
+                .client
+                .send_transaction(&pipe, None)
+                .await
+                .unwrap();
+
+            // Gather info from each server
+            let mut cmd = redis::cmd("INFO");
+            cmd.arg("STATS");
+            let values = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            let mut values: Vec<_> = match values {
+                Value::Map(map) => map.into_iter().filter_map(|(_, value)| {
+                    InfoDict::from_owned_redis_value(value)
+                        .unwrap()
+                        .get::<u32>("total_commands_processed")
+                }),
+
+                _ => panic!("Expected map, got `{values:?}`"),
+            }
+            .collect();
+
+            // Check that all nodes except for one has processed the same number of commands.
+            values.sort();
+            assert_eq!(values.len(), 6);
+            assert_eq!(values[0], values[1]);
+            assert_eq!(values[1], values[2]);
+            assert_eq!(values[2], values[3]);
+            assert_eq!(values[3], values[4]);
+            assert_eq!(values[4] + 3, values[5]); // + MULTI, GET, EXEC
         });
     }
 
@@ -267,10 +348,25 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
+            // BLPOP doesn't block in transactions, so we'll pause the client instead.
+            let mut cmd = redis::cmd("CLIENT");
+            cmd.arg("PAUSE").arg(100);
+            let _ = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await;
+
             let mut pipeline = redis::pipe();
-            pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
+            pipeline.atomic();
+            pipeline.cmd("GET").arg("foo");
             let result = test_basics.client.send_transaction(&pipeline, None).await;
-            assert!(result.is_err());
+            assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
         });
