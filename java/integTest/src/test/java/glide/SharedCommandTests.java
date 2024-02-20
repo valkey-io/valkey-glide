@@ -114,6 +114,34 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void del_multiple_keys(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+        String key3 = "{key}" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key3, value).get();
+        assertEquals(OK, setResult);
+
+        Long deletedKeysNum = client.del(new String[] {key1, key2, key3}).get();
+        assertEquals(3L, deletedKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void del_non_existent_key(BaseClient client) {
+        Long deletedKeysNum = client.del(new String[] {UUID.randomUUID().toString()}).get();
+        assertEquals(0L, deletedKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void set_overwrite_value_and_returnOldValue_returns_string(BaseClient client) {
         String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
         assertEquals(OK, ok);

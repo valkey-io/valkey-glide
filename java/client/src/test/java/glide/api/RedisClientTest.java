@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -125,6 +126,25 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void del_returns_long_success() {
+        // setup
+        String[] keys = new String[] {"testKey1", "testKey2"};
+        Long numberDeleted = 1L;
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(numberDeleted);
+        when(commandManager.<Long>submitNewCommand(eq(Del), eq(keys), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.del(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberDeleted, result);
     }
 
     @SneakyThrows
