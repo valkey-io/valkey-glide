@@ -16,6 +16,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -446,6 +449,77 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.decrBy(key, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hget_success() {
+        // setup
+        String key = "testKey";
+        String field = "field";
+        String[] args = new String[] {key, field};
+        String value = "value";
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<String>submitNewCommand(eq(HashGet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.hget(key, field);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hset_success() {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        String[] args = new String[] {key, "field1", "value1", "field2", "value2"};
+        Long value = 2L;
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<Long>submitNewCommand(eq(HashSet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hset(key, fieldValueMap);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hdel_success() {
+        // setup
+        String key = "testKey";
+        String[] fields = {"testField1", "testField2"};
+        String[] args = {key, "testField1", "testField2"};
+        Long value = 2L;
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<Long>submitNewCommand(eq(HashDel), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hdel(key, fields);
         Long payload = response.get();
 
         // verify

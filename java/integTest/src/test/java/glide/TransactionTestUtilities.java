@@ -12,8 +12,11 @@ public class TransactionTestUtilities {
     private static final String key2 = "{key}" + UUID.randomUUID();
     private static final String key3 = "{key}" + UUID.randomUUID();
     private static final String key4 = "{key}" + UUID.randomUUID();
-    private static final String value1 = "{value}" + UUID.randomUUID();
-    private static final String value2 = "{value}" + UUID.randomUUID();
+    private static final String key5 = "{key}" + UUID.randomUUID();
+    private static final String value1 = UUID.randomUUID().toString();
+    private static final String value2 = UUID.randomUUID().toString();
+    private static final String field1 = UUID.randomUUID().toString();
+    private static final String field2 = UUID.randomUUID().toString();
 
     public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
 
@@ -34,10 +37,14 @@ public class TransactionTestUtilities {
 
         baseTransaction.incrByFloat(key3, 0.5);
 
-        baseTransaction.sadd(key4, new String[] {"baz", "foo"});
-        baseTransaction.srem(key4, new String[] {"foo"});
-        baseTransaction.scard(key4);
-        baseTransaction.smembers(key4);
+        baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
+        baseTransaction.hget(key4, field1);
+        baseTransaction.hdel(key4, new String[] {field1});
+
+        baseTransaction.sadd(key5, new String[] {"baz", "foo"});
+        baseTransaction.srem(key5, new String[] {"foo"});
+        baseTransaction.scard(key5);
+        baseTransaction.smembers(key5);
 
         return baseTransaction;
     }
@@ -55,6 +62,9 @@ public class TransactionTestUtilities {
             2L,
             0L,
             0.5,
+            2L,
+            value1,
+            1L,
             2L,
             1L,
             1L,
