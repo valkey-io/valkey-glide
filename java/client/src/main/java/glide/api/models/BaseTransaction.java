@@ -266,11 +266,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return getThis();
     }
 
-    /** Build protobuf {@link Command} object for given command and arguments. */
-    protected Command buildCommand(RequestType requestType) {
-        return buildCommand(requestType, buildArgs());
-    }
-
     /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
@@ -337,6 +332,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
         return getThis();
+    }
+
+    /** Build protobuf {@link Command} object for given command and arguments. */
+    protected Command buildCommand(RequestType requestType) {
+        return buildCommand(requestType, buildArgs());
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */
