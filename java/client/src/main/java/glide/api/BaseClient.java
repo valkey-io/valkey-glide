@@ -31,9 +31,6 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Set;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -174,7 +171,7 @@ public abstract class BaseClient
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type, could be even map too
+     * @param <V> Value type could be even map too
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
