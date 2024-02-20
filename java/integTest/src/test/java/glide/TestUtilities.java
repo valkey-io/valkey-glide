@@ -11,6 +11,7 @@ public class TestUtilities {
     private static final String key1 = "{key}" + UUID.randomUUID();
     private static final String key2 = "{key}" + UUID.randomUUID();
     private static final String key3 = "{key}" + UUID.randomUUID();
+    private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String value1 = "{value}" + UUID.randomUUID();
     private static final String value2 = "{value}" + UUID.randomUUID();
 
@@ -25,10 +26,14 @@ public class TestUtilities {
         baseTransaction.mset(Map.of(key1, value2, key2, value1));
         baseTransaction.mget(new String[] {key1, key2});
 
-        baseTransaction.sadd(key3, new String[] {"baz", "foo"});
-        baseTransaction.srem(key3, new String[] {"foo"});
-        baseTransaction.scard(key3);
-        baseTransaction.smembers(key3);
+        baseTransaction.incr(key3);
+        baseTransaction.incrBy(key3, 2);
+        baseTransaction.incrByFloat(key3, 1.5);
+
+        baseTransaction.sadd(key4, new String[] {"baz", "foo"});
+        baseTransaction.srem(key4, new String[] {"foo"});
+        baseTransaction.scard(key4);
+        baseTransaction.smembers(key4);
 
         return baseTransaction;
     }
@@ -41,6 +46,9 @@ public class TestUtilities {
             new String[] {value1, value2},
             "OK",
             new String[] {value2, value1},
+            1L,
+            3L,
+            4.5,
             2L,
             1L,
             1L,

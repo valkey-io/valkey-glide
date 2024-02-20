@@ -14,6 +14,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Incr;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -325,6 +328,79 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void incr_returns_success() {
+        // setup
+        String key = "testKey";
+        Long value = 10L;
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Incr), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.incr(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void incrBy_returns_success() {
+        // setup
+        String key = "testKey";
+        long amount = 1L;
+        Long value = 10L;
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(IncrBy), eq(new String[] {key, Long.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.incrBy(key, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void incrByFloat_returns_success() {
+        // setup
+        String key = "testKey";
+        double amount = 1.1;
+        Double value = 10.1;
+
+        CompletableFuture testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(IncrByFloat), eq(new String[] {key, Double.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.incrByFloat(key, amount);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

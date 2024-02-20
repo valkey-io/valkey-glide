@@ -69,4 +69,38 @@ public interface StringCommands {
      * @return Always <code>OK</code>.
      */
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
+
+    /**
+     * Increment the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @return The value of <code>key</code> after the increment.
+     */
+    CompletableFuture<Long> incr(String key);
+
+    /**
+     * Increment the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     */
+    CompletableFuture<Long> incrBy(String key, long amount);
+
+    /**
+     * Increment the string representing a floating point number stored at <code>key</code> by <code>
+     * amount</code>. By using a negative increment value, the result is that the value stored at
+     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
+     * performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     */
+    CompletableFuture<Double> incrByFloat(String key, double amount);
 }
