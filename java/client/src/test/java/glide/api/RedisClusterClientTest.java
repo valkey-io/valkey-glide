@@ -27,8 +27,10 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass.RedisRequest;
+import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
+@SuppressWarnings("unchecked,resource")
 public class RedisClusterClientTest {
 
     RedisClusterClient service;
@@ -94,6 +96,19 @@ public class RedisClusterClientTest {
         assertEquals(data, value.getMultiValue());
     }
 
+    @Test
+    @SneakyThrows
+    public void custom_command_returns_single_value_on_constant_response() {
+        var commandManager =
+                new TestCommandManager(
+                        Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
+
+        var client = new TestClient(commandManager, "OK");
+
+        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+        assertEquals("OK", value.getSingleValue());
+    }
+
     private static class TestClient extends RedisClusterClient {
 
         private final Object object;
@@ -116,7 +131,7 @@ public class RedisClusterClientTest {
 
         public TestCommandManager(Response responseToReturn) {
             super(null);
-            response = responseToReturn;
+            response = responseToReturn != null ? responseToReturn : Response.newBuilder().build();
         }
 
         @Override
@@ -154,7 +169,7 @@ public class RedisClusterClientTest {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};
-        CompletableFuture<String> testResponse = new CompletableFuture();
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
 
         Route route = ALL_PRIMARIES;
