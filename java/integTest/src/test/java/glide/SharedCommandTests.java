@@ -7,6 +7,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -329,6 +330,37 @@ public class SharedCommandTests {
         Exception incrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
         assertTrue(incrByFloatException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void decr_and_decrBy_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "10").get());
+
+        assertEquals(9, client.decr(key).get());
+        assertEquals("9", client.get(key).get());
+
+        assertEquals(5, client.decrBy(key, 4).get());
+        assertEquals("5", client.get(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void decr_and_decrBy_non_existing_key(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertNull(client.get(key1).get());
+        assertEquals(-1, client.decr(key1).get());
+        assertEquals("-1", client.get(key1).get());
+
+        assertNull(client.get(key2).get(10, SECONDS));
+        assertEquals(-3, client.decrBy(key2, 3).get());
+        assertEquals("-3", client.get(key2).get());
     }
 
     @SneakyThrows
