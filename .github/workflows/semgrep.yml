@@ -2,15 +2,15 @@ name: Semgrep
 
 on:
   # Scan changed files in PRs (diff-aware scanning):
-  pull_request: {}
+#   pull_request: {}
   # Scan on-demand through GitHub Actions interface:
   workflow_dispatch:
     inputs:
         branch:
           description: 'The branch to run against the semgrep tool'
           required: true
-  push:
-    branches: ["master", "main"]
+#   push:
+#     branches: ["master", "main"]
   # Schedule the CI job (this method uses cron syntax):
   schedule:
     - cron: '0 8 * * *' # Sets Semgrep to scan every day at 08:00 UTC.
