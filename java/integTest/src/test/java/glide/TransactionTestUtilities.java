@@ -13,10 +13,10 @@ public class TransactionTestUtilities {
     private static final String key3 = "{key}" + UUID.randomUUID();
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
-    private static final String value1 = "{value}" + UUID.randomUUID();
-    private static final String value2 = "{value}" + UUID.randomUUID();
-    private static final String field1 = "{field}" + UUID.randomUUID();
-    private static final String field2 = "{field}" + UUID.randomUUID();
+    private static final String value1 = UUID.randomUUID().toString();
+    private static final String value2 = UUID.randomUUID().toString();
+    private static final String field1 = UUID.randomUUID().toString();
+    private static final String field2 = UUID.randomUUID().toString();
 
     public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
 
@@ -62,7 +62,9 @@ public class TransactionTestUtilities {
             2L,
             0L,
             0.5,
-            2L, value1, 1L,
+            2L,
+            value1,
+            1L,
             2L,
             1L,
             1L,

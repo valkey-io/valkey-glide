@@ -40,12 +40,9 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Map;
 import java.util.Set;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
-import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -281,12 +278,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hset(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
-        String[] args =
-                Stream.concat(
-                                Stream.of(key),
-                                fieldValueMap.entrySet().stream()
-                                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue())))
-                        .toArray(String[]::new);
+        String[] args = ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key);
         return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
     }
 

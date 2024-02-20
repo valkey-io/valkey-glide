@@ -28,8 +28,6 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.Map;
-import java.util.stream.Stream;
-import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -295,7 +293,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return getThis();
     }
 
-
     /**
      * Retrieve the value associated with <code>field</code> in the hash stored at <code>key</code>.
      *
@@ -324,12 +321,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hset(@NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         ArgsArray commandArgs =
-            buildArgs(
-                Stream.concat(
-                        Stream.of(key),
-                        fieldValueMap.entrySet().stream()
-                            .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue())))
-                    .toArray(String[]::new));
+                buildArgs(ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key));
 
         protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
         return getThis();
@@ -353,7 +345,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
         return getThis();
     }
-
 
     /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
