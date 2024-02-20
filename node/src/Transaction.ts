@@ -53,6 +53,7 @@ import {
     createSRem,
     createSelect,
     createSet,
+    createStrlen,
     createTTL,
     createType,
     createUnlink,
@@ -838,6 +839,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public type(key: string): T {
         return this.addAndReturn(createType(key));
+    }
+
+    /** Returns the length of the string value stored at `key`.
+     * See https://redis.io/commands/strlen/ for more details.
+     *
+     * @param key - The `key` to check its length.
+     * Command Response - The length of the string value stored at `key`
+     * If `key` does not exist, it is treated as an empty string, and the command returns 0.
+     */
+    public strlen(key: string): T {
+        return this.addAndReturn(createStrlen(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
