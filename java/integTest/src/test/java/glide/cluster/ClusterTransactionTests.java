@@ -1,8 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestUtilities.transactionTest;
-import static glide.TestUtilities.transactionTestResult;
+import static glide.TransactionTestUtilities.transactionTest;
+import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,7 +45,7 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        ClusterTransaction transaction = new ClusterTransaction().customCommand("info");
+        ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
         Object[] result = clusterClient.exec(transaction).get(10, TimeUnit.SECONDS);
         assertTrue(((String) result[0]).contains("# Stats"));
     }
