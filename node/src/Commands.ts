@@ -830,3 +830,13 @@ export function createType(key: string): redis_request.Command {
 export function createStrlen(key: string): redis_request.Command {
     return createCommand(RequestType.Strlen, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createLindex(
+    key: string,
+    index: number
+): redis_request.Command {
+    return createCommand(RequestType.Lindex, [key, index.toString()]);
+}

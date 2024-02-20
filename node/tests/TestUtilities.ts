@@ -115,6 +115,8 @@ export function transactionTest(
     args.push([field + "3", field + "2"]);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);
+    baseTransaction.lindex(key6, 0);
+    args.push(field + "1");
     baseTransaction.rpop(key6);
     args.push(field + "3");
     baseTransaction.rpopCount(key6, 2);

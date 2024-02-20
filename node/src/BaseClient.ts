@@ -39,6 +39,7 @@ import {
     createLRange,
     createLRem,
     createLTrim,
+    createLindex,
     createMGet,
     createMSet,
     createPExpire,
@@ -1095,6 +1096,21 @@ export class BaseClient {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
+
+    /** Returns the element at index `index` in the list stored at `key`.
+     * The index is zero-based, so 0 means the first element, 1 the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of the list.
+     * Here, -1 means the last element, -2 means the penultimate and so forth.
+     * See https://redis.io/commands/lindex/ for more details.
+     *
+     * @param key - The `key` of the list.
+     * @param index - The `index` of the element in the list to retrieve.
+     * @returns - The element at `index` in the list stored at `key`.
+     * If `index` is out of range or if `key` does not exist, null is returned.
+     */
+    public lindex(key: string, index: number): Promise<string | null> {
+        return this.createWritePromise(createLindex(key, index));
+    }
 
     /**
      * @internal
