@@ -62,6 +62,7 @@ import {
     createZcount,
     createZrem,
     createZscore,
+    createLindex,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -865,6 +866,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public customCommand(args: string[]): T {
         return this.addAndReturn(createCustomCommand(args));
+    }
+
+    /** Returns the element at index `index` in the list stored at `key`.
+     * The index is zero-based, so 0 means the first element, 1 the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of the list.
+     * Here, -1 means the last element, -2 means the penultimate and so forth.
+     * See https://redis.io/commands/lindex/ for more details.
+     *
+     * @param key - The `key` of the list.
+     * @param index - The `index` of the element in the list to retrieve.
+     * Command Response - The element at index in the list stored at `key`.
+     * If `index` is out of range or if `key` does not exist, null is returned.
+     */
+    public lindex(key: string, index: number): T {
+        return this.addAndReturn(createLindex(key, index));
     }
 }
 
