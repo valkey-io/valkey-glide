@@ -43,7 +43,6 @@ public interface HashCommands {
      * @return The number of fields that were removed from the hash, not including specified but
      *     non-existing fields.<br>
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
-     *     If <code>key</code> holds a value that is not a hash, an error is raised.<br>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
 }
