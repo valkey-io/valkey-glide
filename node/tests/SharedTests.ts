@@ -1535,6 +1535,24 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lindex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const listName = uuidv4();
+                const listKey1Value = uuidv4();
+                const listKey2Value = uuidv4();
+                expect(
+                    await client.lpush(listName, [listKey1Value, listKey2Value])
+                ).toEqual(2);
+                expect(await client.lindex(listName, 0)).toEqual(listKey2Value);
+                expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
+                expect(await client.lindex("notExsitingList", 1)).toEqual(null);
+                expect(await client.lindex(listName, 3)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
