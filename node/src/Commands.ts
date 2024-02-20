@@ -823,3 +823,10 @@ export function createZcount(
 export function createType(key: string): redis_request.Command {
     return createCommand(RequestType.Type, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createStrlen(key: string): redis_request.Command {
+    return createCommand(RequestType.Strlen, [key]);
+}

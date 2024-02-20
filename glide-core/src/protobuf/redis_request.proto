@@ -107,6 +107,7 @@ enum RequestType {
     HLen = 69;
     Echo = 70;
     ZPopMin = 71;
+    Strlen = 72;
 }
 
 message Command {

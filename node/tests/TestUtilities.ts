@@ -78,6 +78,8 @@ export function transactionTest(
     args.push("OK");
     baseTransaction.mget([key1, key2]);
     args.push(["bar", "baz"]);
+    baseTransaction.strlen(key1);
+    args.push(3);
     baseTransaction.del([key1]);
     args.push(1);
     baseTransaction.hset(key4, { [field]: value });
