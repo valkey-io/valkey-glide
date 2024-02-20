@@ -214,10 +214,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
      * @param key The key to increment its value.
-     * @return Command Response - The value of <code>key</code> after the increment. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return Command Response - The value of <code>key</code> after the increment.
      */
     public T incr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -233,10 +230,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
-     * @return Command Response - The value of <code>key</code> after the increment, An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return Command Response - The value of <code>key</code> after the increment.
      */
     public T incrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
@@ -254,10 +248,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
-     * @return Command Response - The value of <code>key</code> after the increment. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type, or the current key content is not parsable as a
-     *     double precision floating point number.
+     * @return Command Response - The value of <code>key</code> after the increment.
      */
     public T incrByFloat(@NonNull String key, double amount) {
         ArgsArray commandArgs = buildArgs(key, Double.toString(amount));

@@ -76,9 +76,7 @@ public interface StringCommands {
      *
      * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
      * @param key The key to increment its value.
-     * @return The value of <code>key</code> after the increment. An error is raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that can not be represented
-     *     as integer.
+     * @return The value of <code>key</code> after the increment.
      */
     CompletableFuture<Long> incr(String key);
 
@@ -89,9 +87,7 @@ public interface StringCommands {
      * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
-     * @return The value of <code>key</code> after the increment. An error is raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return The value of <code>key</code> after the increment.
      */
     CompletableFuture<Long> incrBy(String key, long amount);
 
@@ -104,9 +100,7 @@ public interface StringCommands {
      * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
-     * @return The value of <code>key</code> after the increment. An error is raised if <code>key
-     *     </code> contains a value of the wrong type, or the current key content is not parsable as a
-     *     double precision floating point number.
+     * @return The value of <code>key</code> after the increment.
      */
     CompletableFuture<Double> incrByFloat(String key, double amount);
 }
