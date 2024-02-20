@@ -498,6 +498,4 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, payload);
     }
-
-
 }

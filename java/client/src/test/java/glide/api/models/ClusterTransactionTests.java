@@ -8,6 +8,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.MGet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -19,6 +21,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass.Command;
@@ -54,6 +57,12 @@ public class ClusterTransactionTests {
 
         transaction.ping("KING PONG");
         results.add(Pair.of(Ping, ArgsArray.newBuilder().addArgs("KING PONG").build()));
+
+        transaction.mset(Map.of("key", "value"));
+        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.mget(new String[] {"key"});
+        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.info();
         results.add(Pair.of(Info, ArgsArray.newBuilder().build()));

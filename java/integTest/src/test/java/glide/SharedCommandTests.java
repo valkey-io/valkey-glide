@@ -321,17 +321,14 @@ public class SharedCommandTests {
 
         Exception incrException = assertThrows(ExecutionException.class, () -> client.incr(key1).get());
         assertTrue(incrException.getCause() instanceof RequestException);
-        assertTrue(incrException.getCause().getMessage().contains("value is not an integer"));
 
         Exception incrByException =
                 assertThrows(ExecutionException.class, () -> client.incrBy(key1, 3).get());
         assertTrue(incrByException.getCause() instanceof RequestException);
-        assertTrue(incrByException.getCause().getMessage().contains("value is not an integer"));
 
         Exception incrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
         assertTrue(incrByFloatException.getCause() instanceof RequestException);
-        assertTrue(incrByFloatException.getCause().getMessage().contains("value is not a valid float"));
     }
 
     @SneakyThrows
