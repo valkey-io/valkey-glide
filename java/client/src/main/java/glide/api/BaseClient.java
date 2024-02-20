@@ -4,6 +4,8 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Decr;
+import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -246,6 +248,17 @@ public abstract class BaseClient
     public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
         return commandManager.submitNewCommand(
                 IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> decr(@NonNull String key) {
+        return commandManager.submitNewCommand(Decr, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> decrBy(@NonNull String key, long amount) {
+        return commandManager.submitNewCommand(
+                DecrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
     }
 
     @Override

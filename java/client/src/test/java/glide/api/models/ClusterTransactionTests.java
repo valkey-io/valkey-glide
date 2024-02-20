@@ -3,6 +3,8 @@ package glide.api.models;
 
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Decr;
+import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -58,12 +60,6 @@ public class ClusterTransactionTests {
         transaction.ping("KING PONG");
         results.add(Pair.of(Ping, ArgsArray.newBuilder().addArgs("KING PONG").build()));
 
-        transaction.mset(Map.of("key", "value"));
-        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
-
-        transaction.mget(new String[] {"key"});
-        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
-
         transaction.info();
         results.add(Pair.of(Info, ArgsArray.newBuilder().build()));
 
@@ -73,6 +69,12 @@ public class ClusterTransactionTests {
                         Info,
                         ArgsArray.newBuilder().addArgs(InfoOptions.Section.EVERYTHING.toString()).build()));
 
+        transaction.mset(Map.of("key", "value"));
+        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.mget(new String[] {"key"});
+        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
+
         transaction.incr("key");
         results.add(Pair.of(Incr, ArgsArray.newBuilder().addArgs("key").build()));
 
@@ -81,6 +83,12 @@ public class ClusterTransactionTests {
 
         transaction.incrByFloat("key", 2.5);
         results.add(Pair.of(IncrByFloat, ArgsArray.newBuilder().addArgs("key").addArgs("2.5").build()));
+
+        transaction.decr("key");
+        results.add(Pair.of(Decr, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.decrBy("key", 2);
+        results.add(Pair.of(DecrBy, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));

@@ -28,7 +28,11 @@ public class TestUtilities {
 
         baseTransaction.incr(key3);
         baseTransaction.incrBy(key3, 2);
-        baseTransaction.incrByFloat(key3, 1.5);
+
+        baseTransaction.decr(key3);
+        baseTransaction.decrBy(key3, 2);
+
+        baseTransaction.incrByFloat(key3, 0.5);
 
         baseTransaction.sadd(key4, new String[] {"baz", "foo"});
         baseTransaction.srem(key4, new String[] {"foo"});
@@ -48,7 +52,9 @@ public class TestUtilities {
             new String[] {value2, value1},
             1L,
             3L,
-            4.5,
+            2L,
+            0L,
+            0.5,
             2L,
             1L,
             1L,
