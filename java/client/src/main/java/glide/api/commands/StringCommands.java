@@ -110,9 +110,7 @@ public interface StringCommands {
      *
      * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
      * @param key The key to decrement its value.
-     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return The value of <code>key</code> after the decrement.
      */
     CompletableFuture<Long> decr(String key);
 
@@ -123,9 +121,7 @@ public interface StringCommands {
      * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
      * @param key The key to decrement its value.
      * @param amount The amount to decrement.
-     * @return The value of <code>key</code> after the decrement. An error is raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return The value of <code>key</code> after the decrement.
      */
     CompletableFuture<Long> decrBy(String key, long amount);
 }

@@ -60,12 +60,6 @@ public class ClusterTransactionTests {
         transaction.ping("KING PONG");
         results.add(Pair.of(Ping, ArgsArray.newBuilder().addArgs("KING PONG").build()));
 
-        transaction.mset(Map.of("key", "value"));
-        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
-
-        transaction.mget(new String[] {"key"});
-        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
-
         transaction.info();
         results.add(Pair.of(Info, ArgsArray.newBuilder().build()));
 
@@ -74,6 +68,12 @@ public class ClusterTransactionTests {
                 Pair.of(
                         Info,
                         ArgsArray.newBuilder().addArgs(InfoOptions.Section.EVERYTHING.toString()).build()));
+
+        transaction.mset(Map.of("key", "value"));
+        results.add(Pair.of(MSet, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.mget(new String[] {"key"});
+        results.add(Pair.of(MGet, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.incr("key");
         results.add(Pair.of(Incr, ArgsArray.newBuilder().addArgs("key").build()));

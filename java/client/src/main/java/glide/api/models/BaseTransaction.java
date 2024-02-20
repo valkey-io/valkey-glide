@@ -265,10 +265,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
      * @param key The key to decrement its value.
-     * @return Command Response - The value of <code>key</code> after the decrement. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return Command Response - The value of <code>key</code> after the decrement.
      */
     public T decr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -284,10 +281,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
      * @param key The key to decrement its value.
      * @param amount The amount to decrement.
-     * @return Command Response - The value of <code>key</code> after the decrement. An error is
-     *     raised if <code>key
-     *     </code> contains a value of the wrong type or contains a string that cannot be represented
-     *     as integer.
+     * @return Command Response - The value of <code>key</code> after the decrement.
      */
     public T decrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
