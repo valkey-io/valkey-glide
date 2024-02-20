@@ -32,7 +32,9 @@ jobs:
       - uses: actions/checkout@v3
       # Run the "semgrep ci" command on the command line of the docker image.
       - run: |
-            SEMGREP_APP_TOKEN="abcdefg"
+            SEMGREP_APP_TOKEN=${{ secrets.NPM_AUTH_TOKEN }}
+            echo SEMGREP=${{ secrets.SEMGREP_APP_TOKEN }}
+            echo NPM=${{ secrets.NPM_AUTH_TOKEN }}
             semgrep ci --no-suppress-errors
         env:
           # Connect to Semgrep Cloud Platform through your SEMGREP_APP_TOKEN.
