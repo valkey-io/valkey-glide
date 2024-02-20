@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Generic Commands interface to handle generic command and transaction requests with routing
- * options.
+ * options for cluster client.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */

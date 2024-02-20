@@ -28,6 +28,11 @@ public interface GenericBaseCommands {
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
      *     </code> multiple times, it will be counted multiple times.
+     * @example
+     *     <p><code>
+     * long result = client.exists(new String[] {"my_key", "invalid_key"}).get();
+     * assert result == 1L;
+     * </code>
      */
     CompletableFuture<Long> exists(String[] keys);
 }

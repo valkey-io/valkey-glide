@@ -321,7 +321,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> exists(String[] keys) {
+    public CompletableFuture<Long> exists(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
     }
 }
