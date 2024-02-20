@@ -549,13 +549,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Removes the specified <code>keys</code>. A key is ignored if it does not exist. This command,
-     * similar to DEL, removes specified keys and ignores non-existent ones. However, this command
-     * does not block the server, while <a href="https://redis.io/commands/del/">DEL</a> does.
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while <a
+     * href="https://redis.io/commands/del/">DEL</a> does.
      *
      * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
-     * @param keys The <code>keys</code> we wanted to unlink.
-     * @return the number of <code>keys</code> that were unlinked.
+     * @param keys The list of keys to unlink.
+     * @return Command Response - The number of <code>keys</code> that were unlinked.
      */
     public T unlink(String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
