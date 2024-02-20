@@ -1,8 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestUtilities.transactionTest;
-import static glide.TestUtilities.transactionTestResult;
+import static glide.TransactionTestUtilities.transactionTest;
+import static glide.TransactionTestUtilities.transactionTestResult;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,7 +45,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void custom_command_info() {
-        Transaction transaction = new Transaction().customCommand("info");
+        Transaction transaction = new Transaction().customCommand(new String[] {"info"});
         Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
         assertTrue(((String) result[0]).contains("# Stats"));
     }
