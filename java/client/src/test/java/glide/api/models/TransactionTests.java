@@ -3,6 +3,8 @@ package glide.api.models;
 
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
@@ -54,6 +56,7 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -295,6 +298,16 @@ public class TransactionTests {
 
         transaction.configResetStat();
         results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
+
+        transaction.configGet(new String[] {"Foster", "The", "Fluffy", "Dogster"});
+        results.add(Pair.of(ConfigGet, transaction.buildArgs("Foster", "The", "Fluffy", "Dogster")));
+
+        var configSetMap = new LinkedHashMap<String, String>();
+        configSetMap.put("Foster", "The");
+        configSetMap.put("Fluffy", "Dogster");
+
+        transaction.configSet(configSetMap);
+        results.add(Pair.of(ConfigSet, transaction.buildArgs("Foster", "The", "Fluffy", "Dogster")));
 
         Map<String, Double> membersScores = new LinkedHashMap<>();
         membersScores.put("member1", 1.0);

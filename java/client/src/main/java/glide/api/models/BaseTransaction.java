@@ -1,6 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -747,6 +750,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+
+        return getThis();
+    }
+
+    /**
+     * Read the configuration parameters of a running Redis server.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @return Command response - A <code>map</code> of values corresponding to the configuration
+     *     parameters.
+     */
+    public T configGet(String[] parameters) {
+        ArgsArray commandArgs = buildArgs(parameters);
+
+        protobufTransaction.addCommands(buildCommand(ConfigGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Set configuration parameters to the specified values.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @return Command response - <code>OK</code> if all configurations have been successfully set.
+     *     Otherwise, raises an error.
+     */
+    public T configSet(Map<String, String> parameters) {
+        ArgsArray commandArgs = buildArgs(convertMapToArgArray(parameters));
+
+        protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
         return getThis();
     }
 

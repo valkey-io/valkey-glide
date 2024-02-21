@@ -12,10 +12,12 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
@@ -23,6 +25,9 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import glide.api.models.exceptions.RequestException;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -184,5 +189,65 @@ public class CommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_no_args_returns_error() {
+        var exception =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.configGet(new String[] {}).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        assertTrue(exception.getCause().getMessage().contains("wrong number of arguments"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_wildcard() {
+        var data = regularClient.configGet(new String[] {"*file"}).get();
+        assertTrue(data.size() > 5);
+        assertTrue(data.containsKey("pidfile"));
+        assertTrue(data.containsKey("logfile"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_multiple_params() {
+        assumeTrue(REDIS_VERSION.feature() >= 7, "This feature added in redis 7");
+        var data = regularClient.configGet(new String[] {"pidfile", "logfile"}).get();
+        assertAll(
+                () -> assertEquals(2, data.size()),
+                () -> assertTrue(data.containsKey("pidfile")),
+                () -> assertTrue(data.containsKey("logfile")));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configSet_with_unknown_parameter_returns_error() {
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> regularClient.configSet(Map.of("puppy", "happy")).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        assertTrue(
+                exception
+                        .getCause()
+                        .getMessage()
+                        .contains(
+                                REDIS_VERSION.feature() >= 7 ? "Unknown option" : "Unsupported CONFIG parameter"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configSet_a_parameter() {
+        var oldValue = regularClient.configGet(new String[] {"maxclients"}).get().get("maxclients");
+
+        var response = regularClient.configSet(Map.of("maxclients", "42")).get();
+        assertEquals(OK, response);
+        var newValue = regularClient.configGet(new String[] {"maxclients"}).get();
+        assertEquals("42", newValue.get("maxclients"));
+
+        response = regularClient.configSet(Map.of("maxclients", oldValue)).get();
+        assertEquals(OK, response);
     }
 }

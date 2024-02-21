@@ -5,6 +5,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -136,4 +137,83 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> configResetStat(Route route);
+
+    /**
+     * Reads the configuration parameters of a running Redis server.<br>
+     * The command will be sent to a random node.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @return A <code>map</code> of values corresponding to the configuration parameters.
+     * @example
+     *     <pre>
+     * Map&lt;String, String&gt; configParams = client.configGet("logfile", "*port").get();
+     * var logFile = configParams.get("logfile");
+     * var port = configParams.get("port");
+     * var tlsPort = configParams.get("tls-port");
+     * </pre>
+     */
+    CompletableFuture<Map<String, String>> configGet(String[] parameters);
+
+    /**
+     * Reads the configuration parameters of a running Redis server.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @param route Routing configuration for the command. Client will route the command to the nodes
+     *     defined.
+     * @return A <code>map</code> of values corresponding to the configuration parameters.<br>
+     *     When specifying a route other than a single node, it returns a dictionary where each
+     *     address is the key and its corresponding node response is the value.
+     * @example
+     *     <pre>
+     * Map&lt;String, String&gt; configParams = client.configGet("logfile", new SlotIdRoute(...)).get().getSingleValue();
+     * var logFile = configParams.get("logfile");
+     * </pre>
+     *
+     * @example
+     *     <pre>
+     * Map&lt;String, Map&lt;String, String&gt;&gt; configParamsPerNode = client.configGet("logfile", ALL_NODES).get().getMultiValue();
+     * var logFileNode1 = configParamsPerNode.get("&lt;node1 address&gt;").get("logfile");
+     * var logFileNode2 = configParamsPerNode.get("&lt;node2 address&gt;").get("logfile");
+     * </pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route);
+
+    /**
+     * Sets configuration parameters to the specified values.<br>
+     * The command will be sent to a random node.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
+     *     error.
+     * @example
+     *     <pre>
+     * String response = client.configSet(Map.of("syslog-enabled", "yes")).get();
+     * assert response.equals("OK")
+     * </pre>
+     */
+    CompletableFuture<String> configSet(Map<String, String> parameters);
+
+    /**
+     * Sets configuration parameters to the specified values.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @param route Routing configuration for the command. Client will route the command to the nodes
+     *     defined.
+     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
+     *     error.
+     * @example
+     *     <pre>
+     * String response = client.configSet(Map.of("syslog-enabled", "yes"), ALL_PRIMARIES).get();
+     * assert response.equals("OK")
+     * </pre>
+     */
+    CompletableFuture<String> configSet(Map<String, String> parameters, Route route);
 }
