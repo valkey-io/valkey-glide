@@ -1557,6 +1557,7 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lindex test_%p`,
         async (protocol) => {
@@ -1571,6 +1572,27 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zpopmin test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zpopmin(key)).toEqual({ a: 1.0 });
+                expect(await client.zpopmin(key, 3)).toEqual({
+                    b: 2.0,
+                    c: 3.0,
+                });
+                expect(await client.zpopmin(key)).toEqual({});
+                expect(await client.set(key, "value")).toEqual("OK");
+                await expect(client.zpopmin(key)).rejects.toThrow();
+                expect(await client.zpopmin("notExsitingKey")).toEqual({});
             }, protocol);
         },
         config.timeout

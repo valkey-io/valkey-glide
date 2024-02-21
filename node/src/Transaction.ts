@@ -41,6 +41,7 @@ import {
     createLRange,
     createLRem,
     createLTrim,
+    createLindex,
     createMGet,
     createMSet,
     createPExpire,
@@ -61,9 +62,9 @@ import {
     createZadd,
     createZcard,
     createZcount,
+    createZpopmin,
     createZrem,
     createZscore,
-    createLindex,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -858,11 +859,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://redis.io/commands/strlen/ for more details.
      *
      * @param key - The `key` to check its length.
+     * 
      * Command Response - The length of the string value stored at `key`
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
      */
     public strlen(key: string): T {
         return this.addAndReturn(createStrlen(key));
+    }
+
+    /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
+     * Otherwise, only one member with the lowest score is removed and returned.
+     * See https://redis.io/commands/zpopmin for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     *
+     * Command Response - A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     */
+    public zpopmin(key: string, count?: number): T {
+        return this.addAndReturn(createZpopmin(key, count));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
