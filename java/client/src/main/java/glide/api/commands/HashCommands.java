@@ -111,6 +111,11 @@ public interface HashCommands {
      * @param amount The amount to increment.
      * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment.
+     * @example
+     *     <pre>
+     * Long num = client.hincrBy("my_hash", "field1", 5).get()
+     * assert num == 5L
+     * </pre>
      */
     CompletableFuture<Long> hincrBy(String key, String field, long amount);
 
@@ -127,6 +132,11 @@ public interface HashCommands {
      * @param amount The amount to increment.
      * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment.
+     * @example
+     *     <pre>
+     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get()
+     * assert num == 2.5
+     * </pre>
      */
     CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
 }
