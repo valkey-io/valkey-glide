@@ -855,3 +855,11 @@ export function createZpopmin(key: string, count?: number): redis_request.Comman
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMin, args);
 }
+
+/**
+ * @internal
+ */
+export function createZpopmax(key: string, count?: number): redis_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.ZPopMax, args);
+}

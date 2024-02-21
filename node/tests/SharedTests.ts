@@ -1597,6 +1597,27 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zpopmax test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zpopmax(key)).toEqual({ c: 3.0 });
+                expect(await client.zpopmax(key, 3)).toEqual({
+                    b: 2.0,
+                    a: 1.0,
+                });
+                expect(await client.zpopmax(key)).toEqual({});
+                expect(await client.set(key, "value")).toEqual("OK");
+                await expect(client.zpopmax(key)).rejects.toThrow();
+                expect(await client.zpopmax("notExsitingKey")).toEqual({});
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {

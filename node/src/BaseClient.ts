@@ -59,6 +59,7 @@ import {
     createZadd,
     createZcard,
     createZcount,
+    createZpopmax,
     createZpopmin,
     createZrem,
     createZscore,
@@ -1108,15 +1109,33 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
-     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
      * @returns A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
      */
     public zpopmin(
         key: string,
         count?: number
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZpopmin(key, count));
+    }
+
+    /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the highest scores are removed and returned.
+     * Otherwise, only one member with the highest score is removed and returned.
+     * See https://redis.io/commands/zpopmax for more details.
+     * 
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * @returns A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+     */
+    public zpopmax(
+        key: string,
+        count?: number
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createZpopmax(key, count));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
