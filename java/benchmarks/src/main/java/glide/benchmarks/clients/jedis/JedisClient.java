@@ -39,9 +39,10 @@ public class JedisClient implements SyncClient {
                     new JedisCluster(
                             Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
                             DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
-        }
-        jedisPool =
+        } else {
+            jedisPool =
                 new JedisPool(connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
+        }
     }
 
     @Override
