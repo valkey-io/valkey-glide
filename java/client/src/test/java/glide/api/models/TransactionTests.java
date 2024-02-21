@@ -29,10 +29,8 @@ import glide.api.models.commands.SetOptions;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import lombok.Getter;
-import lombok.SneakyThrows;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -41,13 +39,8 @@ import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
 
 public class TransactionTests {
-    @Getter private static List<Arguments> transactionBuilders;
-
-    @BeforeAll
-    @SneakyThrows
-    public static void init() {
-        transactionBuilders =
-                List.of(Arguments.of(new Transaction()), Arguments.of(new ClusterTransaction()));
+    private static Stream<Arguments> getTransactionBuilders() {
+        return Stream.of(Arguments.of(new Transaction()), Arguments.of(new ClusterTransaction()));
     }
 
     @ParameterizedTest
