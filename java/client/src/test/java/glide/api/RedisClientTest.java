@@ -17,7 +17,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -521,6 +524,76 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.hdel(key, fields);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hmget_success() {
+        // setup
+        String key = "testKey";
+        String[] fields = {"testField1", "testField2"};
+        String[] args = {"testKey", "testField1", "testField2"};
+        String[] value = {"testValue1", "testValue2"};
+
+        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<String[]>submitNewCommand(eq(HashMGet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.hmget(key, fields);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hexists_success() {
+        // setup
+        String key = "testKey";
+        String field = "testField";
+        String[] args = new String[] {key, field};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<Boolean>submitNewCommand(eq(HashExists), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.hexists(key, field);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hgetall_success() {
+        // setup
+        String key = "testKey";
+        String[] args = new String[] {key};
+        Map<String, String> value = new LinkedHashMap<>();
+        value.put("key1", "value1");
+        value.put("key2", "value2");
+
+        CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+        when(commandManager.<Map<String, String>>submitNewCommand(eq(HashGetAll), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String>> response = service.hgetall(key);
+        Map<String, String> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

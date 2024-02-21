@@ -10,6 +10,7 @@ import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -394,6 +395,56 @@ public class SharedCommandTests {
         assertEquals(2, client.hdel(key, new String[] {field1, field2}).get());
         assertEquals(0, client.hdel(key, new String[] {"non_existing_field"}).get());
         assertEquals(0, client.hdel("non_existing_key", new String[] {field3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hmget_multiple_existing_fields_non_existing_field_non_existing_key(
+            BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertArrayEquals(
+                new String[] {value, null, value},
+                client.hmget(key, new String[] {field1, "non_existing_field", field2}).get());
+        assertArrayEquals(
+                new String[] {null, null},
+                client.hmget("non_existing_key", new String[] {field1, field2}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value1");
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertTrue(client.hexists(key, field1).get());
+        assertFalse(client.hexists(key, "non_existing_field").get());
+        assertFalse(client.hexists("non_existing_key", field2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hmgetall_multiple_existing_fields_existing_key_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertEquals(fieldValueMap, client.hgetall(key).get());
+        assertEquals(Map.of(), client.hgetall("non_existing_key").get());
     }
 
     @SneakyThrows

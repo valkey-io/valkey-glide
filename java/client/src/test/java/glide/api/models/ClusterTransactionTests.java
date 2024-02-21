@@ -7,7 +7,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -104,6 +107,16 @@ public class ClusterTransactionTests {
 
         transaction.hdel("key", new String[] {"field"});
         results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hmget("key", new String[] {"field"});
+        results.add(Pair.of(HashMGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hexists("key", "field");
+        results.add(
+                Pair.of(HashExists, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hgetall("key");
+        results.add(Pair.of(HashGetAll, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));

@@ -7,7 +7,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -342,6 +345,58 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
 
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     */
+    public T hmget(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return Command Response - <code>True</code> The hash contains <code>field</code>. If the hash
+     *     does not contain <code>field</code>, or if <code>key</code> does not exist, it returns
+     *     <code>False</code>.
+     */
+    public T hexists(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A map of fields and their values stored in the hash.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is raised.<br>
+     */
+    public T hgetall(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
         return getThis();
     }
 

@@ -45,4 +45,40 @@ public interface HashCommands {
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     */
+    CompletableFuture<String[]> hmget(String key, String[] fields);
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return <code>True</code> the hash contains <code>field</code>. If the hash does not contain
+     *     <code>field</code>, or if <code>key</code> does not exist, it returns <code>False</code>.
+     */
+    CompletableFuture<Boolean> hexists(String key, String field);
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return A map of fields and their values stored in the hash.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is raised.<br>
+     */
+    CompletableFuture<Map<String, String>> hgetall(String key);
 }
