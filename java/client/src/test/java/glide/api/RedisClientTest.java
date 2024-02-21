@@ -733,8 +733,8 @@ public class RedisClientTest {
         Long index = 55L;
         when(testResponse.get()).thenReturn(OK);
         when(commandManager.<String>submitNewCommand(
-            eq(Select), eq(new String[] {Long.toString(index)}), any()))
-            .thenReturn(testResponse);
+                        eq(Select), eq(new String[] {Long.toString(index)}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.select(index);
