@@ -4,6 +4,8 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -41,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
+import glide.api.commands.ConnectionManagementBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.ListBaseCommands;
@@ -75,10 +78,12 @@ import response.ResponseOuterClass.Response;
 public abstract class BaseClient
         implements AutoCloseable,
                 GenericBaseCommands,
+                ConnectionManagementBaseCommands,
                 StringCommands,
                 HashCommands,
                 ListBaseCommands,
                 SetCommands {
+
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -214,7 +219,7 @@ public abstract class BaseClient
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type could be even map too
+     * @param <V> Value type, could be even map too
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
@@ -497,5 +502,15 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    public CompletableFuture<Long> clientId() {
+        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientGetName() {
+        return commandManager.submitNewCommand(
+                ClientGetName, new String[0], this::handleStringOrNullResponse);
     }
 }
