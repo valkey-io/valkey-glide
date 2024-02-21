@@ -15,6 +15,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -94,8 +95,16 @@ public class TransactionTests {
         Transaction transaction = (Transaction) transactionTest(new Transaction());
         Object[] expectedResult = transactionTestResult();
 
+        String key = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+
+        transaction.select(1);
+        transaction.set(key, value);
+        transaction.get(key);
         transaction.select(0);
-        expectedResult = ArrayUtils.add(expectedResult, OK);
+        transaction.get(key);
+
+        expectedResult = ArrayUtils.addAll(expectedResult, OK, OK, value, OK, null);
 
         Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
         assertArrayEquals(expectedResult, result);

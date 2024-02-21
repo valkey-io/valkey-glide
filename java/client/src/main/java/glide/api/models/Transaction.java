@@ -36,12 +36,12 @@ public class Transaction extends BaseTransaction<Transaction> {
      *
      * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
      * @param index The index of the database to select.
-     * @returns Command Response - A simple <code>OK</code> response.
+     * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
         RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
 
         protobufTransaction.addCommands(buildCommand(Select, commandArgs));
-        return getThis();
+        return this;
     }
 }
