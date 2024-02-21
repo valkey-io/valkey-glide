@@ -646,6 +646,11 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.mset(keyValueMap);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
