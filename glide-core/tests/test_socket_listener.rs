@@ -25,7 +25,7 @@ mod socket_listener {
     use glide_core::response::{response, ConstantResponse, Response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
-    use redis::{Cmd, ConnectionAddr, Value};
+    use redis::{Cmd, ConnectionAddr, FromRedisValue, Value};
     use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
     use std::mem::size_of;
@@ -617,6 +617,75 @@ mod socket_listener {
         for i in 0..3 {
             assert_eq!(values.get(i).unwrap().1, Value::BulkString(b"foo".to_vec()));
         }
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_socket_pass_manual_route_by_address() {
+        // We send a request to a random node, get that node's hostname & port, and then
+        // route the same request to the hostname & port, and verify that we've received the same value.
+        let mut test_basics = setup_cluster_test_basics(false, true);
+
+        const CALLBACK_INDEX: u32 = 100;
+        let approx_message_length = 4 + APPROX_RESP_HEADER_LEN;
+        let mut buffer = Vec::with_capacity(approx_message_length);
+        let mut request = get_command_request(
+            CALLBACK_INDEX,
+            vec!["CLUSTER".to_string(), "NODES".to_string()],
+            RequestType::CustomCommand.into(),
+            false,
+        );
+        let mut routes = redis_request::Routes::default();
+        routes.set_simple_routes(redis_request::SimpleRoutes::Random);
+        request.route = Some(routes).into();
+        write_message(&mut buffer, request.clone());
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let (message_length, header_bytes) = parse_header(&buffer);
+        let response = decode_response(&buffer, header_bytes, message_length as usize);
+
+        assert_eq!(response.callback_idx, CALLBACK_INDEX);
+        let Some(response::Value::RespPointer(pointer)) = response.value else {
+            panic!("Unexpected response {:?}", response.value);
+        };
+        let pointer = pointer as *mut Value;
+        let received_value = unsafe { Box::from_raw(pointer) };
+        let first_value = String::from_redis_value(&received_value).unwrap();
+        let (host, port) = first_value
+            .split('\n')
+            .find(|line| line.contains("myself"))
+            .and_then(|line| line.split_once(' '))
+            .and_then(|(_, second)| second.split_once('@'))
+            .and_then(|(first, _)| first.split_once(':'))
+            .and_then(|(host, port)| port.parse::<i32>().map(|port| (host, port)).ok())
+            .unwrap();
+
+        buffer.clear();
+        let mut routes = redis_request::Routes::default();
+        let by_address_route = glide_core::redis_request::ByAddressRoute {
+            host: host.into(),
+            port,
+            ..Default::default()
+        };
+        routes.set_by_address_route(by_address_route);
+        request.route = Some(routes).into();
+        write_message(&mut buffer, request);
+        test_basics.socket.write_all(&buffer).unwrap();
+
+        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
+        let (message_length, header_bytes) = parse_header(&buffer);
+        let response = decode_response(&buffer, header_bytes, message_length as usize);
+
+        assert_eq!(response.callback_idx, CALLBACK_INDEX);
+        let Some(response::Value::RespPointer(pointer)) = response.value else {
+            panic!("Unexpected response {:?}", response.value);
+        };
+        let pointer = pointer as *mut Value;
+        let received_value = unsafe { Box::from_raw(pointer) };
+        let second_value = String::from_redis_value(&received_value).unwrap();
+
+        assert_eq!(first_value, second_value);
     }
 
     #[rstest]
