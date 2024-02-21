@@ -755,7 +755,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Read the configuration parameters of a running Redis server.
+     * Reads the configuration parameters of a running Redis server.
      *
      * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
@@ -763,7 +763,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command response - A <code>map</code> of values corresponding to the configuration
      *     parameters.
      */
-    public T configGet(String[] parameters) {
+    public T configGet(@NonNull String[] parameters) {
         ArgsArray commandArgs = buildArgs(parameters);
 
         protobufTransaction.addCommands(buildCommand(ConfigGet, commandArgs));
@@ -771,7 +771,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Set configuration parameters to the specified values.
+     * Sets configuration parameters to the specified values.
      *
      * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
@@ -779,7 +779,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command response - <code>OK</code> if all configurations have been successfully set.
      *     Otherwise, raises an error.
      */
-    public T configSet(Map<String, String> parameters) {
+    public T configSet(@NonNull Map<String, String> parameters) {
         ArgsArray commandArgs = buildArgs(convertMapToArgArray(parameters));
 
         protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
