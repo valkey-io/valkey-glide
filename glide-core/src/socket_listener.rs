@@ -488,6 +488,18 @@ fn get_route(
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),
         ))),
+        Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
+            Ok(port) => Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::ByAddress {
+                    host: by_address_route.host.to_string(),
+                    port,
+                },
+            ))),
+            Err(err) => {
+                log_warn("get route", format!("Failed to parse port: {err:?}"));
+                Ok(None)
+            }
+        },
     }
 }
 

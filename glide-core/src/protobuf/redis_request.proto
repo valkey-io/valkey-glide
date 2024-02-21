@@ -22,11 +22,17 @@ message SlotKeyRoute {
     string slot_key = 2;
 }
 
+message ByAddressRoute {
+    string host = 1;
+    int32 port = 2;
+}
+
 message Routes {
     oneof value {
         SimpleRoutes simple_routes = 1;
         SlotKeyRoute slot_key_route = 2;
         SlotIdRoute slot_id_route = 3;
+        ByAddressRoute by_address_route = 4;
     }
 }
 
