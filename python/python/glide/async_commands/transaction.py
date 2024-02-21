@@ -1066,6 +1066,29 @@ class BaseTransaction:
             RequestType.Zcount, [key, min_score.value, max_score.value]
         )
 
+    def zpopmax(
+        self: TTransaction, key: str, count: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Removes and returns the members with the highest scores from the sorted set stored at `key`.
+        If `count` is provided, up to `count` members with the highest scores are removed and returned.
+        Otherwise, only one member with the highest score is removed and returned.
+
+        See https://redis.io/commands/zpopmax for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
+            If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+
+        Commands response:
+            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+            If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
+        """
+        return self.append_command(
+            RequestType.ZPopMax, [key, str(count)] if count else [key]
+        )
+
     def zpopmin(
         self: TTransaction, key: str, count: Optional[int] = None
     ) -> TTransaction:

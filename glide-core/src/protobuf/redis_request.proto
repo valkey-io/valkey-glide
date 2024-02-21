@@ -109,6 +109,7 @@ enum RequestType {
     ZPopMin = 71;
     Strlen = 72;
     Lindex = 73;
+    ZPopMax = 74;
 }
 
 message Command {

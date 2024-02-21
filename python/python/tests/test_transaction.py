@@ -149,6 +149,8 @@ def transaction_test(
     args.append(2.0)
     transaction.zpopmin(key8)
     args.append({"two": 2.0})
+    transaction.zpopmax(key8)
+    args.append({"three": 3})
     return args
 
 
