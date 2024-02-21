@@ -94,7 +94,7 @@ public interface HashCommands {
      * @example
      *     <pre>
      * Map fieldValueMap = client.hgetall("my_hash").get()
-     * assert fieldValueMap == Map.of(field1", "value1", "field2", "value2")
+     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"))
      * </pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
