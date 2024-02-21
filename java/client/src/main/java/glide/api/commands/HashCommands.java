@@ -59,9 +59,9 @@ public interface HashCommands {
      *     of null values.<br>
      * @example
      *     <pre>
-     *          String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
-     *          assert values == new String[] {"value1", "value2"}
-     *     </pre>
+     * String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
+     * assert values == new String[] {"value1", "value2"}
+     * </pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
 }
