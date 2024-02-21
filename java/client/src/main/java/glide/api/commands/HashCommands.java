@@ -76,9 +76,9 @@ public interface HashCommands {
      * @example
      *     <pre>
      * Bool exists = client.hexists("my_hash", "field1").get()
-     * assert exists == true
+     * assert exists
      * Bool exists = client.hexists("my_hash", "non_existent_field").get()
-     * assert exists == false
+     * assert !exists
      * </pre>
      */
     CompletableFuture<Boolean> hexists(String key, String field);
