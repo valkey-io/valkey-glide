@@ -98,4 +98,35 @@ public interface HashCommands {
      * </pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
+
+    /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment.
+     */
+    CompletableFuture<Long> hincrBy(String key, String field, long amount);
+
+    /**
+     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment its value.
+     * @param amount The amount to increment.
+     * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment.
+     */
+    CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
 }

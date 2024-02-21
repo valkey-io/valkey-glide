@@ -13,6 +13,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -414,6 +416,47 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment its value.
+     * @param amount The amount to increment.
+     * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment.
+     */
+    public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment its value.
+     * @param amount The amount to increment.
+     * @returns Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment.
+     */
+    public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
         return getThis();
     }
 
