@@ -13,7 +13,7 @@
 * Python, Node: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944), [#981](https://github.com/aws/glide-for-redis/pull/981))
 * Node: Added ZCOUNT command ([#909](https://github.com/aws/glide-for-redis/pull/909))
 * Python: Added ECHO command ([#953](https://github.com/aws/glide-for-redis/pull/953))
-* Python: Added ZPOPMIN command ([#975](https://github.com/aws/glide-for-redis/pull/975))
+* Python, Node: Added ZPOPMIN command ([#975](https://github.com/aws/glide-for-redis/pull/975), [#1008](https://github.com/aws/glide-for-redis/pull/1008))
 * Node: Added STRLEN command ([#993](https://github.com/aws/glide-for-redis/pull/993))
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 

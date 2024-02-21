@@ -143,6 +143,8 @@ export function transactionTest(
     args.push(3.0);
     baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
     args.push(1);
+    baseTransaction.zpopmin(key8)
+    args.push({"member2": 3.0})
     return args;
 }
 

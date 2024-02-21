@@ -847,3 +847,11 @@ export function createLindex(
 ): redis_request.Command {
     return createCommand(RequestType.Lindex, [key, index.toString()]);
 }
+
+/**
+ * @internal
+ */
+export function createZpopmin(key: string, count?: number): redis_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.ZPopMin, args);
+}
