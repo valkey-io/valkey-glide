@@ -6,7 +6,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Server Management Commands interface.
+ * Server Management Commands interface for standalone client.
  *
  * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
  */

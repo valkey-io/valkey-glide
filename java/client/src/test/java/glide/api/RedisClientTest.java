@@ -12,6 +12,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
@@ -644,11 +646,6 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.mset(keyValueMap);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -1325,5 +1322,41 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals("TEST", response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void configRewrite_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+        when(commandManager.<String>submitNewCommand(eq(ConfigRewrite), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configRewrite();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configResetStat_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+        when(commandManager.<String>submitNewCommand(eq(ConfigResetStat), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configResetStat();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

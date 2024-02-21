@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
@@ -180,5 +182,27 @@ public class RedisClusterClient extends BaseClient
                         route.isSingleNodeRoute()
                                 ? ClusterValue.of(handleStringOrNullResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite() {
+        return super.configRewrite();
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat() {
+        return super.configResetStat();
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], route, this::handleStringResponse);
     }
 }
