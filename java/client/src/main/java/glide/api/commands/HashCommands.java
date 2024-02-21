@@ -64,4 +64,15 @@ public interface HashCommands {
      * </pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return <code>True</code> if the hash contains the specified field. If the hash does not
+     *     contain the field, or if the key does not exist, it returns <code>False</code>.
+     */
+    CompletableFuture<Boolean> hexists(String key, String field);
 }
