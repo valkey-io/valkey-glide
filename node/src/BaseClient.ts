@@ -28,6 +28,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHLen,
     createHMGet,
     createHSet,
     createIncr,
@@ -616,6 +617,16 @@ export class BaseClient {
         amount: number
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
+    }
+
+    /** Returns the number of fields contained in the hash stored at `key`.
+     * See https://redis.io/commands/hlen/ for more details.
+     * 
+     * @param key - The key of the hash.
+     * @returns The number of fields in the hash, or 0 when the key does not exist.
+     */
+    public hlen(key: string): Promise<number> {
+        return this.createWritePromise(createHLen(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
