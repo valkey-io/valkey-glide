@@ -19,6 +19,14 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.5'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
+
+    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.100.Final'
+    // https://github.com/netty/netty/wiki/Native-transports
+    // At the moment, Windows is not supported
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
+
 }
 
 run.dependsOn ':client:buildRustRelease'
