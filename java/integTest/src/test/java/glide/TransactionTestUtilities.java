@@ -32,6 +32,9 @@ public class TransactionTestUtilities {
         baseTransaction.del(new String[] {key1});
         baseTransaction.get(key1);
 
+        baseTransaction.unlink(new String[] {key2});
+        baseTransaction.get(key2);
+
         baseTransaction.mset(Map.of(key1, value2, key2, value1));
         baseTransaction.mget(new String[] {key1, key2});
 
@@ -68,6 +71,8 @@ public class TransactionTestUtilities {
             null,
             new String[] {value1, value2},
             1L,
+            1L,
+            null,
             1L,
             null,
             "OK",

@@ -46,10 +46,11 @@ public interface GenericBaseCommands {
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.
      * @example
-     *     <p><code>
+     *     <p>
+     *     <pre>
      * long result = client.unlink("my_key").get();
      * assert result == 1L;
-     * </code>
+     * </pre>
      */
     CompletableFuture<Long> unlink(String[] keys);
 }
