@@ -73,6 +73,13 @@ public interface HashCommands {
      * @param field The field to check in the hash stored at <code>key</code>.
      * @return <code>True</code> if the hash contains the specified field. If the hash does not
      *     contain the field, or if the key does not exist, it returns <code>False</code>.
+     * @example
+     *     <pre>
+     * Bool exists = client.hexists("my_hash", "field1").get()
+     * assert exists == true
+     * Bool exists = client.hexists("my_hash", "non_existent_field").get()
+     * assert exists == false
+     * </pre>
      */
     CompletableFuture<Boolean> hexists(String key, String field);
 }
