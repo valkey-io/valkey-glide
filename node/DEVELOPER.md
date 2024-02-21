@@ -13,6 +13,7 @@ The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings 
 Software Dependencies
 
 > Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
+> If your NodeJS version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
 -   npm v8
 -   git
