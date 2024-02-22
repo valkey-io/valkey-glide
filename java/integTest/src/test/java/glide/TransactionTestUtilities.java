@@ -46,6 +46,8 @@ public class TransactionTestUtilities {
 
         baseTransaction.incrByFloat(key3, 0.5);
 
+        baseTransaction.unlink(new String[] {key3});
+
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
         baseTransaction.hexists(key4, field2);
@@ -82,6 +84,7 @@ public class TransactionTestUtilities {
             2L,
             0L,
             0.5,
+            1L,
             2L,
             value1,
             true,
