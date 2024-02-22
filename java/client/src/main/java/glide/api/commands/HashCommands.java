@@ -107,8 +107,10 @@ public interface HashCommands {
      *
      * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
      * @param key The key of the hash.
-     * @param field The field in the hash stored at <code>key</code> to increment its value.
-     * @param amount The amount to increment.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
      * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment or decrement.
      * @example
@@ -128,8 +130,10 @@ public interface HashCommands {
      *
      * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
      * @param key The key of the hash.
-     * @param field The field in the hash stored at <code>key</code> to increment its value.
-     * @param amount The amount to increment.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
      * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment or decrement.
      * @example
