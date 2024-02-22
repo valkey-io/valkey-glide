@@ -9,6 +9,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
@@ -379,6 +380,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
 
         protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return Command Response - <code>True</code> if the hash contains the specified field. If the
+     *     hash does not contain the field, or if the key does not exist, it returns <code>False
+     *     </code>.
+     */
+    public T hexists(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
         return getThis();
     }
 
