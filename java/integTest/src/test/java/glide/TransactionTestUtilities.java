@@ -44,6 +44,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
+        baseTransaction.hexists(key4, field2);
         baseTransaction.hmget(key4, new String[] {field1, "non_existing_field", field2});
         baseTransaction.hdel(key4, new String[] {field1});
 
@@ -73,6 +74,7 @@ public class TransactionTestUtilities {
             0.5,
             2L,
             value1,
+            true,
             new String[] {value1, null, value2},
             1L,
             2L,
