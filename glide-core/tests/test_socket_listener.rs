@@ -44,6 +44,28 @@ mod socket_listener {
         ClosingError = 3,
     }
 
+    enum RedisType {
+        Cluster,
+        Standalone,
+    }
+
+    #[derive(Copy, Clone)]
+    enum Tls {
+        NoTls,
+        UseTls,
+    }
+
+    impl Tls {
+        fn to_bool(self) -> bool {
+            matches!(self, Tls::UseTls)
+        }
+    }
+
+    enum Sharing {
+        Shared,
+        Unique,
+    }
+
     struct ServerTestBasics {
         server: Option<RedisServer>,
         socket: UnixStream,
@@ -309,7 +331,7 @@ mod socket_listener {
     fn connect_to_redis(
         addresses: &[ConnectionAddr],
         socket: &UnixStream,
-        use_tls: bool,
+        use_tls: Tls,
         cluster_mode: ClusterMode,
     ) {
         // Send the server address
@@ -317,7 +339,7 @@ mod socket_listener {
         let connection_request = create_connection_request(
             addresses,
             &TestConfiguration {
-                use_tls,
+                use_tls: use_tls.to_bool(),
                 cluster_mode,
                 request_timeout: Some(10000),
                 ..Default::default()
@@ -333,7 +355,7 @@ mod socket_listener {
     }
 
     fn setup_socket(
-        use_tls: bool,
+        use_tls: Tls,
         socket_path: Option<String>,
         addresses: &[ConnectionAddr],
         cluster_mode: ClusterMode,
@@ -369,7 +391,7 @@ mod socket_listener {
         let server_mock = ServerMock::new(responses);
         let addresses = server_mock.get_addresses();
         let socket = setup_socket(
-            false,
+            Tls::NoTls,
             socket_path,
             addresses.as_slice(),
             ClusterMode::Disabled,
@@ -381,56 +403,63 @@ mod socket_listener {
     }
 
     fn setup_server_test_basics_with_server_and_socket_path(
-        use_tls: bool,
+        use_tls: Tls,
         socket_path: Option<String>,
         server: Option<RedisServer>,
     ) -> ServerTestBasics {
         let address = server
             .as_ref()
             .map(|server| server.get_client_addr())
-            .unwrap_or(get_shared_server_address(use_tls));
+            .unwrap_or(get_shared_server_address(use_tls.to_bool()));
         let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
         ServerTestBasics { server, socket }
     }
 
     fn setup_test_basics_with_socket_path(
-        use_tls: bool,
+        use_tls: Tls,
         socket_path: Option<String>,
-        shared_server: bool,
+        shared_server: Sharing,
     ) -> ServerTestBasics {
-        let server = if !shared_server {
-            Some(RedisServer::new(ServerType::Tcp { tls: use_tls }))
-        } else {
-            None
+        let server = match shared_server {
+            Sharing::Shared => None,
+            Sharing::Unique => Some(RedisServer::new(ServerType::Tcp {
+                tls: use_tls.to_bool(),
+            })),
         };
         setup_server_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
 
-    fn setup_server_test_basics(use_tls: bool, shared_server: bool) -> ServerTestBasics {
+    fn setup_server_test_basics(use_tls: Tls, shared_server: Sharing) -> ServerTestBasics {
         setup_test_basics_with_socket_path(use_tls, None, shared_server)
     }
 
-    fn setup_test_basics(use_tls: bool, shared_server: bool, use_cluster: bool) -> TestBasics {
-        if use_cluster {
-            let cluster = setup_cluster_test_basics(use_tls, shared_server);
-            TestBasics {
-                server: BackingServer::Cluster(cluster._cluster),
-                socket: cluster.socket,
+    fn setup_test_basics(
+        use_tls: Tls,
+        shared_server: Sharing,
+        redis_type: RedisType,
+    ) -> TestBasics {
+        match redis_type {
+            RedisType::Cluster => {
+                let cluster = setup_cluster_test_basics(use_tls, shared_server);
+                TestBasics {
+                    server: BackingServer::Cluster(cluster._cluster),
+                    socket: cluster.socket,
+                }
             }
-        } else {
-            let server = setup_server_test_basics(use_tls, shared_server);
-            TestBasics {
-                server: BackingServer::Standalone(server.server),
-                socket: server.socket,
+            RedisType::Standalone => {
+                let server = setup_server_test_basics(use_tls, shared_server);
+                TestBasics {
+                    server: BackingServer::Standalone(server.server),
+                    socket: server.socket,
+                }
             }
         }
     }
 
-    fn setup_cluster_test_basics(use_tls: bool, shared_cluster: bool) -> ClusterTestBasics {
-        let cluster = if !shared_cluster {
-            Some(RedisCluster::new(use_tls, &None, None, None))
-        } else {
-            None
+    fn setup_cluster_test_basics(use_tls: Tls, shared_cluster: Sharing) -> ClusterTestBasics {
+        let cluster = match shared_cluster {
+            Sharing::Shared => None,
+            Sharing::Unique => Some(RedisCluster::new(use_tls.to_bool(), &None, None, None)),
         };
         let socket = setup_socket(
             use_tls,
@@ -438,7 +467,7 @@ mod socket_listener {
             &cluster
                 .as_ref()
                 .map(|cluster| cluster.get_server_addresses())
-                .unwrap_or(get_shared_cluster_addresses(use_tls)),
+                .unwrap_or(get_shared_cluster_addresses(use_tls.to_bool())),
             ClusterMode::Enabled,
         );
         ClusterTestBasics {
@@ -463,8 +492,11 @@ mod socket_listener {
             });
 
         const CALLBACK_INDEX: u32 = 99;
-        let mut test_basics =
-            setup_test_basics_with_socket_path(false, Some(socket_path.clone()), true);
+        let mut test_basics = setup_test_basics_with_socket_path(
+            Tls::NoTls,
+            Some(socket_path.clone()),
+            Sharing::Shared,
+        );
         let key = generate_random_string(KEY_LENGTH);
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -492,7 +524,7 @@ mod socket_listener {
                         const CALLBACK_INDEX: u32 = 99;
                         let address = server.get_client_addr();
                         let mut socket = setup_socket(
-                            false,
+                            Tls::NoTls,
                             Some(socket_path.clone()),
                             &[address],
                             ClusterMode::Disabled,
@@ -514,15 +546,13 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_set_and_get(
-        #[values((false, false), (true, false), (false,true,))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-        #[values(true, false)] use_cluster: bool,
+        #[values((false, Tls::NoTls), (true, Tls::NoTls), (false,Tls::UseTls))]
+        use_arg_pointer_and_tls: (bool, Tls),
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls, true, use_cluster);
+        let mut test_basics = setup_test_basics(use_tls, Sharing::Shared, use_cluster);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -558,9 +588,9 @@ mod socket_listener {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_custom_command(
         #[values(false, true)] args_pointer: bool,
-        #[values(true, false)] use_cluster: bool,
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
     ) {
-        let mut test_basics = setup_test_basics(false, true, use_cluster);
+        let mut test_basics = setup_test_basics(Tls::NoTls, Sharing::Shared, use_cluster);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -602,7 +632,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_manual_route_to_all_primaries() {
-        let mut test_basics = setup_cluster_test_basics(false, true);
+        let mut test_basics = setup_cluster_test_basics(Tls::NoTls, Sharing::Shared);
 
         const CALLBACK1_INDEX: u32 = 100;
         let approx_message_length = 4 + APPROX_RESP_HEADER_LEN;
@@ -641,7 +671,7 @@ mod socket_listener {
     fn test_socket_pass_manual_route_by_address() {
         // We send a request to a random node, get that node's hostname & port, and then
         // route the same request to the hostname & port, and verify that we've received the same value.
-        let mut test_basics = setup_cluster_test_basics(false, true);
+        let mut test_basics = setup_cluster_test_basics(Tls::NoTls, Sharing::Shared);
 
         const CALLBACK_INDEX: u32 = 100;
         let approx_message_length = 4 + APPROX_RESP_HEADER_LEN;
@@ -755,15 +785,13 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_long_values(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-        #[values(true, false)] use_cluster: bool,
+        #[values((false, Tls::NoTls), (true, Tls::NoTls), (false,Tls::UseTls))]
+        use_arg_pointer_and_tls: (bool, Tls),
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
     ) {
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let mut test_basics = setup_test_basics(use_tls, true, use_cluster);
+        let mut test_basics = setup_test_basics(use_tls, Sharing::Shared, use_cluster);
 
         const CALLBACK1_INDEX: u32 = 100;
         const CALLBACK2_INDEX: u32 = 101;
@@ -815,11 +843,9 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_multiple_long_inputs(
-        #[values((false, false), (true, false), (false,true))] use_arg_pointer_and_tls: (
-            bool,
-            bool,
-        ),
-        #[values(true, false)] use_cluster: bool,
+        #[values((false, Tls::NoTls), (true, Tls::NoTls), (false,Tls::UseTls))]
+        use_arg_pointer_and_tls: (bool, Tls),
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
     ) {
         #[derive(Clone, PartialEq, Eq, Debug)]
         enum State {
@@ -829,7 +855,7 @@ mod socket_listener {
         }
         let args_pointer = use_arg_pointer_and_tls.0;
         let use_tls = use_arg_pointer_and_tls.1;
-        let test_basics = setup_test_basics(use_tls, true, use_cluster);
+        let test_basics = setup_test_basics(use_tls, Sharing::Shared, use_cluster);
         const VALUE_LENGTH: usize = 1000000;
         const NUMBER_OF_THREADS: usize = 10;
         let values = Arc::new(Mutex::new(vec![Vec::<u8>::new(); NUMBER_OF_THREADS]));
@@ -941,7 +967,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
-        let mut test_basics = setup_test_basics(false, false, false);
+        let mut test_basics = setup_test_basics(Tls::NoTls, Sharing::Unique, RedisType::Standalone);
         let server = test_basics.server;
 
         drop(server);
@@ -963,7 +989,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
-        let test_basics = setup_server_test_basics(false, false);
+        let test_basics = setup_server_test_basics(Tls::NoTls, Sharing::Unique);
         let mut socket = test_basics.socket.try_clone().unwrap();
         let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
@@ -997,7 +1023,7 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
-        let test_basics = setup_server_test_basics(false, false);
+        let test_basics = setup_server_test_basics(Tls::NoTls, Sharing::Unique);
         let mut socket = test_basics.socket.try_clone().unwrap();
         let address = test_basics.server.as_ref().unwrap().get_client_addr();
         drop(test_basics);
@@ -1029,8 +1055,10 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_send_transaction_and_get_array_of_results(#[values(true, false)] use_cluster: bool) {
-        let test_basics = setup_test_basics(false, true, use_cluster);
+    fn test_send_transaction_and_get_array_of_results(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let test_basics = setup_test_basics(Tls::NoTls, Sharing::Shared, use_cluster);
         let mut socket = test_basics.socket;
 
         const CALLBACK_INDEX: u32 = 0;
@@ -1076,8 +1104,10 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_send_script(#[values(true, false)] use_cluster: bool) {
-        let mut test_basics = setup_test_basics(false, true, use_cluster);
+    fn test_send_script(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let mut test_basics = setup_test_basics(Tls::NoTls, Sharing::Shared, use_cluster);
         let socket = &mut test_basics.socket;
         const CALLBACK_INDEX: u32 = 100;
         const VALUE_LENGTH: usize = 10;
@@ -1115,8 +1145,10 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_send_empty_custom_command_is_an_error(#[values(true, false)] use_cluster: bool) {
-        let mut test_basics = setup_test_basics(false, true, use_cluster);
+    fn test_send_empty_custom_command_is_an_error(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let mut test_basics = setup_test_basics(Tls::NoTls, Sharing::Shared, use_cluster);
         const CALLBACK_INDEX: u32 = 42;
 
         let mut buffer = Vec::with_capacity(APPROX_RESP_HEADER_LEN);
