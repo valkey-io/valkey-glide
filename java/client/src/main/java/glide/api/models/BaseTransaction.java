@@ -11,6 +11,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -397,6 +398,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, field);
 
         protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A <code>Map</code> of fields and their values stored in the hash.
+     *     Every field name in the map is associated with its corresponding value.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.
+     */
+    public T hgetall(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
         return getThis();
     }
 

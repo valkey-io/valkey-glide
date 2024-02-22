@@ -21,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -614,6 +615,32 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Boolean> response = service.hexists(key, field);
         Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hgetall_success() {
+        // setup
+        String key = "testKey";
+        String[] args = new String[] {key};
+        Map<String, String> value = new LinkedHashMap<>();
+        value.put("key1", "field1");
+        value.put("key2", "field2");
+
+        CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String>>submitNewCommand(eq(HashGetAll), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String>> response = service.hgetall(key);
+        Map<String, String> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
