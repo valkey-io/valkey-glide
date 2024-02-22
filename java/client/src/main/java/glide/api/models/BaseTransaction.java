@@ -28,6 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
@@ -544,6 +545,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while <a
+     * href="https://redis.io/commands/del/">DEL</a> does.
+     *
+     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @param keys The list of keys to unlink.
+     * @return Command Response - The number of <code>keys</code> that were unlinked.
+     */
+    public T unlink(String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
         return getThis();
     }
 

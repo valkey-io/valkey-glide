@@ -28,6 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericBaseCommands;
@@ -364,5 +365,10 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> exists(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> unlink(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
     }
 }
