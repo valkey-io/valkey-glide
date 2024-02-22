@@ -3,8 +3,11 @@ package glide.cluster;
 
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
+import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.TestConfiguration;
@@ -48,6 +51,17 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
         Object[] result = clusterClient.exec(transaction).get(10, TimeUnit.SECONDS);
         assertTrue(((String) result[0]).contains("# Stats"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void WATCH_transaction_failure_returns_null() {
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.get("key");
+        assertEquals(
+                OK, clusterClient.customCommand(new String[] {"WATCH", "key"}).get().getSingleValue());
+        assertEquals(OK, clusterClient.set("key", "foo").get());
+        assertNull(clusterClient.exec(transaction).get());
     }
 
     @Test
