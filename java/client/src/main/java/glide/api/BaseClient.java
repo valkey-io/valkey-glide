@@ -10,6 +10,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
@@ -174,6 +175,10 @@ public abstract class BaseClient
         return handleRedisResponse(String.class, true, response);
     }
 
+    protected Boolean handleBooleanResponse(Response response) throws RedisException {
+        return handleRedisResponse(Boolean.class, false, response);
+    }
+
     protected Long handleLongResponse(Response response) throws RedisException {
         return handleRedisResponse(Long.class, false, response);
     }
@@ -303,6 +308,12 @@ public abstract class BaseClient
         String[] arguments = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(
                 HashMGet, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean> hexists(@NonNull String key, @NonNull String field) {
+        return commandManager.submitNewCommand(
+                HashExists, new String[] {key, field}, this::handleBooleanResponse);
     }
 
     @Override
