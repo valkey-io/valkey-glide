@@ -90,6 +90,14 @@ mod socket_listener {
         }
     }
 
+    fn get_response(buffer: &mut Vec<u8>, socket: Option<&mut UnixStream>) -> Response {
+        if let Some(socket) = socket {
+            let _size = read_from_socket(buffer, socket);
+        }
+        let (message_length, header_bytes) = parse_header(buffer);
+        decode_response(buffer, header_bytes, message_length as usize)
+    }
+
     fn assert_null_response(buffer: &mut Vec<u8>, socket: &mut UnixStream, expected_callback: u32) {
         assert_response(
             buffer,
@@ -146,11 +154,7 @@ mod socket_listener {
         expected_value: Option<Value>,
         expected_response_type: ResponseType,
     ) -> Response {
-        if let Some(socket) = socket {
-            let _size = read_from_socket(buffer, socket);
-        }
-        let (message_length, header_bytes) = parse_header(buffer);
-        let response = decode_response(buffer, header_bytes, message_length as usize);
+        let response = get_response(buffer, socket);
         assert_eq!(response.callback_idx, expected_callback);
         match response.value {
             Some(response::Value::RespPointer(pointer)) => {
@@ -615,9 +619,7 @@ mod socket_listener {
         write_message(&mut buffer, request);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        let (message_length, header_bytes) = parse_header(&buffer);
-        let response = decode_response(&buffer, header_bytes, message_length as usize);
+        let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
         assert_eq!(response.callback_idx, CALLBACK1_INDEX);
         let Some(response::Value::RespPointer(pointer)) = response.value else {
@@ -656,9 +658,7 @@ mod socket_listener {
         write_message(&mut buffer, request.clone());
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        let (message_length, header_bytes) = parse_header(&buffer);
-        let response = decode_response(&buffer, header_bytes, message_length as usize);
+        let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
         assert_eq!(response.callback_idx, CALLBACK_INDEX);
         let Some(response::Value::RespPointer(pointer)) = response.value else {
@@ -688,9 +688,7 @@ mod socket_listener {
         write_message(&mut buffer, request);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        let (message_length, header_bytes) = parse_header(&buffer);
-        let response = decode_response(&buffer, header_bytes, message_length as usize);
+        let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
         assert_eq!(response.callback_idx, CALLBACK_INDEX);
         let Some(response::Value::RespPointer(pointer)) = response.value else {
