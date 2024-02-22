@@ -27,31 +27,4 @@ public interface ConnectionManagementBaseCommands {
      *     str</code>.
      */
     CompletableFuture<String> ping(String str);
-
-    /**
-     * Gets the current connection id.
-     *
-     * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
-     * @return The id of the client.
-     * @example
-     *     <pre>
-     * long id = client.clientId().get();
-     * assert id > 0
-     * </pre>
-     */
-    CompletableFuture<Long> clientId();
-
-    /**
-     * Gets the name of the current connection.
-     *
-     * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
-     * @return The name of the client connection as a string if a name is set, or <code>null</code> if
-     *     no name is assigned.
-     * @example
-     *     <pre>
-     * String clientName = client.clientGetName().get();
-     * assert clientName != null
-     * </pre>
-     */
-    CompletableFuture<String> clientGetName();
 }

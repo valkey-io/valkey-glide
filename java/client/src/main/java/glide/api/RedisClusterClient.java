@@ -149,7 +149,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> clientId() {
-        return super.clientId();
+        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
     }
 
     @Override
@@ -166,7 +166,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clientGetName() {
-        return super.clientGetName();
+        return commandManager.submitNewCommand(
+                ClientGetName, new String[0], this::handleStringOrNullResponse);
     }
 
     @Override
