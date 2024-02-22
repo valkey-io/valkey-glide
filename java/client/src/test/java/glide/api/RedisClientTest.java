@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
@@ -151,6 +152,28 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(numberDeleted, result);
+    }
+
+    @SneakyThrows
+    @Test
+    public void unlink_returns_long_success() {
+        // setup
+        String[] keys = new String[] {"testKey1", "testKey2"};
+        Long numberUnlinked = 1L;
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(numberUnlinked);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Unlink), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.unlink(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberUnlinked, result);
     }
 
     @SneakyThrows

@@ -28,6 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
@@ -74,6 +75,9 @@ public class TransactionTests {
 
         transaction.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
+
+        transaction.unlink(new String[] {"key1", "key2"});
+        results.add(Pair.of(Unlink, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
 
         transaction.ping();
         results.add(Pair.of(Ping, ArgsArray.newBuilder().build()));
