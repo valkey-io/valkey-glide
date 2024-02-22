@@ -43,7 +43,7 @@ jobs:
                   redis-version: ${{ matrix.redis }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v2.1.0
+              uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
 
