@@ -10,6 +10,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -359,6 +360,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
 
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     */
+    public T hmget(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
         return getThis();
     }
 
