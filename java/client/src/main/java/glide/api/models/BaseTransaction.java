@@ -407,7 +407,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
      * @param key The key of the hash.
      * @return Command Response - A <code>Map</code> of fields and their values stored in the hash.
-     *     Every field name in the list is followed by its value. <br>
+     *     Every field name in the map is associated with its corresponding value.<br>
      *     If <code>key</code> does not exist, it returns an empty map.
      */
     public T hgetall(@NonNull String key) {

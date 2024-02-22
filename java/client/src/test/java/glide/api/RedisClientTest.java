@@ -628,11 +628,13 @@ public class RedisClientTest {
         String key = "testKey";
         String[] args = new String[] {key};
         Map<String, String> value = new LinkedHashMap<>();
-        value.put("key1", "value1");
-        value.put("key2", "value2");
+        value.put("key1", "field1");
+        value.put("key2", "field2");
 
         CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<Map<String, String>>submitNewCommand(eq(HashGetAll), eq(args), any()))
                 .thenReturn(testResponse);
 
