@@ -22,6 +22,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -641,6 +643,58 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, String>> response = service.hgetall(key);
         Map<String, String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hincrBy_returns_success() {
+        // setup
+        String key = "testKey";
+        String field = "field";
+        long amount = 1L;
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(HashIncrBy), eq(new String[] {key, field, Long.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hincrBy(key, field, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hincrByFloat_returns_success() {
+        // setup
+        String key = "testKey";
+        String field = "field";
+        double amount = 1.0;
+        Double value = 10.0;
+
+        CompletableFuture<Double> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(
+                        eq(HashIncrByFloat), eq(new String[] {key, field, Double.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.hincrByFloat(key, field, amount);
+        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

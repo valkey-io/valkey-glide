@@ -12,6 +12,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -130,6 +132,18 @@ public class TransactionTests {
 
         transaction.hgetall("key");
         results.add(Pair.of(HashGetAll, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.hincrBy("key", "field", 1);
+        results.add(
+                Pair.of(
+                        HashIncrBy,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1").build()));
+
+        transaction.hincrByFloat("key", "field", 1.5);
+        results.add(
+                Pair.of(
+                        HashIncrByFloat,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1.5").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));

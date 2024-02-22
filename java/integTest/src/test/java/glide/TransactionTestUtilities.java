@@ -17,6 +17,7 @@ public class TransactionTestUtilities {
     private static final String value2 = UUID.randomUUID().toString();
     private static final String field1 = UUID.randomUUID().toString();
     private static final String field2 = UUID.randomUUID().toString();
+    private static final String field3 = UUID.randomUUID().toString();
 
     public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
 
@@ -49,6 +50,9 @@ public class TransactionTestUtilities {
         baseTransaction.hgetall(key4);
         baseTransaction.hdel(key4, new String[] {field1});
 
+        baseTransaction.hincrBy(key4, field3, 5);
+        baseTransaction.hincrByFloat(key4, field3, 5.5);
+
         baseTransaction.sadd(key5, new String[] {"baz", "foo"});
         baseTransaction.srem(key5, new String[] {"foo"});
         baseTransaction.scard(key5);
@@ -79,6 +83,8 @@ public class TransactionTestUtilities {
             new String[] {value1, null, value2},
             Map.of(field1, value1, field2, value2),
             1L,
+            5L,
+            10.5,
             2L,
             1L,
             1L,
