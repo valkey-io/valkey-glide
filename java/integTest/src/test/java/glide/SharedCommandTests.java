@@ -478,6 +478,58 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_commands_existing_key_existing_field(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "10");
+
+        assertEquals(1, client.hset(key, fieldValueMap).get());
+
+        assertEquals(11, client.hincrBy(key, field, 1).get());
+        assertEquals(15, client.hincrBy(key, field, 4).get());
+        assertEquals(16.5, client.hincrByFloat(key, field, 1.5).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_commands_non_existing_key_non_existing_field(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "10");
+
+        assertEquals(1, client.hincrBy("non_existing_key_1", field, 1).get());
+        assertEquals(1, client.hset(key1, fieldValueMap).get());
+        assertEquals(2, client.hincrBy(key1, "non_existing_field_1", 2).get());
+
+        assertEquals(0.5, client.hincrByFloat("non_existing_key_2", field, 0.5).get());
+        assertEquals(1, client.hset(key2, fieldValueMap).get());
+        assertEquals(-0.5, client.hincrByFloat(key1, "non_existing_field_2", -0.5).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "foo");
+
+        assertEquals(1, client.hset(key, fieldValueMap).get());
+
+        Exception hincrByException =
+                assertThrows(ExecutionException.class, () -> client.hincrBy(key, field, 2).get());
+        assertTrue(hincrByException.getCause() instanceof RequestException);
+
+        Exception hincrByFloatException =
+                assertThrows(ExecutionException.class, () -> client.hincrByFloat(key, field, 2.5).get());
+        assertTrue(hincrByFloatException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(
