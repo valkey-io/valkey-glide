@@ -98,4 +98,49 @@ public interface HashCommands {
      * </pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
+
+    /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment or decrement.
+     * @example
+     *     <pre>
+     * Long num = client.hincrBy("my_hash", "field1", 5).get()
+     * assert num == 5L
+     * </pre>
+     */
+    CompletableFuture<Long> hincrBy(String key, String field, long amount);
+
+    /**
+     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment or decrement.
+     * @example
+     *     <pre>
+     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get()
+     * assert num == 2.5
+     * </pre>
+     */
+    CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
 }

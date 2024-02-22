@@ -13,6 +13,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -320,6 +322,21 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
         return commandManager.submitNewCommand(HashGetAll, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hincrBy(@NonNull String key, @NonNull String field, long amount) {
+        return commandManager.submitNewCommand(
+                HashIncrBy, new String[] {key, field, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> hincrByFloat(
+            @NonNull String key, @NonNull String field, double amount) {
+        return commandManager.submitNewCommand(
+                HashIncrByFloat,
+                new String[] {key, field, Double.toString(amount)},
+                this::handleDoubleResponse);
     }
 
     @Override
