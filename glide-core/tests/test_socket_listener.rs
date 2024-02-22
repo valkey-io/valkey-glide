@@ -90,13 +90,21 @@ mod socket_listener {
         }
     }
 
-    fn assert_null_response(buffer: &[u8], expected_callback: u32) {
-        assert_response(buffer, 0, expected_callback, None, ResponseType::Null);
-    }
-
-    fn assert_ok_response(buffer: &[u8], expected_callback: u32) {
+    fn assert_null_response(buffer: &mut Vec<u8>, socket: &mut UnixStream, expected_callback: u32) {
         assert_response(
             buffer,
+            Some(socket),
+            0,
+            expected_callback,
+            None,
+            ResponseType::Null,
+        );
+    }
+
+    fn assert_ok_response(buffer: &mut Vec<u8>, socket: &mut UnixStream, expected_callback: u32) {
+        assert_response(
+            buffer,
+            Some(socket),
             0,
             expected_callback,
             Some(Value::Okay),
@@ -105,11 +113,12 @@ mod socket_listener {
     }
 
     fn assert_error_response(
-        buffer: &[u8],
+        buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
         expected_callback: u32,
         error_type: ResponseType,
     ) -> Response {
-        assert_response(buffer, 0, expected_callback, None, error_type)
+        assert_response(buffer, Some(socket), 0, expected_callback, None, error_type)
     }
 
     fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
@@ -118,12 +127,16 @@ mod socket_listener {
     }
 
     fn assert_response(
-        buffer: &[u8],
+        buffer: &mut Vec<u8>,
+        socket: Option<&mut UnixStream>,
         cursor: usize,
         expected_callback: u32,
         expected_value: Option<Value>,
         expected_response_type: ResponseType,
     ) -> Response {
+        if let Some(socket) = socket {
+            let _size = read_from_socket(buffer, socket);
+        }
         let (message_length, header_bytes) = parse_header(buffer);
         let response = decode_response(buffer, cursor + header_bytes, message_length as usize);
         assert_eq!(response.callback_idx, expected_callback);
@@ -300,8 +313,7 @@ mod socket_listener {
         write_message(&mut buffer, connection_request);
         let mut socket = socket.try_clone().unwrap();
         socket.write_all(&buffer).unwrap();
-        let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_ok_response(&buffer, CALLBACK_INDEX);
+        assert_ok_response(&mut buffer, &mut socket, CALLBACK_INDEX);
     }
 
     fn setup_socket(
@@ -443,8 +455,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_null_response(&buffer, CALLBACK_INDEX);
+        assert_null_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
         close_socket(&socket_path);
     }
 
@@ -476,8 +487,7 @@ mod socket_listener {
                         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
                         socket.write_all(&buffer).unwrap();
 
-                        let _size = read_from_socket(&mut buffer, &mut socket);
-                        assert_null_response(&buffer, CALLBACK_INDEX);
+                        assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
                     })
                     .unwrap();
             }
@@ -515,16 +525,15 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_ok_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
-            &buffer,
+            &mut buffer,
+            Some(&mut test_basics.socket),
             0,
             CALLBACK2_INDEX,
             Some(Value::BulkString(value.into_bytes())),
@@ -557,8 +566,7 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_ok_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
         write_command_request(
@@ -570,9 +578,9 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_response(
-            &buffer,
+            &mut buffer,
+            Some(&mut test_basics.socket),
             0,
             CALLBACK2_INDEX,
             Some(Value::BulkString(value.into_bytes())),
@@ -703,8 +711,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), use_arg_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_null_response(&buffer, CALLBACK_INDEX);
+        assert_null_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
     }
 
     #[rstest]
@@ -727,8 +734,12 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        let response = assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::ClosingError);
+        let response = assert_error_response(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            ResponseType::ClosingError,
+        );
         assert_eq!(
             response.closing_error(),
             format!("Received invalid request type: {request_type}")
@@ -769,8 +780,7 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_ok_response(&buffer, CALLBACK1_INDEX);
+        assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
@@ -788,7 +798,8 @@ mod socket_listener {
             size += next_read;
         }
         assert_response(
-            &buffer,
+            &mut buffer,
+            None,
             0,
             CALLBACK2_INDEX,
             Some(Value::BulkString(value.into_bytes())),
@@ -938,8 +949,12 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
-        assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::RequestError);
+        assert_error_response(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            ResponseType::RequestError,
+        );
     }
 
     #[rstest]
@@ -962,15 +977,18 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::RequestError);
+        assert_error_response(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            ResponseType::RequestError,
+        );
 
         let mut buffer = Vec::with_capacity(100);
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_null_response(&buffer, CALLBACK_INDEX);
+        assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
     }
 
     #[rstest]
@@ -987,8 +1005,12 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_error_response(&buffer, CALLBACK_INDEX, ResponseType::RequestError);
+        assert_error_response(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            ResponseType::RequestError,
+        );
 
         let new_server = RedisServer::new_with_addr_and_modules(address, &[]);
         block_on_all(wait_for_server_to_become_ready(
@@ -999,8 +1021,7 @@ mod socket_listener {
         write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut socket);
-        assert_null_response(&buffer, CALLBACK_INDEX);
+        assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
     }
 
     #[rstest]
@@ -1037,9 +1058,9 @@ mod socket_listener {
         write_transaction_request(&mut buffer, CALLBACK_INDEX, commands);
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut socket);
         assert_response(
-            buffer.as_slice(),
+            &mut buffer,
+            Some(&mut socket),
             0,
             CALLBACK_INDEX,
             Some(Value::Array(vec![
@@ -1083,9 +1104,9 @@ mod socket_listener {
 
         socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, socket);
         assert_response(
-            &buffer,
+            &mut buffer,
+            Some(&mut test_basics.socket),
             0,
             CALLBACK_INDEX,
             Some(Value::BulkString(value.into_bytes())),
@@ -1109,9 +1130,9 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        let _size = read_from_socket(&mut buffer, &mut test_basics.socket);
         assert_error_response(
-            buffer.as_slice(),
+            &mut buffer,
+            &mut test_basics.socket,
             CALLBACK_INDEX,
             ResponseType::RequestError,
         );
