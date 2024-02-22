@@ -186,7 +186,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configRewrite() {
-        return super.configRewrite();
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], this::handleStringResponse);
     }
 
     @Override
@@ -197,7 +198,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configResetStat() {
-        return super.configResetStat();
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], this::handleStringResponse);
     }
 
     @Override
