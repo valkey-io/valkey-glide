@@ -267,21 +267,24 @@ mod socket_listener {
 
     fn write_command_request(
         buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
         callback_index: u32,
         args: Vec<String>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
-    ) -> u32 {
+    ) {
         let request = get_command_request(callback_index, args, request_type, args_pointer);
 
-        write_message(buffer, request)
+        write_message(buffer, request);
+        socket.write_all(buffer).unwrap();
     }
 
     fn write_transaction_request(
         buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
         callback_index: u32,
         commands_components: Vec<CommandComponents>,
-    ) -> u32 {
+    ) {
         let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
         let mut transaction = Transaction::new();
@@ -295,12 +298,20 @@ mod socket_listener {
             transaction,
         ));
 
-        write_message(buffer, request)
+        write_message(buffer, request);
+        socket.write_all(buffer).unwrap();
     }
 
-    fn write_get(buffer: &mut Vec<u8>, callback_index: u32, key: &str, args_pointer: bool) -> u32 {
+    fn write_get(
+        buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
+        callback_index: u32,
+        key: &str,
+        args_pointer: bool,
+    ) {
         write_command_request(
             buffer,
+            socket,
             callback_index,
             vec![key.to_string()],
             RequestType::GetString.into(),
@@ -310,13 +321,15 @@ mod socket_listener {
 
     fn write_set(
         buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
         callback_index: u32,
         key: &str,
         value: String,
         args_pointer: bool,
-    ) -> u32 {
+    ) {
         write_command_request(
             buffer,
+            socket,
             callback_index,
             vec![key.to_string(), value],
             RequestType::SetString.into(),
@@ -500,8 +513,13 @@ mod socket_listener {
         let key = generate_random_string(KEY_LENGTH);
         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_null_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
         close_socket(&socket_path);
@@ -532,8 +550,13 @@ mod socket_listener {
                         let key = generate_random_string(KEY_LENGTH);
                         let approx_message_length = key.len() + APPROX_RESP_HEADER_LEN;
                         let mut buffer = Vec::with_capacity(approx_message_length);
-                        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-                        socket.write_all(&buffer).unwrap();
+                        write_get(
+                            &mut buffer,
+                            &mut socket,
+                            CALLBACK_INDEX,
+                            key.as_str(),
+                            false,
+                        );
 
                         assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
                     })
@@ -564,18 +587,23 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         write_set(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK1_INDEX,
             key.as_str(),
             value.clone(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK2_INDEX,
+            key.as_str(),
+            args_pointer,
+        );
         assert_value_response(
             &mut buffer,
             Some(&mut test_basics.socket),
@@ -602,24 +630,24 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         write_command_request(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK1_INDEX,
             vec!["SET".to_string(), key.to_string(), value.clone()],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
         write_command_request(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK2_INDEX,
             vec!["GET".to_string(), key],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         assert_value_response(
             &mut buffer,
@@ -743,8 +771,13 @@ mod socket_listener {
             .server_mock
             .add_response(&expected_command, "*-1\r\n".to_string());
         let mut buffer = Vec::with_capacity(key.len() * 2);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), use_arg_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            use_arg_pointer,
+        );
 
         assert_null_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
     }
@@ -762,12 +795,12 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         write_command_request(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK_INDEX,
             vec![key],
             EnumOrUnknown::from_i32(request_type),
             false,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         let response = assert_error_response(
             &mut buffer,
@@ -806,18 +839,23 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         write_set(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK1_INDEX,
             key.as_str(),
             value.clone(),
             args_pointer,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK1_INDEX);
 
         buffer.clear();
-        write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK2_INDEX,
+            key.as_str(),
+            args_pointer,
+        );
 
         let response_header_length = u32::required_space(size_of::<usize>() as u32);
         let expected_length = size_of::<usize>() + response_header_length + 2; // 2 bytes for callbackIdx and value type
@@ -941,18 +979,29 @@ mod socket_listener {
                     // Send a set request
                     let approx_message_length = VALUE_LENGTH + key.len() + APPROX_RESP_HEADER_LEN;
                     let mut buffer = Vec::with_capacity(approx_message_length);
-                    write_set(&mut buffer, index as u32, &key, value, args_pointer);
                     {
                         let _guard = cloned_lock.lock().unwrap();
-                        write_socket.write_all(&buffer).unwrap();
+                        write_set(
+                            &mut buffer,
+                            &mut write_socket,
+                            index as u32,
+                            &key,
+                            value,
+                            args_pointer,
+                        );
                     }
                     buffer.clear();
 
                     // Send a get request
-                    write_get(&mut buffer, index as u32, &key, args_pointer);
                     {
                         let _guard = cloned_lock.lock().unwrap();
-                        write_socket.write_all(&buffer).unwrap();
+                        write_get(
+                            &mut buffer,
+                            &mut write_socket,
+                            index as u32,
+                            &key,
+                            args_pointer,
+                        );
                     }
                 });
             }
@@ -975,8 +1024,13 @@ mod socket_listener {
         const CALLBACK_INDEX: u32 = 0;
         let key = generate_random_string(KEY_LENGTH);
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut test_basics.socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_error_response(
             &mut buffer,
@@ -1003,8 +1057,13 @@ mod socket_listener {
         let key = generate_random_string(KEY_LENGTH);
         // TODO - this part should be replaced with a sleep once we implement heartbeat
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_error_response(
             &mut buffer,
@@ -1014,8 +1073,13 @@ mod socket_listener {
         );
 
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
     }
@@ -1031,8 +1095,13 @@ mod socket_listener {
         const CALLBACK_INDEX: u32 = 0;
         let key = generate_random_string(KEY_LENGTH);
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_error_response(
             &mut buffer,
@@ -1047,8 +1116,13 @@ mod socket_listener {
         ));
 
         let mut buffer = Vec::with_capacity(100);
-        write_get(&mut buffer, CALLBACK_INDEX, key.as_str(), false);
-        socket.write_all(&buffer).unwrap();
+        write_get(
+            &mut buffer,
+            &mut socket,
+            CALLBACK_INDEX,
+            key.as_str(),
+            false,
+        );
 
         assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
     }
@@ -1086,8 +1160,7 @@ mod socket_listener {
             },
         ];
         let mut buffer = Vec::with_capacity(200);
-        write_transaction_request(&mut buffer, CALLBACK_INDEX, commands);
-        socket.write_all(&buffer).unwrap();
+        write_transaction_request(&mut buffer, &mut socket, CALLBACK_INDEX, commands);
 
         assert_value_response(
             &mut buffer,
@@ -1132,7 +1205,6 @@ mod socket_listener {
 
         write_header(&mut buffer, request.compute_size() as u32);
         let _res = buffer.write_all(&request.write_to_bytes().unwrap());
-
         socket.write_all(&buffer).unwrap();
 
         assert_value_response(
@@ -1154,12 +1226,12 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(APPROX_RESP_HEADER_LEN);
         write_command_request(
             &mut buffer,
+            &mut test_basics.socket,
             CALLBACK_INDEX,
             vec![],
             RequestType::CustomCommand.into(),
             false,
         );
-        test_basics.socket.write_all(&buffer).unwrap();
 
         assert_error_response(
             &mut buffer,
