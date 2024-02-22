@@ -12,6 +12,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
@@ -314,6 +315,11 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> hexists(@NonNull String key, @NonNull String field) {
         return commandManager.submitNewCommand(
                 HashExists, new String[] {key, field}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
+        return commandManager.submitNewCommand(HashGetAll, new String[] {key}, this::handleMapResponse);
     }
 
     @Override

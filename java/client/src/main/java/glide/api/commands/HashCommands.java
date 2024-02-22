@@ -82,4 +82,20 @@ public interface HashCommands {
      * </pre>
      */
     CompletableFuture<Boolean> hexists(String key, String field);
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return A <code>Map</code> of fields and their values stored in the hash. Every field name in
+     *     the map is associated with its corresponding value.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.
+     * @example
+     *     <pre>
+     * Map fieldValueMap = client.hgetall("my_hash").get()
+     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"))
+     * </pre>
+     */
+    CompletableFuture<Map<String, String>> hgetall(String key);
 }
