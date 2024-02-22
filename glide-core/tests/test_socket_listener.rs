@@ -121,6 +121,22 @@ mod socket_listener {
         assert_response(buffer, Some(socket), 0, expected_callback, None, error_type)
     }
 
+    fn assert_value_response(
+        buffer: &mut Vec<u8>,
+        socket: Option<&mut UnixStream>,
+        expected_callback: u32,
+        value: Value,
+    ) -> Response {
+        assert_response(
+            buffer,
+            socket,
+            0,
+            expected_callback,
+            Some(value),
+            ResponseType::Value,
+        )
+    }
+
     fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
         buffer.resize(100, 0_u8);
         socket.read(buffer).unwrap()
@@ -530,14 +546,11 @@ mod socket_listener {
         buffer.clear();
         write_get(&mut buffer, CALLBACK2_INDEX, key.as_str(), args_pointer);
         test_basics.socket.write_all(&buffer).unwrap();
-
-        assert_response(
+        assert_value_response(
             &mut buffer,
             Some(&mut test_basics.socket),
-            0,
             CALLBACK2_INDEX,
-            Some(Value::BulkString(value.into_bytes())),
-            ResponseType::Value,
+            Value::BulkString(value.into_bytes()),
         );
     }
 
@@ -578,13 +591,11 @@ mod socket_listener {
         );
         test_basics.socket.write_all(&buffer).unwrap();
 
-        assert_response(
+        assert_value_response(
             &mut buffer,
             Some(&mut test_basics.socket),
-            0,
             CALLBACK2_INDEX,
-            Some(Value::BulkString(value.into_bytes())),
-            ResponseType::Value,
+            Value::BulkString(value.into_bytes()),
         );
     }
 
@@ -797,13 +808,11 @@ mod socket_listener {
             assert_ne!(0, next_read);
             size += next_read;
         }
-        assert_response(
+        assert_value_response(
             &mut buffer,
             None,
-            0,
             CALLBACK2_INDEX,
-            Some(Value::BulkString(value.into_bytes())),
-            ResponseType::Value,
+            Value::BulkString(value.into_bytes()),
         );
     }
 
@@ -1058,18 +1067,16 @@ mod socket_listener {
         write_transaction_request(&mut buffer, CALLBACK_INDEX, commands);
         socket.write_all(&buffer).unwrap();
 
-        assert_response(
+        assert_value_response(
             &mut buffer,
             Some(&mut socket),
-            0,
             CALLBACK_INDEX,
-            Some(Value::Array(vec![
+            Value::Array(vec![
                 Value::Okay,
                 Value::BulkString(vec![b'b', b'a', b'r']),
                 Value::Okay,
                 Value::Nil,
-            ])),
-            ResponseType::Value,
+            ]),
         );
     }
 
@@ -1104,13 +1111,11 @@ mod socket_listener {
 
         socket.write_all(&buffer).unwrap();
 
-        assert_response(
+        assert_value_response(
             &mut buffer,
             Some(&mut test_basics.socket),
-            0,
             CALLBACK_INDEX,
-            Some(Value::BulkString(value.into_bytes())),
-            ResponseType::Value,
+            Value::BulkString(value.into_bytes()),
         );
     }
 
