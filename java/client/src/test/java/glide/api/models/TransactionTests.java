@@ -27,7 +27,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
@@ -149,9 +148,6 @@ public class TransactionTests {
                 Pair.of(
                         HashIncrByFloat,
                         ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1.5").build()));
-
-        transaction.select(99L);
-        results.add(Pair.of(Select, ArgsArray.newBuilder().addArgs("99").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));

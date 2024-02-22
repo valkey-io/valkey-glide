@@ -730,8 +730,10 @@ public class RedisClientTest {
     public void select_returns_success() {
         // setup
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        Long index = 55L;
+        Long index = 5L;
         when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(
                         eq(Select), eq(new String[] {Long.toString(index)}), any()))
                 .thenReturn(testResponse);
