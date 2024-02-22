@@ -606,6 +606,8 @@ public class RedisClientTest {
 
         CompletableFuture<Boolean> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<Boolean>submitNewCommand(eq(HashExists), eq(args), any()))
                 .thenReturn(testResponse);
 

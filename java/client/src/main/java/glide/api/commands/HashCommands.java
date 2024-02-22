@@ -75,9 +75,9 @@ public interface HashCommands {
      *     contain the field, or if the key does not exist, it returns <code>False</code>.
      * @example
      *     <pre>
-     * Bool exists = client.hexists("my_hash", "field1").get()
+     * Boolean exists = client.hexists("my_hash", "field1").get()
      * assert exists
-     * Bool exists = client.hexists("my_hash", "non_existent_field").get()
+     * Boolean exists = client.hexists("my_hash", "non_existent_field").get()
      * assert !exists
      * </pre>
      */
