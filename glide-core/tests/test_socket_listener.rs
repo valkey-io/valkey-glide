@@ -92,9 +92,13 @@ mod socket_listener {
         args_pointer: bool,
     }
 
-    fn assert_value(pointer: u64, expected_value: Option<Value>) {
+    fn pointer_to_value(pointer: u64) -> Box<Value> {
         let pointer = pointer as *mut Value;
-        let received_value = unsafe { Box::from_raw(pointer) };
+        unsafe { Box::from_raw(pointer) }
+    }
+
+    fn assert_value(pointer: u64, expected_value: Option<Value>) {
+        let received_value = pointer_to_value(pointer);
         assert!(expected_value.is_some());
         assert_eq!(*received_value, expected_value.unwrap());
     }
@@ -683,8 +687,7 @@ mod socket_listener {
         let Some(response::Value::RespPointer(pointer)) = response.value else {
             panic!("Unexpected response {:?}", response.value);
         };
-        let pointer = pointer as *mut Value;
-        let received_value = unsafe { Box::from_raw(pointer) };
+        let received_value = pointer_to_value(pointer);
         let Value::Map(values) = *received_value else {
             panic!("Unexpected value {:?}", received_value);
         };
@@ -722,8 +725,7 @@ mod socket_listener {
         let Some(response::Value::RespPointer(pointer)) = response.value else {
             panic!("Unexpected response {:?}", response.value);
         };
-        let pointer = pointer as *mut Value;
-        let received_value = unsafe { Box::from_raw(pointer) };
+        let received_value = pointer_to_value(pointer);
         let first_value = String::from_redis_value(&received_value).unwrap();
         let (host, port) = first_value
             .split('\n')
@@ -752,8 +754,7 @@ mod socket_listener {
         let Some(response::Value::RespPointer(pointer)) = response.value else {
             panic!("Unexpected response {:?}", response.value);
         };
-        let pointer = pointer as *mut Value;
-        let received_value = unsafe { Box::from_raw(pointer) };
+        let received_value = pointer_to_value(pointer);
         let second_value = String::from_redis_value(&received_value).unwrap();
 
         assert_eq!(first_value, second_value);
