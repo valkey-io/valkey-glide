@@ -3,6 +3,7 @@ package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
@@ -53,5 +54,11 @@ public class RedisClient extends BaseClient implements GenericCommands, ServerMa
     @Override
     public CompletableFuture<String> info(@NonNull InfoOptions options) {
         return commandManager.submitNewCommand(Info, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> select(long index) {
+        return commandManager.submitNewCommand(
+                Select, new String[] {Long.toString(index)}, this::handleStringResponse);
     }
 }

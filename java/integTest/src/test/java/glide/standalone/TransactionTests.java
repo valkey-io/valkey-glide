@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
+import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -14,8 +15,10 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -91,6 +94,17 @@ public class TransactionTests {
     public void test_standalone_transactions() {
         Transaction transaction = (Transaction) transactionTest(new Transaction());
         Object[] expectedResult = transactionTestResult();
+
+        String key = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+
+        transaction.select(1);
+        transaction.set(key, value);
+        transaction.get(key);
+        transaction.select(0);
+        transaction.get(key);
+
+        expectedResult = ArrayUtils.addAll(expectedResult, OK, OK, value, OK, null);
 
         Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
         assertArrayEquals(expectedResult, result);

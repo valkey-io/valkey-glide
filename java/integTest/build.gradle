@@ -10,6 +10,8 @@ dependencies {
     // client
     implementation project(':client')
 
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
     implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
