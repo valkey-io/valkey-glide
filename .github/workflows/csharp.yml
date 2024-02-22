@@ -18,6 +18,10 @@ on:
 permissions:
     contents: read
 
+concurrency:
+    group: C#-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     run-tests:
         timeout-minutes: 15

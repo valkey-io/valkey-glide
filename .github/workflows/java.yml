@@ -15,6 +15,10 @@ on:
             - "java/**"
             - ".github/workflows/java.yml"
 
+concurrency:
+    group: java-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     build-and-test-java-client:
         timeout-minutes: 25
