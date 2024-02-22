@@ -213,13 +213,13 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
-        return super.configGet(parameters);
+    public CompletableFuture<Map<String, String>> configGet(@NonNull String[] parameters) {
+        return commandManager.submitNewCommand(ConfigGet, parameters, this::handleMapResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, String>>> configGet(
-            String[] parameters, @NonNull Route route) {
+            @NonNull String[] parameters, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 ConfigGet,
                 parameters,
@@ -232,7 +232,8 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> configSet(@NonNull Map<String, String> parameters) {
-        return super.configSet(parameters);
+        return commandManager.submitNewCommand(
+                ConfigSet, convertMapToArgArray(parameters), this::handleStringResponse);
     }
 
     @Override

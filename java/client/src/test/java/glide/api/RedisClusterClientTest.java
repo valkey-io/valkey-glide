@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -533,6 +534,25 @@ public class RedisClusterClientTest {
     }
 
     // TODO copy/move tests from RedisClientTest which call super for coverage
+    @SneakyThrows
+    @Test
+    public void configGet_returns_success() {
+        // setup
+        CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
+        var testPayload = Map.of("value", "42");
+        when(testResponse.get()).thenReturn(testPayload);
+        when(commandManager.<Map<String, String>>submitNewCommand(
+                        eq(ConfigGet), eq(new String[] {"value"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String>> response = service.configGet(new String[] {"value"});
+        Map<String, String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(testPayload, payload);
+    }
 
     @Test
     @SneakyThrows
@@ -559,6 +579,24 @@ public class RedisClusterClientTest {
         var value = client.configGet(TEST_ARGS, ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+    }
+
+    @SneakyThrows
+    @Test
+    public void configSet_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+        when(commandManager.<String>submitNewCommand(
+                        eq(ConfigSet), eq(new String[] {"value", "42"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configSet(Map.of("value", "42"));
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 
     @SneakyThrows
