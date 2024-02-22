@@ -5,7 +5,7 @@ on:
         branches: ["main"]
         paths:
             - csharp/**
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
             - .github/workflows/csharp.yml
     pull_request:
