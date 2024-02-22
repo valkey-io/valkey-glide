@@ -94,7 +94,6 @@ mod socket_listener {
         assert_response(
             buffer,
             Some(socket),
-            0,
             expected_callback,
             None,
             ResponseType::Null,
@@ -105,7 +104,6 @@ mod socket_listener {
         assert_response(
             buffer,
             Some(socket),
-            0,
             expected_callback,
             Some(Value::Okay),
             ResponseType::Value,
@@ -118,7 +116,7 @@ mod socket_listener {
         expected_callback: u32,
         error_type: ResponseType,
     ) -> Response {
-        assert_response(buffer, Some(socket), 0, expected_callback, None, error_type)
+        assert_response(buffer, Some(socket), expected_callback, None, error_type)
     }
 
     fn assert_value_response(
@@ -130,7 +128,6 @@ mod socket_listener {
         assert_response(
             buffer,
             socket,
-            0,
             expected_callback,
             Some(value),
             ResponseType::Value,
@@ -145,7 +142,6 @@ mod socket_listener {
     fn assert_response(
         buffer: &mut Vec<u8>,
         socket: Option<&mut UnixStream>,
-        cursor: usize,
         expected_callback: u32,
         expected_value: Option<Value>,
         expected_response_type: ResponseType,
@@ -154,7 +150,7 @@ mod socket_listener {
             let _size = read_from_socket(buffer, socket);
         }
         let (message_length, header_bytes) = parse_header(buffer);
-        let response = decode_response(buffer, cursor + header_bytes, message_length as usize);
+        let response = decode_response(buffer, header_bytes, message_length as usize);
         assert_eq!(response.callback_idx, expected_callback);
         match response.value {
             Some(response::Value::RespPointer(pointer)) => {
