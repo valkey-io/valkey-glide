@@ -353,6 +353,13 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Strlen => Some(cmd("STRLEN")),
         RequestType::Lindex => Some(cmd("LINDEX")),
         RequestType::ZPopMax => Some(cmd("ZPOPMAX")),
+        RequestType::XAck => Some(cmd("XACK")),
+        RequestType::XAdd => Some(cmd("XADD")),
+        RequestType::XReadGroup => Some(cmd("XREADGROUP")),
+        RequestType::XRead => Some(cmd("XREAD")),
+        RequestType::XGroupCreate => Some(get_two_word_command("XGROUP", "CREATE")),
+        RequestType::XGroupDestroy => Some(get_two_word_command("XGROUP", "DESTROY")),
+        RequestType::XTrim => Some(cmd("XTRIM")),
     }
 }
 
