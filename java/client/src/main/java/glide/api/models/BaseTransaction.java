@@ -430,7 +430,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param field The field in the hash stored at <code>key</code> to increment its value.
      * @param amount The amount to increment.
      * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
-     *     </code> after the increment.
+     *     </code> after the increment or decrement.
      */
     public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
         ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
@@ -451,7 +451,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param field The field in the hash stored at <code>key</code> to increment its value.
      * @param amount The amount to increment.
      * @returns Command Response - The value of <code>field</code> in the hash stored at <code>key
-     *     </code> after the increment.
+     *     </code> after the increment or decrement.
      */
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));

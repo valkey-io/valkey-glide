@@ -110,7 +110,7 @@ public interface HashCommands {
      * @param field The field in the hash stored at <code>key</code> to increment its value.
      * @param amount The amount to increment.
      * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
-     *     increment.
+     *     increment or decrement.
      * @example
      *     <pre>
      * Long num = client.hincrBy("my_hash", "field1", 5).get()
@@ -131,7 +131,7 @@ public interface HashCommands {
      * @param field The field in the hash stored at <code>key</code> to increment its value.
      * @param amount The amount to increment.
      * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
-     *     increment.
+     *     increment or decrement.
      * @example
      *     <pre>
      * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get()
