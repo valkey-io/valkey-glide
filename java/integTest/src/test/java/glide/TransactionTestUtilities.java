@@ -13,8 +13,11 @@ public class TransactionTestUtilities {
     private static final String key3 = "{key}" + UUID.randomUUID();
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
+    private static final String key6 = "{key}" + UUID.randomUUID();
+
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
+    private static final String value3 = UUID.randomUUID().toString();
     private static final String field1 = UUID.randomUUID().toString();
     private static final String field2 = UUID.randomUUID().toString();
     private static final String field3 = UUID.randomUUID().toString();
@@ -58,10 +61,14 @@ public class TransactionTestUtilities {
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
 
-        baseTransaction.sadd(key5, new String[] {"baz", "foo"});
-        baseTransaction.srem(key5, new String[] {"foo"});
-        baseTransaction.scard(key5);
-        baseTransaction.smembers(key5);
+        baseTransaction.lpush(key5, new String[] {value1, value2, value3});
+        baseTransaction.lpop(key5);
+        baseTransaction.lpopCount(key5, 2);
+
+        baseTransaction.sadd(key6, new String[] {"baz", "foo"});
+        baseTransaction.srem(key6, new String[] {"foo"});
+        baseTransaction.scard(key6);
+        baseTransaction.smembers(key6);
 
         return baseTransaction;
     }
@@ -93,6 +100,9 @@ public class TransactionTestUtilities {
             1L,
             5L,
             10.5,
+            3L,
+            value3,
+            new String[] {value2, value1},
             2L,
             1L,
             1L,
