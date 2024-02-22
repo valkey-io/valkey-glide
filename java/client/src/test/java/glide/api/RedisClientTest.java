@@ -162,6 +162,8 @@ public class RedisClientTest {
         Long numberUnlinked = 1L;
         CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(numberUnlinked);
+
+        // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(Unlink), eq(keys), any()))
                 .thenReturn(testResponse);
 
