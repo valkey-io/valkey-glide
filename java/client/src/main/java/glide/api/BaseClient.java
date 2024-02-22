@@ -11,6 +11,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -295,6 +296,13 @@ public abstract class BaseClient
     public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
         String[] args = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(HashDel, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hmget(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments = ArrayUtils.addFirst(fields, key);
+        return commandManager.submitNewCommand(
+                HashMGet, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override

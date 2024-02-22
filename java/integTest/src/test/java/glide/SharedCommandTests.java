@@ -427,6 +427,26 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void hmget_multiple_existing_fields_non_existing_field_non_existing_key(
+            BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertArrayEquals(
+                new String[] {value, null, value},
+                client.hmget(key, new String[] {field1, "non_existing_field", field2}).get());
+        assertArrayEquals(
+                new String[] {null, null},
+                client.hmget("non_existing_key", new String[] {field1, field2}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(
