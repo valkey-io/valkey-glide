@@ -35,4 +35,22 @@ public interface GenericBaseCommands {
      * </code>
      */
     CompletableFuture<Long> exists(String[] keys);
+
+    /**
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to <a href="https://redis.io/commands/del/">DEL</a>, removes
+     * specified keys and ignores non-existent ones. However, this command does not block the server,
+     * while <a href="https://redis.io/commands/del/">DEL</a> does.
+     *
+     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @param keys The list of keys to unlink.
+     * @return The number of <code>keys</code> that were unlinked.
+     * @example
+     *     <p>
+     *     <pre>
+     * long result = client.unlink("my_key").get();
+     * assert result == 1L;
+     * </pre>
+     */
+    CompletableFuture<Long> unlink(String[] keys);
 }
