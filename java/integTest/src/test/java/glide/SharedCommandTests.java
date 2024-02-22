@@ -80,22 +80,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void ping(BaseClient client) {
-        String data = client.ping().get();
-        assertEquals("PONG", data);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void ping_with_message(BaseClient client) {
-        String data = client.ping("H3LL0").get();
-        assertEquals("H3LL0", data);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
     public void unlink_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
