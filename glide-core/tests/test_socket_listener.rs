@@ -227,12 +227,11 @@ mod socket_listener {
         u32::encode_var(length, &mut buffer[new_len - required_space..]);
     }
 
-    fn write_message(buffer: &mut Vec<u8>, request: impl Message) -> u32 {
+    fn write_message(buffer: &mut Vec<u8>, request: impl Message) {
         let message_length = request.compute_size() as u32;
 
         write_header(buffer, message_length);
         let _res = buffer.write_all(&request.write_to_bytes().unwrap());
-        message_length
     }
 
     fn get_command(components: CommandComponents) -> Command {
@@ -269,6 +268,11 @@ mod socket_listener {
         request
     }
 
+    fn write_request(buffer: &mut Vec<u8>, socket: &mut UnixStream, request: RedisRequest) {
+        write_message(buffer, request);
+        socket.write_all(buffer).unwrap();
+    }
+
     fn write_command_request(
         buffer: &mut Vec<u8>,
         socket: &mut UnixStream,
@@ -279,8 +283,7 @@ mod socket_listener {
     ) {
         let request = get_command_request(callback_index, args, request_type, args_pointer);
 
-        write_message(buffer, request);
-        socket.write_all(buffer).unwrap();
+        write_request(buffer, socket, request);
     }
 
     fn write_transaction_request(
@@ -302,8 +305,7 @@ mod socket_listener {
             transaction,
         ));
 
-        write_message(buffer, request);
-        socket.write_all(buffer).unwrap();
+        write_request(buffer, socket, request);
     }
 
     fn write_get(
@@ -678,8 +680,7 @@ mod socket_listener {
         let mut routes = redis_request::Routes::default();
         routes.set_simple_routes(redis_request::SimpleRoutes::AllPrimaries);
         request.route = Some(routes).into();
-        write_message(&mut buffer, request);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_request(&mut buffer, &mut test_basics.socket, request);
 
         let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
@@ -716,8 +717,7 @@ mod socket_listener {
         let mut routes = redis_request::Routes::default();
         routes.set_simple_routes(redis_request::SimpleRoutes::Random);
         request.route = Some(routes).into();
-        write_message(&mut buffer, request.clone());
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_request(&mut buffer, &mut test_basics.socket, request.clone());
 
         let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
@@ -745,8 +745,7 @@ mod socket_listener {
         };
         routes.set_by_address_route(by_address_route);
         request.route = Some(routes).into();
-        write_message(&mut buffer, request);
-        test_basics.socket.write_all(&buffer).unwrap();
+        write_request(&mut buffer, &mut test_basics.socket, request);
 
         let response = get_response(&mut buffer, Some(&mut test_basics.socket));
 
@@ -1182,7 +1181,6 @@ mod socket_listener {
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
     ) {
         let mut test_basics = setup_test_basics(Tls::NoTls, Sharing::Shared, use_cluster);
-        let socket = &mut test_basics.socket;
         const CALLBACK_INDEX: u32 = 100;
         const VALUE_LENGTH: usize = 10;
         let key = generate_random_string(KEY_LENGTH);
@@ -1204,9 +1202,7 @@ mod socket_listener {
             },
         ));
 
-        write_header(&mut buffer, request.compute_size() as u32);
-        let _res = buffer.write_all(&request.write_to_bytes().unwrap());
-        socket.write_all(&buffer).unwrap();
+        write_request(&mut buffer, &mut test_basics.socket, request);
 
         assert_value_response(
             &mut buffer,
