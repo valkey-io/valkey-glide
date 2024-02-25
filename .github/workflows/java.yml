@@ -4,13 +4,13 @@ on:
     push:
         branches: ["main"]
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
             - "java/**"
             - ".github/workflows/java.yml"
     pull_request:
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
             - "java/**"
             - ".github/workflows/java.yml"

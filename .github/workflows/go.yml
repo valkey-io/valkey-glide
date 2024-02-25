@@ -5,13 +5,13 @@ on:
     push:
         branches: [ "main" ]
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
             - go/**
             - .github/workflows/go.yml
     pull_request:
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
             - go/**
             - .github/workflows/go.yml
