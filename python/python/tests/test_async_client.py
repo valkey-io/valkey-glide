@@ -1415,7 +1415,6 @@ class TestClusterRoutes:
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
         assert isinstance(info, str)
         assert "# Server" in info
-        assert "# Server" in info
 
 
 @pytest.mark.asyncio
