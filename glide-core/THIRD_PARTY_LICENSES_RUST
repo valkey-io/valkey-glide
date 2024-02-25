@@ -4138,7 +4138,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.15.1
+Package: bumpalo:3.15.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12482,7 +12482,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hermit-abi:0.3.6
+Package: hermit-abi:0.3.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26958,7 +26958,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: socket2:0.5.5
+Package: socket2:0.5.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34498,7 +34498,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-targets:0.52.0
+Package: windows-targets:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34956,7 +34956,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_gnullvm:0.52.0
+Package: windows_aarch64_gnullvm:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35414,7 +35414,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_msvc:0.52.0
+Package: windows_aarch64_msvc:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35872,7 +35872,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnu:0.52.0
+Package: windows_i686_gnu:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36330,7 +36330,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_msvc:0.52.0
+Package: windows_i686_msvc:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36788,7 +36788,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnu:0.52.0
+Package: windows_x86_64_gnu:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37246,7 +37246,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnullvm:0.52.0
+Package: windows_x86_64_gnullvm:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37704,7 +37704,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_msvc:0.52.0
+Package: windows_x86_64_msvc:0.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
