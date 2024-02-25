@@ -1179,22 +1179,30 @@ class TestCommands:
         assert await redis_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
         assert (
             await redis_client.zcount(
-                key, ScoreBoundary(1, False), ScoreBoundary(3, False)
+                key,
+                ScoreBoundary(1, is_inclusive=False),
+                ScoreBoundary(3, is_inclusive=False),
             )
             == 1
         )
         assert (
             await redis_client.zcount(
-                key, ScoreBoundary(1, False), ScoreBoundary(3, True)
+                key,
+                ScoreBoundary(1, is_inclusive=False),
+                ScoreBoundary(3, is_inclusive=True),
             )
             == 2
         )
         assert (
-            await redis_client.zcount(key, InfBound.NEG_INF, ScoreBoundary(3, True))
+            await redis_client.zcount(
+                key, InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=True)
+            )
             == 3
         )
         assert (
-            await redis_client.zcount(key, InfBound.POS_INF, ScoreBoundary(3, True))
+            await redis_client.zcount(
+                key, InfBound.POS_INF, ScoreBoundary(3, is_inclusive=True)
+            )
             == 0
         )
         assert (

@@ -5,7 +5,7 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
-from glide.async_commands.core import InfBound, RangeByIndex, ScoreBoundary
+from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -146,7 +146,7 @@ def transaction_test(
     args.append(1)
     transaction.zcard(key8)
     args.append(2)
-    transaction.zcount(key8, ScoreBoundary(2, True), InfBound.POS_INF)
+    transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
     args.append(2)
     transaction.zscore(key8, "two")
     args.append(2.0)

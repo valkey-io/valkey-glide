@@ -1238,9 +1238,9 @@ class CoreCommands(Protocol):
             If `changed` is set, returns the number of elements updated in the sorted set.
 
         Examples:
-            >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
                 2  # Indicates that two elements have been added or updated in the sorted set "my_sorted_set."
-            >>> await zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
+            >>> await client.zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
                 2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
         """
         args = [key]
@@ -1301,9 +1301,9 @@ class CoreCommands(Protocol):
             If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
 
         Examples:
-            >>> await zaddIncr("my_sorted_set", member , 5.0)
+            >>> await client.zaddIncr("my_sorted_set", member , 5.0)
                 5.0
-            >>> await zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
+            >>> await client.zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
                 None
         """
         args = [key]
@@ -1342,9 +1342,9 @@ class CoreCommands(Protocol):
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
 
         Examples:
-            >>> await zcard("my_sorted_set")
+            >>> await client.zcard("my_sorted_set")
                 3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
-            >>> await zcard("non_existing_key")
+            >>> await client.zcard("non_existing_key")
                 0
         """
         return cast(int, await self._execute_command(RequestType.Zcard, [key]))
@@ -1381,14 +1381,14 @@ class CoreCommands(Protocol):
                 1  # Indicates that there is one ScoreBoundary with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
         """
         score_min = (
-            min_score.value
-            if not type(min_score) == InfBound
-            else min_score.value["default_arg"]
+            min_score.value["score_arg"]
+            if type(min_score) == InfBound
+            else min_score.value
         )
         score_max = (
-            max_score.value
-            if not type(max_score) == InfBound
-            else max_score.value["default_arg"]
+            max_score.value["score_arg"]
+            if type(max_score) == InfBound
+            else max_score.value
         )
         return cast(
             int,
@@ -1474,6 +1474,8 @@ class CoreCommands(Protocol):
 
         See https://redis.io/commands/zrange/ for more details.
 
+        To get the elements with their scores, see zrange_withscores.
+
         Args:
             key (str): The key of the sorted set.
             range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
@@ -1490,7 +1492,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
                 ['member1', 'member2', 'member3']  # Returns all members in ascending order.
             >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop= ScoreBoundary(3), limit= Limit(0 , 2)))
-                ['member2', 'member3']
+                ['member2', 'member3'] # Returns members with scores within the range of negative infinity to 3, limited to 2 elements, in ascending order.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
@@ -1504,7 +1506,7 @@ class CoreCommands(Protocol):
     ) -> Mapping[str, float]:
         """
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
-        Similar to ZRANGE but with a WTHISCORE flag.
+        Similar to ZRANGE but with a WITHSCORE flag.
 
         See https://redis.io/commands/zrange/ for more details.
 
@@ -1516,15 +1518,14 @@ class CoreCommands(Protocol):
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Returns:
-            Map[str , float]: A map of elements and their scores within the specified range.
+            Mapping[str , float]: A map of elements and their scores within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
 
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
                 {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
             >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop= ScoreBoundary(3), limit= Limit(0 , 2)))
-                {'member4': -2.0, 'member7': 1.5}
-
+                {'member4': -2.0, 'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, limited to 2 elements, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 

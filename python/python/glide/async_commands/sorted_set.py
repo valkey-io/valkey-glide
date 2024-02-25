@@ -6,11 +6,11 @@ from typing import List, Optional, Union
 
 class InfBound(Enum):
     """
-    Enumeration representing numeric and lexicographic positive and negative infinity bounds for sorted set scores.
+    Enumeration representing numeric and lexicographic positive and negative infinity bounds for sorted set.
     """
 
-    POS_INF = {"default_arg": "+inf", "lex_arg": "+"}
-    NEG_INF = {"default_arg": "-inf", "lex_arg": "-"}
+    POS_INF = {"score_arg": "+inf", "lex_arg": "+"}
+    NEG_INF = {"score_arg": "-inf", "lex_arg": "-"}
 
 
 class ScoreBoundary:
@@ -83,7 +83,7 @@ class RangeByScore:
     Args:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
         stop (Union[InfBound, ScoreBoundary]): The stop score boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`.
     """
 
     def __init__(
@@ -93,11 +93,9 @@ class RangeByScore:
         limit: Optional[Limit] = None,
     ):
         self.start = (
-            start.value if not type(start) == InfBound else start.value["default_arg"]
+            start.value["score_arg"] if type(start) == InfBound else start.value
         )
-        self.stop = (
-            stop.value if not type(stop) == InfBound else stop.value["default_arg"]
-        )
+        self.stop = stop.value["score_arg"] if type(stop) == InfBound else stop.value
         self.limit = limit
 
 
@@ -110,7 +108,7 @@ class RangeByLex:
     Args:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
         stop (Union[InfBound, LexBoundary]): The stop lexicographic boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`.
     """
 
     def __init__(
@@ -119,10 +117,8 @@ class RangeByLex:
         stop: Union[InfBound, LexBoundary],
         limit: Optional[Limit] = None,
     ):
-        self.start = (
-            start.value if not type(start) == InfBound else start.value["lex_arg"]
-        )
-        self.stop = stop.value if not type(stop) == InfBound else stop.value["lex_arg"]
+        self.start = start.value["lex_arg"] if type(start) == InfBound else start.value
+        self.stop = stop.value["lex_arg"] if type(stop) == InfBound else stop.value
         self.limit = limit
 
 

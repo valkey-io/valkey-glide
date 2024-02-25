@@ -1098,12 +1098,12 @@ class BaseTransaction:
 
         Args:
             key (str): The key of the sorted set.
-            min_score (Union[InfBound, ScoreLimit]): The minimum score to count from.
+            min_score (Union[InfBound, ScoreBoundary]): The minimum score to count from.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
-            max_score (Union[InfBound, ScoreLimit]): The maximum score to count up to.
+                or ScoreBoundary representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreBoundary]): The maximum score to count up to.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
+                or ScoreBoundary representing a specific score and inclusivity.
 
         Commands response:
             int: The number of members in the specified score range.
@@ -1111,14 +1111,14 @@ class BaseTransaction:
             If `max_score` < `min_score`, 0 is returned.
         """
         score_min = (
-            min_score.value
-            if not type(min_score) == InfBound
-            else min_score.value["default_arg"]
+            min_score.value["score_arg"]
+            if type(min_score) == InfBound
+            else min_score.value
         )
         score_max = (
-            max_score.value
-            if not type(max_score) == InfBound
-            else max_score.value["default_arg"]
+            max_score.value["score_arg"]
+            if type(max_score) == InfBound
+            else max_score.value
         )
         return self.append_command(RequestType.Zcount, [key, score_min, score_max])
 
@@ -1205,7 +1205,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
-        Similar to ZRANGE but with a WTHISCORE flag.
+        Similar to ZRANGE but with a WITHSCORE flag.
 
         See https://redis.io/commands/zrange/ for more details.
 
@@ -1217,7 +1217,7 @@ class BaseTransaction:
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Commands response:
-            Map[str , float]: A map of elements and their scores within the specified range.
+            Mapping[str , float]: A map of elements and their scores within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
