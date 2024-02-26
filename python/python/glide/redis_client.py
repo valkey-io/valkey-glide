@@ -2,7 +2,7 @@
 
 import asyncio
 import threading
-from typing import List, Optional, Set, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
