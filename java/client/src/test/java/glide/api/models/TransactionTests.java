@@ -25,6 +25,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
@@ -162,6 +164,15 @@ public class TransactionTests {
 
         transaction.lpopCount("key", 2);
         results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.rpush("key", new String[] {"element"});
+        results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
+
+        transaction.rpop("key");
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.rpopCount("key", 2);
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
