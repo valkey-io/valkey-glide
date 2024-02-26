@@ -713,9 +713,9 @@ class TestCommands:
         field_value_map = {field: "value", field2: "value2"}
 
         assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hexists(key, field) == True
-        assert await redis_client.hexists(key, "nonExistingField") == False
-        assert await redis_client.hexists("nonExistingKey", field2) == False
+        assert await redis_client.hexists(key, field)
+        assert not await redis_client.hexists(key, "nonExistingField")
+        assert not await redis_client.hexists("nonExistingKey", field2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -938,21 +938,15 @@ class TestCommands:
         # set command clears the timeout.
         assert await redis_client.set(key, "bar") == OK
         if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.pexpire(key, 10000) == True
+            assert await redis_client.pexpire(key, 10000)
         else:
-            assert (
-                await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
-                == True
-            )
+            assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
         assert await redis_client.ttl(key) in range(11)
 
         if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expire(key, 15) == True
+            assert await redis_client.expire(key, 15)
         else:
-            assert (
-                await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
-                == True
-            )
+            assert await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
         assert await redis_client.ttl(key) in range(16)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -981,11 +975,8 @@ class TestCommands:
         assert await redis_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert (
-                await redis_client.pexpireat(
-                    key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
-                )
-                == False
+            assert not await redis_client.pexpireat(
+                key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1001,7 +992,7 @@ class TestCommands:
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.pexpire(key, -10000) == True
+        assert await redis_client.pexpire(key, -10000)
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
@@ -1009,9 +1000,7 @@ class TestCommands:
         assert await redis_client.ttl(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
-        assert (
-            await redis_client.pexpireat(key, int(time.time() * 1000) - 50000) == True
-        )
+        assert await redis_client.pexpireat(key, int(time.time() * 1000) - 50000)
         assert await redis_client.ttl(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1022,11 +1011,9 @@ class TestCommands:
         key = get_random_string(10)
 
         assert await redis_client.expire(key, 10) == 0
-        assert await redis_client.pexpire(key, 10000) == False
+        assert not await redis_client.pexpire(key, 10000)
         assert await redis_client.expireat(key, int(time.time()) + 50) == 0
-        assert (
-            await redis_client.pexpireat(key, int(time.time() * 1000) + 50000) == False
-        )
+        assert not await redis_client.pexpireat(key, int(time.time() * 1000) + 50000)
         assert await redis_client.ttl(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1066,7 +1053,7 @@ class TestCommands:
                 increment=5.0,
                 existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
             )
-            == None
+            is None
         )
 
         assert (
@@ -1123,7 +1110,7 @@ class TestCommands:
                 increment=-3.0,
                 update_condition=UpdateOptions.GREATER_THAN,
             )
-            == None
+            is None
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1187,9 +1174,9 @@ class TestCommands:
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zscore(key, "one") == 1.0
 
-        assert await redis_client.zscore(key, "non_existing_member") == None
+        assert await redis_client.zscore(key, "non_existing_member") is None
         assert (
-            await redis_client.zscore("non_existing_key", "non_existing_member") == None
+            await redis_client.zscore("non_existing_key", "non_existing_member") is None
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1423,7 +1410,7 @@ class TestExceptions:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_timeout_exception_with_blpop(self, redis_client: TRedisClient):
         key = get_random_string(10)
-        with pytest.raises(TimeoutError) as e:
+        with pytest.raises(TimeoutError):
             await redis_client.custom_command(["BLPOP", key, "1"])
 
 
