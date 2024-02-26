@@ -468,7 +468,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Insert all the specified values at the head of the list stored at <code>key</code>. <code>
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
      * elements</code> are inserted one after the other to the head of the list, from the leftmost
      * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
      * list before performing the push operations.
