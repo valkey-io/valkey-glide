@@ -52,6 +52,19 @@ export type SlotKeyTypes = {
     key: string;
 };
 
+/// Route command to specific node.
+export type RouteByAddress = {
+    type: "routeByAddress";
+    /**
+     * DNS name of the host.
+     */
+    host: string;
+    /**
+     * The port to access on the node. If port is not provided, `host` is assumed to be in the format `{hostname}:{port}`.
+     */
+    port?: number;
+};
+
 export type Routes =
     | SingleNodeRoute
     /**
@@ -75,7 +88,8 @@ export type SingleNodeRoute =
     /**
      * Route request to the node that contains the slot that the given key matches.
      */
-    | SlotKeyTypes;
+    | SlotKeyTypes
+    | RouteByAddress;
 
 function toProtobufRoute(
     route: Routes | undefined
@@ -123,6 +137,27 @@ function toProtobufRoute(
                 slotType: redis_request.SlotTypes.Replica,
                 slotId: route.id,
             }),
+        });
+    } else if (route.type === "routeByAddress") {
+        let port = route.port;
+        let host = route.host;
+
+        if (port === undefined) {
+            const split = host.split(":");
+
+            if (split.length !== 2) {
+                throw new Error(
+                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
+                        host
+                );
+            }
+
+            host = split[0];
+            port = Number(split[1]);
+        }
+
+        return redis_request.Routes.create({
+            byAddressRoute: { host, port },
         });
     }
 }
