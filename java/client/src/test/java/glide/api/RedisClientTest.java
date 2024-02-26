@@ -836,6 +836,8 @@ public class RedisClientTest {
 
         CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(RPush), eq(args), any()))
                 .thenReturn(testResponse);
 
@@ -858,6 +860,8 @@ public class RedisClientTest {
 
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(RPop), eq(args), any()))
                 .thenReturn(testResponse);
 
@@ -881,6 +885,8 @@ public class RedisClientTest {
 
         CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(RPop), eq(args), any()))
                 .thenReturn(testResponse);
 
