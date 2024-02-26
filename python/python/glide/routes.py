@@ -58,7 +58,7 @@ class ByAddressRoute(Route):
             port (Optional[int]): The port the node communicates on.
         """
         super().__init__()
-        if port == None:
+        if port is None:
             split = host.split(":")
             if len(split) < 2:
                 raise RequestError(
