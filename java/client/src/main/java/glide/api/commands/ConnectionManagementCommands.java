@@ -14,7 +14,7 @@ public interface ConnectionManagementCommands {
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
-     * @return Response from Redis containing a <code>String</code> with "PONG".
+     * @return <code>String</code> with <code>"PONG"</code>.
      */
     CompletableFuture<String> ping();
 
@@ -22,9 +22,8 @@ public interface ConnectionManagementCommands {
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
-     * @param str The ping argument that will be returned.
-     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>
-     *     str</code>.
+     * @param message The server will respond with a copy of the message.
+     * @return <code>String</code> with a copy of the argument <code>message</code>.
      */
-    CompletableFuture<String> ping(String str);
+    CompletableFuture<String> ping(String message);
 }

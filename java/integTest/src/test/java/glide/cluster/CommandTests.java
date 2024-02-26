@@ -132,6 +132,20 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping() {
+        String data = clusterClient.ping().get();
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message() {
+        String data = clusterClient.ping("H3LL0").get();
+        assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
     public void ping_with_route() {
         String data = clusterClient.ping(ALL_NODES).get();
         assertEquals("PONG", data);
