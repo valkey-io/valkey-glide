@@ -136,6 +136,75 @@ describe("RedisClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `route by address reaches correct node_%p`,
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.ports(), protocol)
+            );
+            const result = (await client.customCommand(
+                ["cluster", "nodes"],
+                "randomNode"
+            )) as string;
+
+            // check that routing without explicit port works
+            const host =
+                result
+                    .split("\n")
+                    .find((line) => line.includes("myself"))
+                    ?.split(" ")[1]
+                    .split("@")[0] ?? "";
+
+            if (!host) {
+                throw new Error("No host could be parsed");
+            }
+
+            const secondResult = (await client.customCommand(
+                ["cluster", "nodes"],
+                {
+                    type: "routeByAddress",
+                    host,
+                }
+            )) as string;
+
+            expect(result).toEqual(secondResult);
+
+            const [host2, port] = host.split(":");
+
+            // check that routing with explicit port works
+            const thirdResult = (await client.customCommand(
+                ["cluster", "nodes"],
+                {
+                    type: "routeByAddress",
+                    host: host2,
+                    port: Number(port),
+                }
+            )) as string;
+
+            expect(result).toEqual(thirdResult);
+
+            client.close();
+        },
+        TIMEOUT
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `fail routing by address if no port is provided_%p`,
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.ports(), protocol)
+            );
+            expect(() =>
+                client.info(undefined, {
+                    type: "routeByAddress",
+                    host: "foo",
+                })
+            ).toThrowError();
+            client.close();
+        },
+        TIMEOUT
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set transactions test_%p`,
         async (protocol) => {
             const client = await RedisClusterClient.createClient(
