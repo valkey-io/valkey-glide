@@ -1,10 +1,11 @@
+use ::std::str;
 /**
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use redis::{
     cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
 };
-
+use serde_json::Value as JsonValue;
 #[derive(Clone, Copy)]
 pub(crate) enum ExpectedReturnType {
     Map,
@@ -127,8 +128,14 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::Json => match value {
             Value::Nil => Ok(value),
             Value::BulkString(json_bytes) => {
-                let mut json_iterator = std::str::from_utf8(&json_bytes)?.chars().peekable();
-                parse_value(&mut json_iterator)
+                let json_str = str::from_utf8(&json_bytes)?;
+                let parsed_value: JsonValue = match serde_json::from_str(&json_str) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        return Err((ErrorKind::TypeError, "Json response cannot be parsed").into())
+                    }
+                };
+                json_to_redis(parsed_value)
             }
             _ => Err((
                 ErrorKind::TypeError,
@@ -187,126 +194,39 @@ fn convert_array_to_map(
     }
     Ok(Value::Map(map))
 }
-fn parse_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> RedisResult<Value> {
-    match chars.peek() {
-        Some('"') => parse_string(chars),
-        Some('[') => parse_array(chars),
-        Some('{') => parse_map(chars),
-        Some(_) => parse_number(chars),
-        _ => Err((
-            ErrorKind::TypeError,
-            "Json response cannot be parsed",
-            format!("(response has value {:?})", chars.peek()),
-        )
-            .into()),
-    }
-}
-fn parse_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> RedisResult<Value> {
-    let mut string = String::new();
-    chars.next();
-    while let Some(&c) = chars.peek() {
-        if c == '"' {
-            chars.next();
-            break;
-        } else {
-            string.push(c);
-            chars.next();
-        }
-    }
-    Ok(Value::BulkString(string.into()))
-}
-fn parse_array(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> RedisResult<Value> {
-    let mut array = Vec::new();
-    chars.next(); // skip the "[" char
-    loop {
-        match chars.peek() {
-            Some(']') => {
-                chars.next();
-                break;
-            }
-            Some(',') | Some(' ') => {
-                chars.next();
-                continue;
-            }
-            Some(_) => {
-                let value = parse_value(chars)?;
-                array.push(value);
-            }
-            _ => {
-                return Err((
-                    ErrorKind::TypeError,
-                    "Json response cannot be entered into an array",
-                    format!("(response has value {:?})", chars.peek()),
-                )
-                    .into())
-            }
-        }
-    }
-    Ok(Value::Array(array))
-}
 
-fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> RedisResult<Value> {
-    let mut number = String::new();
-    while let Some(&c) = chars.peek() {
-        if c.is_numeric() || c == '.' {
-            number.push(c);
-            chars.next();
-        } else {
-            break;
-        }
-    }
-    if number.contains('.') {
-        Ok(Value::Double(
-            from_owned_redis_value::<f64>(Value::BulkString(number.into()))?.into(),
-        ))
-    } else {
-        Ok(Value::Int(from_owned_redis_value::<i64>(
-            Value::BulkString(number.into()),
-        )?))
-    }
-}
-
-fn parse_map(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> RedisResult<Value> {
-    let mut map = Vec::new();
-    chars.next(); // skip the "{" char
-    loop {
-        match chars.peek() {
-            Some('}') => {
-                chars.next();
-                break;
-            }
-            Some(',') | Some(' ') => {
-                chars.next();
-                continue;
-            }
-            Some(_) => {
-                let key = parse_string(chars)?;
-                if chars.peek() != Some(&':') {
-                    return Err((
-                        ErrorKind::TypeError,
-                        "Response next value wasn't ':' , and cannot be entered into a map",
-                        format!("(response next value {:?})", chars.peek()),
-                    )
-                        .into());
-                }
-                chars.next(); // skip the ":" char
-                if chars.peek() == Some(&' ') {
-                    chars.next();
-                }
-                let value = parse_value(chars)?;
-                map.push((key, value));
-            }
-            _ => {
-                return Err((
-                    ErrorKind::TypeError,
-                    "Json response cannot be entered into a map",
-                    format!("(response has value {:?})", chars.peek()),
-                )
-                    .into())
+fn json_to_redis(json_value: JsonValue) -> Result<Value, redis::RedisError> {
+    match json_value {
+        JsonValue::Null => Ok(Value::Nil),
+        JsonValue::Bool(b) => Ok(Value::Boolean(b)),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Ok(Value::Int(i))
+            } else if let Some(_) = n.as_f64() {
+                Ok(Value::Double(
+                    from_owned_redis_value::<f64>(Value::BulkString(n.to_string().into_bytes()))?
+                        .into(),
+                ))
+            } else {
+                Err((ErrorKind::TypeError, "Unsupported number type").into())
             }
         }
+        JsonValue::String(s) => Ok(Value::BulkString(s.into_bytes())),
+        JsonValue::Array(arr) => {
+            let mut redis_arr = Vec::new();
+            for json_val in arr {
+                redis_arr.push(json_to_redis(json_val)?);
+            }
+            Ok(Value::Array(redis_arr))
+        }
+        JsonValue::Object(obj) => {
+            let mut redis_map = Vec::new();
+            for (k, v) in obj {
+                redis_map.push((Value::BulkString(k.into_bytes()), json_to_redis(v)?));
+            }
+            Ok(Value::Map(redis_map))
+        }
     }
-    Ok(Value::Map(map))
 }
 
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
@@ -594,33 +514,61 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_string() {
+    fn test_json_string() {
         let json_str = r#""test""#;
-        let result = parse_string(&mut json_str.chars().peekable()).unwrap();
+        let result = convert_to_expected_type(
+            Value::BulkString(json_str.into()),
+            Some(ExpectedReturnType::Json),
+        )
+        .unwrap();
         assert_eq!(result, Value::BulkString(b"test".to_vec()));
     }
 
     #[test]
-    fn test_parse_number() {
+    fn test_json_number() {
         let json_str = "123";
-        let result = parse_number(&mut json_str.chars().peekable()).unwrap();
+        let result = convert_to_expected_type(
+            Value::BulkString(json_str.into()),
+            Some(ExpectedReturnType::Json),
+        )
+        .unwrap();
         assert_eq!(result, Value::Int(123));
+
+        let json_str = "12.3";
+        let result = convert_to_expected_type(
+            Value::BulkString(json_str.into()),
+            Some(ExpectedReturnType::Json),
+        )
+        .unwrap();
+        assert_eq!(result, Value::Double(12.3.into()));
     }
 
     #[test]
-    fn test_parse_array() {
-        let json_str = r#"[1, 2, 3]"#;
-        let result = parse_array(&mut json_str.chars().peekable()).unwrap();
+    fn test_json_array() {
+        let json_str = r#"[1, 2, 3.0]"#;
+        let result = convert_to_expected_type(
+            Value::BulkString(json_str.into()),
+            Some(ExpectedReturnType::Json),
+        )
+        .unwrap();
         assert_eq!(
             result,
-            Value::Array(vec![Value::Int(1), Value::Int(2), Value::Int(3),])
+            Value::Array(vec![
+                Value::Int(1),
+                Value::Int(2),
+                Value::Double(3.0.into()),
+            ])
         );
     }
 
     #[test]
-    fn test_parse_map() {
+    fn test_json_map() {
         let json_str = r#"{"a": 1, "b": 2}"#;
-        let result = parse_map(&mut json_str.chars().peekable()).unwrap();
+        let result = convert_to_expected_type(
+            Value::BulkString(json_str.into()),
+            Some(ExpectedReturnType::Json),
+        )
+        .unwrap();
         assert_eq!(
             result,
             Value::Map(vec![
