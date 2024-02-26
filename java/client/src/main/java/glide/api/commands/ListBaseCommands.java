@@ -67,7 +67,6 @@ public interface ListBaseCommands {
      */
     CompletableFuture<String[]> lpopCount(String key, long count);
 
-
     /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
