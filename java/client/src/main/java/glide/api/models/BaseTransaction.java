@@ -581,6 +581,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
+     */
+    public T llen(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LLen, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as

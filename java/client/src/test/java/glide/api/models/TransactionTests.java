@@ -175,6 +175,9 @@ public class TransactionTests {
         results.add(
                 Pair.of(LTrim, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
 
+        transaction.llen("key");
+        results.add(Pair.of(LLen, ArgsArray.newBuilder().addArgs("key").build()));
+
         transaction.rpush("key", new String[] {"element"});
         results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
 
