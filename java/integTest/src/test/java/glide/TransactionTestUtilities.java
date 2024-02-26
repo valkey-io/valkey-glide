@@ -14,7 +14,7 @@ public class TransactionTestUtilities {
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String key6 = "{key}" + UUID.randomUUID();
-
+    private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -65,10 +65,14 @@ public class TransactionTestUtilities {
         baseTransaction.lpop(key5);
         baseTransaction.lpopCount(key5, 2);
 
-        baseTransaction.sadd(key6, new String[] {"baz", "foo"});
-        baseTransaction.srem(key6, new String[] {"foo"});
-        baseTransaction.scard(key6);
-        baseTransaction.smembers(key6);
+        baseTransaction.rpush(key6, new String[] {value1, value2, value2});
+        baseTransaction.rpop(key6);
+        baseTransaction.rpopCount(key6, 2);
+
+        baseTransaction.sadd(key7, new String[] {"baz", "foo"});
+        baseTransaction.srem(key7, new String[] {"foo"});
+        baseTransaction.scard(key7);
+        baseTransaction.smembers(key7);
 
         return baseTransaction;
     }
@@ -102,6 +106,9 @@ public class TransactionTestUtilities {
             10.5,
             3L,
             value3,
+            new String[] {value2, value1},
+            3L,
+            value2,
             new String[] {value2, value1},
             2L,
             1L,

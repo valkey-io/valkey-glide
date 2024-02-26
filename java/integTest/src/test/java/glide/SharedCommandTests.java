@@ -575,6 +575,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void rpush_rpop_existing_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value1", "value2", "value3", "value4"};
+
+        assertEquals(4, client.rpush(key, valueArray).get());
+        assertEquals("value4", client.rpop(key).get());
+
+        assertArrayEquals(new String[] {"value3", "value2"}, client.rpopCount(key, 2).get());
+        assertNull(client.rpop("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void rpush_rpop_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception rpushException =
+                assertThrows(ExecutionException.class, () -> client.rpush(key, new String[] {"foo"}).get());
+        assertTrue(rpushException.getCause() instanceof RequestException);
+
+        Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
+        assertTrue(rpopException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(
