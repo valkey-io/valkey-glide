@@ -148,6 +148,48 @@ public class RedisClusterClientTest {
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn("PONG");
 
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("PONG", payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_message_returns_success() {
+        // setup
+        String message = "RETURN OF THE PONG";
+        String[] arguments = new String[] {message};
+        CompletableFuture<String> testResponse = new CompletableFuture();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(message);
+        String pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("PONG");
+
         Route route = ALL_NODES;
 
         // match on protobuf request
@@ -165,7 +207,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void ping_with_message_returns_success() {
+    public void ping_with_message_with_route_returns_success() {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};

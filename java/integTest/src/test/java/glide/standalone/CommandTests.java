@@ -72,6 +72,20 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping() {
+        String data = regularClient.ping().get();
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message() {
+        String data = regularClient.ping("H3LL0").get();
+        assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get();
         for (String section : DEFAULT_INFO_SECTIONS) {
