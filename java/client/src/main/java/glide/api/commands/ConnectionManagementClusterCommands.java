@@ -12,12 +12,29 @@ import java.util.concurrent.CompletableFuture;
 public interface ConnectionManagementClusterCommands {
 
     /**
+     * Ping the Redis server. The command will be routed to all primaries.
+     *
+     * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
+     * @return <code>String</code> with <code>"PONG"</code>.
+     */
+    CompletableFuture<String> ping();
+
+    /**
+     * Ping the Redis server. The command will be routed to all primaries.
+     *
+     * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
+     * @param message The server will respond with a copy of the message.
+     * @return <code>String</code> with a copy of the argument <code>message</code>.
+     */
+    CompletableFuture<String> ping(String message);
+
+    /**
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
-     * @return Response from Redis containing a <code>String</code> with "PONG".
+     * @return <code>String</code> with <code>"PONG"</code>.
      */
     CompletableFuture<String> ping(Route route);
 
@@ -25,11 +42,10 @@ public interface ConnectionManagementClusterCommands {
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
-     * @param str The ping argument that will be returned.
+     * @param message The ping argument that will be returned.
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
-     * @return Response from Redis containing a <code>String</code> with a copy of the argument <code>
-     *     str</code>.
+     * @return <code>String</code> with a copy of the argument <code>message</code>.
      */
-    CompletableFuture<String> ping(String str, Route route);
+    CompletableFuture<String> ping(String message, Route route);
 }

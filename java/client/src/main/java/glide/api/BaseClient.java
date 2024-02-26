@@ -22,7 +22,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
@@ -30,7 +29,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
-import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.SetCommands;
@@ -61,12 +59,7 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable,
-                GenericBaseCommands,
-                ConnectionManagementCommands,
-                StringCommands,
-                HashCommands,
-                SetCommands {
+        implements AutoCloseable, GenericBaseCommands, StringCommands, HashCommands, SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -212,16 +205,6 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, false, response);
-    }
-
-    @Override
-    public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> ping(@NonNull String str) {
-        return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
     }
 
     @Override
