@@ -129,7 +129,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Nil => Ok(value),
             Value::BulkString(json_bytes) => {
                 let json_str = str::from_utf8(&json_bytes)?;
-                let parsed_value: JsonValue = match serde_json::from_str(&json_str) {
+                let parsed_value: JsonValue = match serde_json::from_str(json_str) {
                     Ok(value) => value,
                     Err(_) => {
                         return Err((ErrorKind::TypeError, "Json response cannot be parsed").into())
@@ -202,7 +202,7 @@ fn json_to_redis(json_value: JsonValue) -> Result<Value, redis::RedisError> {
         JsonValue::Number(n) => {
             if let Some(i) = n.as_i64() {
                 Ok(Value::Int(i))
-            } else if let Some(_) = n.as_f64() {
+            } else if n.as_f64().is_some() {
                 Ok(Value::Double(
                     from_owned_redis_value::<f64>(Value::BulkString(n.to_string().into_bytes()))?
                         .into(),
