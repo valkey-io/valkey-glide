@@ -36,7 +36,7 @@ public interface ListBaseCommands {
      * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
      * @param key The key of the list.
      * @return The value of the first element. <br>
-     *     If <code>key</code> does not exist null will be returned. <br>
+     *     If <code>key</code> does not exist, null will be returned. <br>
      * @example
      *     <pre>
      * String value1 = client.lpop("my_list").get()
@@ -55,7 +55,7 @@ public interface ListBaseCommands {
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of the popped elements will be returned depending on the list's length.<br>
-     *     If <code>key</code> does not exist null will be returned.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
      * @example
      *     <pre>
      * String[] values1 = client.lpopCount("my_list", 2).get()

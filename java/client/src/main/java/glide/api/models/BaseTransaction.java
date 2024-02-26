@@ -492,7 +492,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
      * @param key The key of the list.
      * @return Command Response - The value of the first element. <br>
-     *     If <code>key</code> does not exist null will be returned. <br>
+     *     If <code>key</code> does not exist, null will be returned. <br>
      */
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -510,7 +510,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count The count of the elements to pop from the list.
      * @return Command Response - An array of the popped elements will be returned depending on the
      *     list's length.<br>
-     *     If <code>key</code> does not exist null will be returned.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
      */
     public T lpopCount(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));

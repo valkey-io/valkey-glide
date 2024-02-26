@@ -566,6 +566,10 @@ public class SharedCommandTests {
 
         Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
         assertTrue(lpopException.getCause() instanceof RequestException);
+
+        Exception lpopCountException =
+                assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
+        assertTrue(lpopCountException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
