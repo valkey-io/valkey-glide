@@ -6,18 +6,24 @@ import glide.benchmarks.utils.ConnectionSettings;
 import java.util.Set;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.commands.JedisCommands;
 
 /** A Jedis client with sync capabilities. See: https://github.com/redis/jedis */
 public class JedisClient implements SyncClient {
-
-    private JedisCommands jedis;
+    boolean isClusterMode;
+    private JedisPool jedisStandalonePool;
+    private JedisCluster jedisCluster;
 
     @Override
     public void closeConnection() {
-        // nothing to do
+        if (jedisCluster != null) {
+            jedisCluster.close();
+        }
+        if (jedisStandalonePool != null) {
+            jedisStandalonePool.close();
+        }
     }
 
     @Override
@@ -27,27 +33,38 @@ public class JedisClient implements SyncClient {
 
     @Override
     public void connectToRedis(ConnectionSettings connectionSettings) {
-        if (connectionSettings.clusterMode) {
-            jedis =
+        isClusterMode = connectionSettings.clusterMode;
+        if (isClusterMode) {
+            jedisCluster =
                     new JedisCluster(
                             Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
                             DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
         } else {
-            try (JedisPool pool =
+            jedisStandalonePool =
                     new JedisPool(
-                            connectionSettings.host, connectionSettings.port, connectionSettings.useSsl)) {
-                jedis = pool.getResource();
-            }
+                            connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
         }
     }
 
     @Override
     public void set(String key, String value) {
-        jedis.set(key, value);
+        if (isClusterMode) {
+            jedisCluster.set(key, value);
+        } else {
+            try (Jedis jedis = jedisStandalonePool.getResource()) {
+                jedis.set(key, value);
+            }
+        }
     }
 
     @Override
     public String get(String key) {
-        return jedis.get(key);
+        if (isClusterMode) {
+            return jedisCluster.get(key);
+        } else {
+            try (Jedis jedis = jedisStandalonePool.getResource()) {
+                return jedis.get(key);
+            }
+        }
     }
 }
