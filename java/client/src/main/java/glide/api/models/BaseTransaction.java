@@ -554,6 +554,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Trim an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - Always <code>OK</code>. <br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     */
+    public T ltrim(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+
+        protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as

@@ -1068,6 +1068,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void ltrim_returns_success() {
+        // setup
+        String key = "testKey";
+        long start = 2L;
+        long end = 2L;
+        String[] args = new String[] {key, Long.toString(end), Long.toString(start)};
+
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LTrim), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ltrim(key, start, end);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void rpush_returns_success() {
         // setup
         String key = "testKey";

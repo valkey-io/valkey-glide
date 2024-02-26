@@ -369,6 +369,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> ltrim(@NonNull String key, long start, long end) {
+        return commandManager.submitNewCommand(
+                LTrim,
+                new String[] {key, Long.toString(start), Long.toString(end)},
+                this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> rpush(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);

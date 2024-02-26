@@ -169,6 +169,10 @@ public class TransactionTests {
         results.add(
                 Pair.of(LRange, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
 
+        transaction.ltrim("key", 1, 2);
+        results.add(
+                Pair.of(LTrim, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+
         transaction.rpush("key", new String[] {"element"});
         results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
 

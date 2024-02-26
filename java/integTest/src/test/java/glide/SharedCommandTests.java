@@ -584,6 +584,28 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void ltrim_existing_non_existing_key_and_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
+
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals(OK, client.ltrim(key, 0, 1).get());
+        assertArrayEquals(new String[] {"value1", "value2"}, client.lrange(key, 0, -1).get());
+
+        // `start` is greater than `end` so the key will be removed.
+        assertEquals(OK, client.ltrim(key, 4, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange(key, 0, -1).get());
+
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception ltrimException =
+                assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
+        assertTrue(ltrimException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void rpush_rpop_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value1", "value2", "value3", "value4"};
