@@ -62,6 +62,7 @@ public class TransactionTestUtilities {
         baseTransaction.hincrByFloat(key4, field3, 5.5);
 
         baseTransaction.lpush(key5, new String[] {value1, value2, value3});
+        baseTransaction.lrange(key5, 0, -2);
         baseTransaction.lpop(key5);
         baseTransaction.lpopCount(key5, 2);
 
@@ -105,6 +106,7 @@ public class TransactionTestUtilities {
             5L,
             10.5,
             3L,
+            new String[] {value3, value2},
             value3,
             new String[] {value2, value1},
             3L,

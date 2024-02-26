@@ -545,20 +545,22 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void lpush_lpop_existing_non_existing_key(BaseClient client) {
+    public void lpush_lpop_lrange_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
 
         assertEquals(4, client.lpush(key, valueArray).get());
         assertEquals("value1", client.lpop(key).get());
+        assertArrayEquals(new String[] {"value2", "value3", "value4"}, client.lrange(key, 0, -1).get());
         assertArrayEquals(new String[] {"value2", "value3"}, client.lpopCount(key, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange("non_existing_key", 0, -1).get());
         assertNull(client.lpop("non_existing_key").get());
     }
 
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void lpush_lpop_type_error(BaseClient client) {
+    public void lpush_lpop_lrange_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "foo").get());
@@ -573,6 +575,10 @@ public class SharedCommandTests {
         Exception lpopCountException =
                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
         assertTrue(lpopCountException.getCause() instanceof RequestException);
+
+        Exception lrangeException =
+                assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
+        assertTrue(lrangeException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows

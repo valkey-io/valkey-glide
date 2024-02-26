@@ -165,6 +165,10 @@ public class TransactionTests {
         transaction.lpopCount("key", 2);
         results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
+        transaction.lrange("key", 1, 2);
+        results.add(
+                Pair.of(LRange, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+
         transaction.rpush("key", new String[] {"element"});
         results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
 

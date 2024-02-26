@@ -68,6 +68,27 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lpopCount(String key, long count);
 
     /**
+     * Returns the specified elements of the list stored at <code>key</code>.<br>
+     * The offsets <code>start
+     * </code> and <code>end</code> are zero-based indexes, with 0 being the first element of the
+     * list, 1 being the next element and so on. These offsets can also be negative numbers indicating
+     * offsets starting at the end of the list, with -1 being the last element of the list, -2 being
+     * the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Array of elements in the specified range.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, an empty array will be returned.<br>
+     *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
+     *     end of the list.<br>
+     *     If <code>key</code> does not exist an empty array will be returned.<br>
+     */
+    CompletableFuture<String[]> lrange(String key, long start, long end);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as

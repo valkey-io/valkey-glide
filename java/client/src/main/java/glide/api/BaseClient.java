@@ -24,6 +24,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -357,6 +358,14 @@ public abstract class BaseClient
                 LPop,
                 new String[] {key, Long.toString(count)},
                 response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> lrange(@NonNull String key, long start, long end) {
+        return commandManager.submitNewCommand(
+                LRange,
+                new String[] {key, Long.toString(start), Long.toString(end)},
+                response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
