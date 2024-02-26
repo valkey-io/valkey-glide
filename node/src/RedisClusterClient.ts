@@ -16,6 +16,7 @@ import {
     createInfo,
     createPing,
 } from "./Commands";
+import { RequestError } from "./Errors";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
@@ -146,7 +147,7 @@ function toProtobufRoute(
             const split = host.split(":");
 
             if (split.length !== 2) {
-                throw new Error(
+                throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
                         host
                 );

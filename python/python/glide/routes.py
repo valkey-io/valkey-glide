@@ -3,6 +3,7 @@
 from enum import Enum
 from typing import Optional
 
+from glide.exceptions import RequestError
 from glide.protobuf.redis_request_pb2 import RedisRequest, SimpleRoutes
 from glide.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
 
@@ -59,6 +60,11 @@ class ByAddressRoute(Route):
         super().__init__()
         if port == None:
             split = host.split(":")
+            if len(split) < 2:
+                raise RequestError(
+                    "No port provided, expected host to be formatted as {hostname}:{port}`. Received "
+                    + host
+                )
             host = split[0]
             port = int(split[1])
 
@@ -93,4 +99,4 @@ def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
         request.route.by_address_route.host = route.host
         request.route.by_address_route.port = route.port
     else:
-        raise Exception(f"Received invalid route type: {type(route)}")
+        raise RequestError(f"Received invalid route type: {type(route)}")

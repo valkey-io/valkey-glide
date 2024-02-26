@@ -1687,6 +1687,14 @@ class TestClusterRoutes:
 
         assert cluster_nodes == third_result
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_fail_routing_by_address_if_no_port_is_provided(
+        self, redis_client: RedisClusterClient
+    ):
+        with pytest.raises(RequestError) as e:
+            await redis_client.info(route=ByAddressRoute("foo"))
+
 
 @pytest.mark.asyncio
 class TestExceptions:
