@@ -48,6 +48,24 @@ class SlotIdRoute(Route):
         self.slot_id = slot_id
 
 
+class ByAddressRoute(Route):
+    def __init__(self, host: str, port: Optional[int] = None) -> None:
+        """Routes a request to a node by its DNS address
+
+        Args:
+            host (str): The DNS name of the node. If `port` is not provided, should be in the `{DNS}:{port}` format.
+            port (Optional[int]): The port the node communicates on.
+        """
+        super().__init__()
+        if port == None:
+            split = host.split(":")
+            host = split[0]
+            port = int(split[1])
+
+        self.host = host
+        self.port = port if port else 0
+
+
 def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
     return (
         ProtoSlotTypes.Primary
@@ -71,5 +89,8 @@ def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
     elif isinstance(route, SlotIdRoute):
         request.route.slot_id_route.slot_type = to_protobuf_slot_type(route.slot_type)
         request.route.slot_id_route.slot_id = route.slot_id
+    elif isinstance(route, ByAddressRoute):
+        request.route.by_address_route.host = route.host
+        request.route.by_address_route.port = route.port
     else:
         raise Exception(f"Received invalid route type: {type(route)}")
