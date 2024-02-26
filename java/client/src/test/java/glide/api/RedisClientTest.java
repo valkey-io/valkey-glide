@@ -140,6 +140,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void select_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        Long index = 5L;
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Select), eq(new String[] {Long.toString(index)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.select(index);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void del_returns_long_success() {
         // setup
         String[] keys = new String[] {"testKey1", "testKey2"};
@@ -799,28 +821,6 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void select_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        Long index = 5L;
-        when(testResponse.get()).thenReturn(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Select), eq(new String[] {Long.toString(index)}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.select(index);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
     }
 
     @SneakyThrows

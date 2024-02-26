@@ -62,7 +62,12 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, GenericBaseCommands, StringCommands, HashCommands, ListBaseCommands, SetCommands {
+        implements AutoCloseable,
+                GenericBaseCommands,
+                StringCommands,
+                HashCommands,
+                ListBaseCommands,
+                SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
