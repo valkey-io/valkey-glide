@@ -20,6 +20,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -462,6 +464,58 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
 
         protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
+     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
+     * list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T lpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
+     * a single element from the beginning of the list.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the first element. <br>
+     *     If <code>key</code> does not exist, null will be returned. <br>
+     */
+    public T lpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the elements to pop from the list.
+     * @return Command Response - An array of the popped elements will be returned depending on the
+     *     list's length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T lpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
         return getThis();
     }
 

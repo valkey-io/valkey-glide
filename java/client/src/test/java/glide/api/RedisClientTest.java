@@ -30,6 +30,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -134,6 +136,28 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void select_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        Long index = 5L;
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Select), eq(new String[] {Long.toString(index)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.select(index);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -727,24 +751,76 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void select_returns_success() {
+    public void lpush_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        Long index = 5L;
-        when(testResponse.get()).thenReturn(OK);
+        String key = "testKey";
+        String[] elements = new String[] {"value1", "value2"};
+        String[] args = new String[] {key, "value1", "value2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Select), eq(new String[] {Long.toString(index)}), any()))
+        when(commandManager.<Long>submitNewCommand(eq(LPush), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.select(index);
+        CompletableFuture<Long> response = service.lpush(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpop_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = new String[] {key};
+        String value = "value";
+
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lpop(key);
         String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(OK, payload);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpopCount_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String[] args = new String[] {key, Long.toString(count)};
+        String[] value = new String[] {"value1", "value2"};
+
+        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(LPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.lpopCount(key, count);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

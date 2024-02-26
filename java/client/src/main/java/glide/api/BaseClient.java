@@ -20,6 +20,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -31,6 +33,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
+import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
@@ -59,7 +62,12 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, GenericBaseCommands, StringCommands, HashCommands, SetCommands {
+        implements AutoCloseable,
+                GenericBaseCommands,
+                StringCommands,
+                HashCommands,
+                ListBaseCommands,
+                SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -321,6 +329,26 @@ public abstract class BaseClient
                 HashIncrByFloat,
                 new String[] {key, field, Double.toString(amount)},
                 this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpush(@NonNull String key, @NonNull String[] elements) {
+        String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lpop(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                LPop, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> lpopCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                LPop,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override

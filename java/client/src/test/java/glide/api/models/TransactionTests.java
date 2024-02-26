@@ -20,6 +20,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -148,6 +150,18 @@ public class TransactionTests {
                 Pair.of(
                         HashIncrByFloat,
                         ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1.5").build()));
+
+        transaction.lpush("key", new String[] {"element1", "element2"});
+        results.add(
+                Pair.of(
+                        LPush,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("element1").addArgs("element2").build()));
+
+        transaction.lpop("key");
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.lpopCount("key", 2);
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
