@@ -13,7 +13,7 @@ import redis.clients.jedis.JedisPool;
 /** A Jedis client with sync capabilities. See: https://github.com/redis/jedis */
 public class JedisClient implements SyncClient {
     boolean isClusterMode;
-    private JedisPool jedisPool;
+    private JedisPool jedisStandalonePool;
     private JedisCluster jedisCluster;
 
     @Override
@@ -21,8 +21,8 @@ public class JedisClient implements SyncClient {
         if (jedisCluster != null) {
             jedisCluster.close();
         }
-        if (jedisPool != null) {
-            jedisPool.close();
+        if (jedisStandalonePool != null) {
+            jedisStandalonePool.close();
         }
     }
 
@@ -40,7 +40,7 @@ public class JedisClient implements SyncClient {
                             Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
                             DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
         } else {
-            jedisPool =
+            jedisStandalonePool =
                     new JedisPool(
                             connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
         }
@@ -51,7 +51,7 @@ public class JedisClient implements SyncClient {
         if (isClusterMode) {
             jedisCluster.set(key, value);
         } else {
-            try (Jedis jedis = jedisPool.getResource()) {
+            try (Jedis jedis = jedisStandalonePool.getResource()) {
                 jedis.set(key, value);
             }
         }
@@ -62,7 +62,7 @@ public class JedisClient implements SyncClient {
         if (isClusterMode) {
             return jedisCluster.get(key);
         } else {
-            try (Jedis jedis = jedisPool.getResource()) {
+            try (Jedis jedis = jedisStandalonePool.getResource()) {
                 return jedis.get(key);
             }
         }
