@@ -1559,6 +1559,31 @@ class TestCommands:
         message = get_random_string(5)
         assert await redis_client.echo(message) == message
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_dbsize(self, redis_client: TRedisClient):
+        assert await redis_client.custom_command(["FLUSHALL"]) == OK
+
+        key_value_pairs = [(get_random_string(10), "foo") for _ in range(10)]
+        assert await redis_client.dbsize() == 0
+
+        for key, value in key_value_pairs:
+            assert await redis_client.set(key, value) == OK
+        assert await redis_client.dbsize() == 10
+
+        if isinstance(redis_client, RedisClusterClient):
+            cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+            assert isinstance(cluster_nodes, (str, list))
+            cluster_nodes = get_first_result(cluster_nodes)
+            replica_count = cluster_nodes.count("slave")
+            master_count = cluster_nodes.count("master")
+            assert await redis_client.dbsize(AllNodes()) == 10 * (
+                replica_count / master_count + 1
+            )
+        else:
+            assert await redis_client.select(1) == OK
+            assert await redis_client.dbsize() == 0
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
