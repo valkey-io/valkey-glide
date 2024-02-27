@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
@@ -11,12 +12,16 @@ import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.exceptions.RequestException;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -67,6 +72,20 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping() {
+        String data = regularClient.ping().get();
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message() {
+        String data = regularClient.ping("H3LL0").get();
+        assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get();
         for (String section : DEFAULT_INFO_SECTIONS) {
@@ -98,5 +117,29 @@ public class CommandTests {
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void simple_select_test() {
+        assertEquals(OK, regularClient.select(0).get());
+
+        String key = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        assertEquals(OK, regularClient.set(key, value).get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertNull(regularClient.get(key).get());
+
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(value, regularClient.get(key).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void select_test_gives_error() {
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> regularClient.select(-1).get());
+        assertTrue(e.getCause() instanceof RequestException);
     }
 }

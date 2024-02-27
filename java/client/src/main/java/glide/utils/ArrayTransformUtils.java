@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Stream;
 
+/** Utility methods for data conversion. */
 public class ArrayTransformUtils {
 
     /**
@@ -25,8 +26,9 @@ public class ArrayTransformUtils {
      *
      * @param objectArr Array of objects to cast.
      * @param clazz The class of the array elements to cast to.
-     * @return An array of type T, containing the elements from the input array.
-     * @param <T> The type to which the elements are cast.
+     * @return An array of type U, containing the elements from the input array.
+     * @param <T> The base type from which the elements are being cast.
+     * @param <U> The subtype of T to which the elements are cast.
      */
     @SuppressWarnings("unchecked")
     public static <T, U extends T> U[] castArray(T[] objectArr, Class<U> clazz) {

@@ -6,20 +6,36 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
-import glide.api.commands.ConnectionManagementCommands;
+import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.HashCommands;
+import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.SetOptions;
@@ -48,7 +64,12 @@ import response.ResponseOuterClass.Response;
 /** Base Client class for Redis */
 @AllArgsConstructor
 public abstract class BaseClient
-        implements AutoCloseable, ConnectionManagementCommands, StringCommands, SetCommands {
+        implements AutoCloseable,
+                GenericBaseCommands,
+                StringCommands,
+                HashCommands,
+                ListBaseCommands,
+                SetCommands {
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -161,6 +182,10 @@ public abstract class BaseClient
         return handleRedisResponse(String.class, true, response);
     }
 
+    protected Boolean handleBooleanResponse(Response response) throws RedisException {
+        return handleRedisResponse(Boolean.class, false, response);
+    }
+
     protected Long handleLongResponse(Response response) throws RedisException {
         return handleRedisResponse(Long.class, false, response);
     }
@@ -193,13 +218,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> ping() {
-        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> ping(@NonNull String str) {
-        return commandManager.submitNewCommand(Ping, new String[] {str}, this::handleStringResponse);
+    public CompletableFuture<Long> del(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
     }
 
     @Override
@@ -262,6 +282,98 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> hget(@NonNull String key, @NonNull String field) {
+        return commandManager.submitNewCommand(
+                HashGet, new String[] {key, field}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hset(
+            @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
+        String[] args = ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key);
+        return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
+        String[] args = ArrayUtils.addFirst(fields, key);
+        return commandManager.submitNewCommand(HashDel, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hmget(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments = ArrayUtils.addFirst(fields, key);
+        return commandManager.submitNewCommand(
+                HashMGet, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean> hexists(@NonNull String key, @NonNull String field) {
+        return commandManager.submitNewCommand(
+                HashExists, new String[] {key, field}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
+        return commandManager.submitNewCommand(HashGetAll, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hincrBy(@NonNull String key, @NonNull String field, long amount) {
+        return commandManager.submitNewCommand(
+                HashIncrBy, new String[] {key, field, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> hincrByFloat(
+            @NonNull String key, @NonNull String field, double amount) {
+        return commandManager.submitNewCommand(
+                HashIncrByFloat,
+                new String[] {key, field, Double.toString(amount)},
+                this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpush(@NonNull String key, @NonNull String[] elements) {
+        String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lpop(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                LPop, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> lpopCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                LPop,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> rpush(@NonNull String key, @NonNull String[] elements) {
+        String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> rpop(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                RPop, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> rpopCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                RPop,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sadd(String key, String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(SAdd, arguments, this::handleLongResponse);
@@ -281,5 +393,15 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> exists(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> unlink(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
     }
 }

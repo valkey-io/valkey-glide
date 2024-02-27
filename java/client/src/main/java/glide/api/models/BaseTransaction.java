@@ -5,19 +5,34 @@ import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
@@ -124,6 +139,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(options.toArgs());
 
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
+     * exist.
+     *
+     * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
+     * @param keys The keys we wanted to remove.
+     * @return Command Response - The number of keys that were removed.
+     */
+    public T del(String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Del, commandArgs));
         return getThis();
     }
 
@@ -291,6 +321,258 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Retrieve the value associated with <code>field</code> in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
+     * @return Command Response - The value associated with <code>field</code>, or <code>null</code>
+     *     when <code>field
+     *     </code> is not present in the hash or <code>key</code> does not exist.
+     */
+    public T hget(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @return Command Response - The number of fields that were added.
+     */
+    public T hset(@NonNull String key, @NonNull Map<String, String> fieldValueMap) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key));
+
+        protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
+     * not exist within this hash are ignored.
+     *
+     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove from the hash stored at <code>key</code>.
+     * @return Command Response - The number of fields that were removed from the hash, not including
+     *     specified but non-existing fields.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
+     */
+    public T hdel(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
+     * <code>elements</code> are inserted one after the other to the tail of the list, from the
+     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
+     * an empty list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T rpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the last elements of the list stored at <code>key</code>.<br>
+     * The command pops a single element from the end of the list.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the last element.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param count The count of the elements to pop from the list.
+     * @returns Command Response - An array of popped elements will be returned depending on the
+     *     list's length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     */
+    public T hmget(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return Command Response - <code>True</code> if the hash contains the specified field. If the
+     *     hash does not contain the field, or if the key does not exist, it returns <code>False
+     *     </code>.
+     */
+    public T hexists(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A <code>Map</code> of fields and their values stored in the hash.
+     *     Every field name in the map is associated with its corresponding value.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.
+     */
+    public T hgetall(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment or decrement.
+     */
+    public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @returns Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment or decrement.
+     */
+    public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
+     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
+     * list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T lpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
+     * a single element from the beginning of the list.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the first element. <br>
+     *     If <code>key</code> does not exist, null will be returned. <br>
+     */
+    public T lpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the elements to pop from the list.
+     * @return Command Response - An array of the popped elements will be returned depending on the
+     *     list's length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T lpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
      *
@@ -355,6 +637,38 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of keys in <code>keys</code> that exist in the database.
+     *
+     * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
+     * @param keys The keys list to check.
+     * @return Command Response - The number of keys that exist. If the same existing key is mentioned
+     *     in <code>keys</code> multiple times, it will be counted multiple times.
+     */
+    public T exists(String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while <a
+     * href="https://redis.io/commands/del/">DEL</a> does.
+     *
+     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @param keys The list of keys to unlink.
+     * @return Command Response - The number of <code>keys</code> that were unlinked.
+     */
+    public T unlink(String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
         return getThis();
     }
 

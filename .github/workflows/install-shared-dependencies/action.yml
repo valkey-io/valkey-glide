@@ -52,7 +52,7 @@ runs:
               targets: ${{ inputs.target }}
 
         - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v2.1.0
+          uses: arduino/setup-protoc@v3
           with:
               version: "25.1"
               repo-token: ${{ inputs.github-token }}

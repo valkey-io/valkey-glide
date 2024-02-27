@@ -5,36 +5,57 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
 
 public class TransactionTests {
-    @Test
-    public void transaction_builds_protobuf_request() {
-        Transaction transaction = new Transaction();
+    private static Stream<Arguments> getTransactionBuilders() {
+        return Stream.of(Arguments.of(new Transaction()), Arguments.of(new ClusterTransaction()));
+    }
 
+    @ParameterizedTest
+    @MethodSource("getTransactionBuilders")
+    public void transaction_builds_protobuf_request(BaseTransaction<?> transaction) {
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
         transaction.get("key");
@@ -52,6 +73,15 @@ public class TransactionTests {
                                 .addArgs("value")
                                 .addArgs(RETURN_OLD_VALUE)
                                 .build()));
+
+        transaction.exists(new String[] {"key1", "key2"});
+        results.add(Pair.of(Exists, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
+
+        transaction.del(new String[] {"key1", "key2"});
+        results.add(Pair.of(Del, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
+
+        transaction.unlink(new String[] {"key1", "key2"});
+        results.add(Pair.of(Unlink, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
 
         transaction.ping();
         results.add(Pair.of(Ping, ArgsArray.newBuilder().build()));
@@ -88,6 +118,61 @@ public class TransactionTests {
 
         transaction.decrBy("key", 2);
         results.add(Pair.of(DecrBy, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.hset("key", Map.of("field", "value"));
+        results.add(
+                Pair.of(
+                        HashSet,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
+
+        transaction.hget("key", "field");
+        results.add(Pair.of(HashGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hdel("key", new String[] {"field"});
+        results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hmget("key", new String[] {"field"});
+        results.add(Pair.of(HashMGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hexists("key", "field");
+        results.add(
+                Pair.of(HashExists, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hgetall("key");
+        results.add(Pair.of(HashGetAll, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.hincrBy("key", "field", 1);
+        results.add(
+                Pair.of(
+                        HashIncrBy,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1").build()));
+
+        transaction.hincrByFloat("key", "field", 1.5);
+        results.add(
+                Pair.of(
+                        HashIncrByFloat,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1.5").build()));
+
+        transaction.lpush("key", new String[] {"element1", "element2"});
+        results.add(
+                Pair.of(
+                        LPush,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("element1").addArgs("element2").build()));
+
+        transaction.lpop("key");
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.lpopCount("key", 2);
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.rpush("key", new String[] {"element"});
+        results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
+
+        transaction.rpop("key");
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.rpopCount("key", 2);
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));

@@ -1342,6 +1342,38 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zpopmax(
+        self, key: str, count: Optional[int] = None
+    ) -> Mapping[str, float]:
+        """
+        Removes and returns the members with the highest scores from the sorted set stored at `key`.
+        If `count` is provided, up to `count` members with the highest scores are removed and returned.
+        Otherwise, only one member with the highest score is removed and returned.
+
+        See https://redis.io/commands/zpopmax for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
+            If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+
+        Returns:
+            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+            If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
+
+        Examples:
+            >>> await client.zpopmax("my_sorted_set")
+                {'member1': 10.0}  # Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+            >>> await client.zpopmax("my_sorted_set", 2)
+                {'member2': 8.0, 'member3': 7.5}  # Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+        """
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(
+                RequestType.ZPopMax, [key, str(count)] if count else [key]
+            ),
+        )
+
     async def zpopmin(
         self, key: str, count: Optional[int] = None
     ) -> Mapping[str, float]:
@@ -1363,9 +1395,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zpopmin("my_sorted_set")
-                {'member1': 10.0}  # Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+                {'member1': 5.0}  # Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
             >>> await client.zpopmin("my_sorted_set", 2)
-                {'member2': 8.0, 'member3': 7.5}  # Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+                {'member3': 7.5 , 'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
         """
         return cast(
             Mapping[str, float],

@@ -85,7 +85,7 @@ export function runBaseTests<Context>(config: {
                 const result = await client.customCommand(["CLIENT", "INFO"]);
 
                 expect(result).toContain("lib-name=GlideJS");
-                expect(result).toContain("lib-ver=0.1.0");
+                expect(result).toContain("lib-ver=unknown");
             }, protocol);
         },
         config.timeout
@@ -745,6 +745,28 @@ export function runBaseTests<Context>(config: {
                         "hash value is not a float"
                     );
                 }
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hlen test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const fieldValueMap = {
+                    [field1]: "value1",
+                    [field2]: "value2",
+                };
+
+                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hlen(key1)).toEqual(2);
+                expect(await client.hdel(key1, [field1])).toEqual(1);
+                expect(await client.hlen(key1)).toEqual(1);
+                expect(await client.hlen("nonExistingHash")).toEqual(0);
             }, protocol);
         },
         config.timeout
@@ -1535,6 +1557,7 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lindex test_%p`,
         async (protocol) => {
@@ -1549,6 +1572,48 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zpopmin test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zpopmin(key)).toEqual({ a: 1.0 });
+                expect(await client.zpopmin(key, 3)).toEqual({
+                    b: 2.0,
+                    c: 3.0,
+                });
+                expect(await client.zpopmin(key)).toEqual({});
+                expect(await client.set(key, "value")).toEqual("OK");
+                await expect(client.zpopmin(key)).rejects.toThrow();
+                expect(await client.zpopmin("notExsitingKey")).toEqual({});
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zpopmax test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zpopmax(key)).toEqual({ c: 3.0 });
+                expect(await client.zpopmax(key, 3)).toEqual({
+                    b: 2.0,
+                    a: 1.0,
+                });
+                expect(await client.zpopmax(key)).toEqual({});
+                expect(await client.set(key, "value")).toEqual("OK");
+                await expect(client.zpopmax(key)).rejects.toThrow();
+                expect(await client.zpopmax("notExsitingKey")).toEqual({});
             }, protocol);
         },
         config.timeout

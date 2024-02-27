@@ -588,6 +588,13 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
+export function createHLen(key: string): redis_request.Command {
+    return createCommand(RequestType.HLen, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createExists(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
@@ -839,4 +846,20 @@ export function createLindex(
     index: number
 ): redis_request.Command {
     return createCommand(RequestType.Lindex, [key, index.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createZpopmin(key: string, count?: number): redis_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.ZPopMin, args);
+}
+
+/**
+ * @internal
+ */
+export function createZpopmax(key: string, count?: number): redis_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.ZPopMax, args);
 }

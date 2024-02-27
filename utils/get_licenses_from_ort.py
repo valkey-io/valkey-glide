@@ -67,7 +67,7 @@ ort_results_per_lang = [
 ]
 
 all_licenses_set: Set = set()
-unkown_licenses: List[PackageLicense] = []
+unknown_licenses: List[PackageLicense] = []
 
 for ort_result in ort_results_per_lang:
     with open(ort_result.analyzer_result_file, "r") as ort_results, open(
@@ -93,7 +93,7 @@ for ort_result in ort_results_per_lang:
                         final_licenses = [license]
                     for license in final_licenses:
                         if license not in APPROVED_LICENSES:
-                            unkown_licenses.append(
+                            unknown_licenses.append(
                                 PackageLicense(package["id"], ort_result.name, license)
                             )
                         all_licenses_set.add(license)
@@ -108,6 +108,6 @@ all_licenses_set = set(sorted(all_licenses_set))
 for license in all_licenses_set:
     print(f"{license}")
 
-print("\n\n#### Unkown / Not Pre-Approved Licenses #####\n")
-for package in unkown_licenses:
+print("\n\n#### unknown / Not Pre-Approved Licenses #####\n")
+for package in unknown_licenses:
     print(str(package))

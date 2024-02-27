@@ -28,6 +28,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHLen,
     createHMGet,
     createHSet,
     createIncr,
@@ -58,6 +59,8 @@ import {
     createZadd,
     createZcard,
     createZcount,
+    createZpopmax,
+    createZpopmin,
     createZrem,
     createZscore,
 } from "./Commands";
@@ -618,6 +621,16 @@ export class BaseClient {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
     }
 
+    /** Returns the number of fields contained in the hash stored at `key`.
+     * See https://redis.io/commands/hlen/ for more details.
+     * 
+     * @param key - The key of the hash.
+     * @returns The number of fields in the hash, or 0 when the key does not exist.
+     */
+    public hlen(key: string): Promise<number> {
+        return this.createWritePromise(createHLen(key));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -1087,6 +1100,42 @@ export class BaseClient {
      */
     public type(key: string): Promise<string> {
         return this.createWritePromise(createType(key));
+    }
+
+    /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
+     * Otherwise, only one member with the lowest score is removed and returned.
+     * See https://redis.io/commands/zpopmin for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * @returns A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     */
+    public zpopmin(
+        key: string,
+        count?: number
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createZpopmin(key, count));
+    }
+
+    /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the highest scores are removed and returned.
+     * Otherwise, only one member with the highest score is removed and returned.
+     * See https://redis.io/commands/zpopmax for more details.
+     * 
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * @returns A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+     */
+    public zpopmax(
+        key: string,
+        count?: number
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createZpopmax(key, count));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

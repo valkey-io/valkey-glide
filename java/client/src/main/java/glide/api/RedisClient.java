@@ -3,7 +3,10 @@ package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
+import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
@@ -18,7 +21,8 @@ import lombok.NonNull;
  * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
  * client to Redis.
  */
-public class RedisClient extends BaseClient implements GenericCommands, ServerManagementCommands {
+public class RedisClient extends BaseClient
+        implements GenericCommands, ServerManagementCommands, ConnectionManagementCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -46,6 +50,17 @@ public class RedisClient extends BaseClient implements GenericCommands, ServerMa
     }
 
     @Override
+    public CompletableFuture<String> ping() {
+        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> ping(@NonNull String message) {
+        return commandManager.submitNewCommand(
+                Ping, new String[] {message}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> info() {
         return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
     }
@@ -53,5 +68,11 @@ public class RedisClient extends BaseClient implements GenericCommands, ServerMa
     @Override
     public CompletableFuture<String> info(@NonNull InfoOptions options) {
         return commandManager.submitNewCommand(Info, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> select(long index) {
+        return commandManager.submitNewCommand(
+                Select, new String[] {Long.toString(index)}, this::handleStringResponse);
     }
 }
