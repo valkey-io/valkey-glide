@@ -22,6 +22,7 @@ Software Dependencies:
 - .Net SDK 6 or later
 - git
 - rustup
+- redis
 
 Please also install the following packages to build [GLIDE core rust library](../glide-core/README.md):
 
@@ -51,6 +52,10 @@ For example, on Linux you can copy it to `/usr/bin`:
 ```bash
 sudo cp protoc /usr/bin/
 ```
+
+**Redis installation**
+
+To install `redis-server` and `redis-cli` on your host, follow the [Redis Installation Guide](https://redis.io/docs/install/install-redis/).
 
 **Dependencies installation for Ubuntu**
 
@@ -90,16 +95,8 @@ git submodule update --init --recursive
 
 3. Build the C# wrapper
 
-Choose a build option from the following and run it from the `csharp` folder.
-
-Build in release mode, stripped from all debug symbols:
-
 ```bash
 dotnet build
-```
-For debug build use:
-```bash
-dotnet build --configuration=Debug
 ```
 
 4. Run tests
@@ -120,8 +117,6 @@ dotnet test
     cd <repo root>/benchmarks/csharp
     dotnet run --framework net8.0 --dataSize 1024 --resultsFile test.json --concurrentTasks 4 --clients all --host localhost --clientCount 4
     ```
-
-    Run benchmarking with `-h` flag to get list and help about all command line parameters.
 
     3. Use a [helper script](../benchmarks/README.md) which runs end-to-end benchmarking workflow:
 
