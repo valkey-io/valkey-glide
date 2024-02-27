@@ -85,6 +85,15 @@ public interface ListBaseCommands {
      *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
      *     end of the list.<br>
      *     If <code>key</code> does not exist an empty array will be returned.<br>
+     * @example
+     *     <pre>
+     * String[] payload = lient.lrange("my_list", 0, 2).get()
+     * assert payload.equals(new String[] {"value1", "value2", "value3"})
+     * String[] payload = client.lrange("my_list", -2, -1).get()
+     * assert payload.equals(new String[] {"value2", "value3"})
+     * String[] payload = client.lrange("non_exiting_key", 0, 2).get()
+     * assert payload.equals(new String[] {})
+     * </pre>
      */
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
@@ -106,6 +115,11 @@ public interface ListBaseCommands {
      *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>
+     * String payload = client.ltrim("my_list", 0, 1).get()
+     * assert payload.equals("OK")
+     * </pre>
      */
     CompletableFuture<String> ltrim(String key, long start, long end);
 
