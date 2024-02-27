@@ -51,7 +51,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.HashCommands;
-import glide.api.commands.ServerManagementBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
