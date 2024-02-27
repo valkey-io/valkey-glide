@@ -1551,8 +1551,10 @@ public class RedisClientTest {
     public void configGet_returns_success() {
         // setup
         CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
-        var testPayload = Map.of("value", "42");
+        Map<String, String> testPayload = Map.of("value", "42");
         when(testResponse.get()).thenReturn(testPayload);
+
+        // match on protobuf request
         when(commandManager.<Map<String, String>>submitNewCommand(
                         eq(ConfigGet), eq(new String[] {"value"}), any()))
                 .thenReturn(testResponse);
@@ -1572,6 +1574,8 @@ public class RedisClientTest {
         // setup
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(
                         eq(ConfigSet), eq(new String[] {"value", "42"}), any()))
                 .thenReturn(testResponse);
