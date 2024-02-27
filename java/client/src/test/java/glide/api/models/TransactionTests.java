@@ -271,8 +271,10 @@ public class TransactionTests {
         transaction.ttl("key");
         results.add(Pair.of(TTL, ArgsArray.newBuilder().addArgs("key").build()));
 
-        transaction.clientId().clientGetName();
+        transaction.clientId();
         results.add(Pair.of(ClientId, ArgsArray.newBuilder().build()));
+
+        transaction.clientGetName();
         results.add(Pair.of(ClientGetName, ArgsArray.newBuilder().build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
