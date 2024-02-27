@@ -4,7 +4,6 @@ package glide.api;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -42,7 +41,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
-import glide.api.commands.ConnectionManagementBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.ListBaseCommands;
@@ -77,7 +75,6 @@ import response.ResponseOuterClass.Response;
 public abstract class BaseClient
         implements AutoCloseable,
                 GenericBaseCommands,
-                ConnectionManagementBaseCommands,
                 StringCommands,
                 HashCommands,
                 ListBaseCommands,
