@@ -344,7 +344,7 @@ public class RedisClientTest {
         CompletableFuture<Boolean> response = service.expire(key, seconds);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(true, response.get());
     }
 
@@ -367,7 +367,7 @@ public class RedisClientTest {
         CompletableFuture<Boolean> response = service.expire(key, seconds, ExpireOptions.HAS_NO_EXPIRY);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(false, response.get());
     }
 
@@ -390,7 +390,7 @@ public class RedisClientTest {
         CompletableFuture<Boolean> response = service.expireAt(key, unixSeconds);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(true, response.get());
     }
 
@@ -414,7 +414,7 @@ public class RedisClientTest {
                 service.expireAt(key, unixSeconds, ExpireOptions.HAS_EXISTING_EXPIRY);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(false, response.get());
     }
 
@@ -423,7 +423,7 @@ public class RedisClientTest {
     public void pexpire_returns_success() {
         // setup
         String key = "testKey";
-        long milliseconds = 5L;
+        long milliseconds = 50000L;
         String[] arguments = new String[] {key, Long.toString(milliseconds)};
 
         CompletableFuture<Boolean> testResponse = mock(CompletableFuture.class);
@@ -437,7 +437,7 @@ public class RedisClientTest {
         CompletableFuture<Boolean> response = service.pexpire(key, milliseconds);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(true, response.get());
     }
 
@@ -446,7 +446,7 @@ public class RedisClientTest {
     public void pexpire_with_expireOptions_returns_success() {
         // setup
         String key = "testKey";
-        long milliseconds = 5L;
+        long milliseconds = 50000L;
         String[] arguments = new String[] {key, Long.toString(milliseconds), "LT"};
 
         CompletableFuture<Boolean> testResponse = mock(CompletableFuture.class);
@@ -461,7 +461,7 @@ public class RedisClientTest {
                 service.pexpire(key, milliseconds, ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(false, response.get());
     }
 
@@ -484,7 +484,7 @@ public class RedisClientTest {
         CompletableFuture<Boolean> response = service.pexpireAt(key, unixMilliseconds);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(true, response.get());
     }
 
@@ -508,7 +508,7 @@ public class RedisClientTest {
                 service.pexpireAt(key, unixMilliseconds, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(false, response.get());
     }
 
@@ -530,7 +530,7 @@ public class RedisClientTest {
         CompletableFuture<Long> response = service.ttl(key);
 
         // verify
-        assertNotNull(response);
+        assertEquals(testResponse, response);
         assertEquals(ttl, response.get());
     }
 

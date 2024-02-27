@@ -680,17 +680,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
-     * </code> will automatically be deleted. If <code>key</code> already has an existing <code>expire
-     * </code> set, the time to live is updated to the new value. If <code>seconds</code> is a
-     * non-positive number, the <code>key</code> will be deleted rather than expired. The timeout will
-     * only be cleared by commands that delete or overwrite the contents of <code>key</code>.
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
      * @param key The key to set timeout on it.
      * @param seconds The timeout in seconds.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
-     *     timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided
-     *     arguments.
+     *     timeout was not set. e.g. key doesn't exist.
      */
     public T expire(@NonNull String key, long seconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(seconds));
@@ -701,10 +703,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
-     * </code> will automatically be deleted. If <code>key</code> already has an existing <code>expire
-     * </code> set, the time to live is updated to the new value. If <code>seconds</code> is a
-     * non-positive number, the <code>key</code> will be deleted rather than expired. The timeout will
-     * only be cleared by commands that delete or overwrite the contents of <code>key</code>.
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
      * @param key The key to set timeout on it.
@@ -725,18 +730,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
-     * 1, 1970) instead of specifying the number of seconds. A timestamp in the past will delete the
-     * <code>key</code> immediately. After the timeout has expired, the <code>key</code> will
-     * automatically be deleted. If <code>key</code> already has an existing <code>expire</code> set,
-     * the time to live is updated to the new value. The timeout will only be cleared by commands that
-     * delete or overwrite the contents of <code>key</code>.
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
      * @param key The key to set timeout on it.
      * @param unixSeconds The timeout in an absolute Unix timestamp.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
-     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
-     *     provided arguments.
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
      */
     public T expireAt(@NonNull String key, long unixSeconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(unixSeconds));
@@ -747,11 +753,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
-     * 1, 1970) instead of specifying the number of seconds. A timestamp in the past will delete the
-     * <code>key</code> immediately. After the timeout has expired, the <code>key</code> will
-     * automatically be deleted. If <code>key</code> already has an existing <code>expire</code> set,
-     * the time to live is updated to the new value. The timeout will only be cleared by commands that
-     * delete or overwrite the contents of <code>key</code>.
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
      * @param key The key to set timeout on it.
@@ -773,17 +781,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
-     * key</code> will automatically be deleted. If <code>key</code> already has an existing <code>
-     * expire</code> set, the time to live is updated to the new value. If <code>milliseconds</code>
-     * is a non-positive number, the <code>key</code> will be deleted rather than expired. The timeout
-     * will only be cleared by commands that delete or overwrite the contents of <code>key</code>.
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>
+     * expire</code> set, the time to live is updated to the new value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
      * @param key The key to set timeout on it.
      * @param milliseconds The timeout in milliseconds.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
-     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
-     *     provided arguments.
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
      */
     public T pexpire(@NonNull String key, long milliseconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(milliseconds));
@@ -794,10 +804,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
-     * key</code> will automatically be deleted. If <code>key</code> already has an existing expire
-     * set, the time to live is updated to the new value. If <code>milliseconds</code> is a
-     * non-positive number, the <code>key</code> will be deleted rather than expired. The timeout will
-     * only be cleared by commands that delete or overwrite the contents of <code>key</code>.
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing expire set, the time to live is updated to the new
+     * value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
      * @param key The key to set timeout on it.
@@ -819,18 +832,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
-     * January 1, 1970) instead of specifying the number of milliseconds. A timestamp in the past will
-     * delete the <code>key</code> immediately. After the timeout has expired, the <code>key</code>
-     * will automatically be deleted. If <code>key</code> already has an existing <code>expire</code>
-     * set, the time to live is updated to the new value. The timeout will only be cleared by commands
-     * that delete or overwrite the contents of <code>key</code>.
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
      * @param key The <code>key</code> to set timeout on it.
      * @param unixMilliseconds The timeout in an absolute Unix timestamp.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
-     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
-     *     provided arguments.
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
      */
     public T pexpireAt(@NonNull String key, long unixMilliseconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(unixMilliseconds));
@@ -841,11 +855,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
-     * January 1, 1970) instead of specifying the number of milliseconds. A timestamp in the past will
-     * delete the <code>key</code> immediately. After the timeout has expired, the <code>key</code>
-     * will automatically be deleted. If <code>key</code> already has an existing <code>expire</code>
-     * set, the time to live is updated to the new value. The timeout will only be cleared by commands
-     * that delete or overwrite the contents of <code>key</code>.
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
      * @param key The <code>key</code> to set timeout on it.

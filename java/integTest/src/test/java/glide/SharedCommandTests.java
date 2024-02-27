@@ -718,13 +718,15 @@ public class SharedCommandTests {
         }
         assertTrue(client.ttl(key).get() <= 50L);
 
-        if (REDIS_VERSION.feature() >= 7) {
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
+        } else {
             // set command clears the timeout.
             assertEquals(OK, client.set(key, "pexpireAt_timeout").get());
             assertFalse(
                     client
                             .pexpireAt(
-                                    key, Instant.now().getEpochSecond() + 50000L, ExpireOptions.HAS_EXISTING_EXPIRY)
+                                    key, Instant.now().toEpochMilli() + 50000L, ExpireOptions.HAS_EXISTING_EXPIRY)
                             .get());
         }
     }
@@ -758,7 +760,7 @@ public class SharedCommandTests {
 
         assertEquals(OK, client.set(key, "pexpireAt_with_past_timestamp").get());
         // set timeout in the past
-        assertTrue(client.pexpireAt(key, Instant.now().getEpochSecond() - 50000L).get());
+        assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() - 50000L).get());
         assertEquals(-2L, client.ttl(key).get());
     }
 
@@ -781,7 +783,7 @@ public class SharedCommandTests {
         String key = UUID.randomUUID().toString();
 
         assertFalse(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
-        assertFalse(client.pexpireAt(key, Instant.now().getEpochSecond() + 10000L).get());
+        assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
     }
