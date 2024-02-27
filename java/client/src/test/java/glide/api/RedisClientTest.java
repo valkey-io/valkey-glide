@@ -1335,6 +1335,8 @@ public class RedisClientTest {
         // setup
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ConfigRewrite), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
@@ -1353,6 +1355,8 @@ public class RedisClientTest {
         // setup
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ConfigResetStat), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 

@@ -279,8 +279,10 @@ public class TransactionTests {
         transaction.clientGetName();
         results.add(Pair.of(ClientGetName, ArgsArray.newBuilder().build()));
 
-        transaction.configRewrite().configResetStat();
+        transaction.configRewrite();
         results.add(Pair.of(ConfigRewrite, ArgsArray.newBuilder().build()));
+
+        transaction.configResetStat();
         results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
