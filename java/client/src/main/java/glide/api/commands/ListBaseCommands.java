@@ -129,6 +129,11 @@ public interface ListBaseCommands {
      * @param key The key of the list.
      * @return The length of the list at <code>key</code>.<br>
      *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
+     * @example
+     *     <pre>
+     * Long lenList = client.llen("my_list").get()
+     * assert lenList == 3L //Indicates that there are 3 elements in the list.
+     * </pre>
      */
     CompletableFuture<Long> llen(String key);
 
