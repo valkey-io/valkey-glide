@@ -98,7 +98,7 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
     /**
-     * Trim an existing list so that it will contain only the specified range of elements specified.
+     * Trims an existing list so that it will contain only the specified range of elements specified.
      * <br>
      * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
      * first element of the list, 1 being the next element and so on.<br>
