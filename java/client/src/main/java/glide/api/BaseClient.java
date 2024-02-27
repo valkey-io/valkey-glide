@@ -44,7 +44,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashCommands;
 import glide.api.commands.ListBaseCommands;
-import glide.api.commands.ServerManagementBaseCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.ExpireOptions;

@@ -5,7 +5,6 @@ import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.api.BaseClient.OK;
-import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
