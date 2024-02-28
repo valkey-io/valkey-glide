@@ -65,11 +65,11 @@ class ByAddressRoute(Route):
                     "No port provided, expected host to be formatted as {hostname}:{port}`. Received "
                     + host
                 )
-            host = split[0]
-            port = int(split[1])
-
-        self.host = host
-        self.port = port if port else 0
+            self.host = split[0]
+            self.port = int(split[1])
+        else:
+            self.host = host
+            self.port = port
 
 
 def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
