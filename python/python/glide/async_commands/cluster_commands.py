@@ -265,14 +265,15 @@ class ClusterCommands(CoreCommands):
         See https://redis.io/commands/dbsize for more details.
 
         Args:
-            route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            int: The number of keys in the currently selected database.
+            int: The number of keys in the database.
+            In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
 
         Examples:
             >>> await client.dbsize()
-                10  # Indicates there are 10 keys in the current database.
+                10  # Indicates there are 10 keys in the cluster.
         """
         return cast(int, await self._execute_command(RequestType.DBSize, [], route))

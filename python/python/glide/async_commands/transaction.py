@@ -1382,7 +1382,7 @@ class BaseTransaction:
         See https://redis.io/commands/dbsize for more details.
 
         Commands response:
-            int: The number of keys in the currently selected database.
+            int: The number of keys in the database.
         """
         return self.append_command(RequestType.DBSize, [])
 
