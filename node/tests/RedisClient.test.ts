@@ -11,7 +11,6 @@ import {
     it,
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
-import RedisServer from "redis-server";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -21,41 +20,32 @@ import {
 } from "..";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
-import { flushallOnPort, transactionTest } from "./TestUtilities";
+import { RedisCluster, flushallOnPort, transactionTest } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
-const FreePort = require("find-free-port");
 
 type Context = {
     client: RedisClient;
 };
 
-const PORT_NUMBER = 3000;
+const TIMEOUT = 10000;
 
 describe("RedisClient", () => {
-    let server: RedisServer;
+    let testsFailed = 0;
+    let cluster: RedisCluster;
     let port: number;
     beforeAll(async () => {
-        port = await FreePort(PORT_NUMBER).then(
-            ([free_port]: number[]) => free_port
-        );
-        server = await new Promise((resolve, reject) => {
-            const server = new RedisServer(port);
-            server.open(async (err: Error | null) => {
-                if (err) {
-                    reject(err);
-                }
-
-                resolve(server);
-            });
-        });
-    });
+        cluster = await RedisCluster.createCluster(false, 1, 1);
+        port = cluster.ports()[0];
+    }, 20000);
 
     afterEach(async () => {
-        await flushallOnPort(port);
+        await flushallOnPort(cluster.ports()[0]);
     });
 
-    afterAll(() => {
-        server.close();
+    afterAll(async () => {
+        if (testsFailed === 0) {
+            await cluster.close();
+        }
     });
 
     const getAddress = (port: number) => {
@@ -204,12 +194,17 @@ describe("RedisClient", () => {
             const options = getOptions(port, protocol);
             options.protocol = protocol;
             options.clientName = clientName;
+            testsFailed += 1;
             const client = await RedisClient.createClient(options);
-
             return { client, context: { client } };
         },
-        close: async (context: Context) => {
+        close: (context: Context, testSucceeded: boolean) => {
+            if (testSucceeded) {
+                testsFailed -= 1;
+            }
+
             context.client.close();
         },
+        timeout: TIMEOUT,
     });
 });

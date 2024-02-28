@@ -144,9 +144,9 @@ export function transactionTest(
     baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
     args.push(2);
     baseTransaction.zpopmin(key8);
-    args.push({"member2": 3.0});
+    args.push({ member2: 3.0 });
     baseTransaction.zpopmax(key8);
-    args.push({"member3": 3.5});
+    args.push({ member3: 3.5 });
     return args;
 }
 
@@ -185,12 +185,17 @@ export class RedisCluster {
     }
 
     public static createCluster(
+        cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
         loadModule?: string[]
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
-            let command = `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`;
+            let command = `python3 ../utils/cluster_manager.py start -r ${replicaCount} -n ${shardCount}`;
+
+            if (cluster_mode) {
+                command += " --cluster-mode";
+            }
 
             if (loadModule) {
                 if (loadModule.length === 0) {

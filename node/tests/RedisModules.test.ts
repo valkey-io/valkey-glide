@@ -34,7 +34,12 @@ describe("RedisModules", () => {
             arg.startsWith("--load-module=")
         );
         const loadModuleValues = loadModuleArgs.map((arg) => arg.split("=")[1]);
-        cluster = await RedisCluster.createCluster(3, 0, loadModuleValues);
+        cluster = await RedisCluster.createCluster(
+            true,
+            3,
+            0,
+            loadModuleValues
+        );
     }, 20000);
 
     afterEach(async () => {

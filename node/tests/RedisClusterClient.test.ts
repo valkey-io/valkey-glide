@@ -35,7 +35,7 @@ describe("RedisClusterClient", () => {
     let testsFailed = 0;
     let cluster: RedisCluster;
     beforeAll(async () => {
-        cluster = await RedisCluster.createCluster(3, 0);
+        cluster = await RedisCluster.createCluster(true, 3, 0);
     }, 20000);
 
     afterEach(async () => {
