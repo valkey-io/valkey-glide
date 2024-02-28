@@ -21,11 +21,13 @@ import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -857,5 +859,101 @@ public class SharedCommandTests {
         assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zadd_and_zaddIncr(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(3.0, client.zaddIncr(key, "one", 2.0).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zadd_and_zaddIncr_with_NX_XX(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+
+        ZaddOptions onlyIfExistsOptions =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .build();
+        ZaddOptions onlyIfDoesNotExistOptions =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .build();
+
+        assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
+        assertEquals(3, client.zadd(key, membersScores, onlyIfDoesNotExistOptions).get());
+        assertEquals(null, client.zaddIncr(key, "one", 5, onlyIfDoesNotExistOptions).get());
+        assertEquals(6, client.zaddIncr(key, "one", 5, onlyIfExistsOptions).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zadd_and_zaddIncr_with_GT_LT(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put("one", -3.0);
+        membersScores.put("two", 2.0);
+        membersScores.put("three", 3.0);
+
+        assertEquals(3, client.zadd(key, membersScores).get());
+        membersScores.put("one", 10.0);
+
+        ZaddOptions scoreGreaterThanOptions =
+                ZaddOptions.builder()
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        ZaddOptions scoreLessThanOptions =
+                ZaddOptions.builder()
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+
+        assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
+        assertEquals(0, client.zadd(key, membersScores, scoreLessThanOptions, true).get());
+        assertEquals(7, client.zaddIncr(key, "one", -3, scoreLessThanOptions).get());
+        assertEquals(null, client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zadd_illegal_arguments(BaseClient client) {
+        ZaddOptions existsGreaterThanOptions =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        assertThrows(IllegalArgumentException.class, () -> existsGreaterThanOptions.toArgs());
+        ZaddOptions existsLessThanOptions =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+        assertThrows(IllegalArgumentException.class, () -> existsLessThanOptions.toArgs());
+        ZaddOptions options =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .build();
+        options.toArgs();
+        options =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        options.toArgs();
+        options =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+        options.toArgs();
     }
 }

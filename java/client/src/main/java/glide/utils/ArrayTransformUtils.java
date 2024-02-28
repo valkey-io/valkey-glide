@@ -10,14 +10,28 @@ import java.util.stream.Stream;
 public class ArrayTransformUtils {
 
     /**
-     * Converts a map to an array of strings with alternating keys and values.
+     * Converts a map of string keys and values of any type in to an array of strings with alternating
+     * keys and values.
      *
-     * @param args Map of string pairs to convert.
-     * @return Array of strings [key1, value1, key2, value2, ...].
+     * @param args Map of string keys to values of any type to convert.
+     * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
      */
-    public static String[] convertMapToArgArray(Map<String, String> args) {
+    public static String[] convertMapToKeyValueStringArray(Map<String, ?> args) {
         return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
+                .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a map of string keys and values of any type into an array of strings with alternating
+     * values and keys.
+     *
+     * @param args Map of string keys to values of any type to convert.
+     * @return Array of strings [value1.toString(), key1, value2.toString(), key2, ...].
+     */
+    public static String[] convertMapToValueKeyStringArray(Map<String, ?> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getValue().toString(), entry.getKey()))
                 .toArray(String[]::new);
     }
 
@@ -35,5 +49,17 @@ public class ArrayTransformUtils {
         return Arrays.stream(objectArr)
                 .map(clazz::cast)
                 .toArray(size -> (U[]) Array.newInstance(clazz, size));
+    }
+
+    /**
+     * Concatenates multiple arrays of type T and returns a single concatenated array.
+     *
+     * @param arrays Varargs parameter for arrays to be concatenated.
+     * @param <T> The type of the elements in the arrays.
+     * @return A concatenated array of type T.
+     */
+    @SafeVarargs
+    public static <T> T[] concatenateArrays(T[]... arrays) {
+        return Stream.of(arrays).flatMap(Stream::of).toArray(size -> Arrays.copyOf(arrays[0], size));
     }
 }

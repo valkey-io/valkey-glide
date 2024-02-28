@@ -46,10 +46,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.ZaddOptions;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -290,6 +293,47 @@ public class TransactionTests {
 
         transaction.configResetStat();
         results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
+
+        Map<String, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put("member1", 1.0);
+        membersScores.put("member2", 2.0);
+        transaction.zadd(
+                "key",
+                membersScores,
+                ZaddOptions.builder()
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build(),
+                true);
+        results.add(
+                Pair.of(
+                        Zadd,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("LT")
+                                .addArgs("CH")
+                                .addArgs("1.0")
+                                .addArgs("member1")
+                                .addArgs("2.0")
+                                .addArgs("member2")
+                                .build()));
+
+        transaction.zaddIncr(
+                "key",
+                "member1",
+                3.0,
+                ZaddOptions.builder()
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build());
+        results.add(
+                Pair.of(
+                        Zadd,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("LT")
+                                .addArgs("INCR")
+                                .addArgs("3.0")
+                                .addArgs("member1")
+                                .build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
