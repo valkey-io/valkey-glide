@@ -12,12 +12,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "^0.20", features = ["extension-module", "num-bigint"] }
-pyo3-asyncio = { version =  "^0.20", features = ["tokio-runtime"] }
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager","tokio-rustls-comp"] }
 glide-core = { path = "../glide-core" }
-tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = {path = "../logger_core"}
-tracing-subscriber = "0.3.16"
 
 [package.metadata.maturin]
 python-source = "python"
