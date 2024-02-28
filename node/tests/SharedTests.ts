@@ -1481,7 +1481,7 @@ export function runBaseTests<Context>(config: {
                         "positiveInfinity"
                     )
                 ).toEqual(0);
-                
+
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
                     client.zcount(key2, "negativeInfinity", "positiveInfinity")
