@@ -15,10 +15,7 @@ crate-type = ["cdylib"]
 redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp","tokio-native-tls-comp"] }
 glide-core = { path = "../../glide-core" }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
-num-derive = "0.4.0"
-num-traits = "0.2.15"
 logger_core = {path = "../../logger_core"}
-tracing-subscriber = "0.3.16"
 
 [profile.release]
 lto = true

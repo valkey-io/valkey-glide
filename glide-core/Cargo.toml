@@ -10,7 +10,6 @@ authors = ["Amazon Web Services"]
 [dependencies]
 bytes = "^1.3"
 futures = "^0.3"
-num-traits = "^0.2"
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp", "connection-manager","cluster", "cluster-async"] }
 signal-hook = "^0.3"
 signal-hook-tokio = {version = "^0.3", features = ["futures-v0_3"] }
