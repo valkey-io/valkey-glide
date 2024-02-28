@@ -1,6 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -46,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
@@ -53,6 +57,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -247,7 +252,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - Always <code>OK</code>.
      */
     public T mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToArgArray(keyValueMap);
+        String[] args = convertMapToKeyValueStringArray(keyValueMap);
         ArgsArray commandArgs = buildArgs(args);
 
         protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
@@ -362,7 +367,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hset(@NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key));
+                buildArgs(ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key));
 
         protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
         return getThis();
@@ -1041,6 +1046,133 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T configResetStat() {
         protobufTransaction.addCommands(buildCommand(ConfigResetStat));
         return getThis();
+    }
+
+    /**
+     * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
+     * If a member is already a part of the sorted set, its score is updated.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param options The Zadd options.
+     * @param changed Modify the return value from the number of new elements added, to the total
+     *     number of elements changed.
+     * @return Command Response - The number of elements added to the sorted set. <br>
+     *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
+     *     <br>
+     */
+    public T zadd(
+            @NonNull String key,
+            @NonNull Map<String, Double> membersScoresMap,
+            @NonNull ZaddOptions options,
+            boolean changed) {
+        String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
+        String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
+
+        String[] arguments =
+                concatenateArrays(new String[] {key}, options.toArgs(), changedArg, membersScores);
+
+        ArgsArray commandArgs = buildArgs(arguments);
+
+        protobufTransaction.addCommands(buildCommand(Zadd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
+     * If a member is already a part of the sorted set, its score is updated.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param options The Zadd options.
+     * @return Command Response - The number of elements added to the sorted set.
+     */
+    public T zadd(
+            @NonNull String key,
+            @NonNull Map<String, Double> membersScoresMap,
+            @NonNull ZaddOptions options) {
+        return getThis().zadd(key, membersScoresMap, options, false);
+    }
+
+    /**
+     * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
+     * If a member is already a part of the sorted set, its score is updated.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param changed Modify the return value from the number of new elements added, to the total
+     *     number of elements changed.
+     * @return Command Response - The number of elements added to the sorted set. <br>
+     *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
+     *     <br>
+     */
+    public T zadd(
+            @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
+        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+    }
+
+    /**
+     * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
+     * If a member is already a part of the sorted set, its score is updated.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @return Command Response - The number of elements added to the sorted set.
+     */
+    public T zadd(@NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
+        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+    }
+
+    /**
+     * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
+     * </code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>
+     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
+     * member is created.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member A member in the sorted set to increment.
+     * @param increment The score to increment the member.
+     * @param options The Zadd options.
+     * @return Command Response - The score of the member.<br>
+     *     If there was a conflict with the options, the operation aborts and <code>null</code> is
+     *     returned.<br>
+     */
+    public T zaddIncr(
+            @NonNull String key, @NonNull String member, double increment, @NonNull ZaddOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {key},
+                                options.toArgs(),
+                                new String[] {"INCR", Double.toString(increment), member}));
+
+        protobufTransaction.addCommands(buildCommand(Zadd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
+     * </code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>
+     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
+     * member is created.
+     *
+     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member A member in the sorted set to increment.
+     * @param increment The score to increment the member.
+     * @return Command Response - The score of the member.
+     */
+    public T zaddIncr(@NonNull String key, @NonNull String member, double increment) {
+        return getThis().zaddIncr(key, member, increment, ZaddOptions.builder().build());
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */
