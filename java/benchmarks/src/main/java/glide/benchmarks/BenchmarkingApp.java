@@ -66,36 +66,66 @@ public class BenchmarkingApp {
         // create the Options
         Options options = new Options();
 
-        options.addOption(Option.builder("help").desc("print this message").build());
+        options.addOption(Option.builder("h").longOpt("help").desc("Print this message").build());
         options.addOption(
-                Option.builder("configuration").hasArg(true).desc("Configuration flag [Release]").build());
+                Option.builder()
+                        .longOpt("configuration")
+                        .hasArg(true)
+                        .desc("Configuration flag [Release]")
+                        .build());
         options.addOption(
-                Option.builder("resultsFile")
+                Option.builder()
+                        .longOpt("resultsFile")
                         .hasArg(true)
                         .desc("Result filepath (stdout if empty) []")
                         .build());
         options.addOption(
-                Option.builder("dataSize").hasArg(true).desc("Data block size [100 4000]").build());
+                Option.builder()
+                        .longOpt("dataSize")
+                        .hasArg(true)
+                        .desc("Data block size [100 4000]")
+                        .build());
         options.addOption(
-                Option.builder("concurrentTasks")
+                Option.builder()
+                        .longOpt("concurrentTasks")
                         .hasArg(true)
                         .desc("Number of concurrent tasks [100, 1000]")
                         .build());
         options.addOption(
-                Option.builder("clients").hasArg(true).desc("one of: all|jedis|lettuce|glide").build());
-        options.addOption(Option.builder("host").hasArg(true).desc("Hostname [localhost]").build());
-        options.addOption(Option.builder("port").hasArg(true).desc("Port number [6379]").build());
+                Option.builder()
+                        .longOpt("clients")
+                        .hasArg(true)
+                        .desc("one of: all|jedis|lettuce|glide")
+                        .build());
         options.addOption(
-                Option.builder("clientCount").hasArg(true).desc("Number of clients to run [1]").build());
-        options.addOption(Option.builder("tls").hasArg(false).desc("TLS [false]").build());
+                Option.builder().longOpt("host").hasArg(true).desc("Hostname [localhost]").build());
         options.addOption(
-                Option.builder("clusterModeEnabled")
+                Option.builder().longOpt("port").hasArg(true).desc("Port number [6379]").build());
+        options.addOption(
+                Option.builder()
+                        .longOpt("clientCount")
+                        .hasArg(true)
+                        .desc("Number of clients to run [1]")
+                        .build());
+        options.addOption(Option.builder().longOpt("tls").hasArg(false).desc("TLS [false]").build());
+        options.addOption(
+                Option.builder()
+                        .longOpt("clusterModeEnabled")
                         .hasArg(false)
                         .desc("Is cluster-mode enabled, other standalone mode is used [false]")
                         .build());
-        Option.builder("minimal").hasArg(false).desc("Run·benchmark·in·minimal·mode").build();
         options.addOption(
-                Option.builder("debugLogging").hasArg(false).desc("Verbose logs [false]").build());
+                Option.builder()
+                        .longOpt("minimal")
+                        .hasArg(false)
+                        .desc("Run benchmark in minimal mode")
+                        .build());
+        options.addOption(
+                Option.builder()
+                        .longOpt("debugLogging")
+                        .hasArg(false)
+                        .desc("Verbose logs [false]")
+                        .build());
 
         return options;
     }
