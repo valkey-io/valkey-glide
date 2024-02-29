@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
@@ -18,11 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -663,5 +666,125 @@ public class SharedCommandTests {
         Long existsKeysNum =
                 client.exists(new String[] {key1, key2, key1, UUID.randomUUID().toString()}).get();
         assertEquals(3L, existsKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_ttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "expire_timeout").get());
+        assertTrue(client.expire(key, 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // set command clears the timeout.
+        assertEquals(OK, client.set(key, "pexpire_timeout").get());
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.pexpire(key, 10000L).get());
+        } else {
+            assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
+        }
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // TTL will be updated to the new value = 15
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.expire(key, 15L).get());
+        } else {
+            assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
+        }
+        assertTrue(client.ttl(key).get() <= 15L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "expireAt_timeout").get());
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // extend TTL
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
+        } else {
+            assertTrue(
+                    client
+                            .expireAt(
+                                    key,
+                                    Instant.now().getEpochSecond() + 50L,
+                                    ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                            .get());
+        }
+        assertTrue(client.ttl(key).get() <= 50L);
+
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
+        } else {
+            // set command clears the timeout.
+            assertEquals(OK, client.set(key, "pexpireAt_timeout").get());
+            assertFalse(
+                    client
+                            .pexpireAt(
+                                    key, Instant.now().toEpochMilli() + 50000L, ExpireOptions.HAS_EXISTING_EXPIRY)
+                            .get());
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
+        assertEquals(-1L, client.ttl(key).get());
+        assertTrue(client.expire(key, -10L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, "pexpire_with_past_timestamp").get());
+        assertTrue(client.pexpire(key, -10000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "expireAt_with_past_timestamp").get());
+        // set timeout in the past
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() - 50L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, "pexpireAt_with_past_timestamp").get());
+        // set timeout in the past
+        assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() - 50000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_ttl_with_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.expire(key, 10L).get());
+        assertFalse(client.pexpire(key, 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_with_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
     }
 }
