@@ -86,7 +86,8 @@ def transaction_test(
     args.append(value2)
     transaction.hlen(key4)
     args.append(2)
-
+    transaction.hsetnx(key4, key, value)
+    args.append(False)
     transaction.hincrby(key4, key3, 5)
     args.append(5)
     transaction.hincrbyfloat(key4, key3, 5.5)

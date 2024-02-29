@@ -373,6 +373,28 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HashGet, [key, field])
 
+    def hsetnx(
+        self: TTransaction,
+        key: str,
+        field: str,
+        value: str,
+    ) -> TTransaction:
+        """
+        Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
+        If `key` does not exist, a new key holding a hash is created.
+        If `field` already exists, this operation has no effect.
+        See https://redis.io/commands/hsetnx/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field to set the value for.
+            value (str): The value to set.
+
+        Commands response:
+            bool: True if the field was set, False if the field already existed and was not set.
+        """
+        return self.append_command(RequestType.HSetNX, [key, field, value])
+
     def hincrby(self: TTransaction, key: str, field: str, amount: int) -> TTransaction:
         """
         Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
