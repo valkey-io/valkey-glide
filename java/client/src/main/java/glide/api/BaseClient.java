@@ -8,6 +8,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
+import static redis_request.RedisRequestOuterClass.RequestType.Expire;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
@@ -24,6 +26,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -31,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.commands.GenericBaseCommands;
@@ -38,6 +43,7 @@ import glide.api.commands.HashCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetCommands;
 import glide.api.commands.StringCommands;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -403,5 +409,69 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> unlink(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expire(@NonNull String key, long seconds) {
+        return commandManager.submitNewCommand(
+                Expire, new String[] {key, Long.toString(seconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expire(
+            @NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
+        String[] arguments =
+                ArrayUtils.addAll(new String[] {key, Long.toString(seconds)}, expireOptions.toArgs());
+        return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expireAt(@NonNull String key, long unixSeconds) {
+        return commandManager.submitNewCommand(
+                ExpireAt, new String[] {key, Long.toString(unixSeconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expireAt(
+            @NonNull String key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
+        String[] arguments =
+                ArrayUtils.addAll(new String[] {key, Long.toString(unixSeconds)}, expireOptions.toArgs());
+        return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpire(@NonNull String key, long milliseconds) {
+        return commandManager.submitNewCommand(
+                PExpire, new String[] {key, Long.toString(milliseconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpire(
+            @NonNull String key, long milliseconds, @NonNull ExpireOptions expireOptions) {
+        String[] arguments =
+                ArrayUtils.addAll(new String[] {key, Long.toString(milliseconds)}, expireOptions.toArgs());
+        return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(@NonNull String key, long unixMilliseconds) {
+        return commandManager.submitNewCommand(
+                PExpireAt,
+                new String[] {key, Long.toString(unixMilliseconds)},
+                this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(
+            @NonNull String key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
+        String[] arguments =
+                ArrayUtils.addAll(
+                        new String[] {key, Long.toString(unixMilliseconds)}, expireOptions.toArgs());
+        return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> ttl(@NonNull String key) {
+        return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
     }
 }
