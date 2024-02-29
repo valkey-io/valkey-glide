@@ -54,6 +54,12 @@ public abstract class BaseClientConfiguration {
     private final Integer requestTimeout;
 
     /**
+     * Client name to be used for the client. Will be used with CLIENT SETNAME command during
+     * connection establishment.
+     */
+    private final String clientName;
+
+    /**
      * Advanced users can pass an extended {@link ThreadPoolResource} to pass a user-defined event
      * loop group. If set, users are responsible for shutting the resource down when no longer in use.
      */
