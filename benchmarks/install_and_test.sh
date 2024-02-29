@@ -33,7 +33,6 @@ chosenClients="all"
 host="localhost"
 port=6379
 tlsFlag="--tls"
-javaTlsFlag="-tls"
 
 function runPythonBenchmark(){
   # generate protobuf files
@@ -74,7 +73,7 @@ function runCSharpBenchmark(){
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
+  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" --dataSize \"$2\" --concurrentTasks \"$concurrentTasks\" --clients \"$chosenClients\" --host $host $portFlag --clientCount \"$clientCount\" $tlsFlag $clusterFlag $minimalFlag"
 }
 
 function runRustBenchmark(){
@@ -218,15 +217,12 @@ do
         -no-csv) writeResultsCSV=0 ;;
         -no-tls)
             tlsFlag=
-            javaTlsFlag=
             ;;
         -is-cluster)
             clusterFlag="--clusterModeEnabled"
-            javaClusterFlag="-clusterModeEnabled"
             ;;
         -port)
             portFlag="--port "$2
-            javaPortFlag="-port "$2
             shift
             ;;
         -minimal)
