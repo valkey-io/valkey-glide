@@ -80,10 +80,9 @@ public interface ServerManagementCommands {
      * @return A <code>map</code> of values corresponding to the configuration parameters.
      * @example
      *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet("logfile", "*port").get();
-     * var logFile = configParams.get("logfile");
-     * var port = configParams.get("port");
-     * var tlsPort = configParams.get("tls-port");
+     * Map&lt;String, String&gt; configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     * assert configParams.get("timeout").equals("1000);
+     * assert configParams.get("maxmemory").equals("1GB)'
      * </pre>
      */
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
@@ -98,7 +97,7 @@ public interface ServerManagementCommands {
      *     error.
      * @example
      *     <pre>
-     * String response = client.configSet(Map.of("syslog-enabled", "yes")).get();
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
      * assert response.equals("OK")
      * </pre>
      */

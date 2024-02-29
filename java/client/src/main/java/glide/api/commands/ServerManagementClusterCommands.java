@@ -148,10 +148,9 @@ public interface ServerManagementClusterCommands {
      * @return A <code>map</code> of values corresponding to the configuration parameters.
      * @example
      *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet("logfile", "*port").get();
-     * var logFile = configParams.get("logfile");
-     * var port = configParams.get("port");
-     * var tlsPort = configParams.get("tls-port");
+     * Map&lt;String, String&gt; configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     * assert configParams.get("timeout").equals("1000");
+     * assert configParams.get("maxmemory").equals("1GB");
      * </pre>
      */
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
@@ -169,15 +168,15 @@ public interface ServerManagementClusterCommands {
      *     address is the key and its corresponding node response is the value.
      * @example
      *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet("logfile", new SlotIdRoute(...)).get().getSingleValue();
-     * var logFile = configParams.get("logfile");
+     * Map&lt;String, String&gt; configParams = client.configGet("timeout", Random).get().getSingleValue();
+     * assert configParams.get("timeout").equals("1000");
      * </pre>
      *
      * @example
      *     <pre>
-     * Map&lt;String, Map&lt;String, String&gt;&gt; configParamsPerNode = client.configGet("logfile", ALL_NODES).get().getMultiValue();
-     * var logFileNode1 = configParamsPerNode.get("&lt;node1 address&gt;").get("logfile");
-     * var logFileNode2 = configParamsPerNode.get("&lt;node2 address&gt;").get("logfile");
+     * Map&lt;String, Map&lt;String, String&gt;&gt; configParamsPerNode = client.configGet("maxmemory", ALL_NODES).get().getMultiValue();
+     * assert configParamsPerNode.get("&lt;node1 address&gt;").get("maxmemory").equals("1GB");
+     * assert configParamsPerNode.get("&lt;node2 address&gt;").get("maxmemory").equals("2GB");
      * </pre>
      */
     CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route);
@@ -193,7 +192,7 @@ public interface ServerManagementClusterCommands {
      *     error.
      * @example
      *     <pre>
-     * String response = client.configSet(Map.of("syslog-enabled", "yes")).get();
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
      * assert response.equals("OK")
      * </pre>
      */
@@ -211,7 +210,7 @@ public interface ServerManagementClusterCommands {
      *     error.
      * @example
      *     <pre>
-     * String response = client.configSet(Map.of("syslog-enabled", "yes"), ALL_PRIMARIES).get();
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB"), ALL_PRIMARIES).get();
      * assert response.equals("OK")
      * </pre>
      */
