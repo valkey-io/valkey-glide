@@ -7,6 +7,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
+import static redis_request.RedisRequestOuterClass.RequestType.Expire;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
@@ -24,6 +26,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -32,8 +36,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
@@ -669,6 +675,225 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param seconds The timeout in seconds.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. key doesn't exist.
+     */
+    public T expire(@NonNull String key, long seconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(seconds));
+
+        protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param seconds The timeout in seconds.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T expire(@NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(new String[] {key, Long.toString(seconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param unixSeconds The timeout in an absolute Unix timestamp.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T expireAt(@NonNull String key, long unixSeconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(unixSeconds));
+
+        protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param unixSeconds The timeout in an absolute Unix timestamp.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T expireAt(@NonNull String key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(unixSeconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>
+     * expire</code> set, the time to live is updated to the new value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param milliseconds The timeout in milliseconds.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T pexpire(@NonNull String key, long milliseconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(milliseconds));
+
+        protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing expire set, the time to live is updated to the new
+     * value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param milliseconds The timeout in milliseconds.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T pexpire(@NonNull String key, long milliseconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(milliseconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @param key The <code>key</code> to set timeout on it.
+     * @param unixMilliseconds The timeout in an absolute Unix timestamp.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T pexpireAt(@NonNull String key, long unixMilliseconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(unixMilliseconds));
+
+        protobufTransaction.addCommands(buildCommand(PExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @param key The <code>key</code> to set timeout on it.
+     * @param unixMilliseconds The timeout in an absolute Unix timestamp.
+     * @param expireOptions The expire option.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T pexpireAt(
+            @NonNull String key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(unixMilliseconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(PExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of <code>key</code> that has a timeout.
+     *
+     * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
+     * @param key The <code>key</code> to return its timeout.
+     * @return Command response - TTL in seconds, <code>-2</code> if <code>key</code> does not exist,
+     *     or <code>-1</code> if <code>key</code> exists but has no associated expire.
+     */
+    public T ttl(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
         return getThis();
     }
 
