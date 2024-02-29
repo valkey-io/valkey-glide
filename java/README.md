@@ -111,8 +111,8 @@ assert getResponse.get() == "foobar" : "Failed on client.get("key") request";
 You can run benchmarks using `./gradlew run`. You can set arguments using the args flag like:
 
 ```shell
-./gradlew run --args="-help"
-./gradlew run --args="-resultsFile=output -dataSize \"100 1000\" -concurrentTasks \"10 100\" -clients all -host localhost -port 6279 -clientCount \"1 5\" -tls"
+./gradlew run --args="--help"
+./gradlew run --args="--resultsFile=output --dataSize \"100 1000\" --concurrentTasks \"10 100\" --clients all --host localhost --port 6279 --clientCount \"1 5\" --tls"
 ```
 
 The following arguments are accepted:

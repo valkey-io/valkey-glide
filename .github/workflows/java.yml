@@ -6,14 +6,22 @@ on:
         paths:
             - glide-core/src/**
             - submodules/**
-            - "java/**"
-            - ".github/workflows/java.yml"
+            - java/**
+            - .github/workflows/java.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
             - glide-core/src/**
             - submodules/**
-            - "java/**"
-            - ".github/workflows/java.yml"
+            - java/**
+            - .github/workflows/java.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
 
 jobs:
     build-and-test-java-client:
@@ -67,6 +75,10 @@ jobs:
               working-directory: java
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -java
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -77,6 +89,7 @@ jobs:
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
+                      benchmarks/results/**
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
