@@ -360,6 +360,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::XGroupCreate => Some(get_two_word_command("XGROUP", "CREATE")),
         RequestType::XGroupDestroy => Some(get_two_word_command("XGROUP", "DESTROY")),
         RequestType::XTrim => Some(cmd("XTRIM")),
+        RequestType::HSetNX => Some(cmd("HSETNX")),
     }
 }
 
