@@ -36,4 +36,4 @@ glideClient.Dispose();
 
 ### Building & Testing
 
-Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/csharp/DEVELOPER.md#build-from-source) file.
+Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md#build-from-source) file.
