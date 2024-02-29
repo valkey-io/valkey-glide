@@ -8,12 +8,20 @@ on:
             - glide-core/src/**
             - submodules/**
             - .github/workflows/csharp.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
             - csharp/**
             - glide-core/src/**
             - submodules/**
             - .github/workflows/csharp.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
 
 permissions:
     contents: read
@@ -21,7 +29,6 @@ permissions:
 jobs:
     run-tests:
         timeout-minutes: 15
-        runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
@@ -29,8 +36,12 @@ jobs:
                     - 6.2.14
                     - 7.2.3
                 dotnet:
-                    - 6.0
-                    - 8.0
+                    - '6.0'
+                    - '8.0'
+                os:
+                    - ubuntu-latest
+                    - macos-latest
+        runs-on: ${{ matrix.os }}
 
         steps:
             - uses: actions/checkout@v4
@@ -38,34 +49,45 @@ jobs:
                   submodules: recursive
 
             - name: Install redis
+              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
+              if: ${{ matrix.os == 'ubuntu-latest' }}
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
               with:
-                  version: "25.1"
+                  os: ${{ matrix.os }}
+                  target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
-              uses: actions/setup-dotnet@v3
+              uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
-
-            - name: Start redis server
-              run: redis-server &
 
             - name: Format
               working-directory: ./csharp
               run: dotnet format --verify-no-changes --verbosity diagnostic
 
-            - name: Test dotnet ${{ matrix.dotnet }}
-              working-directory: ./csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} /warnaserror
-
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -csharp
+
+            - name: Test dotnet ${{ matrix.dotnet }}
+              working-directory: ./csharp
+              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-dotnet-${{ matrix.dotnet }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  path: |
+                      csharp/TestReport.html
+                      benchmarks/results/*
 
     lint-rust:
         timeout-minutes: 10
