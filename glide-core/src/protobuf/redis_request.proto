@@ -124,6 +124,7 @@ enum RequestType {
     XGroupCreate = 80;
     XGroupDestroy = 81;
     HSetNX = 82;
+    SIsMember = 83;
 }
 
 message Command {

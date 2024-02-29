@@ -902,6 +902,35 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
+    async def sismember(
+        self,
+        key: str,
+        member: str,
+    ) -> bool:
+        """
+        Returns if `member` is a member of the set stored at `key`.
+
+        See https://redis.io/commands/sismember/ for more details.
+
+        Args:
+            key (str): The key of the set.
+            member (str): The member to check for existence in the set.
+
+        Returns:
+            bool: True if the member exists in the set, False otherwise.
+            If `key` doesn't exist, it is treated as an empty set and the command returns False.
+
+        Examples:
+            >>> await client.sismember("my_set", "member1")
+                True  # Indicates that "member1" exists in the set "my_set".
+            >>> await client.sismember("my_set", "non_existing_member")
+                False  # Indicates that "non_existing_member" does not exist in the set "my_set".
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.SIsMember, [key, member]),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
