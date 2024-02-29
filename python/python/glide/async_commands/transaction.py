@@ -695,6 +695,26 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SCard, [key])
 
+    def sismember(
+        self: TTransaction,
+        key: str,
+        member: str,
+    ) -> TTransaction:
+        """
+        Returns if `member` is a member of the set stored at `key`.
+
+        See https://redis.io/commands/sismember/ for more details.
+
+        Args:
+            key (str): The key of the set.
+            member (str): The member to check for existence in the set.
+
+        Commands response:
+            bool: True if the member exists in the set, False otherwise.
+            If `key` doesn't exist, it is treated as an empty set and the command returns False.
+        """
+        return self.append_command(RequestType.SIsMember, [key, member])
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
