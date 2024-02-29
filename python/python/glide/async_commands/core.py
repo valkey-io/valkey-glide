@@ -419,7 +419,7 @@ class CoreCommands(Protocol):
             int: The number of fields that were added to the hash.
 
         Example:
-            >>> hset("my_hash", {"field": "value", "field2": "value2"})
+            >>> await client.hset("my_hash", {"field": "value", "field2": "value2"})
                 2
         """
         field_value_list: List[str] = [key]
@@ -444,14 +444,45 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
-            >>> hget("my_hash", "field")
+            >>> await client.hget("my_hash", "field")
                 "value"
-            >>> hget("my_hash", "nonexistent_field")
+            >>> await client.hget("my_hash", "nonexistent_field")
                 None
         """
         return cast(
             Optional[str],
             await self._execute_command(RequestType.HashGet, [key, field]),
+        )
+
+    async def hsetnx(
+        self,
+        key: str,
+        field: str,
+        value: str,
+    ) -> bool:
+        """
+        Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
+        If `key` does not exist, a new key holding a hash is created.
+        If `field` already exists, this operation has no effect.
+        See https://redis.io/commands/hsetnx/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field to set the value for.
+            value (str): The value to set.
+
+        Returns:
+            bool: True if the field was set, False if the field already existed and was not set.
+
+        Examples:
+            >>> await client.hsetnx("my_hash", "field", "value")
+                True  # Indicates that the field "field" was set successfully in the hash "my_hash".
+            >>> await client.hsetnx("my_hash", "field", "new_value")
+                False # Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.HSetNX, [key, field, value]),
         )
 
     async def hincrby(self, key: str, field: str, amount: int) -> int:

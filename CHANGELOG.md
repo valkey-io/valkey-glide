@@ -1,6 +1,7 @@
 #### Changes
 
 -   Node: Allow routing Cluster requests by address. ([#1021](https://github.com/aws/glide-for-redis/pull/1021))
+* Python: Added HSETNX command. ([#954](https://github.com/aws/glide-for-redis/pull/954))
 
 ## 0.2.0 (2024-02-11)
 

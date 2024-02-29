@@ -636,6 +636,20 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetnx(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+
+        assert await redis_client.hsetnx(key, field, "value") == True
+        assert await redis_client.hsetnx(key, field, "new value") == False
+        assert await redis_client.hget(key, field) == "value"
+        key = get_random_string(5)
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hsetnx(key, field, "value")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_hmget(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)
