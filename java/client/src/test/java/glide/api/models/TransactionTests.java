@@ -174,6 +174,18 @@ public class TransactionTests {
         transaction.rpopCount("key", 2);
         results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
+        transaction.sadd("key", new String[] {"value"});
+        results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.srem("key", new String[] {"value"});
+        results.add(Pair.of(SRem, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
+
+        transaction.smembers("key");
+        results.add(Pair.of(SMembers, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.scard("key");
+        results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
+
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
 
@@ -242,18 +254,6 @@ public class TransactionTests {
 
         transaction.ttl("key");
         results.add(Pair.of(TTL, ArgsArray.newBuilder().addArgs("key").build()));
-
-        transaction.sadd("key", new String[] {"value"});
-        results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
-
-        transaction.srem("key", new String[] {"value"});
-        results.add(Pair.of(SRem, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
-
-        transaction.smembers("key");
-        results.add(Pair.of(SMembers, ArgsArray.newBuilder().addArgs("key").build()));
-
-        transaction.scard("key");
-        results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
