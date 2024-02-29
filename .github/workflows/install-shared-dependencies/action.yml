@@ -31,7 +31,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'macos-latest' }}"
           run: |
-              brew install git gcc pkgconfig openssl redis
+              brew install git gcc pkgconfig openssl redis coreutils
 
         - name: Install software dependencies for Ubuntu
           shell: bash
