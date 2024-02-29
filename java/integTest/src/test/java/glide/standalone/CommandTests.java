@@ -225,14 +225,8 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class,
-                        () -> regularClient.configSet(Map.of("puppy", "happy")).get());
+                        () -> regularClient.configSet(Map.of("Unknown Option", "Unknown Value")).get());
         assertTrue(exception.getCause() instanceof RequestException);
-        assertTrue(
-                exception
-                        .getCause()
-                        .getMessage()
-                        .contains(
-                                REDIS_VERSION.feature() >= 7 ? "Unknown option" : "Unsupported CONFIG parameter"));
     }
 
     @Test

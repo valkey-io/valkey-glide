@@ -301,13 +301,21 @@ public class TransactionTests {
 
         transaction.configGet(new String[] {"Foster", "The", "Fluffy", "Dogster"});
         results.add(Pair.of(ConfigGet, transaction.buildArgs("Foster", "The", "Fluffy", "Dogster")));
+        transaction.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
+        results.add(
+                Pair.of(
+                        ConfigGet,
+                        ArgsArray.newBuilder()
+                                .addArgs("maxmemory")
+                                .addArgs("hash-max-listpack-entries")
+                                .build()));
 
         var configSetMap = new LinkedHashMap<String, String>();
-        configSetMap.put("Foster", "The");
-        configSetMap.put("Fluffy", "Dogster");
+        configSetMap.put("maxmemory", "100mb");
+        configSetMap.put("save", "60");
 
         transaction.configSet(configSetMap);
-        results.add(Pair.of(ConfigSet, transaction.buildArgs("Foster", "The", "Fluffy", "Dogster")));
+        results.add(Pair.of(ConfigSet, transaction.buildArgs("maxmemory", "100mb", "save", "60")));
 
         Map<String, Double> membersScores = new LinkedHashMap<>();
         membersScores.put("member1", 1.0);

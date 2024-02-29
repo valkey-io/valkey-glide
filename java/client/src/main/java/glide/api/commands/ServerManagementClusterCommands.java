@@ -184,7 +184,7 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Sets configuration parameters to the specified values.<br>
-     * The command will be sent to a random node.
+     * The command will be sent to all nodes.
      *
      * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their

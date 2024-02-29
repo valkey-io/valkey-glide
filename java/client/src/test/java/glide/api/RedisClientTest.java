@@ -1551,16 +1551,16 @@ public class RedisClientTest {
     public void configGet_returns_success() {
         // setup
         CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
-        Map<String, String> testPayload = Map.of("value", "42");
+        Map<String, String> testPayload = Map.of("timeout", "1000");
         when(testResponse.get()).thenReturn(testPayload);
 
         // match on protobuf request
         when(commandManager.<Map<String, String>>submitNewCommand(
-                        eq(ConfigGet), eq(new String[] {"value"}), any()))
+                        eq(ConfigGet), eq(new String[] {"timeout"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String>> response = service.configGet(new String[] {"value"});
+        CompletableFuture<Map<String, String>> response = service.configGet(new String[] {"timeout"});
         Map<String, String> payload = response.get();
 
         // verify
@@ -1577,11 +1577,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(ConfigSet), eq(new String[] {"value", "42"}), any()))
+                        eq(ConfigSet), eq(new String[] {"timeout", "1000"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.configSet(Map.of("value", "42"));
+        CompletableFuture<String> response = service.configSet(Map.of("timeout", "1000"));
 
         // verify
         assertEquals(testResponse, response);

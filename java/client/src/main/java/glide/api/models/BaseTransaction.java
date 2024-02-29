@@ -777,7 +777,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
      * @return Command response - <code>OK</code> if all configurations have been successfully set.
-     *     Otherwise, raises an error.
+     *     Otherwise, the transaction fails with an error.
      */
     public T configSet(@NonNull Map<String, String> parameters) {
         ArgsArray commandArgs = buildArgs(convertMapToArgArray(parameters));
