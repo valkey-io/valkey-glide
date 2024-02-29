@@ -2,6 +2,7 @@
 
 -   Node: Allow routing Cluster requests by address. ([#1021](https://github.com/aws/glide-for-redis/pull/1021))
 * Python: Added HSETNX command. ([#954](https://github.com/aws/glide-for-redis/pull/954))
+* Python: Added SISMEMBER command ([#971](https://github.com/aws/glide-for-redis/pull/971))
 
 ## 0.2.0 (2024-02-11)
 
@@ -16,7 +17,7 @@
 * Python, Node: When recieving LPOP/RPOP with count, convert result to Array. ([#811](https://github.com/aws/glide-for-redis/pull/811))
 * Python, Node: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945), [#980](https://github.com/aws/glide-for-redis/pull/980))
 * Python, Node: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944), [#981](https://github.com/aws/glide-for-redis/pull/981))
-* Node: Added ZCOUNT command ([#909](https://github.com/aws/glide-for-redis/pull/909))
+* Python, Node: Added ZCOUNT command ([#878](https://github.com/aws/glide-for-redis/pull/878)) ([#909](https://github.com/aws/glide-for-redis/pull/909))
 * Python: Added ECHO command ([#953](https://github.com/aws/glide-for-redis/pull/953))
 * Python, Node: Added ZPOPMIN command ([#975](https://github.com/aws/glide-for-redis/pull/975), [#1008](https://github.com/aws/glide-for-redis/pull/1008))
 * Node: Added STRLEN command ([#993](https://github.com/aws/glide-for-redis/pull/993))

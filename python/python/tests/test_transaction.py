@@ -135,6 +135,8 @@ def transaction_test(
     args.append({"bar"})
     transaction.scard(key7)
     args.append(1)
+    transaction.sismember(key7, "bar")
+    args.append(True)
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     args.append(3)
