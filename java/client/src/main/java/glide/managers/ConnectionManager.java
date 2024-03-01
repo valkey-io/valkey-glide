@@ -111,6 +111,10 @@ public class ConnectionManager {
             connectionRequestBuilder.setRequestTimeout(configuration.getRequestTimeout());
         }
 
+        if (configuration.getClientName() != null) {
+            connectionRequestBuilder.setClientName(configuration.getClientName());
+        }
+
         return connectionRequestBuilder;
     }
 
