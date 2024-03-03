@@ -18,8 +18,16 @@ from glide.async_commands.core import (
     ExpiryType,
     InfBound,
     InfoSection,
-    ScoreLimit,
     UpdateOptions,
+)
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    Limit,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
 )
 from glide.config import ProtocolVersion, RedisCredentials
 from glide.constants import OK
@@ -1170,18 +1178,32 @@ class TestCommands:
 
         assert await redis_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
         assert (
-            await redis_client.zcount(key, ScoreLimit(1, False), ScoreLimit(3, False))
+            await redis_client.zcount(
+                key,
+                ScoreBoundary(1, is_inclusive=False),
+                ScoreBoundary(3, is_inclusive=False),
+            )
             == 1
         )
         assert (
-            await redis_client.zcount(key, ScoreLimit(1, False), ScoreLimit(3, True))
+            await redis_client.zcount(
+                key,
+                ScoreBoundary(1, is_inclusive=False),
+                ScoreBoundary(3, is_inclusive=True),
+            )
             == 2
         )
         assert (
-            await redis_client.zcount(key, InfBound.NEG_INF, ScoreLimit(3, True)) == 3
+            await redis_client.zcount(
+                key, InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=True)
+            )
+            == 3
         )
         assert (
-            await redis_client.zcount(key, InfBound.POS_INF, ScoreLimit(3, True)) == 0
+            await redis_client.zcount(
+                key, InfBound.POS_INF, ScoreBoundary(3, is_inclusive=True)
+            )
+            == 0
         )
         assert (
             await redis_client.zcount(
@@ -1233,6 +1255,194 @@ class TestCommands:
             await redis_client.zpopmax(key)
 
         assert await redis_client.zpopmax("non_exisitng_key") == {}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrange_by_index(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
+            "one",
+            "two",
+        ]
+
+        assert (
+            await redis_client.zrange_withscores(key, RangeByIndex(start=0, stop=-1))
+        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        assert await redis_client.zrange(
+            key, RangeByIndex(start=0, stop=1), reverse=True
+        ) == [
+            "three",
+            "two",
+        ]
+
+        assert await redis_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
+        assert (
+            await redis_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
+            == {}
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrange_byscore(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zrange(
+            key,
+            RangeByScore(
+                start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
+            ),
+        ) == ["one", "two"]
+
+        assert (
+            await redis_client.zrange_withscores(
+                key,
+                RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+            )
+        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        assert await redis_client.zrange(
+            key,
+            RangeByScore(
+                start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
+            ),
+            reverse=True,
+        ) == ["two", "one"]
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByScore(
+                    start=InfBound.NEG_INF,
+                    stop=InfBound.POS_INF,
+                    limit=Limit(offset=1, count=2),
+                ),
+            )
+        ) == ["two", "three"]
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByScore(
+                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
+                ),
+                reverse=True,
+            )
+            == []
+        )  # stop is greater than start with reverse set to True
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByScore(
+                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
+                ),
+            )
+            == []
+        )  # start is greater than stop
+
+        assert (
+            await redis_client.zrange_withscores(
+                key,
+                RangeByScore(
+                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
+                ),
+            )
+            == {}
+        )  # start is greater than stop
+
+        assert (
+            await redis_client.zrange_withscores(
+                key,
+                RangeByScore(
+                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
+                ),
+                reverse=True,
+            )
+            == {}
+        )  # stop is greater than start with reverse set to True
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrange_bylex(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"a": 1, "b": 2, "c": 3}
+        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+
+        assert await redis_client.zrange(
+            key,
+            RangeByLex(
+                start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+            ),
+        ) == ["a", "b"]
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByLex(
+                    start=InfBound.NEG_INF,
+                    stop=InfBound.POS_INF,
+                    limit=Limit(offset=1, count=2),
+                ),
+            )
+        ) == ["b", "c"]
+
+        assert await redis_client.zrange(
+            key,
+            RangeByLex(
+                start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
+            ),
+            reverse=True,
+        ) == ["b", "a"]
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByLex(
+                    start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                ),
+                reverse=True,
+            )
+            == []
+        )  # stop is greater than start with reverse set to True
+
+        assert (
+            await redis_client.zrange(
+                key,
+                RangeByLex(
+                    start=InfBound.POS_INF, stop=LexBoundary("c", is_inclusive=False)
+                ),
+            )
+            == []
+        )  # start is greater than stop
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrange_different_types_of_keys(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+
+        assert (
+            await redis_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
+            == []
+        )
+
+        assert (
+            await redis_client.zrange_withscores(
+                "non_existing_key", RangeByIndex(start=0, stop=-1)
+            )
+        ) == {}
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrange(key, RangeByIndex(start=0, stop=1))
+
+        with pytest.raises(RequestError):
+            await redis_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
