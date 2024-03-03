@@ -596,6 +596,30 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LRange, [key, str(start), str(end)])
 
+    def lindex(
+        self: TTransaction,
+        key: str,
+        index: int,
+    ) -> TTransaction:
+        """
+        Returns the element at `index` in the list stored at `key`.
+
+        The index is zero-based, so 0 means the first element, 1 the second element and so on.
+        Negative indices can be used to designate elements starting at the tail of the list.
+        Here, -1 means the last element, -2 means the penultimate and so forth.
+
+        See https://redis.io/commands/lindex/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            index (int): The index of the element in the list to retrieve.
+
+        Command response:
+            Optional[str]: The element at `index` in the list stored at `key`.
+                If `index` is out of range or if `key` does not exist, None is returned.
+        """
+        return self.append_command(RequestType.Lindex, [key, str(index)])
+
     def rpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
