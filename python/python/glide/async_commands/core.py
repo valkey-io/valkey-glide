@@ -746,7 +746,7 @@ class CoreCommands(Protocol):
         index: int,
     ) -> Optional[str]:
         """
-        Returns the element at ; in the list stored at `key`.
+        Returns the element at `index` in the list stored at `key`.
 
         The index is zero-based, so 0 means the first element, 1 the second element and so on.
         Negative indices can be used to designate elements starting at the tail of the list.
