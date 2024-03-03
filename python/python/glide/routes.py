@@ -54,7 +54,7 @@ class ByAddressRoute(Route):
         """Routes a request to a node by its DNS address
 
         Args:
-            host (str): The DNS name of the node. If `port` is not provided, should be in the `{DNS}:{port}` format.
+            host (str): The name of the node. If `port` is not provided, should be in the `{DNS/ip}:{port}` format, as returned from the cluster when sending a request to multiple nodes.
             port (Optional[int]): The port the node communicates on.
         """
         super().__init__()

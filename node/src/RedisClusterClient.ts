@@ -57,7 +57,7 @@ export type SlotKeyTypes = {
 export type RouteByAddress = {
     type: "routeByAddress";
     /**
-     * DNS name of the host.
+     * The name of the node. If `port` is not provided, should be in the `{DNS/ip}:{port}` format, as returned from the cluster when sending a request to multiple nodes.
      */
     host: string;
     /**
@@ -244,7 +244,7 @@ export class RedisClusterClient extends BaseClient {
     /** Ping the Redis server.
      * See https://redis.io/commands/ping/ for details.
      *
-     * @param message - An optional message to include in the PING command. 
+     * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
@@ -252,7 +252,10 @@ export class RedisClusterClient extends BaseClient {
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
     public ping(message?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(createPing(message), toProtobufRoute(route));
+        return this.createWritePromise(
+            createPing(message),
+            toProtobufRoute(route)
+        );
     }
 
     /** Get information and statistics about the Redis server.
