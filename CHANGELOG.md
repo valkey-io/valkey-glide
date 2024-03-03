@@ -3,6 +3,7 @@
 -   Node: Allow routing Cluster requests by address. ([#1021](https://github.com/aws/glide-for-redis/pull/1021))
 * Python: Added HSETNX command. ([#954](https://github.com/aws/glide-for-redis/pull/954))
 * Python: Added SISMEMBER command ([#971](https://github.com/aws/glide-for-redis/pull/971))
+* Python: Added ZRANGE command ([#906](https://github.com/aws/glide-for-redis/pull/906))
 
 ## 0.2.0 (2024-02-11)
 
@@ -23,7 +24,6 @@
 * Node: Added STRLEN command ([#993](https://github.com/aws/glide-for-redis/pull/993))
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/aws/glide-for-redis/pull/996), [#1009](https://github.com/aws/glide-for-redis/pull/1009))
-* Python: Added ZRANGE command ([#906](https://github.com/aws/glide-for-redis/pull/906))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))

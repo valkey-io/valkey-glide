@@ -10,7 +10,17 @@ class InfBound(Enum):
     """
 
     POS_INF = {"score_arg": "+inf", "lex_arg": "+"}
+    """
+    Positive infinity bound for sorted set.
+        score_arg: represents numeric positive infinity (+inf).
+        lex_arg: represents lexicographic positive infinity (+).
+    """
     NEG_INF = {"score_arg": "-inf", "lex_arg": "-"}
+    """
+    Negative infinity bound for sorted set.
+        score_arg: represents numeric negative infinity (-inf).
+        lex_arg: represents lexicographic negative infinity (-).
+    """
 
 
 class ScoreBoundary:
@@ -83,7 +93,7 @@ class RangeByScore:
     Args:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
         stop (Union[InfBound, ScoreBoundary]): The stop score boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
     """
 
     def __init__(
@@ -108,7 +118,7 @@ class RangeByLex:
     Args:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
         stop (Union[InfBound, LexBoundary]): The stop lexicographic boundary.
-        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit`.
+        limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
     """
 
     def __init__(
