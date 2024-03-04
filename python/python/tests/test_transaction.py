@@ -144,6 +144,8 @@ def transaction_test(
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     args.append(3)
+    transaction.zrank(key8, "one")
+    args.append(0)
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
     transaction.zrem(key8, ["one"])
