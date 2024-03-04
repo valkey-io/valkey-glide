@@ -12,10 +12,9 @@ The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings 
 
 Software Dependencies
 
-> Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
 > If your NodeJS version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
--   npm v8
+-   npm
 -   git
 -   GCC
 -   pkg-config
@@ -29,7 +28,6 @@ Software Dependencies
 ```bash
 sudo apt update -y
 sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -39,7 +37,6 @@ source "$HOME/.cargo/env"
 ```bash
 sudo yum update -y
 sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -49,7 +46,6 @@ source "$HOME/.cargo/env"
 ```bash
 brew update
 brew install nodejs git gcc pkgconfig protobuf openssl
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -112,6 +108,10 @@ Before starting this step, make sure you've installed all software requirments.
 -   To generate Node's protobuf files, execute `npm run build-protobuf`. Keep in mind that protobuf files are generated as part of full builds (e.g., `build`, `build:release`, etc.).
 
 > Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder.
+
+### Troubleshooting
+
+-   If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
 
 ### Test
 
