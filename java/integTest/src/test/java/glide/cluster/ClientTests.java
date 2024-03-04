@@ -16,6 +16,22 @@ import org.junit.jupiter.api.Test;
 public class ClientTests {
     @Test
     @SneakyThrows
+    public void custom_command_info() {
+        RedisClusterClient client =
+                RedisClusterClient.CreateClient(
+                                RedisClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
+                                        .clientName("TEST_CLIENT_NAME")
+                                        .build())
+                        .get();
+
+        String clientInfo =
+                (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get().getSingleValue();
+        assertTrue(clientInfo.contains("name=TEST_CLIENT_NAME"));
+    }
+
+    @Test
+    @SneakyThrows
     public void close_client_throws_ExecutionException_with_ClosingException_cause() {
         RedisClusterClient client =
                 RedisClusterClient.CreateClient(
