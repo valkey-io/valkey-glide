@@ -57,10 +57,10 @@ public interface ConnectionManagementClusterCommands {
      * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
      * @return The id of the client.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * long id = client.clientId().get();
      * assert id > 0
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Long> clientId();
 
@@ -74,15 +74,11 @@ public interface ConnectionManagementClusterCommands {
      *     dictionary where each address is the key and its corresponding node response is the value.
      *     The value is the id of the client on that node.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * long id = client.clientId(new SlotIdRoute(...)).get().getSingleValue();
-     * assert id > 0
-     * </pre>
-     *
-     * @example
-     *     <pre>
-     * Map&lt;String, Long&gt; idPerNode = client.clientId(ALL_NODES).get().getMultiValue();
-     * assert idPerNode.get("&lt;node 1 address&gt;") > 0
+     * assert id > 0;
+     * Map<String, Long> idPerNode = client.clientId(ALL_NODES).get().getMultiValue();
+     * assert idPerNode.get("<node 1 address>") > 0;
      * </pre>
      */
     CompletableFuture<ClusterValue<Long>> clientId(Route route);
@@ -95,10 +91,10 @@ public interface ConnectionManagementClusterCommands {
      * @return The name of the client connection as a string if a name is set, or <code>null</code> if
      *     no name is assigned.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String clientName = client.clientGetName().get();
-     * assert clientName != null
-     * </pre>
+     * assert clientName != null;
+     * }</pre>
      */
     CompletableFuture<String> clientGetName();
 
@@ -113,16 +109,12 @@ public interface ConnectionManagementClusterCommands {
      *     The value is the name of the client connection as a string if a name is set, or null if no
      *     name is assigned.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String clientName = client.clientGetName(new SlotIdRoute(...)).get().getSingleValue();
-     * assert clientName != null
-     * </pre>
-     *
-     * @example
-     *     <pre>
-     * Map&lt;String, String&gt; clientNamePerNode = client.clientGetName(ALL_NODES).get().getMultiValue();
-     * assert clientNamePerNode.get("&lt;node 1 address&gt;") != null
-     * </pre>
+     * assert clientName != null;
+     * Map<String, String> clientNamePerNode = client.clientGetName(ALL_NODES).get().getMultiValue();
+     * assert clientNamePerNode.get("<node 1 address>") != null
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> clientGetName(Route route);
 }
