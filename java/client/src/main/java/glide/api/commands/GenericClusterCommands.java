@@ -26,12 +26,13 @@ public interface GenericClusterCommands {
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
-     * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
-     *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
-     * </code>
      * @param args Arguments for the custom command including the command name.
      * @return Response from Redis containing an <code>Object</code>.
+     * @example
+     *     <pre>
+     * ClusterValue<Object> data = client.customCommand(new String[] {"ping"}).get();
+     * assert ((String) data.getSingleValue()).equals("PONG");
+     * </pre>
      */
     CompletableFuture<ClusterValue<Object>> customCommand(String[] args);
 
@@ -46,13 +47,16 @@ public interface GenericClusterCommands {
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
-     * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
-     *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }, RANDOM).get();
-     * </code>
      * @param args Arguments for the custom command including the command name
      * @param route Routing configuration for the command
      * @return Response from Redis containing an <code>Object</code>.
+     * @example
+     *     <pre>
+     * ClusterValue&lt;Object&gt; result = clusterClient.customCommand(new String[]{ "CONFIG", "GET", "maxmemory"}, ALL_NODES).get();
+     * Map&lt;String, Object&gt; payload = result.getMultiValue();
+     * assert ((String) payload.get("node1")).equals("1GB");
+     * assert ((String) payload.get("node2")).equals("100MB");
+     * </pre>
      */
     CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route);
 
@@ -73,6 +77,13 @@ public interface GenericClusterCommands {
      *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
      *           return <code>null</code>.
      *     </ul>
+     *
+     * @example
+     *     <pre>
+     * ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
+     * Object[] result = clusterClient.exec(transaction).get();
+     * assert ((String) result[0]).contains("# Stats");
+     * </pre>
      */
     CompletableFuture<Object[]> exec(ClusterTransaction transaction);
 
@@ -92,6 +103,14 @@ public interface GenericClusterCommands {
      *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
      *           return <code>null</code>.
      *     </ul>
+     *
+     * @example
+     *     <pre>
+     * ClusterTransaction transaction = new ClusterTransaction().ping().info();
+     * ClusterValue<Object>[] result = clusterClient.exec(transaction, RANDOM).get();
+     * assert ((String) result[0].getSingleValue()).equals("PONG");
+     * assert ((String) result[1].getSingleValue()).contains("# Stats");
+     * </pre>
      */
     CompletableFuture<ClusterValue<Object>[]> exec(ClusterTransaction transaction, Route route);
 }

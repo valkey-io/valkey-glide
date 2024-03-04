@@ -18,6 +18,11 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return The number of keys that were removed.
+     * @example
+     *     <pre>
+     * Long num = client.del(new String[] {"key1", "key2"}).get()
+     * assert num == 2l;
+     * </pre>
      */
     CompletableFuture<Long> del(String[] keys);
 
@@ -29,10 +34,10 @@ public interface GenericBaseCommands {
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
      *     </code> multiple times, it will be counted multiple times.
      * @example
-     *     <p><code>
-     * long result = client.exists(new String[] {"my_key", "invalid_key"}).get();
+     *     <pre>
+     * Long result = client.exists(new String[] {"my_key", "invalid_key"}).get();
      * assert result == 1L;
-     * </code>
+     * </pre>
      */
     CompletableFuture<Long> exists(String[] keys);
 
@@ -46,9 +51,8 @@ public interface GenericBaseCommands {
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.
      * @example
-     *     <p>
      *     <pre>
-     * long result = client.unlink("my_key").get();
+     * Long result = client.unlink("my_key").get();
      * assert result == 1L;
      * </pre>
      */
