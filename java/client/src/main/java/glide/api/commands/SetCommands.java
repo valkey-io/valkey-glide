@@ -21,10 +21,10 @@ public interface SetCommands {
      * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
      *     </code>.
      * @example
-     *     <p><code>
-     *  int result = client.sadd("my_set", new String[]{"member1", "member2"}).get();
-     *  // result: 2
-     *  </code>
+     *     <pre>
+     * Long result = client.sadd("my_set", new String[]{"member1", "member2"}).get();
+     * assert result == 2L;
+     * </pre>
      */
     CompletableFuture<Long> sadd(String key, String[] members);
 
@@ -39,10 +39,10 @@ public interface SetCommands {
      * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
      *     returns 0.
      * @example
-     *     <p><code>
-     *  int result = client.srem("my_set", new String[]{"member1", "member2"}).get();
-     *  // result: 2
-     *  </code>
+     *     <pre>
+     * Long result = client.srem("my_set", new String[]{"member1", "member2"}).get();
+     * assert result == 2L;
+     * </pre>
      */
     CompletableFuture<Long> srem(String key, String[] members);
 
@@ -54,10 +54,10 @@ public interface SetCommands {
      * @return A <code>Set</code> of all members of the set.
      * @remarks If <code>key</code> does not exist an empty set will be returned.
      * @example
-     *     <p><code>
-     *  {@literal Set<String>} result = client.smembers("my_set").get();
-     *  // result: {"member1", "member2", "member3"}
-     *  </code>
+     *     <pre>
+     * {@literal Set<String>} result = client.smembers("my_set").get();
+     * assert result.equals(Set.of("member1", "member2", "member3"));
+     * </pre>
      */
     CompletableFuture<Set<String>> smembers(String key);
 
@@ -68,10 +68,10 @@ public interface SetCommands {
      * @param key The key from which to retrieve the number of set members.
      * @return The cardinality (number of elements) of the set, or 0 if the key does not exist.
      * @example
-     *     <p><code>
-     *  int result = client.scard("my_set").get();
-     *  // result: 3
-     *  </code>
+     *     <pre>
+     * Long result = client.scard("my_set").get();
+     * assert result == 3L;
+     * </pre>
      */
     CompletableFuture<Long> scard(String key);
 }
