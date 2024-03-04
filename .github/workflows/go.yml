@@ -24,8 +24,8 @@ jobs:
             fail-fast: false
             matrix:
                 go:
-                    - '1.18'
-                    - '1.21'
+                    - '1.18.10'
+                    - '1.22.0'
                 redis:
                     - 6.2.14
                     - 7.2.3
@@ -60,9 +60,9 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Install client dependencies
+            - name: Install tools for Go ${{ matrix.go }}
               working-directory: ./go
-              run: make install-tools
+              run: make install-tools-go${{ matrix.go }}
 
             - name: Build client
               working-directory: ./go
@@ -70,11 +70,11 @@ jobs:
 
             - name: Run linters
               working-directory: ./go
-              run: make lint
+              run: make lint-ci
 
-            - name: Run unit tests
+            - name: Run tests
               working-directory: ./go
-              run: make unit-test-report
+              run: make test-and-report
 
             - name: Upload test reports
               if: always()
@@ -83,7 +83,7 @@ jobs:
               with:
                   name: test-reports-go-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
                   path: |
-                      go/reports/unit-test-report.html
+                      go/reports/test-report.html
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
@@ -93,7 +93,7 @@ jobs:
             matrix:
                 go:
                     - 1.18.10
-                    - 1.21.6
+                    - 1.22.0
         runs-on: ubuntu-latest
         container: amazonlinux:latest
         timeout-minutes: 15
@@ -135,9 +135,9 @@ jobs:
                   echo "/usr/local/go/bin" >> $GITHUB_PATH
                   echo "$HOME/go/bin" >> $GITHUB_PATH
 
-            - name: Install client dependencies
+            - name: Install tools for Go ${{ matrix.go }}
               working-directory: ./go
-              run: make install-tools
+              run: make install-tools-go${{ matrix.go }}
 
             - name: Build client
               working-directory: ./go
@@ -145,11 +145,11 @@ jobs:
 
             - name: Run linters
               working-directory: ./go
-              run: make lint
+              run: make lint-ci
 
-            - name: Run unit tests
+            - name: Run tests
               working-directory: ./go
-              run: make unit-test-report
+              run: make test-and-report
 
             - name: Upload test reports
               if: always()
@@ -157,7 +157,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: test-reports-go-${{ matrix.go }}-amazon-linux-latest
-                  path: go/reports/unit-test-report.html
+                  path: go/reports/test-report.html
 
     lint-rust:
         timeout-minutes: 15
