@@ -29,10 +29,10 @@ public interface GenericCommands {
      * @param args Arguments for the custom command.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Object response = (String) client.customCommand(new String[] {"ping", "GLIDE"}).get()
      * assert ((String) response).equals("GLIDE");
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object> customCommand(String[] args);
 
@@ -52,11 +52,11 @@ public interface GenericCommands {
      *     </ul>
      *
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Transaction transaction = new Transaction().customCommand(new String[] {"info"});
      * Object[] result = client.exec(transaction).get();
      * assert ((String) result[0]).contains("# Stats");
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> exec(Transaction transaction);
 }
