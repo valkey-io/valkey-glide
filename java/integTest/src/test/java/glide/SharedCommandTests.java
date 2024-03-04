@@ -625,6 +625,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void lrem_existing_non_existing_key_and_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray =
+                new String[] {
+                    "value1", "value2", "value1", "value1", "value2",
+                };
+
+        assertEquals(5, client.lpush(key, valueArray).get());
+        assertEquals(2, client.lrem(key, 2, "value1").get());
+        assertArrayEquals(
+                new String[] {
+                    "value2", "value2", "value1",
+                },
+                client.lrange(key, 0, -1).get());
+        assertEquals(1, client.lrem(key, -1, "value2").get());
+        assertArrayEquals(new String[] {"value2", "value1"}, client.lrange(key, 0, -1).get());
+        assertEquals(1, client.lrem(key, 0, "value2").get());
+        assertArrayEquals(new String[] {"value1"}, client.lrange(key, 0, -1).get());
+        assertEquals(0, client.lrem("non_existing_key", 0, "value").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void rpush_rpop_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value1", "value2", "value3", "value4"};
