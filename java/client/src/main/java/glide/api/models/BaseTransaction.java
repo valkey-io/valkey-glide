@@ -114,7 +114,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param msg The ping argument that will be returned.
      * @return A response from Redis with a <code>String</code>.
      */
-    public T ping(String msg) {
+    public T ping(@NonNull String msg) {
         ArgsArray commandArgs = buildArgs(msg);
 
         protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
@@ -141,7 +141,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Response from Redis with a <code>String</code> containing the requested {@link
      *     Section}s.
      */
-    public T info(InfoOptions options) {
+    public T info(@NonNull InfoOptions options) {
         ArgsArray commandArgs = buildArgs(options.toArgs());
 
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
@@ -156,7 +156,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys The keys we wanted to remove.
      * @return Command Response - The number of keys that were removed.
      */
-    public T del(String[] keys) {
+    public T del(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Del, commandArgs));
@@ -171,7 +171,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Response from Redis. <code>key</code> exists, returns the <code>value</code> of <code>
      *     key</code> as a String. Otherwise, return <code>null</code>.
      */
-    public T get(String key) {
+    public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
@@ -186,7 +186,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis.
      */
-    public T set(String key, String value) {
+    public T set(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
 
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
@@ -206,7 +206,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} conditions, return <code>null</code>.
      *     Otherwise, return <code>OK</code>.
      */
-    public T set(String key, String value, SetOptions options) {
+    public T set(@NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
@@ -590,7 +590,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
      *     </code>.
      */
-    public T sadd(String key, String[] members) {
+    public T sadd(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
@@ -609,7 +609,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
      *     returns 0.
      */
-    public T srem(String key, String[] members) {
+    public T srem(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SRem, commandArgs));
@@ -624,7 +624,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Set</code> of all members of the set.
      * @remarks If <code>key</code> does not exist an empty set will be returned.
      */
-    public T smembers(String key) {
+    public T smembers(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SMembers, commandArgs));
@@ -639,7 +639,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The cardinality (number of elements) of the set, or 0 if the key
      *     does not exist.
      */
-    public T scard(String key) {
+    public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
@@ -654,7 +654,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of keys that exist. If the same existing key is mentioned
      *     in <code>keys</code> multiple times, it will be counted multiple times.
      */
-    public T exists(String[] keys) {
+    public T exists(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
@@ -671,7 +671,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys The list of keys to unlink.
      * @return Command Response - The number of <code>keys</code> that were unlinked.
      */
-    public T unlink(String[] keys) {
+    public T unlink(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
