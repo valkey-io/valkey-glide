@@ -69,11 +69,10 @@ public interface ListBaseCommands {
 
     /**
      * Returns the specified elements of the list stored at <code>key</code>.<br>
-     * The offsets <code>start
-     * </code> and <code>end</code> are zero-based indexes, with 0 being the first element of the
-     * list, 1 being the next element and so on. These offsets can also be negative numbers indicating
-     * offsets starting at the end of the list, with -1 being the last element of the list, -2 being
-     * the penultimate, and so on.
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with -1 being the last
+     * element of the list, -2 being the penultimate, and so on.
      *
      * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
      * @param key The key of the list.
