@@ -620,7 +620,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
      * @param count The count of the elements to pop from the list.
-     * @returns Command Response - An array of popped elements will be returned depending on the
+     * @return Command Response - An array of popped elements will be returned depending on the
      *     list's length.<br>
      *     If <code>key</code> does not exist, null will be returned.<br>
      */
