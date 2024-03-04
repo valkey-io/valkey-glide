@@ -84,10 +84,10 @@ public interface SortedSetBaseCommands {
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @return The number of elements added to the sorted set.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2)).get();
      * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap);
 
@@ -108,12 +108,12 @@ public interface SortedSetBaseCommands {
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
      *     returned.<br>
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Double num = client.zaddIncr("mySortedSet", member, 5.0, ZaddOptions.builder().build()).get();
      * assert num == 5.0
      * Double num = client.zaddIncr("existingSortedSet", member, 3.0, ZaddOptions.builder().updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT).build()).get();
      * assert num == null
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Double> zaddIncr(
             String key, String member, double increment, ZaddOptions options);
@@ -132,10 +132,10 @@ public interface SortedSetBaseCommands {
      * @param increment The score to increment the member.
      * @return The score of the member.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Double num = client.zaddIncr("mySortedSet", member, 5.0).get();
      * assert num == 5.0
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Double> zaddIncr(String key, String member, double increment);
 }
