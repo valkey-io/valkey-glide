@@ -109,6 +109,13 @@ public class CommandManager {
      */
     protected <T> CompletableFuture<T> submitCommandToChannel(
             RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+        if (channel.isClosed()) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Channel closed: Unable to submit command."));
+            return errorFuture;
+        }
+
         // write command request to channel
         // when complete, convert the response to our expected type T using the given responseHandler
         return channel
