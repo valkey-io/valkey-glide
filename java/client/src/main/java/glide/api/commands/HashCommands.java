@@ -77,7 +77,7 @@ public interface HashCommands {
      * @example
      *     <pre>{@code
      * String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
-     * assert values == new String[] {"value1", "value2"}
+     * assert values.equals(new String[] {"value1", "value2"});
      * }</pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
@@ -92,10 +92,10 @@ public interface HashCommands {
      *     contain the field, or if the key does not exist, it returns <code>False</code>.
      * @example
      *     <pre>{@code
-     * Boolean exists = client.hexists("my_hash", "field1").get()
-     * assert exists
-     * Boolean exists = client.hexists("my_hash", "non_existent_field").get()
-     * assert !exists
+     * Boolean exists = client.hexists("my_hash", "field1").get();
+     * assert exists;
+     * Boolean exists = client.hexists("my_hash", "non_existent_field").get();
+     * assert !exists;
      * }</pre>
      */
     CompletableFuture<Boolean> hexists(String key, String field);
@@ -110,8 +110,8 @@ public interface HashCommands {
      *     If <code>key</code> does not exist, it returns an empty map.
      * @example
      *     <pre>{@code
-     * Map fieldValueMap = client.hgetall("my_hash").get()
-     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"))
+     * Map fieldValueMap = client.hgetall("my_hash").get();
+     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"));
      * }</pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
@@ -132,8 +132,8 @@ public interface HashCommands {
      *     increment or decrement.
      * @example
      *     <pre>{@code
-     * Long num = client.hincrBy("my_hash", "field1", 5).get()
-     * assert num == 5L
+     * Long num = client.hincrBy("my_hash", "field1", 5).get();
+     * assert num == 5L;
      * }</pre>
      */
     CompletableFuture<Long> hincrBy(String key, String field, long amount);
@@ -155,8 +155,8 @@ public interface HashCommands {
      *     increment or decrement.
      * @example
      *     <pre>{@code
-     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get()
-     * assert num == 2.5
+     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get();
+     * assert num == 2.5;
      * }</pre>
      */
     CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
