@@ -24,6 +24,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -379,57 +381,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
-     * <code>elements</code> are inserted one after the other to the tail of the list, from the
-     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
-     * an empty list before performing the push operations.
-     *
-     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
-     * @param key The key of the list.
-     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
-     * @return Command Response - The length of the list after the push operations.
-     */
-    public T rpush(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-
-        protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Removes and returns the last elements of the list stored at <code>key</code>.<br>
-     * The command pops a single element from the end of the list.
-     *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
-     * @param key The key of the list.
-     * @return Command Response - The value of the last element.<br>
-     *     If <code>key</code> does not exist, null will be returned.<br>
-     */
-    public T rpop(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-
-        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
-     * depending on the list's length.
-     *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
-     * @param count The count of the elements to pop from the list.
-     * @returns Command Response - An array of popped elements will be returned depending on the
-     *     list's length.<br>
-     *     If <code>key</code> does not exist, null will be returned.<br>
-     */
-    public T rpopCount(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-
-        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
-        return getThis();
-    }
-
-    /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
@@ -575,6 +526,108 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
 
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the specified elements of the list stored at <code>key</code>.<br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with -1 being the last
+     * element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - Array of elements in the specified range.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, an empty array will be returned.<br>
+     *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
+     *     end of the list.<br>
+     *     If <code>key</code> does not exist an empty array will be returned.<br>
+     */
+    public T lrange(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+
+        protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - Always <code>OK</code>. <br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     */
+    public T ltrim(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+
+        protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
+     * <code>elements</code> are inserted one after the other to the tail of the list, from the
+     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
+     * an empty list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T rpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the last elements of the list stored at <code>key</code>.<br>
+     * The command pops a single element from the end of the list.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the last element.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param count The count of the elements to pop from the list.
+     * @return Command Response - An array of popped elements will be returned depending on the list's
+     *     length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
         return getThis();
     }
 
