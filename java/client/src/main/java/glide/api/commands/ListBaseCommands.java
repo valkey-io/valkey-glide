@@ -123,6 +123,21 @@ public interface ListBaseCommands {
     CompletableFuture<String> ltrim(String key, long start, long end);
 
     /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
+     * @example
+     *     <pre>
+     * Long lenList = client.llen("my_list").get()
+     * assert lenList == 3L //Indicates that there are 3 elements in the list.
+     * </pre>
+     */
+    CompletableFuture<Long> llen(String key);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as

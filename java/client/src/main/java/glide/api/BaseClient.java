@@ -22,6 +22,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -375,6 +376,11 @@ public abstract class BaseClient
                 LTrim,
                 new String[] {key, Long.toString(start), Long.toString(end)},
                 this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> llen(@NonNull String key) {
+        return commandManager.submitNewCommand(LLen, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
