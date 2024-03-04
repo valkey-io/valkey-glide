@@ -8,6 +8,7 @@ import {
     ScoreLimit,
     SetOptions,
     StreamAddOptions,
+    StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
     createClientGetName,
@@ -69,6 +70,7 @@ import {
     createType,
     createUnlink,
     createXadd,
+    createXread,
     createXtrim,
     createZadd,
     createZcard,
@@ -1092,6 +1094,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public time(): T {
         return this.addAndReturn(createTime());
+    }
+
+    /**
+     * Reads entries from the given streams.
+     * See https://redis.io/commands/xread/ for more details.
+     *
+     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     * @param options - options detailing how to read the stream.
+     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     */
+    public xread(
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadOptions,
+    ): T {
+        return this.addAndReturn(createXread(keys_and_ids, options));
     }
 }
 
