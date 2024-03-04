@@ -33,10 +33,10 @@ public interface ConnectionManagementCommands {
      * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
      * @return The id of the client.
      * @example
-     *     <pre>
-     * long id = client.clientId().get();
-     * assert id > 0
-     * </pre>
+     *     <pre>{@code
+     * Long id = client.clientId().get();
+     * assert id > 0;
+     * }</pre>
      */
     CompletableFuture<Long> clientId();
 
@@ -47,10 +47,10 @@ public interface ConnectionManagementCommands {
      * @return The name of the client connection as a string if a name is set, or <code>null</code> if
      *     no name is assigned.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String clientName = client.clientGetName().get();
-     * assert clientName != null
-     * </pre>
+     * assert clientName != null;
+     * }</pre>
      */
     CompletableFuture<String> clientGetName();
 }
