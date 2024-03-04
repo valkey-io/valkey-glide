@@ -19,6 +19,13 @@ public interface HashCommands {
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
      * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
      *     </code> is not present in the hash or <code>key</code> does not exist.
+     * @example
+     *     <pre>
+     * String payload = client.hget("my_hash", "field1").get();
+     * assert payload.equals("value");
+     * String payload = client.hget("my_hash", "nonexistent_field").get();
+     * assert payload.equals(null);
+     * </pre>
      */
     CompletableFuture<String> hget(String key, String field);
 
@@ -30,6 +37,11 @@ public interface HashCommands {
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
      * @return The number of fields that were added.
+     * @example
+     *     <pre>
+     * Long num = client.hset("my_hash", Map.of("field", "value", "field2", "value2")).get();
+     * assert num == 2L;
+     * </pre>
      */
     CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap);
 
@@ -43,6 +55,11 @@ public interface HashCommands {
      * @return The number of fields that were removed from the hash, not including specified but
      *     non-existing fields.<br>
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
+     * @example
+     *     <pre>
+     * Long num = client.hdel("my_hash", new String[] {}).get("field1", "field2");
+     * assert num == 2L; //Indicates that two fields were successfully removed from the hash.
+     * </pre>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
 
