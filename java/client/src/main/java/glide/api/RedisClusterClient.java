@@ -53,7 +53,8 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(
+            @NonNull String[] args, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
     }
@@ -69,14 +70,14 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
+    public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
         return commandManager.submitNewCommand(
                 transaction, Optional.empty(), this::handleArrayOrNullResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>[]> exec(
-            ClusterTransaction transaction, Route route) {
+            @NonNull ClusterTransaction transaction, Route route) {
         return commandManager
                 .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayOrNullResponse)
                 .thenApply(
