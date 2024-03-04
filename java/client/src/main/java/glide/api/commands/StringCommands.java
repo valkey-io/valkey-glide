@@ -23,12 +23,12 @@ public interface StringCommands {
      * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String payload = client.get("key").get();
      * assert payload.equals("value");
      * String payload = client.get("non_existing_key").get();
      * assert payload.equals(null);
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> get(String key);
 
@@ -40,10 +40,10 @@ public interface StringCommands {
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis containing <code>"OK"</code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String payload = client.set("key", "value").get();
      * assert payload.equals("OK");
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> set(String key, String value);
 
@@ -60,7 +60,7 @@ public interface StringCommands {
      *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
      *     is set, return the old value as a <code>String</code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String payload =
      *         client.set("key", "value", SetOptions.builder()
      *                 .conditionalSet(ONLY_IF_EXISTS)
@@ -68,7 +68,7 @@ public interface StringCommands {
      *                 .build())
      *                 .get();
      * assert payload.equals("OK");
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
@@ -81,10 +81,10 @@ public interface StringCommands {
      *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
      *     </code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String payload = client.mget(new String[] {"key1", "key2"}).get();
      * assert payload.equals(new String[] {"value1", "value2"});
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String[]> mget(String[] keys);
 
@@ -95,10 +95,10 @@ public interface StringCommands {
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Always <code>OK</code>.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String payload = client.mset(Map.of("key1", "value1", "key2", "value2"}).get();
      * assert payload.equals("OK"));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 
@@ -110,10 +110,10 @@ public interface StringCommands {
      * @param key The key to increment its value.
      * @return The value of <code>key</code> after the increment.
      * @example
-     *     <pre>
-     * Long num = client.incr("key").get()
-     * assert num == 5L
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.incr("key").get();
+     * assert num == 5L;
+     * }</pre>
      */
     CompletableFuture<Long> incr(String key);
 
@@ -126,10 +126,10 @@ public interface StringCommands {
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
      * @example
-     *     <pre>
-     * Long num = client.incrBy("key", 2).get()
-     * assert num == 7L
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.incrBy("key", 2).get();
+     * assert num == 7L;
+     * }</pre>
      */
     CompletableFuture<Long> incrBy(String key, long amount);
 
@@ -144,10 +144,10 @@ public interface StringCommands {
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
      * @example
-     *     <pre>
-     * Long num = client.incrByFloat("key", 0.5).get()
-     * assert num == 7.5
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.incrByFloat("key", 0.5).get();
+     * assert num == 7.5;
+     * }</pre>
      */
     CompletableFuture<Double> incrByFloat(String key, double amount);
 
@@ -159,10 +159,10 @@ public interface StringCommands {
      * @param key The key to decrement its value.
      * @return The value of <code>key</code> after the decrement.
      * @example
-     *     <pre>
-     * Long num = client.decr("key").get()
-     * assert num == 4L
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.decr("key").get();
+     * assert num == 4L;
+     * }</pre>
      */
     CompletableFuture<Long> decr(String key);
 
@@ -175,10 +175,10 @@ public interface StringCommands {
      * @param amount The amount to decrement.
      * @return The value of <code>key</code> after the decrement.
      * @example
-     *     <pre>
-     * Long num = client.decrBy("key", 2).get()
-     * assert num == 2L
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.decrBy("key", 2).get();
+     * assert num == 2L;
+     * }</pre>
      */
     CompletableFuture<Long> decrBy(String key, long amount);
 }
