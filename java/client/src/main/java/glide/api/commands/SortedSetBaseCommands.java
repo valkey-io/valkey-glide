@@ -17,7 +17,7 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The Zadd options.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
@@ -41,7 +41,7 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The Zadd options.
      * @return The number of elements added to the sorted set.
      * @example
@@ -61,7 +61,7 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
      * @return The number of elements added to the sorted set. <br>
@@ -81,7 +81,7 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersScoresMap A mapping of members to their corresponding scores.
+     * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @return The number of elements added to the sorted set.
      * @example
      *     <pre>
