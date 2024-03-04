@@ -48,10 +48,10 @@ public interface ServerManagementCommands {
      * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
      *     raised.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String response = client.configRewrite().get();
-     * assert response.equals("OK")
-     * </pre>
+     * assert response.equals("OK");
+     * }</pre>
      */
     CompletableFuture<String> configRewrite();
 
@@ -63,10 +63,10 @@ public interface ServerManagementCommands {
      * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
      * @return <code>OK</code> to confirm that the statistics were successfully reset.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String response = client.configResetStat().get();
-     * assert response.equals("OK")
-     * </pre>
+     * assert response.equals("OK");
+     * }</pre>
      */
     CompletableFuture<String> configResetStat();
 }
