@@ -79,11 +79,11 @@ public interface ServerManagementCommands {
      *     for.
      * @return A <code>map</code> of values corresponding to the configuration parameters.
      * @example
-     *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
      * assert configParams.get("timeout").equals("1000);
      * assert configParams.get("maxmemory").equals("1GB)'
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
 
@@ -96,10 +96,10 @@ public interface ServerManagementCommands {
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
      * assert response.equals("OK")
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters);
 }

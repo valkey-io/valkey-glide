@@ -147,11 +147,11 @@ public interface ServerManagementClusterCommands {
      *     for.
      * @return A <code>map</code> of values corresponding to the configuration parameters.
      * @example
-     *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
      * assert configParams.get("timeout").equals("1000");
      * assert configParams.get("maxmemory").equals("1GB");
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
 
@@ -167,17 +167,14 @@ public interface ServerManagementClusterCommands {
      *     When specifying a route other than a single node, it returns a dictionary where each
      *     address is the key and its corresponding node response is the value.
      * @example
-     *     <pre>
-     * Map&lt;String, String&gt; configParams = client.configGet("timeout", Random).get().getSingleValue();
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet("timeout", Random).get().getSingleValue();
      * assert configParams.get("timeout").equals("1000");
-     * </pre>
      *
-     * @example
-     *     <pre>
-     * Map&lt;String, Map&lt;String, String&gt;&gt; configParamsPerNode = client.configGet("maxmemory", ALL_NODES).get().getMultiValue();
-     * assert configParamsPerNode.get("&lt;node1 address&gt;").get("maxmemory").equals("1GB");
-     * assert configParamsPerNode.get("&lt;node2 address&gt;").get("maxmemory").equals("2GB");
-     * </pre>
+     * Map<String, Map<String, String>> configParamsPerNode = client.configGet("maxmemory", ALL_NODES).get().getMultiValue();
+     * assert configParamsPerNode.get("<node1 address>").get("maxmemory").equals("1GB");
+     * assert configParamsPerNode.get("<node2 address>").get("maxmemory").equals("2GB");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route);
 
@@ -191,10 +188,10 @@ public interface ServerManagementClusterCommands {
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
      * assert response.equals("OK")
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters);
 
@@ -209,10 +206,10 @@ public interface ServerManagementClusterCommands {
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB"), ALL_PRIMARIES).get();
      * assert response.equals("OK")
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters, Route route);
 }
