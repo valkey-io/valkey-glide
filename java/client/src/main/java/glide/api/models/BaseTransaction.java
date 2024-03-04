@@ -22,6 +22,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -577,6 +578,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
         protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
+     */
+    public T llen(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LLen, commandArgs));
         return getThis();
     }
 
