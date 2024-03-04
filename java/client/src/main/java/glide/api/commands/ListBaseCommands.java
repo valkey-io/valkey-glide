@@ -68,6 +68,61 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lpopCount(String key, long count);
 
     /**
+     * Returns the specified elements of the list stored at <code>key</code>.<br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with -1 being the last
+     * element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Array of elements in the specified range.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, an empty array will be returned.<br>
+     *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
+     *     end of the list.<br>
+     *     If <code>key</code> does not exist an empty array will be returned.<br>
+     * @example
+     *     <pre>
+     * String[] payload = lient.lrange("my_list", 0, 2).get()
+     * assert payload.equals(new String[] {"value1", "value2", "value3"})
+     * String[] payload = client.lrange("my_list", -2, -1).get()
+     * assert payload.equals(new String[] {"value2", "value3"})
+     * String[] payload = client.lrange("non_exiting_key", 0, 2).get()
+     * assert payload.equals(new String[] {})
+     * </pre>
+     */
+    CompletableFuture<String[]> lrange(String key, long start, long end);
+
+    /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Always <code>OK</code>.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>
+     * String payload = client.ltrim("my_list", 0, 1).get()
+     * assert payload.equals("OK")
+     * </pre>
+     */
+    CompletableFuture<String> ltrim(String key, long start, long end);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
