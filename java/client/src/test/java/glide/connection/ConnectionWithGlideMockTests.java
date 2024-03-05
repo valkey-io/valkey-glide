@@ -5,6 +5,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -146,7 +147,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
 
         var exception = assertThrows(ExecutionException.class, () -> testConnection().get(1, SECONDS));
         assertAll(
-                () -> assertTrue(exception.getCause() instanceof ClosingException),
+                () -> assertInstanceOf(ClosingException.class, exception.getCause()),
                 () -> assertEquals("You shall not pass!", exception.getCause().getMessage()));
     }
 
@@ -157,7 +158,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
 
         var exception = assertThrows(ExecutionException.class, () -> testConnection().get(1, SECONDS));
         assertAll(
-                () -> assertTrue(exception.getCause() instanceof ClosingException),
+                () -> assertInstanceOf(ClosingException.class, exception.getCause()),
                 () ->
                         assertTrue(
                                 exception
@@ -175,7 +176,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
             var exception =
                     assertThrows(
                             ExecutionException.class, () -> client.customCommand(new String[0]).get(1, SECONDS));
-            assertTrue(exception.getCause() instanceof RuntimeException);
+            assertInstanceOf(RuntimeException.class, exception.getCause());
 
             // Not a public class, can't import
             assertEquals(

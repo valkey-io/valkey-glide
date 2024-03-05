@@ -11,6 +11,7 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -140,6 +141,6 @@ public class CommandTests {
     public void select_test_gives_error() {
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> regularClient.select(-1).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 }

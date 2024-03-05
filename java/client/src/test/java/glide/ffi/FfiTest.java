@@ -4,6 +4,7 @@ package glide.ffi;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,7 +70,7 @@ public class FfiTest {
     public void redisValueToJavaValue_Int(Long input) {
         long ptr = FfiTest.createLeakedInt(input);
         Object longValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(longValue instanceof Long);
+        assertInstanceOf(Long.class, longValue);
         assertEquals(input, longValue);
     }
 
@@ -87,7 +88,7 @@ public class FfiTest {
         long[] array = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedLongArray(array);
         Object longArrayValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(longArrayValue instanceof Object[]);
+        assertInstanceOf(Object[].class, longArrayValue);
         Object[] result = (Object[]) longArrayValue;
         assertArrayEquals(new Object[] {1L, 2L, 3L}, result);
     }
@@ -98,7 +99,7 @@ public class FfiTest {
         long[] values = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedMap(keys, values);
         Object mapValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(mapValue instanceof HashMap);
+        assertInstanceOf(HashMap.class, mapValue);
         HashMap<Object, Object> result = (HashMap<Object, Object>) mapValue;
         assertAll(
                 () -> assertEquals(1L, result.get(12L)),
@@ -134,7 +135,7 @@ public class FfiTest {
         long[] array = {1L, 2L, 2L};
         long ptr = FfiTest.createLeakedLongSet(array);
         Object longSetValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(longSetValue instanceof HashSet);
+        assertInstanceOf(HashSet.class, longSetValue);
         HashSet<Long> result = (HashSet<Long>) longSetValue;
         assertAll(
                 () -> assertTrue(result.contains(1L)),

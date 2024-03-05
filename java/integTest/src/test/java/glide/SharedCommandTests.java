@@ -12,6 +12,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -365,15 +366,15 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key1, "foo").get());
 
         Exception incrException = assertThrows(ExecutionException.class, () -> client.incr(key1).get());
-        assertTrue(incrException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrException.getCause());
 
         Exception incrByException =
                 assertThrows(ExecutionException.class, () -> client.incrBy(key1, 3).get());
-        assertTrue(incrByException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrByException.getCause());
 
         Exception incrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
-        assertTrue(incrByFloatException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrByFloatException.getCause());
     }
 
     @SneakyThrows
@@ -535,11 +536,11 @@ public class SharedCommandTests {
 
         Exception hincrByException =
                 assertThrows(ExecutionException.class, () -> client.hincrBy(key, field, 2).get());
-        assertTrue(hincrByException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, hincrByException.getCause());
 
         Exception hincrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.hincrByFloat(key, field, 2.5).get());
-        assertTrue(hincrByFloatException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, hincrByFloatException.getCause());
     }
 
     @SneakyThrows
@@ -567,18 +568,18 @@ public class SharedCommandTests {
 
         Exception lpushException =
                 assertThrows(ExecutionException.class, () -> client.lpush(key, new String[] {"foo"}).get());
-        assertTrue(lpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpushException.getCause());
 
         Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
-        assertTrue(lpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopException.getCause());
 
         Exception lpopCountException =
                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
-        assertTrue(lpopCountException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopCountException.getCause());
 
         Exception lrangeException =
                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lrangeException.getCause());
     }
 
     @SneakyThrows
@@ -600,7 +601,7 @@ public class SharedCommandTests {
 
         Exception ltrimException =
                 assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
-        assertTrue(ltrimException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, ltrimException.getCause());
     }
 
     @SneakyThrows
@@ -619,7 +620,7 @@ public class SharedCommandTests {
 
         Exception lrangeException =
                 assertThrows(ExecutionException.class, () -> client.llen(key2).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lrangeException.getCause());
     }
 
     @SneakyThrows
@@ -646,10 +647,10 @@ public class SharedCommandTests {
 
         Exception rpushException =
                 assertThrows(ExecutionException.class, () -> client.rpush(key, new String[] {"foo"}).get());
-        assertTrue(rpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpushException.getCause());
 
         Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
-        assertTrue(rpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpopException.getCause());
     }
 
     @SneakyThrows
@@ -685,16 +686,16 @@ public class SharedCommandTests {
 
         Exception e =
                 assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 
     @SneakyThrows

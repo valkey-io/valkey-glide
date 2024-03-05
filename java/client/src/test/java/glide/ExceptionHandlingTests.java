@@ -4,6 +4,7 @@ package glide;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
@@ -83,7 +84,7 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future::get);
         // a ClosingException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by ConnectionManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
         assertTrue(channelHandler.wasClosed);
     }
 
@@ -99,7 +100,7 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future::get);
         // a ClosingException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
         // check the channel
         assertTrue(channelHandler.wasClosed);
     }
@@ -116,7 +117,7 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future::get);
         // a RequestException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
         // check the channel
         assertFalse(channelHandler.wasClosed);
     }
@@ -133,8 +134,8 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future::get);
         // a IOException thrown from CallbackDispatcher::completeRequest and then wrapped
         // by a RuntimeException and rethrown by CommandManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof RuntimeException);
-        assertTrue(exception.getCause().getCause() instanceof IOException);
+        assertInstanceOf(RuntimeException.class, exception.getCause());
+        assertInstanceOf(IOException.class, exception.getCause().getCause());
         // check the channel
         assertFalse(channelHandler.wasClosed);
     }
@@ -152,8 +153,8 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future::get);
         // a IOException thrown from CallbackDispatcher::completeRequest and then wrapped
         // by a RuntimeException and rethrown by ConnectionManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof RuntimeException);
-        assertTrue(exception.getCause().getCause() instanceof IOException);
+        assertInstanceOf(RuntimeException.class, exception.getCause());
+        assertInstanceOf(IOException.class, exception.getCause().getCause());
         // check the channel
         assertTrue(channelHandler.wasClosed);
     }
@@ -175,7 +176,7 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future1::get);
         // a ClosingException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
         // check the channel
         assertTrue(channelHandler.wasClosed);
 
@@ -243,7 +244,7 @@ public class ExceptionHandlingTests {
         var exception = assertThrows(ExecutionException.class, future1::get);
         // a ClosingException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
         assertEquals(
                 exception.getCause().getMessage(), "Client is in an erroneous state and should close");
         // check the channel

@@ -4,6 +4,7 @@ package glide.managers;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,7 +118,7 @@ public class CommandManagerTest {
         Object respPointer = result.get();
 
         // verify
-        assertTrue(respPointer instanceof String);
+        assertInstanceOf(String.class, respPointer);
         assertEquals(testString, respPointer);
     }
 

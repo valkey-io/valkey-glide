@@ -4,9 +4,9 @@ package glide.managers;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -209,7 +209,7 @@ public class ConnectionManagerTest {
                         ExecutionException.class,
                         () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
-        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, executionException.getCause());
         assertEquals("Unexpected empty data in response", executionException.getCause().getMessage());
         verify(channel).close();
     }
@@ -229,7 +229,7 @@ public class ConnectionManagerTest {
                         ExecutionException.class,
                         () -> connectionManager.connectToRedis(redisClientConfiguration).get());
 
-        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, executionException.getCause());
         assertEquals("Unexpected data in response", executionException.getCause().getMessage());
         verify(channel).close();
     }
