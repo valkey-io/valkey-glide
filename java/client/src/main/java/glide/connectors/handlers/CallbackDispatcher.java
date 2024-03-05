@@ -129,7 +129,8 @@ public class CallbackDispatcher {
     }
 
     public void shutdownGracefully() {
-        responses.values().forEach(future -> future.cancel(false));
+        String msg = "Operation terminated: The closing process has been initiated for the resource.";
+        responses.values().forEach(future -> future.completeExceptionally(new ClosingException(msg)));
         responses.clear();
     }
 }
