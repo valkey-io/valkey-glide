@@ -1,5 +1,20 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+"""module for `RedisJSON` commands.
 
+    Examples:
+
+        >>> from glide import json as redisJson
+        >>> import json
+        >>> value = {'a': 1.0, 'b': 2}
+        >>> json_str = json.dumps(value)
+        >>> await redisJson.set(client, "doc", "$", json_str)
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at 'doc'.
+        >>> await redisJson.get(client, "doc", "$")
+            "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at 'doc'.
+        >>> json_get = await redisJson.get(client, "doc", "$")
+        >>> json.loads(json_get)
+            [{"a": 1.0, "b" :2}]
+        """
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
@@ -30,16 +45,16 @@ async def set(
             Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
 
     Returns:
-        Optional[TOK]: If the value is successfully set, return OK.
-            If value isn't set because of `set_condition`, return None.
+        Optional[TOK]: If the value is successfully set, returns OK.
+            If value isn't set because of `set_condition`, returns None.
 
     Examples:
-        >>> from glide.async_commands.json import json
-        >>> import json as OuterJson
+        >>> from glide import json as redisJson
+        >>> import json
         >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = OuterJson.dumps(value)
-        >>> await json.set(client, "doc", "$", json_str)
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at 'doc'.
+        >>> json_str = json.dumps(value)
+        >>> await redisJson.set(client, "doc", "$", json_str)
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
     """
     args = [key, path, value]
     if set_condition:
@@ -64,26 +79,27 @@ async def get(
     Args:
         client (TRedisClient): The Redis client to execute the command.
         key (str): The key of the JSON document.
-        paths (ptional[Union[str, List[str]]]): The path or list of paths within the JSON document.
+        paths (Optional[Union[str, List[str]]]): The path or list of paths within the JSON document.
         indent (Optional[str]): Sets an indentation string for nested levels. Defaults to None.
         newline (Optional[str]): Sets a string that's printed at the end of each line. Defaults to None.
         space (Optional[str]): Sets a string that's put between a key and a value. Defaults to None.
 
     Returns:
         str: A bulk string representation of the returned value.
-            If `key` doesn't exists, return None.
+            If `key` doesn't exists, returns None.
 
     Examples:
-        >>> import json as OuterJson
+        >>> from glide import json as redisJson
         >>> import json
-        >>> OuterJson.loads(await json_get(client, "doc", "$"))
-            [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key "doc" using json.loads()
-        >>> await json.get(client, "doc", "$")
-            "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at 'doc'.
-        >>> await json.get(client, "doc", ["$.a", "$.b"], indent="  ", newline="\n", space=" ")
-            "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at 'doc', with specified formatting options.
-        >>> await json.get(client, "doc", "$.non_existing_path")
-            "[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at 'doc'.
+        >>> json_str = await redisJson.get(client, "doc", "$")
+        >>> json.loads(json_str) # Parse JSON string to Python data
+            [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
+        >>> await redisJson.get(client, "doc", "$")
+            "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
+        >>> await redisJson.get(client, "doc", ["$.a", "$.b"], indent="  ", newline="\n", space=" ")
+            "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
+        >>> await redisJson.get(client, "doc", "$.non_existing_path")
+            "[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
     """
     args = [key]
 
@@ -97,8 +113,6 @@ async def get(
     if paths:
         if isinstance(paths, str):
             paths = [paths]
-
-        for path in paths:
-            args.append(path)
+        args.extend(paths)
 
     return cast(str, await client._execute_command(RequestType.JsonGet, args))

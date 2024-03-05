@@ -2,8 +2,8 @@
 
 import json as OuterJson
 
-import glide.async_commands.redis_modules.json.json as json
 import pytest
+from glide import json
 from glide.async_commands.core import ConditionalChange, InfoSection
 from glide.config import ProtocolVersion
 from glide.constants import OK
