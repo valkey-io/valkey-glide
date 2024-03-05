@@ -499,14 +499,4 @@ public abstract class BaseClient
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
     }
-
-    public CompletableFuture<Long> clientId() {
-        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> clientGetName() {
-        return commandManager.submitNewCommand(
-                ClientGetName, new String[0], this::handleStringOrNullResponse);
-    }
 }
