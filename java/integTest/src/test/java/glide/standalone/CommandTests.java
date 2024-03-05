@@ -142,4 +142,22 @@ public class CommandTests {
                 assertThrows(ExecutionException.class, () -> regularClient.select(-1).get());
         assertTrue(e.getCause() instanceof RequestException);
     }
+
+    @Test
+    @SneakyThrows
+    public void clientId() {
+        var id = regularClient.clientId().get();
+        assertTrue(id > 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName() {
+        // TODO replace with the corresponding command once implemented
+        regularClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
+
+        var name = regularClient.clientGetName().get();
+
+        assertEquals("clientGetName", name);
+    }
 }
