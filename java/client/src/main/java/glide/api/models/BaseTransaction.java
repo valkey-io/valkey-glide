@@ -997,8 +997,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Rewrite the configuration file with the current configuration.
      *
      * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
-     * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     raised.
+     * @return <code>OK</code> is returned when the configuration was rewritten properly. Otherwise,
+     *     the transaction fails with an error.
      */
     public T configRewrite() {
         protobufTransaction.addCommands(buildCommand(ConfigRewrite));

@@ -46,7 +46,7 @@ public interface ServerManagementCommands {
      *
      * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
      * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     raised.
+     *     thrown.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();

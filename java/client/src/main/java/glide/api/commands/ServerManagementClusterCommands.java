@@ -78,7 +78,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
      * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     raised.
+     *     thrown.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();
@@ -94,7 +94,7 @@ public interface ServerManagementClusterCommands {
      * @param route Routing configuration for the command. Client will route the command to the nodes
      *     defined.
      * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     raised.
+     *     thrown.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite(ALL_PRIMARIES).get();
