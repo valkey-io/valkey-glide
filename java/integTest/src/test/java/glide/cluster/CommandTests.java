@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
@@ -273,5 +274,65 @@ public class CommandTests {
                         "Section " + section + " is missing");
             }
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId() {
+        var id = clusterClient.clientId().get();
+        assertTrue(id > 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_single_node_route() {
+        var data = clusterClient.clientId(RANDOM).get();
+        assertTrue(data.getSingleValue() > 0L);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_multi_node_route() {
+        var data = clusterClient.clientId(ALL_NODES).get();
+        data.getMultiValue().values().forEach(id -> assertTrue(id > 0));
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
+
+        var name = clusterClient.clientGetName().get();
+
+        assertEquals("clientGetName", name);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_single_node_route() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient
+                .customCommand(
+                        new String[] {"client", "setname", "clientGetName_with_single_node_route"}, ALL_NODES)
+                .get();
+
+        var name = clusterClient.clientGetName(RANDOM).get();
+
+        assertEquals("clientGetName_with_single_node_route", name.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_multi_node_route() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient
+                .customCommand(
+                        new String[] {"client", "setname", "clientGetName_with_multi_node_route"}, ALL_NODES)
+                .get();
+
+        var name = clusterClient.clientGetName(ALL_NODES).get();
+
+        assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
     }
 }

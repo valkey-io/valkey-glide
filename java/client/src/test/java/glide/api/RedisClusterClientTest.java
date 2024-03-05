@@ -11,6 +11,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
@@ -118,7 +120,6 @@ public class RedisClusterClientTest {
             object = objectToReturn;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
             return (T) object;
@@ -355,5 +356,89 @@ public class RedisClusterClientTest {
         var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientId_returns_success() {
+        // setup
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(42L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ClientId), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.clientId();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(42L, response.get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_multi_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("n1", 42L);
+        var client = new TestClient(commandManager, data);
+
+        var value = client.clientId(ALL_NODES).get();
+        assertEquals(data, value.getMultiValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_single_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var client = new TestClient(commandManager, 42L);
+
+        var value = client.clientId(RANDOM).get();
+        assertEquals(42, value.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientGetName_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("TEST");
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClientGetName), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientGetName();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("TEST", response.get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_single_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var client = new TestClient(commandManager, "TEST");
+
+        var value = client.clientGetName(RANDOM).get();
+        assertEquals("TEST", value.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_multi_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("n1", "TEST");
+        var client = new TestClient(commandManager, data);
+
+        var value = client.clientGetName(ALL_NODES).get();
+        assertEquals(data, value.getMultiValue());
     }
 }

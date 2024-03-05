@@ -296,7 +296,7 @@ public class SharedCommandTests {
         assertEquals(OK, ok);
 
         SetOptions options = SetOptions.builder().returnOldValue(true).build();
-        String data = client.set("another", ANOTHER_VALUE, options).get();
+        String data = client.set(UUID.randomUUID().toString(), ANOTHER_VALUE, options).get();
         assertNull(data);
     }
 

@@ -12,6 +12,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -1285,5 +1287,43 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientId_returns_success() {
+        // setup
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(42L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ClientId), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.clientId();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(42L, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientGetName_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("TEST");
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClientGetName), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientGetName();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("TEST", response.get());
     }
 }

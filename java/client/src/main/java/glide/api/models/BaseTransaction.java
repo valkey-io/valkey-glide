@@ -2,6 +2,8 @@
 package glide.api.models;
 
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -963,6 +965,29 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Get the current connection id.
+     *
+     * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
+     * @return Command response - The id of the client.
+     */
+    public T clientId() {
+        protobufTransaction.addCommands(buildCommand(ClientId));
+        return getThis();
+    }
+
+    /**
+     * Get the name of the current connection.
+     *
+     * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
+     * @return Command response - The name of the client connection as a string if a name is set, or
+     *     <code>null</code> if no name is assigned.
+     */
+    public T clientGetName() {
+        protobufTransaction.addCommands(buildCommand(ClientGetName));
         return getThis();
     }
 

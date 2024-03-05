@@ -79,6 +79,7 @@ public abstract class BaseClient
                 HashCommands,
                 ListBaseCommands,
                 SetCommands {
+
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
@@ -214,7 +215,7 @@ public abstract class BaseClient
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type could be even map too
+     * @param <V> Value type
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
