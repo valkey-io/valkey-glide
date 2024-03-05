@@ -11,8 +11,8 @@ const (
 
 // NodeAddress represents the host address and port of a node in the cluster.
 type NodeAddress struct {
-	Host string // Optional: if not supplied, "localhost" will be used.
-	Port int    // Optional: if not supplied, 6379 will be used.
+	Host string // If not supplied, "localhost" will be used.
+	Port int    // If not supplied, 6379 will be used.
 }
 
 func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
@@ -29,19 +29,19 @@ func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
 
 // RedisCredentials represents the credentials for connecting to a Redis server.
 type RedisCredentials struct {
-	// Optional: the username that will be used for authenticating connections to the Redis servers. If not supplied, "default"
+	// The username that will be used for authenticating connections to the Redis servers. If not supplied, "default"
 	// will be used.
 	username string
-	// Required: the password that will be used for authenticating connections to the Redis servers.
+	// The password that will be used for authenticating connections to the Redis servers.
 	password string
 }
 
-// NewRedisCredentials returns a new RedisCredentials struct with the given username and password.
+// NewRedisCredentials returns a [RedisCredentials] struct with the given username and password.
 func NewRedisCredentials(username string, password string) *RedisCredentials {
 	return &RedisCredentials{username, password}
 }
 
-// NewRedisCredentialsWithDefaultUsername returns a new RedisCredentials struct with a default username of "default" and the
+// NewRedisCredentialsWithDefaultUsername returns a [RedisCredentials] struct with a default username of "default" and the
 // given password.
 func NewRedisCredentialsWithDefaultUsername(password string) *RedisCredentials {
 	return &RedisCredentials{password: password}
@@ -117,17 +117,17 @@ func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest 
 // Once the maximum value is reached, that will remain the time between retry attempts until a reconnect attempt is successful.
 // The client will attempt to reconnect indefinitely.
 type BackoffStrategy struct {
-	// Required: number of retry attempts that the client should perform when disconnected from the server, where the time
+	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
 	// constant until a reconnect attempt is successful.
 	numOfRetries int
-	// Required: the multiplier that will be applied to the waiting time between each retry.
+	// The multiplier that will be applied to the waiting time between each retry.
 	factor int
-	// Required: the exponent base configured for the strategy.
+	// The exponent base configured for the strategy.
 	exponentBase int
 }
 
-// NewBackoffStrategy returns a new BackoffStrategy with the given configuration parameters.
+// NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
 	return &BackoffStrategy{numOfRetries, factor, exponentBase}
 }
@@ -240,7 +240,7 @@ type RedisClusterClientConfiguration struct {
 	baseClientConfiguration
 }
 
-// NewRedisClusterClientConfiguration returns a [RedisClientConfiguration] with default configuration settings. For further
+// NewRedisClusterClientConfiguration returns a [RedisClusterClientConfiguration] with default configuration settings. For further
 // configuration, use the [RedisClientConfiguration] With* methods.
 func NewRedisClusterClientConfiguration() *RedisClusterClientConfiguration {
 	return &RedisClusterClientConfiguration{
