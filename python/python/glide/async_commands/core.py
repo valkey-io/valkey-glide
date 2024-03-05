@@ -1627,7 +1627,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[int]: The rank of `member` in the sorted set.
-            If `key` does'nt exist, or if `member` is not present in the set, None will be returned.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
             ples:
             >>> await client.zrank("my_sorted_set", "member2")
                 1  # Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
