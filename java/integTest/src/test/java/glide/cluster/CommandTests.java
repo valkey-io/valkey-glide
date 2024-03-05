@@ -21,6 +21,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleR
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClusterClient;
@@ -29,7 +30,9 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.exceptions.RequestException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -354,5 +357,13 @@ public class CommandTests {
         firstNodeInfo = getFirstEntryFromMultiValue(data);
         int value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
         assertTrue(value_after < value_before);
+    }
+
+    @Test
+    @SneakyThrows
+    public void config_rewrite_non_existent_config_file() {
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

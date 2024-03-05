@@ -176,4 +176,12 @@ public class CommandTests {
         int value_after = getValueFromInfo(data, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
+
+    @Test
+    @SneakyThrows
+    public void config_rewrite_non_existent_config_file() {
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
 }
