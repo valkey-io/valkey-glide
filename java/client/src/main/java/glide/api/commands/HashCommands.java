@@ -23,6 +23,7 @@ public interface HashCommands {
      *     <pre>{@code
      * String payload = client.hget("my_hash", "field1").get();
      * assert payload.equals("value");
+     *
      * String payload = client.hget("my_hash", "nonexistent_field").get();
      * assert payload.equals(null);
      * }</pre>
@@ -94,6 +95,7 @@ public interface HashCommands {
      *     <pre>{@code
      * Boolean exists = client.hexists("my_hash", "field1").get();
      * assert exists;
+     *
      * Boolean exists = client.hexists("my_hash", "non_existent_field").get();
      * assert !exists;
      * }</pre>
