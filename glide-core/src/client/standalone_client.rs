@@ -225,7 +225,7 @@ impl StandaloneClient {
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
-            Err(err) if err.is_connection_dropped() => {
+            Err(err) if err.is_unrecoverable_error() => {
                 log_warn("send request", format!("received disconnect error `{err}`"));
                 reconnecting_connection.reconnect();
                 Err(err)
@@ -321,7 +321,7 @@ impl StandaloneClient {
             .send_packed_commands(pipeline, offset, count)
             .await;
         match result {
-            Err(err) if err.is_connection_dropped() => {
+            Err(err) if err.is_unrecoverable_error() => {
                 log_warn(
                     "pipeline request",
                     format!("received disconnect error `{err}`"),
