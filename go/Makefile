@@ -46,9 +46,7 @@ lint:
 	gofumpt -d .
 	golines --dry-run --shorten-comments -m 127 .
 
-lint-ci:
-	go vet ./...
-	staticcheck ./...
+lint-ci: lint
 	if [ "$$(gofumpt -l . | wc -l)" -gt 0 ]; then exit 1; fi
 	if [ "$$(golines -l --shorten-comments -m 127 . | wc -l)" -gt 0 ]; then exit 1; fi
 
