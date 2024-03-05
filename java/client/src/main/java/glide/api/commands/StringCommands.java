@@ -26,6 +26,7 @@ public interface StringCommands {
      *     <pre>{@code
      * String payload = client.get("key").get();
      * assert payload.equals("value");
+     *
      * String payload = client.get("non_existing_key").get();
      * assert payload.equals(null);
      * }</pre>
