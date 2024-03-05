@@ -262,6 +262,7 @@ public interface GenericBaseCommands {
      *     <pre>{@code
      * Long timeRemaining = client.ttl("my_key").get()
      * assert timeRemaining == 3600L //Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     *
      * Long timeRemaining = client.ttl("nonexistent_key").get();
      * assert timeRemaining == -2L; //Returns -2 for a non-existing key.
      * }</pre>
