@@ -240,8 +240,8 @@ type RedisClusterClientConfiguration struct {
 	baseClientConfiguration
 }
 
-// NewRedisClusterClientConfiguration returns a [RedisClusterClientConfiguration] with default configuration settings. For further
-// configuration, use the [RedisClientConfiguration] With* methods.
+// NewRedisClusterClientConfiguration returns a [RedisClusterClientConfiguration] with default configuration settings. For
+// further configuration, use the [RedisClientConfiguration] With* methods.
 func NewRedisClusterClientConfiguration() *RedisClusterClientConfiguration {
 	return &RedisClusterClientConfiguration{
 		baseClientConfiguration: baseClientConfiguration{},
