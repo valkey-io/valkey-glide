@@ -52,7 +52,7 @@ public interface ConnectionManagementClusterCommands {
 
     /**
      * Gets the current connection id.<br>
-     * The command will be routed a random node.
+     * The command will be routed to a random node.
      *
      * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
      * @return The id of the client.
@@ -77,6 +77,7 @@ public interface ConnectionManagementClusterCommands {
      *     <pre>{@code
      * long id = client.clientId(new SlotIdRoute(...)).get().getSingleValue();
      * assert id > 0;
+     *
      * Map<String, Long> idPerNode = client.clientId(ALL_NODES).get().getMultiValue();
      * assert idPerNode.get("<node 1 address>") > 0;
      * </pre>
@@ -112,6 +113,7 @@ public interface ConnectionManagementClusterCommands {
      *     <pre>{@code
      * String clientName = client.clientGetName(new SlotIdRoute(...)).get().getSingleValue();
      * assert clientName != null;
+     *
      * Map<String, String> clientNamePerNode = client.clientGetName(ALL_NODES).get().getMultiValue();
      * assert clientNamePerNode.get("<node 1 address>") != null
      * }</pre>
