@@ -1619,7 +1619,7 @@ class CoreCommands(Protocol):
 
         See https://redis.io/commands/zrank for more details.
 
-        To get the rank of `member` with it's score, see zrank_withscore.
+        To get the rank of `member` with it's score, see `zrank_withscore`.
 
         Args:
             key (str): The key of the sorted set.
@@ -1628,7 +1628,8 @@ class CoreCommands(Protocol):
         Returns:
             Optional[int]: The rank of `member` in the sorted set.
             If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
-            ples:
+
+            Examples:
             >>> await client.zrank("my_sorted_set", "member2")
                 1  # Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
             >>> await client.zrank("my_sorted_set", "non_existing_member")
@@ -1645,6 +1646,7 @@ class CoreCommands(Protocol):
     ) -> Optional[List[Union[int, float]]]:
         """
         Returns the rank of `member` in the sorted set stored at `key` with it's score, where scores are ordered from the lowest to highest.
+
         See https://redis.io/commands/zrank for more details.
 
         Args:
@@ -1653,12 +1655,12 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[List[Union[int, float]]]: A list containing the rank and score of `member` in the sorted set.
-            If `key` does'nt exist, or if `member` is not present in the set, None will be returned.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
 
         Examples:
-            >>> await client.zrank("my_sorted_set", "member2")
+            >>> await client.zrank_withscore("my_sorted_set", "member2")
                 [1 , 6.0]  # Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
-            >>> await client.zrank("my_sorted_set", "non_existing_member")
+            >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
         """
         return cast(

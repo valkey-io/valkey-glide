@@ -1288,7 +1288,7 @@ class BaseTransaction:
 
         See https://redis.io/commands/zrank for more details.
 
-        To get the rank of `member` with it's score, see zrank_withscore.
+        To get the rank of `member` with it's score, see `zrank_withscore`.
 
         Args:
             key (str): The key of the sorted set.
@@ -1296,7 +1296,7 @@ class BaseTransaction:
 
         Commands response:
             Optional[int]: The rank of `member` in the sorted set.
-            If `key` does'nt exist, or if `member` is not present in the set, None will be returned.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
         """
         return self.append_command(RequestType.Zrank, [key, member])
 
@@ -1307,6 +1307,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Returns the rank of `member` in the sorted set stored at `key` with it's score, where scores are ordered from the lowest to highest.
+
         See https://redis.io/commands/zrank for more details.
 
         Args:
@@ -1315,7 +1316,7 @@ class BaseTransaction:
 
         Commands response:
             Optional[List[Union[int, float]]]: A list containing the rank and score of `member` in the sorted set.
-            If `key` does'nt exist, or if `member` is not present in the set, None will be returned.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
         """
         return self.append_command(RequestType.Zrank, [key, member, "WITHSCORE"])
 
