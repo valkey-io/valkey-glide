@@ -19,6 +19,14 @@ public interface HashCommands {
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
      * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
      *     </code> is not present in the hash or <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * String payload = client.hget("my_hash", "field1").get();
+     * assert payload.equals("value");
+     *
+     * String payload = client.hget("my_hash", "nonexistent_field").get();
+     * assert payload.equals(null);
+     * }</pre>
      */
     CompletableFuture<String> hget(String key, String field);
 
@@ -30,6 +38,11 @@ public interface HashCommands {
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
      * @return The number of fields that were added.
+     * @example
+     *     <pre>{@code
+     * Long num = client.hset("my_hash", Map.of("field", "value", "field2", "value2")).get();
+     * assert num == 2L;
+     * }</pre>
      */
     CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap);
 
@@ -43,6 +56,11 @@ public interface HashCommands {
      * @return The number of fields that were removed from the hash, not including specified but
      *     non-existing fields.<br>
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
+     * @example
+     *     <pre>{@code
+     * Long num = client.hdel("my_hash", new String[] {}).get("field1", "field2");
+     * assert num == 2L; //Indicates that two fields were successfully removed from the hash.
+     * }</pre>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
 
@@ -58,10 +76,10 @@ public interface HashCommands {
      *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
      *     of null values.<br>
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
-     * assert values == new String[] {"value1", "value2"}
-     * </pre>
+     * assert values.equals(new String[] {"value1", "value2"});
+     * }</pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
 
@@ -74,12 +92,13 @@ public interface HashCommands {
      * @return <code>True</code> if the hash contains the specified field. If the hash does not
      *     contain the field, or if the key does not exist, it returns <code>False</code>.
      * @example
-     *     <pre>
-     * Boolean exists = client.hexists("my_hash", "field1").get()
-     * assert exists
-     * Boolean exists = client.hexists("my_hash", "non_existent_field").get()
-     * assert !exists
-     * </pre>
+     *     <pre>{@code
+     * Boolean exists = client.hexists("my_hash", "field1").get();
+     * assert exists;
+     *
+     * Boolean exists = client.hexists("my_hash", "non_existent_field").get();
+     * assert !exists;
+     * }</pre>
      */
     CompletableFuture<Boolean> hexists(String key, String field);
 
@@ -92,10 +111,10 @@ public interface HashCommands {
      *     the map is associated with its corresponding value.<br>
      *     If <code>key</code> does not exist, it returns an empty map.
      * @example
-     *     <pre>
-     * Map fieldValueMap = client.hgetall("my_hash").get()
-     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"))
-     * </pre>
+     *     <pre>{@code
+     * Map fieldValueMap = client.hgetall("my_hash").get();
+     * assert fieldValueMap.equals(Map.of(field1", "value1", "field2", "value2"));
+     * }</pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
 
@@ -114,10 +133,10 @@ public interface HashCommands {
      * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment or decrement.
      * @example
-     *     <pre>
-     * Long num = client.hincrBy("my_hash", "field1", 5).get()
-     * assert num == 5L
-     * </pre>
+     *     <pre>{@code
+     * Long num = client.hincrBy("my_hash", "field1", 5).get();
+     * assert num == 5L;
+     * }</pre>
      */
     CompletableFuture<Long> hincrBy(String key, String field, long amount);
 
@@ -137,10 +156,10 @@ public interface HashCommands {
      * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment or decrement.
      * @example
-     *     <pre>
-     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get()
-     * assert num == 2.5
-     * </pre>
+     *     <pre>{@code
+     * Double num = client.hincrByFloat("my_hash", "field1", 2.5).get();
+     * assert num == 2.5;
+     * }</pre>
      */
     CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
 }
