@@ -126,6 +126,7 @@ enum RequestType {
     HSetNX = 82;
     SIsMember = 83;
     Hvals = 84;
+    PTTL = 85;
 }
 
 message Command {
