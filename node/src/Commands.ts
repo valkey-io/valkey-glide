@@ -877,3 +877,10 @@ export function createZpopmax(key: string, count?: number): redis_request.Comman
 export function createEcho(message: string): redis_request.Command {
     return createCommand(RequestType.Echo, [message]);
 }
+
+/**
+ * @internal
+ */
+export function createPttl(key: string): redis_request.Command {
+    return createCommand(RequestType.PTTL, [key]);
+}
