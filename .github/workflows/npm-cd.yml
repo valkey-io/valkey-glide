@@ -112,7 +112,7 @@ jobs:
               run: |
                   # Remove the "cpu" and "os" fileds so the base package would be able to install it on ubuntu
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/"cpu":/d' ./package.json && sed -i $SED_FOR_MACOS '/"os":/d' ./package.json 
+                  sed -i $SED_FOR_MACOS '/"\/\/\/cpu": \[/,/]/d' ./package.json && sed -i $SED_FOR_MACOS '/"\/\/\/os": \[/,/]/d' ./package.json
                   mkdir -p bin
                   npm pack --pack-destination ./bin
                   ls ./bin
