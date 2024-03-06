@@ -88,6 +88,8 @@ export function transactionTest(
     args.push(1);
     baseTransaction.hlen(key4);
     args.push(1);
+    baseTransaction.hvals(key4);
+    args.push([value]);
     baseTransaction.hget(key4, field);
     args.push(value);
     baseTransaction.hgetall(key4);

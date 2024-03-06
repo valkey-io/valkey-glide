@@ -595,6 +595,13 @@ export function createHLen(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createHvals(key: string): redis_request.Command {
+    return createCommand(RequestType.Hvals, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createExists(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Exists, keys);
 }

@@ -32,6 +32,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
+    createHvals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -630,6 +631,16 @@ export class BaseClient {
      */
     public hlen(key: string): Promise<number> {
         return this.createWritePromise(createHLen(key));
+    }
+
+    /** Returns all values in the hash stored at key.
+     * See https://redis.io/commands/hvals/ for more details.
+     * 
+     * @param key - The key of the hash. 
+     * @returns a list of values in the hash, or an empty list when the key does not exist.
+     */
+    public hvals(key: string): Promise<string[]> {
+        return this.createWritePromise(createHvals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
