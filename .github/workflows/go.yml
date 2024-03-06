@@ -3,12 +3,6 @@ name: Go CI
 on:
     workflow_dispatch:
     push:
-        branches: [ "main" ]
-        paths:
-            - glide-core/src/**
-            - submodules/**
-            - go/**
-            - .github/workflows/go.yml
     pull_request:
         paths:
             - glide-core/src/**

@@ -2,17 +2,6 @@ name: Python tests
 
 on:
     push:
-        branches: ["main"]
-        paths:
-            - python/**
-            - glide-core/src/**
-            - submodules/**
-            - utils/cluster_manager.py
-            - .github/workflows/python.yml
-            - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-redis-modules/action.yml
-
     pull_request:
         paths:
             - python/**
