@@ -12,6 +12,7 @@
         "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
+        "prettier": "^3.2.5",
         "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
@@ -32,7 +33,9 @@
         "test": "jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
         "prepack": "npmignore --auto",
-        "test-modules": "jest --verbose --runInBand 'tests/RedisModules.test.ts'"
+        "test-modules": "jest --verbose --runInBand 'tests/RedisModules.test.ts'",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
+        "prettier:format": "./node_modules/.bin/prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.20.2",
@@ -70,8 +73,12 @@
     "//": [
         "The fields below have been commented out and are only necessary for publishing the package."
     ],
-    "///cpu": ["${node_arch}"],
-    "///os": ["${node_os}"],
+    "///cpu": [
+        "${node_arch}"
+    ],
+    "///os": [
+        "${node_os}"
+    ],
     "///name": "${scope}${pkg_name}",
     "///version": "${package_version}"
 }
