@@ -46,7 +46,7 @@ describe("RedisClient", () => {
         if (testsFailed === 0) {
             await cluster.close();
         }
-    });
+    }, TIMEOUT);
 
     const getAddress = (port: number) => {
         return [{ host: "localhost", port }];
