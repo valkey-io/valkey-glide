@@ -24,7 +24,7 @@ public class IntegrationTestBase
         StopRedis(false);
 
         // Delete dirs if stop failed due to https://github.com/aws/glide-for-redis/issues/849
-        Directory.Delete(Path.Combine(scriptDir, "clusters"), true);
+        Directory.Delete(Path.Combine(_scriptDir, "clusters"), true);
 
         // Start cluster
         TestConfiguration.CLUSTER_PORTS = StartRedis(true);
@@ -45,52 +45,52 @@ public class IntegrationTestBase
         StopRedis(true);
     }
 
-    private readonly string scriptDir;
+    private readonly string _scriptDir;
 
     // Nunit requires a public default constructor. These variables would be set in SetUp method.
     public IntegrationTestBase()
     {
-        var projectDir = Directory.GetCurrentDirectory();
+        string? projectDir = Directory.GetCurrentDirectory();
         while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
             projectDir = Path.GetDirectoryName(projectDir);
 
         if (projectDir == null)
             throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
 
-        scriptDir = Path.Combine(projectDir, "..", "utils");
+        _scriptDir = Path.Combine(projectDir, "..", "utils");
     }
 
-    public List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
+    internal List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
     {
-        var cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
+        string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParsePortsFromOutput(RunClusterManager(cmd, false));
     }
 
     /// <summary>
     /// Stop <b>all</b> instances on the given <paramref name="name"/>.
     /// </summary>
-    public void StopRedis(bool keepLogs, string? name = null)
+    internal void StopRedis(bool keepLogs, string? name = null)
     {
-        var cmd = $"stop --prefix {name ?? "redis-cluster"} {(keepLogs ? "--keep-folder" : "")}";
+        string cmd = $"stop --prefix {name ?? "redis-cluster"} {(keepLogs ? "--keep-folder" : "")}";
         RunClusterManager(cmd, true);
     }
 
     private string RunClusterManager(string cmd, bool ignoreExitCode)
     {
-        var info = new ProcessStartInfo
+        ProcessStartInfo info = new()
         {
-            WorkingDirectory = scriptDir,
+            WorkingDirectory = _scriptDir,
             FileName = "python3",
             Arguments = "cluster_manager.py " + cmd,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        var script = Process.Start(info);
+        Process? script = Process.Start(info);
         script?.WaitForExit();
-        var error = script?.StandardError.ReadToEnd();
-        var output = script?.StandardOutput.ReadToEnd();
-        var exit_code = script?.ExitCode;
+        string? error = script?.StandardError.ReadToEnd();
+        string? output = script?.StandardOutput.ReadToEnd();
+        int? exit_code = script?.ExitCode;
 
         TestContext.Progress.WriteLine($"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
 
@@ -100,33 +100,33 @@ public class IntegrationTestBase
         return output ?? "";
     }
 
-    private List<uint> ParsePortsFromOutput(string output)
+    private static List<uint> ParsePortsFromOutput(string output)
     {
-        var ports = new List<uint>();
-        foreach (var line in output.Split("\n"))
+        List<uint> ports = new();
+        foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
                 continue;
 
-            var addresses = line.Split("=")[1].Split(",");
-            foreach (var address in addresses)
+            string[] addresses = line.Split("=")[1].Split(",");
+            foreach (string address in addresses)
                 ports.Add(uint.Parse(address.Split(":")[1]));
         }
         return ports;
     }
 
-    private Version GetRedisVersion()
+    private static Version GetRedisVersion()
     {
-        var info = new ProcessStartInfo
+        ProcessStartInfo info = new()
         {
             FileName = "redis-server",
             Arguments = "-v",
             UseShellExecute = false,
             RedirectStandardOutput = true,
         };
-        var proc = Process.Start(info);
+        Process? proc = Process.Start(info);
         proc?.WaitForExit();
-        var output = proc?.StandardOutput.ReadToEnd() ?? "";
+        string output = proc?.StandardOutput.ReadToEnd() ?? "";
 
         // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
         return new Version(output.Split(" ")[2].Split("=")[1]);
