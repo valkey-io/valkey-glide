@@ -1,6 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -53,7 +57,8 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
+    public CompletableFuture<ClusterValue<Object>> customCommand(
+            @NonNull String[] args, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
     }
@@ -69,16 +74,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
+    public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
         return commandManager.submitNewCommand(
-                transaction, Optional.empty(), this::handleArrayResponse);
+                transaction, Optional.empty(), this::handleArrayOrNullResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object>[]> exec(
-            ClusterTransaction transaction, Route route) {
+            @NonNull ClusterTransaction transaction, Route route) {
         return commandManager
-                .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayResponse)
+                .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayOrNullResponse)
                 .thenApply(
                         objects ->
                                 Arrays.stream(objects)
@@ -87,14 +92,25 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> ping() {
+        return commandManager.submitNewCommand(Ping, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> ping(@NonNull String message) {
+        return commandManager.submitNewCommand(
+                Ping, new String[] {message}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> ping(@NonNull Route route) {
         return commandManager.submitNewCommand(Ping, new String[0], route, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> ping(@NonNull String str, @NonNull Route route) {
+    public CompletableFuture<String> ping(@NonNull String message, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                Ping, new String[] {str}, route, this::handleStringResponse);
+                Ping, new String[] {message}, route, this::handleStringResponse);
     }
 
     @Override
@@ -131,5 +147,64 @@ public class RedisClusterClient extends BaseClient
                         route.isSingleNodeRoute()
                                 ? ClusterValue.of(handleStringResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clientId() {
+        return commandManager.submitNewCommand(ClientId, new String[0], this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> clientId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientId,
+                new String[0],
+                route,
+                response ->
+                        route.isSingleNodeRoute()
+                                ? ClusterValue.of(handleLongResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clientGetName() {
+        return commandManager.submitNewCommand(
+                ClientGetName, new String[0], this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clientGetName(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientGetName,
+                new String[0],
+                route,
+                response ->
+                        route.isSingleNodeRoute()
+                                ? ClusterValue.of(handleStringOrNullResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite() {
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat() {
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], route, this::handleStringResponse);
     }
 }

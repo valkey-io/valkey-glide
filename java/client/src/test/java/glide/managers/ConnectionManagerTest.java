@@ -54,6 +54,8 @@ public class ConnectionManagerTest {
 
     private static int REQUEST_TIMEOUT = 3;
 
+    private static String CLIENT_NAME = "ClientName";
+
     @BeforeEach
     public void setUp() {
         channel = mock(ChannelHandler.class);
@@ -132,6 +134,7 @@ public class ConnectionManagerTest {
                                         .factor(FACTOR)
                                         .build())
                         .databaseId(DATABASE_ID)
+                        .clientName(CLIENT_NAME)
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
@@ -158,6 +161,7 @@ public class ConnectionManagerTest {
                                         .setExponentBase(EXPONENT_BASE)
                                         .build())
                         .setDatabaseId(DATABASE_ID)
+                        .setClientName(CLIENT_NAME)
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();

@@ -2,28 +2,51 @@
 package glide.api.models;
 
 import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
+import static redis_request.RedisRequestOuterClass.RequestType.Expire;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SetOptions;
@@ -98,7 +121,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param msg The ping argument that will be returned.
      * @return A response from Redis with a <code>String</code>.
      */
-    public T ping(String msg) {
+    public T ping(@NonNull String msg) {
         ArgsArray commandArgs = buildArgs(msg);
 
         protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
@@ -125,7 +148,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Response from Redis with a <code>String</code> containing the requested {@link
      *     Section}s.
      */
-    public T info(InfoOptions options) {
+    public T info(@NonNull InfoOptions options) {
         ArgsArray commandArgs = buildArgs(options.toArgs());
 
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
@@ -140,7 +163,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys The keys we wanted to remove.
      * @return Command Response - The number of keys that were removed.
      */
-    public T del(String[] keys) {
+    public T del(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Del, commandArgs));
@@ -155,7 +178,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Response from Redis. <code>key</code> exists, returns the <code>value</code> of <code>
      *     key</code> as a String. Otherwise, return <code>null</code>.
      */
-    public T get(String key) {
+    public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
@@ -170,7 +193,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis.
      */
-    public T set(String key, String value) {
+    public T set(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
 
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
@@ -190,7 +213,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} conditions, return <code>null</code>.
      *     Otherwise, return <code>OK</code>.
      */
-    public T set(String key, String value, SetOptions options) {
+    public T set(@NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
@@ -363,6 +386,272 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     */
+    public T hmget(@NonNull String key, @NonNull String[] fields) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
+
+        protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check in the hash stored at <code>key</code>.
+     * @return Command Response - <code>True</code> if the hash contains the specified field. If the
+     *     hash does not contain the field, or if the key does not exist, it returns <code>False
+     *     </code>.
+     */
+    public T hexists(@NonNull String key, @NonNull String field) {
+        ArgsArray commandArgs = buildArgs(key, field);
+
+        protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A <code>Map</code> of fields and their values stored in the hash.
+     *     Every field name in the map is associated with its corresponding value.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.
+     */
+    public T hgetall(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment or decrement.
+     */
+    public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @returns Command Response - The value of <code>field</code> in the hash stored at <code>key
+     *     </code> after the increment or decrement.
+     */
+    public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
+        ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
+
+        protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
+     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
+     * list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T lpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
+     * a single element from the beginning of the list.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the first element. <br>
+     *     If <code>key</code> does not exist, null will be returned. <br>
+     */
+    public T lpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the elements to pop from the list.
+     * @return Command Response - An array of the popped elements will be returned depending on the
+     *     list's length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T lpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the specified elements of the list stored at <code>key</code>.<br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with -1 being the last
+     * element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - Array of elements in the specified range.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, an empty array will be returned.<br>
+     *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
+     *     end of the list.<br>
+     *     If <code>key</code> does not exist an empty array will be returned.<br>
+     */
+    public T lrange(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+
+        protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - Always <code>OK</code>. <br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     */
+    public T ltrim(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+
+        protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
+     */
+    public T llen(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(LLen, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
+     * <code>elements</code> are inserted one after the other to the tail of the list, from the
+     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
+     * an empty list before performing the push operations.
+     *
+     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operations.
+     */
+    public T rpush(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+
+        protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns the last elements of the list stored at <code>key</code>.<br>
+     * The command pops a single element from the end of the list.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return Command Response - The value of the last element.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
+     * depending on the list's length.
+     *
+     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param count The count of the elements to pop from the list.
+     * @return Command Response - An array of popped elements will be returned depending on the list's
+     *     length.<br>
+     *     If <code>key</code> does not exist, null will be returned.<br>
+     */
+    public T rpopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+
+        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
      *
@@ -374,7 +663,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
      *     </code>.
      */
-    public T sadd(String key, String[] members) {
+    public T sadd(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
@@ -393,7 +682,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
      *     returns 0.
      */
-    public T srem(String key, String[] members) {
+    public T srem(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SRem, commandArgs));
@@ -408,7 +697,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Set</code> of all members of the set.
      * @remarks If <code>key</code> does not exist an empty set will be returned.
      */
-    public T smembers(String key) {
+    public T smembers(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SMembers, commandArgs));
@@ -423,7 +712,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The cardinality (number of elements) of the set, or 0 if the key
      *     does not exist.
      */
-    public T scard(String key) {
+    public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
@@ -438,10 +727,294 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of keys that exist. If the same existing key is mentioned
      *     in <code>keys</code> multiple times, it will be counted multiple times.
      */
-    public T exists(String[] keys) {
+    public T exists(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
 
         protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to DEL, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while <a
+     * href="https://redis.io/commands/del/">DEL</a> does.
+     *
+     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @param keys The list of keys to unlink.
+     * @return Command Response - The number of <code>keys</code> that were unlinked.
+     */
+    public T unlink(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+
+        protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param seconds The timeout in seconds.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. key doesn't exist.
+     */
+    public T expire(@NonNull String key, long seconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(seconds));
+
+        protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
+     * </code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire
+     * </code> set, the time to live is updated to the new value.<br>
+     * If <code>seconds</code> is a non-positive number, the <code>key</code> will be deleted rather
+     * than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param seconds The timeout in seconds.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T expire(@NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(new String[] {key, Long.toString(seconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param unixSeconds The timeout in an absolute Unix timestamp.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T expireAt(@NonNull String key, long unixSeconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(unixSeconds));
+
+        protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (seconds since January
+     * 1, 1970) instead of specifying the number of seconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param unixSeconds The timeout in an absolute Unix timestamp.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T expireAt(@NonNull String key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(unixSeconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>
+     * expire</code> set, the time to live is updated to the new value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param milliseconds The timeout in milliseconds.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T pexpire(@NonNull String key, long milliseconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(milliseconds));
+
+        protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
+     * key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing expire set, the time to live is updated to the new
+     * value.<br>
+     * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
+     * rather than expired.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @param key The key to set timeout on it.
+     * @param milliseconds The timeout in milliseconds.
+     * @param expireOptions The expire options.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T pexpire(@NonNull String key, long milliseconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(milliseconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @param key The <code>key</code> to set timeout on it.
+     * @param unixMilliseconds The timeout in an absolute Unix timestamp.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist.
+     */
+    public T pexpireAt(@NonNull String key, long unixMilliseconds) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(unixMilliseconds));
+
+        protobufTransaction.addCommands(buildCommand(PExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
+     * January 1, 1970) instead of specifying the number of milliseconds.<br>
+     * A timestamp in the past will delete the <code>key</code> immediately. After the timeout has
+     * expired, the <code>key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code>expire</code> set, the time to live is
+     * updated to the new value.<br>
+     * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @param key The <code>key</code> to set timeout on it.
+     * @param unixMilliseconds The timeout in an absolute Unix timestamp.
+     * @param expireOptions The expire option.
+     * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
+     *     timeout was not set. e.g. <code>key</code> doesn't exist, or operation skipped due to the
+     *     provided arguments.
+     */
+    public T pexpireAt(
+            @NonNull String key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, Long.toString(unixMilliseconds)}, expireOptions.toArgs()));
+
+        protobufTransaction.addCommands(buildCommand(PExpireAt, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of <code>key</code> that has a timeout.
+     *
+     * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
+     * @param key The <code>key</code> to return its timeout.
+     * @return Command response - TTL in seconds, <code>-2</code> if <code>key</code> does not exist,
+     *     or <code>-1</code> if <code>key</code> exists but has no associated expire.
+     */
+    public T ttl(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Get the current connection id.
+     *
+     * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
+     * @return Command response - The id of the client.
+     */
+    public T clientId() {
+        protobufTransaction.addCommands(buildCommand(ClientId));
+        return getThis();
+    }
+
+    /**
+     * Get the name of the current connection.
+     *
+     * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
+     * @return Command response - The name of the client connection as a string if a name is set, or
+     *     <code>null</code> if no name is assigned.
+     */
+    public T clientGetName() {
+        protobufTransaction.addCommands(buildCommand(ClientGetName));
+        return getThis();
+    }
+
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
+     * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
+     * @return <code>OK</code> is returned when the configuration was rewritten properly. Otherwise,
+     *     the transaction fails with an error.
+     */
+    public T configRewrite() {
+        protobufTransaction.addCommands(buildCommand(ConfigRewrite));
+        return getThis();
+    }
+
+    /**
+     * Resets the statistics reported by Redis using the <a
+     * href="https://redis.io/commands/info/">INFO</a> and <a
+     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
+     *
+     * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
+     * @return <code>OK</code> to confirm that the statistics were successfully reset.
+     */
+    public T configResetStat() {
+        protobufTransaction.addCommands(buildCommand(ConfigResetStat));
         return getThis();
     }
 

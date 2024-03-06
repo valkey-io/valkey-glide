@@ -3,27 +3,50 @@ package glide.api.models;
 
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
+import static redis_request.RedisRequestOuterClass.RequestType.Expire;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RPop;
+import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import java.util.LinkedList;
@@ -63,9 +86,6 @@ public class TransactionTests {
                                 .addArgs("value")
                                 .addArgs(RETURN_OLD_VALUE)
                                 .build()));
-
-        transaction.exists(new String[] {"key1", "key2"});
-        results.add(Pair.of(Exists, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
 
         transaction.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
@@ -118,6 +138,60 @@ public class TransactionTests {
         transaction.hdel("key", new String[] {"field"});
         results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
 
+        transaction.hmget("key", new String[] {"field"});
+        results.add(Pair.of(HashMGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hexists("key", "field");
+        results.add(
+                Pair.of(HashExists, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hgetall("key");
+        results.add(Pair.of(HashGetAll, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.hincrBy("key", "field", 1);
+        results.add(
+                Pair.of(
+                        HashIncrBy,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1").build()));
+
+        transaction.hincrByFloat("key", "field", 1.5);
+        results.add(
+                Pair.of(
+                        HashIncrByFloat,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("1.5").build()));
+
+        transaction.lpush("key", new String[] {"element1", "element2"});
+        results.add(
+                Pair.of(
+                        LPush,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("element1").addArgs("element2").build()));
+
+        transaction.lpop("key");
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.lpopCount("key", 2);
+        results.add(Pair.of(LPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.lrange("key", 1, 2);
+        results.add(
+                Pair.of(LRange, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+
+        transaction.ltrim("key", 1, 2);
+        results.add(
+                Pair.of(LTrim, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+
+        transaction.llen("key");
+        results.add(Pair.of(LLen, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.rpush("key", new String[] {"element"});
+        results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));
+
+        transaction.rpop("key");
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.rpopCount("key", 2);
+        results.add(Pair.of(RPop, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
         transaction.sadd("key", new String[] {"value"});
         results.add(Pair.of(SAdd, ArgsArray.newBuilder().addArgs("key").addArgs("value").build()));
 
@@ -129,6 +203,87 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.exists(new String[] {"key1", "key2"});
+        results.add(Pair.of(Exists, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
+
+        transaction.unlink(new String[] {"key1", "key2"});
+        results.add(Pair.of(Unlink, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
+
+        transaction.expire("key", 9L);
+        results.add(
+                Pair.of(Expire, ArgsArray.newBuilder().addArgs("key").addArgs(Long.toString(9L)).build()));
+
+        transaction.expire("key", 99L, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT);
+        results.add(
+                Pair.of(
+                        Expire,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs(Long.toString(99L))
+                                .addArgs("GT")
+                                .build()));
+
+        transaction.expireAt("key", 999L);
+        results.add(
+                Pair.of(
+                        ExpireAt, ArgsArray.newBuilder().addArgs("key").addArgs(Long.toString(999L)).build()));
+
+        transaction.expireAt("key", 9999L, ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT);
+        results.add(
+                Pair.of(
+                        ExpireAt,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs(Long.toString(9999L))
+                                .addArgs("LT")
+                                .build()));
+
+        transaction.pexpire("key", 99999L);
+        results.add(
+                Pair.of(
+                        PExpire, ArgsArray.newBuilder().addArgs("key").addArgs(Long.toString(99999L)).build()));
+
+        transaction.pexpire("key", 999999L, ExpireOptions.HAS_EXISTING_EXPIRY);
+        results.add(
+                Pair.of(
+                        PExpire,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs(Long.toString(999999L))
+                                .addArgs("XX")
+                                .build()));
+
+        transaction.pexpireAt("key", 9999999L);
+        results.add(
+                Pair.of(
+                        PExpireAt,
+                        ArgsArray.newBuilder().addArgs("key").addArgs(Long.toString(9999999L)).build()));
+
+        transaction.pexpireAt("key", 99999999L, ExpireOptions.HAS_NO_EXPIRY);
+        results.add(
+                Pair.of(
+                        PExpireAt,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs(Long.toString(99999999L))
+                                .addArgs("NX")
+                                .build()));
+
+        transaction.ttl("key");
+        results.add(Pair.of(TTL, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.clientId();
+        results.add(Pair.of(ClientId, ArgsArray.newBuilder().build()));
+
+        transaction.clientGetName();
+        results.add(Pair.of(ClientGetName, ArgsArray.newBuilder().build()));
+
+        transaction.configRewrite();
+        results.add(Pair.of(ConfigRewrite, ArgsArray.newBuilder().build()));
+
+        transaction.configResetStat();
+        results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

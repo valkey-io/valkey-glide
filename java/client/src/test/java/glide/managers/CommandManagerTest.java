@@ -60,6 +60,7 @@ public class CommandManagerTest {
         CompletableFuture<Response> future = new CompletableFuture<>();
         future.complete(respPointerResponse);
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         // exercise
         CompletableFuture<Object> result =
@@ -81,6 +82,7 @@ public class CommandManagerTest {
         CompletableFuture<Response> future = new CompletableFuture<>();
         future.complete(respPointerResponse);
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         // exercise
         CompletableFuture<Object> result =
@@ -107,6 +109,7 @@ public class CommandManagerTest {
         CompletableFuture<Response> future = new CompletableFuture<>();
         future.complete(respPointerResponse);
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         // exercise
         CompletableFuture<Object> result =
@@ -126,6 +129,7 @@ public class CommandManagerTest {
     public void prepare_request_with_simple_routes(SimpleRoute routeType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
@@ -156,6 +160,7 @@ public class CommandManagerTest {
     public void prepare_request_with_slot_id_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
@@ -188,6 +193,7 @@ public class CommandManagerTest {
     public void prepare_request_with_slot_key_routes(SlotType slotType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
@@ -239,6 +245,7 @@ public class CommandManagerTest {
 
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
@@ -279,6 +286,7 @@ public class CommandManagerTest {
 
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
 
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);

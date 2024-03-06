@@ -595,6 +595,13 @@ export function createHLen(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createHvals(key: string): redis_request.Command {
+    return createCommand(RequestType.Hvals, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createExists(keys: string[]): redis_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
@@ -862,4 +869,18 @@ export function createZpopmin(key: string, count?: number): redis_request.Comman
 export function createZpopmax(key: string, count?: number): redis_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMax, args);
+}
+
+/**
+ * @internal
+ */
+export function createEcho(message: string): redis_request.Command {
+    return createCommand(RequestType.Echo, [message]);
+}
+
+/**
+ * @internal
+ */
+export function createPttl(key: string): redis_request.Command {
+    return createCommand(RequestType.PTTL, [key]);
 }

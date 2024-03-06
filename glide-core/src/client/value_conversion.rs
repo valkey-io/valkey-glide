@@ -51,7 +51,7 @@ pub(crate) fn convert_to_expected_type(
                         match inner_value {
                             Value::BulkString(_) => Ok((
                                 key_str,
-                                Value::Double(from_owned_redis_value::<f64>(inner_value)?.into()),
+                                Value::Double(from_owned_redis_value::<f64>(inner_value)?),
                             )),
                             Value::Double(_) => Ok((key_str, inner_value)),
                             _ => Err((
@@ -89,13 +89,11 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::Double => {
-            Ok(Value::Double(from_owned_redis_value::<f64>(value)?.into()))
-        }
+        ExpectedReturnType::Double => Ok(Value::Double(from_owned_redis_value::<f64>(value)?)),
         ExpectedReturnType::Boolean => Ok(Value::Boolean(from_owned_redis_value::<bool>(value)?)),
         ExpectedReturnType::DoubleOrNull => match value {
             Value::Nil => Ok(value),
-            _ => Ok(Value::Double(from_owned_redis_value::<f64>(value)?.into())),
+            _ => Ok(Value::Double(from_owned_redis_value::<f64>(value)?)),
         },
         ExpectedReturnType::ZrankReturnType => match value {
             Value::Nil => Ok(value),
@@ -201,9 +199,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             Some(ExpectedReturnType::Map)
         }
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
-        b"HEXISTS" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT" => {
-            Some(ExpectedReturnType::Boolean)
-        }
+        b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
+        | b"SISMEMBER" => Some(ExpectedReturnType::Boolean),
         b"SMEMBERS" => Some(ExpectedReturnType::Set),
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -307,10 +304,7 @@ mod tests {
                 Value::BulkString(b"key2".to_vec()),
                 Value::BulkString(b"20.8".to_vec()),
             ),
-            (
-                Value::Double(20.5.into()),
-                Value::BulkString(b"30.2".to_vec()),
-            ),
+            (Value::Double(20.5), Value::BulkString(b"30.2".to_vec())),
         ];
 
         let converted_map = convert_to_expected_type(
@@ -329,15 +323,15 @@ mod tests {
 
         let (key, value) = &converted_map[0];
         assert_eq!(*key, Value::BulkString(b"key1".to_vec()));
-        assert_eq!(*value, Value::Double(10.5.into()));
+        assert_eq!(*value, Value::Double(10.5));
 
         let (key, value) = &converted_map[1];
         assert_eq!(*key, Value::BulkString(b"key2".to_vec()));
-        assert_eq!(*value, Value::Double(20.8.into()));
+        assert_eq!(*value, Value::Double(20.8));
 
         let (key, value) = &converted_map[2];
         assert_eq!(*key, Value::BulkString(b"20.5".to_vec()));
-        assert_eq!(*value, Value::Double(30.2.into()));
+        assert_eq!(*value, Value::Double(30.2));
 
         let array_of_arrays = vec![
             Value::Array(vec![
@@ -346,7 +340,7 @@ mod tests {
             ]),
             Value::Array(vec![
                 Value::BulkString(b"key2".to_vec()),
-                Value::Double(20.5.into()),
+                Value::Double(20.5),
             ]),
         ];
 
@@ -366,11 +360,11 @@ mod tests {
 
         let (key, value) = &converted_map[0];
         assert_eq!(*key, Value::BulkString(b"key1".to_vec()));
-        assert_eq!(*value, Value::Double(10.5.into()));
+        assert_eq!(*value, Value::Double(10.5));
 
         let (key, value) = &converted_map[1];
         assert_eq!(*key, Value::BulkString(b"key2".to_vec()));
-        assert_eq!(*value, Value::Double(20.5.into()));
+        assert_eq!(*value, Value::Double(20.5));
 
         let array_of_arrays_err: Vec<Value> = vec![Value::Array(vec![
             Value::BulkString(b"key".to_vec()),
@@ -411,7 +405,7 @@ mod tests {
         assert_eq!(array_result.len(), 2);
 
         assert_eq!(array_result[0], Value::BulkString(b"key".to_vec()));
-        assert_eq!(array_result[1], Value::Double(20.5.into()));
+        assert_eq!(array_result[1], Value::Double(20.5));
 
         let array_err = vec![Value::BulkString(b"key".to_vec())];
         assert!(convert_to_expected_type(

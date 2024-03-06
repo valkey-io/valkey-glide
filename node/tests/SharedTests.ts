@@ -85,7 +85,7 @@ export function runBaseTests<Context>(config: {
                 const result = await client.customCommand(["CLIENT", "INFO"]);
 
                 expect(result).toContain("lib-name=GlideJS");
-                expect(result).toContain("lib-ver=0.1.0");
+                expect(result).toContain("lib-ver=unknown");
             }, protocol);
         },
         config.timeout
@@ -767,6 +767,28 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hlen(key1)).toEqual(1);
                 expect(await client.hlen("nonExistingHash")).toEqual(0);
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hvals test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const fieldValueMap = {
+                    [field1]: "value1",
+                    [field2]: "value2",
+                };
+
+                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
+                expect(await client.hdel(key1, [field1])).toEqual(1);
+                expect(await client.hvals(key1)).toEqual(["value2"]);
+                expect(await client.hvals("nonExistingHash")).toEqual([]);
             }, protocol);
         },
         config.timeout
@@ -1481,7 +1503,7 @@ export function runBaseTests<Context>(config: {
                         "positiveInfinity"
                     )
                 ).toEqual(0);
-                
+
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
                     client.zcount(key2, "negativeInfinity", "positiveInfinity")
@@ -1527,6 +1549,17 @@ export function runBaseTests<Context>(config: {
                 expect(await client.del([key])).toEqual(1);
 
                 expect(await client.type(key)).toEqual("none");
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `echo test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const message = uuidv4();
+                expect(await client.echo(message)).toEqual(message);
             }, protocol);
         },
         config.timeout
@@ -1614,6 +1647,35 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmax(key)).rejects.toThrow();
                 expect(await client.zpopmax("notExsitingKey")).toEqual({});
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `Pttl test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.pttl(key)).toEqual(-2);
+
+                expect(await client.set(key, "value")).toEqual("OK");
+                expect(await client.pttl(key)).toEqual(-1);
+
+                expect(await client.expire(key, 10)).toEqual(true);
+                let result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(10000);
+
+                expect(await client.expireAt(key, Math.floor(Date.now() / 1000) + 20)).toEqual(true);
+                result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(20000);
+
+                expect(await client.pexpireAt(key, Date.now() + 30000)).toEqual(true);
+                result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(30000);
             }, protocol);
         },
         config.timeout

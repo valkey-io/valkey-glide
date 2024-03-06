@@ -18,6 +18,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -31,6 +32,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
+    createHvals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -45,6 +47,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPttl,
     createRPop,
     createRPush,
     createSAdd,
@@ -631,6 +634,16 @@ export class BaseClient {
         return this.createWritePromise(createHLen(key));
     }
 
+    /** Returns all values in the hash stored at key.
+     * See https://redis.io/commands/hvals/ for more details.
+     * 
+     * @param key - The key of the hash. 
+     * @returns a list of values in the hash, or an empty list when the key does not exist.
+     */
+    public hvals(key: string): Promise<string[]> {
+        return this.createWritePromise(createHvals(key));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -1136,6 +1149,26 @@ export class BaseClient {
         count?: number
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZpopmax(key, count));
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     * 
+     * @param message - The message to be echoed back.
+     * @returns The provided `message`.
+     */
+    public echo(message: string): Promise<string> {
+        return this.createWritePromise(createEcho(message));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     * See https://redis.io/commands/pttl for more details.
+     * 
+     * @param key - The key to return its timeout.
+     * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     */
+    public pttl(key: string): Promise<number> {
+        return this.createWritePromise(createPttl(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

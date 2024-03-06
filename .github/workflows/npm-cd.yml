@@ -3,11 +3,16 @@
 name: Continuous Deployment
 
 on:
+    pull_request:
+      paths:
+        - .github/workflows/npm-cd.yml
+        - .github/workflows/build-node-wrapper/action.yml
     push:
         tags:
             - "v*.*"
 jobs:
     publish-binaries:
+        if: github.repository_owner == 'aws'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
         strategy:
@@ -20,7 +25,6 @@ jobs:
                           RUNNER: ubuntu-latest,
                           ARCH: x64,
                           TARGET: x86_64-unknown-linux-gnu,
-                          NPM_PUBLISH: true,
                       }
                     - {
                           OS: ubuntu-latest,
@@ -28,7 +32,6 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
                           TARGET: aarch64-unknown-linux-gnu,
-                          NPM_PUBLISH: true,
                           CONTAINER: "2_28",
                       }
                     - {
@@ -37,7 +40,6 @@ jobs:
                           RUNNER: macos-latest,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
-                          NPM_PUBLISH: true,
                       }
                     - {
                           OS: macos-latest,
@@ -45,7 +47,6 @@ jobs:
                           RUNNER: macos-13-xlarge,
                           arch: arm64,
                           TARGET: aarch64-apple-darwin,
-                          NPM_PUBLISH: true,
                       }
         steps:
             - name: Checkout
@@ -56,10 +57,10 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Setup node
-              if: matrix.build.NPM_PUBLISH == true
               uses: actions/setup-node@v3
               with:
                   node-version: "16"
@@ -68,9 +69,14 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
-
+            
+            - name: Update package version in config.toml
+              uses: ./.github/workflows/update-glide-version
+              with:
+                  folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
+                  named_os: ${{ matrix.build.NAMED_OS }}
+                
             - name: Build Node wrapper
-              if: matrix.build.NPM_PUBLISH == true
               uses: ./.github/workflows/build-node-wrapper
               with:
                   os: ${{ matrix.build.OS }}
@@ -82,7 +88,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Publish to NPM
-              if: matrix.build.NPM_PUBLISH == true
+              if: github.event_name != 'pull_request'
               shell: bash
               working-directory: ./node
               run: |
@@ -101,13 +107,12 @@ jobs:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Pack the Node package
-              if: matrix.build.NPM_PUBLISH == true
               shell: bash
               working-directory: ./node
               run: |
                   # Remove the "cpu" and "os" fileds so the base package would be able to install it on ubuntu
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/"cpu":/d' ./package.json && sed -i $SED_FOR_MACOS '/"os":/d' ./package.json 
+                  sed -i $SED_FOR_MACOS '/"\/\/\/cpu": \[/,/]/d' ./package.json && sed -i $SED_FOR_MACOS '/"\/\/\/os": \[/,/]/d' ./package.json
                   mkdir -p bin
                   npm pack --pack-destination ./bin
                   ls ./bin
@@ -115,7 +120,7 @@ jobs:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
             - name: Upload the Node package
-              if: matrix.build.NPM_PUBLISH == true
+              if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v3
               with:
                   name: ${{ matrix.build.TARGET }}
@@ -190,6 +195,7 @@ jobs:
                   done
 
             - name: Publish the base package
+              if: github.event_name != 'pull_request'
               shell: bash
               working-directory: ./node/npm/glide
               run: |

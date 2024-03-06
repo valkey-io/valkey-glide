@@ -116,6 +116,17 @@ enum RequestType {
     Strlen = 72;
     Lindex = 73;
     ZPopMax = 74;
+    XRead = 75;
+    XAdd = 76;
+    XReadGroup = 77;
+    XAck = 78;
+    XTrim = 79;
+    XGroupCreate = 80;
+    XGroupDestroy = 81;
+    HSetNX = 82;
+    SIsMember = 83;
+    Hvals = 84;
+    PTTL = 85;
 }
 
 message Command {

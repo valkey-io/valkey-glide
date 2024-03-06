@@ -683,7 +683,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ahash:0.8.9
+Package: ahash:0.8.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -1599,7 +1599,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: arc-swap:1.6.0
+Package: arc-swap:1.7.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4138,7 +4138,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.15.1
+Package: bumpalo:3.15.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -5816,7 +5816,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-channel:0.5.11
+Package: crossbeam-channel:0.5.12
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12482,7 +12482,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hermit-abi:0.3.6
+Package: hermit-abi:0.3.9
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14361,7 +14361,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.68
+Package: js-sys:0.3.69
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15751,7 +15751,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: log:0.4.20
+Package: log:0.4.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16489,7 +16489,7 @@ the following restrictions:
 
 ----
 
-Package: mio:0.8.10
+Package: mio:0.8.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19337,7 +19337,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project:1.1.4
+Package: pin-project:1.1.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19566,7 +19566,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-internal:1.1.4
+Package: pin-project-internal:1.1.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21627,7 +21627,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf:3.3.0
+Package: protobuf:3.4.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21652,7 +21652,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobuf-support:3.3.0
+Package: protobuf-support:3.4.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23838,7 +23838,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pemfile:2.1.0
+Package: rustls-pemfile:2.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24081,7 +24081,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.3.0
+Package: rustls-pki-types:1.3.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26958,7 +26958,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: socket2:0.5.5
+Package: socket2:0.5.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27472,7 +27472,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.50
+Package: syn:2.0.52
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31750,7 +31750,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.91
+Package: wasm-bindgen:0.2.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31979,7 +31979,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-backend:0.2.91
+Package: wasm-bindgen-backend:0.2.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32208,7 +32208,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.91
+Package: wasm-bindgen-macro:0.2.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32437,7 +32437,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.91
+Package: wasm-bindgen-macro-support:0.2.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32666,7 +32666,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.91
+Package: wasm-bindgen-shared:0.2.92
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34498,7 +34498,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-targets:0.52.0
+Package: windows-targets:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34956,7 +34956,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_gnullvm:0.52.0
+Package: windows_aarch64_gnullvm:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35414,7 +35414,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_msvc:0.52.0
+Package: windows_aarch64_msvc:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35872,7 +35872,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnu:0.52.0
+Package: windows_i686_gnu:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36330,7 +36330,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_msvc:0.52.0
+Package: windows_i686_msvc:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36788,7 +36788,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnu:0.52.0
+Package: windows_x86_64_gnu:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37246,7 +37246,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnullvm:0.52.0
+Package: windows_x86_64_gnullvm:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37704,7 +37704,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_msvc:0.52.0
+Package: windows_x86_64_msvc:0.52.4
 
 The following copyrights and licenses were found in the source code of this package:
 

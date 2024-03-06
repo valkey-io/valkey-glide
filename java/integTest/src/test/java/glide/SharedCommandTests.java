@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
@@ -10,6 +11,7 @@ import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,11 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,17 +83,29 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void ping(BaseClient client) {
-        String data = client.ping().get();
-        assertEquals("PONG", data);
+    public void unlink_multiple_keys(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+        String key3 = "{key}" + UUID.randomUUID();
+        String value = UUID.randomUUID().toString();
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key3, value).get();
+        assertEquals(OK, setResult);
+
+        Long unlinkedKeysNum = client.unlink(new String[] {key1, key2, key3}).get();
+        assertEquals(3L, unlinkedKeysNum);
     }
 
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void ping_with_message(BaseClient client) {
-        String data = client.ping("H3LL0").get();
-        assertEquals("H3LL0", data);
+    public void unlink_non_existent_key(BaseClient client) {
+        Long unlinkedKeysNum = client.unlink(new String[] {UUID.randomUUID().toString()}).get();
+        assertEquals(0L, unlinkedKeysNum);
     }
 
     @SneakyThrows
@@ -280,7 +296,7 @@ public class SharedCommandTests {
         assertEquals(OK, ok);
 
         SetOptions options = SetOptions.builder().returnOldValue(true).build();
-        String data = client.set("another", ANOTHER_VALUE, options).get();
+        String data = client.set(UUID.randomUUID().toString(), ANOTHER_VALUE, options).get();
         assertNull(data);
     }
 
@@ -427,6 +443,218 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void hmget_multiple_existing_fields_non_existing_field_non_existing_key(
+            BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertArrayEquals(
+                new String[] {value, null, value},
+                client.hmget(key, new String[] {field1, "non_existing_field", field2}).get());
+        assertArrayEquals(
+                new String[] {null, null},
+                client.hmget("non_existing_key", new String[] {field1, field2}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value1");
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertTrue(client.hexists(key, field1).get());
+        assertFalse(client.hexists(key, "non_existing_field").get());
+        assertFalse(client.hexists("non_existing_key", field2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hgetall_multiple_existing_fields_existing_key_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertEquals(fieldValueMap, client.hgetall(key).get());
+        assertEquals(Map.of(), client.hgetall("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_commands_existing_key_existing_field(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "10");
+
+        assertEquals(1, client.hset(key, fieldValueMap).get());
+
+        assertEquals(11, client.hincrBy(key, field, 1).get());
+        assertEquals(15, client.hincrBy(key, field, 4).get());
+        assertEquals(16.5, client.hincrByFloat(key, field, 1.5).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_commands_non_existing_key_non_existing_field(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "10");
+
+        assertEquals(1, client.hincrBy("non_existing_key_1", field, 1).get());
+        assertEquals(1, client.hset(key1, fieldValueMap).get());
+        assertEquals(2, client.hincrBy(key1, "non_existing_field_1", 2).get());
+
+        assertEquals(0.5, client.hincrByFloat("non_existing_key_2", field, 0.5).get());
+        assertEquals(1, client.hset(key2, fieldValueMap).get());
+        assertEquals(-0.5, client.hincrByFloat(key1, "non_existing_field_2", -0.5).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hincrBy_hincrByFloat_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field, "foo");
+
+        assertEquals(1, client.hset(key, fieldValueMap).get());
+
+        Exception hincrByException =
+                assertThrows(ExecutionException.class, () -> client.hincrBy(key, field, 2).get());
+        assertTrue(hincrByException.getCause() instanceof RequestException);
+
+        Exception hincrByFloatException =
+                assertThrows(ExecutionException.class, () -> client.hincrByFloat(key, field, 2.5).get());
+        assertTrue(hincrByFloatException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void lpush_lpop_lrange_existing_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
+
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals("value1", client.lpop(key).get());
+        assertArrayEquals(new String[] {"value2", "value3", "value4"}, client.lrange(key, 0, -1).get());
+        assertArrayEquals(new String[] {"value2", "value3"}, client.lpopCount(key, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange("non_existing_key", 0, -1).get());
+        assertNull(client.lpop("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void lpush_lpop_lrange_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception lpushException =
+                assertThrows(ExecutionException.class, () -> client.lpush(key, new String[] {"foo"}).get());
+        assertTrue(lpushException.getCause() instanceof RequestException);
+
+        Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
+        assertTrue(lpopException.getCause() instanceof RequestException);
+
+        Exception lpopCountException =
+                assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
+        assertTrue(lpopCountException.getCause() instanceof RequestException);
+
+        Exception lrangeException =
+                assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
+        assertTrue(lrangeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void ltrim_existing_non_existing_key_and_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
+
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals(OK, client.ltrim(key, 0, 1).get());
+        assertArrayEquals(new String[] {"value1", "value2"}, client.lrange(key, 0, -1).get());
+
+        // `start` is greater than `end` so the key will be removed.
+        assertEquals(OK, client.ltrim(key, 4, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange(key, 0, -1).get());
+
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception ltrimException =
+                assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
+        assertTrue(ltrimException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void llen_existing_non_existing_key_and_type_error(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
+
+        assertEquals(4, client.lpush(key1, valueArray).get());
+        assertEquals(4, client.llen(key1).get());
+        assertEquals(0, client.llen("non_existing_key").get());
+
+        assertEquals(OK, client.set(key2, "foo").get());
+
+        Exception lrangeException =
+                assertThrows(ExecutionException.class, () -> client.llen(key2).get());
+        assertTrue(lrangeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void rpush_rpop_existing_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value1", "value2", "value3", "value4"};
+
+        assertEquals(4, client.rpush(key, valueArray).get());
+        assertEquals("value4", client.rpop(key).get());
+
+        assertArrayEquals(new String[] {"value3", "value2"}, client.rpopCount(key, 2).get());
+        assertNull(client.rpop("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void rpush_rpop_type_error(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "foo").get());
+
+        Exception rpushException =
+                assertThrows(ExecutionException.class, () -> client.rpush(key, new String[] {"foo"}).get());
+        assertTrue(rpushException.getCause() instanceof RequestException);
+
+        Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
+        assertTrue(rpopException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(
@@ -485,5 +713,125 @@ public class SharedCommandTests {
         Long existsKeysNum =
                 client.exists(new String[] {key1, key2, key1, UUID.randomUUID().toString()}).get();
         assertEquals(3L, existsKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_ttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "expire_timeout").get());
+        assertTrue(client.expire(key, 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // set command clears the timeout.
+        assertEquals(OK, client.set(key, "pexpire_timeout").get());
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.pexpire(key, 10000L).get());
+        } else {
+            assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
+        }
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // TTL will be updated to the new value = 15
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.expire(key, 15L).get());
+        } else {
+            assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
+        }
+        assertTrue(client.ttl(key).get() <= 15L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "expireAt_timeout").get());
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // extend TTL
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
+        } else {
+            assertTrue(
+                    client
+                            .expireAt(
+                                    key,
+                                    Instant.now().getEpochSecond() + 50L,
+                                    ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                            .get());
+        }
+        assertTrue(client.ttl(key).get() <= 50L);
+
+        if (REDIS_VERSION.feature() < 7) {
+            assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
+        } else {
+            // set command clears the timeout.
+            assertEquals(OK, client.set(key, "pexpireAt_timeout").get());
+            assertFalse(
+                    client
+                            .pexpireAt(
+                                    key, Instant.now().toEpochMilli() + 50000L, ExpireOptions.HAS_EXISTING_EXPIRY)
+                            .get());
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
+        assertEquals(-1L, client.ttl(key).get());
+        assertTrue(client.expire(key, -10L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, "pexpire_with_past_timestamp").get());
+        assertTrue(client.pexpire(key, -10000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(key, "expireAt_with_past_timestamp").get());
+        // set timeout in the past
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() - 50L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, "pexpireAt_with_past_timestamp").get());
+        // set timeout in the past
+        assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() - 50000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_ttl_with_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.expire(key, 10L).get());
+        assertFalse(client.pexpire(key, 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_with_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
     }
 }

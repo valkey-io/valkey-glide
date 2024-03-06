@@ -184,9 +184,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             }
             Ok(obj.into_unknown())
         }
-        Value::Double(float) => js_env
-            .create_double(float.into())
-            .map(|val| val.into_unknown()),
+        Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
         // format is ignored, as per the RESP3 recommendations -
         // "Normal client libraries may ignore completely the difference between this"
@@ -330,7 +328,7 @@ pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
 pub fn create_leaked_double(float: f64) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(Value::Double(float.into()))) as *mut Value;
+    let pointer = Box::leak(Box::new(Value::Double(float))) as *mut Value;
     split_pointer(pointer)
 }
 

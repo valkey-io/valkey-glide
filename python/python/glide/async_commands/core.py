@@ -16,6 +16,14 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.sorted_set import (
+    InfBound,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
+    _create_zrange_args,
+)
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
@@ -121,29 +129,6 @@ class UpdateOptions(Enum):
 
     LESS_THAN = "LT"
     GREATER_THAN = "GT"
-
-
-class InfBound(Enum):
-    """
-    Enumeration representing positive and negative infinity bounds for sorted set scores.
-    """
-
-    POS_INF = "+inf"
-    NEG_INF = "-inf"
-
-
-class ScoreLimit:
-    """
-    Represents a score limit in a sorted set.
-
-    Args:
-        value (float): The score value.
-        is_inclusive (bool): Whether the score value is inclusive. Defaults to False.
-    """
-
-    def __init__(self, value: float, is_inclusive: bool = True):
-        """Convert the score limit to the Redis protocol format."""
-        self.value = str(value) if is_inclusive else f"({value}"
 
 
 class ExpirySet:
@@ -419,7 +404,7 @@ class CoreCommands(Protocol):
             int: The number of fields that were added to the hash.
 
         Example:
-            >>> hset("my_hash", {"field": "value", "field2": "value2"})
+            >>> await client.hset("my_hash", {"field": "value", "field2": "value2"})
                 2
         """
         field_value_list: List[str] = [key]
@@ -444,14 +429,45 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
-            >>> hget("my_hash", "field")
+            >>> await client.hget("my_hash", "field")
                 "value"
-            >>> hget("my_hash", "nonexistent_field")
+            >>> await client.hget("my_hash", "nonexistent_field")
                 None
         """
         return cast(
             Optional[str],
             await self._execute_command(RequestType.HashGet, [key, field]),
+        )
+
+    async def hsetnx(
+        self,
+        key: str,
+        field: str,
+        value: str,
+    ) -> bool:
+        """
+        Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
+        If `key` does not exist, a new key holding a hash is created.
+        If `field` already exists, this operation has no effect.
+        See https://redis.io/commands/hsetnx/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field to set the value for.
+            value (str): The value to set.
+
+        Returns:
+            bool: True if the field was set, False if the field already existed and was not set.
+
+        Examples:
+            >>> await client.hsetnx("my_hash", "field", "value")
+                True  # Indicates that the field "field" was set successfully in the hash "my_hash".
+            >>> await client.hsetnx("my_hash", "field", "new_value")
+                False # Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.HSetNX, [key, field, value]),
         )
 
     async def hincrby(self, key: str, field: str, amount: int) -> int:
@@ -871,6 +887,35 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
+    async def sismember(
+        self,
+        key: str,
+        member: str,
+    ) -> bool:
+        """
+        Returns if `member` is a member of the set stored at `key`.
+
+        See https://redis.io/commands/sismember/ for more details.
+
+        Args:
+            key (str): The key of the set.
+            member (str): The member to check for existence in the set.
+
+        Returns:
+            bool: True if the member exists in the set, False otherwise.
+            If `key` doesn't exist, it is treated as an empty set and the command returns False.
+
+        Examples:
+            >>> await client.sismember("my_set", "member1")
+                True  # Indicates that "member1" exists in the set "my_set".
+            >>> await client.sismember("my_set", "non_existing_member")
+                False  # Indicates that "non_existing_member" does not exist in the set "my_set".
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.SIsMember, [key, member]),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
@@ -1005,7 +1050,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.expire("my_key", 60)
-                1  # Indicates that a timeout of 60 seconds has been set for "my_key."
+                True  # Indicates that a timeout of 60 seconds has been set for "my_key."
         """
         args: List[str] = (
             [key, str(seconds)] if option is None else [key, str(seconds), option.value]
@@ -1035,7 +1080,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry)
-                1
+                True
         """
         args = (
             [key, str(unix_seconds)]
@@ -1065,7 +1110,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry)
-                1  # Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
+                True  # Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
         """
         args = (
             [key, str(milliseconds)]
@@ -1097,7 +1142,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry)
-                1
+                True
         """
         args = (
             [key, str(unix_milliseconds)]
@@ -1124,6 +1169,31 @@ class CoreCommands(Protocol):
                 -2  # Returns -2 for a non-existing key.
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
+
+    async def pttl(
+        self,
+        key: str,
+    ) -> int:
+        """
+        Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+        See https://redis.io/commands/pttl for more details.
+
+        Args:
+            key (str): The key to return its timeout.
+
+        Returns:
+            int: TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+
+        Examples:
+            >>> await client.pttl("my_key")
+                5000  # Indicates that the key "my_key" has a remaining time to live of 5000 milliseconds.
+            >>> await client.pttl("non_existing_key")
+                -2  # Indicates that the key "non_existing_key" does not exist.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PTTL, [key]),
+        )
 
     async def echo(self, message: str) -> str:
         """
@@ -1193,9 +1263,9 @@ class CoreCommands(Protocol):
             If `changed` is set, returns the number of elements updated in the sorted set.
 
         Examples:
-            >>> await zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
                 2  # Indicates that two elements have been added or updated in the sorted set "my_sorted_set."
-            >>> await zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
+            >>> await client.zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
                 2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
         """
         args = [key]
@@ -1256,9 +1326,9 @@ class CoreCommands(Protocol):
             If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
 
         Examples:
-            >>> await zaddIncr("my_sorted_set", member , 5.0)
+            >>> await client.zaddIncr("my_sorted_set", member , 5.0)
                 5.0
-            >>> await zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
+            >>> await client.zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
                 None
         """
         args = [key]
@@ -1297,9 +1367,9 @@ class CoreCommands(Protocol):
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
 
         Examples:
-            >>> await zcard("my_sorted_set")
+            >>> await client.zcard("my_sorted_set")
                 3  # Indicates that there are 3 elements in the sorted set "my_sorted_set".
-            >>> await zcard("non_existing_key")
+            >>> await client.zcard("non_existing_key")
                 0
         """
         return cast(int, await self._execute_command(RequestType.Zcard, [key]))
@@ -1307,8 +1377,8 @@ class CoreCommands(Protocol):
     async def zcount(
         self,
         key: str,
-        min_score: Union[InfBound, ScoreLimit],
-        max_score: Union[InfBound, ScoreLimit],
+        min_score: Union[InfBound, ScoreBoundary],
+        max_score: Union[InfBound, ScoreBoundary],
     ) -> int:
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
@@ -1317,12 +1387,12 @@ class CoreCommands(Protocol):
 
         Args:
             key (str): The key of the sorted set.
-            min_score (Union[InfBound, ScoreLimit]): The minimum score to count from.
+            min_score (Union[InfBound, ScoreBoundary]): The minimum score to count from.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
-            max_score (Union[InfBound, ScoreLimit]): The maximum score to count up to.
+                or ScoreBoundary representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreBoundary]): The maximum score to count up to.
                 Can be an instance of InfBound representing positive/negative infinity,
-                or ScoreLimit representing a specific score and inclusivity.
+                or ScoreBoundary representing a specific score and inclusivity.
 
         Returns:
             int: The number of members in the specified score range.
@@ -1330,15 +1400,25 @@ class CoreCommands(Protocol):
             If `max_score` < `min_score`, 0 is returned.
 
         Examples:
-            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , InfBound.POS_INF)
+            >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , InfBound.POS_INF)
                 2  # Indicates that there are 2 members with scores between 5.0 (not exclusive) and +inf in the sorted set "my_sorted_set".
-            >>> await client.zcount("my_sorted_set", ScoreLimit(5.0 , is_inclusive=true) , ScoreLimit(10.0 , is_inclusive=false))
-                1  # Indicates that there is one ScoreLimit with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
+            >>> await client.zcount("my_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , ScoreBoundary(10.0 , is_inclusive=false))
+                1  # Indicates that there is one ScoreBoundary with 5.0 < score <= 10.0 in the sorted set "my_sorted_set".
         """
+        score_min = (
+            min_score.value["score_arg"]
+            if type(min_score) == InfBound
+            else min_score.value
+        )
+        score_max = (
+            max_score.value["score_arg"]
+            if type(max_score) == InfBound
+            else max_score.value
+        )
         return cast(
             int,
             await self._execute_command(
-                RequestType.Zcount, [key, min_score.value, max_score.value]
+                RequestType.Zcount, [key, score_min, score_max]
             ),
         )
 
@@ -1404,6 +1484,78 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZPopMin, [key, str(count)] if count else [key]
             ),
+        )
+
+    async def zrange(
+        self,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> List[str]:
+        """
+        Returns the specified range of elements in the sorted set stored at `key`.
+
+        ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        To get the elements with their scores, see zrange_withscores.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            List[str]: A list of elements within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+
+        Examples:
+            >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
+                ['member1', 'member2', 'member3']  # Returns all members in ascending order.
+            >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+                ['member2', 'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=False)
+
+        return cast(List[str], await self._execute_command(RequestType.Zrange, args))
+
+    async def zrange_withscores(
+        self,
+        key: str,
+        range_query: Union[RangeByIndex, RangeByScore],
+        reverse: bool = False,
+    ) -> Mapping[str, float]:
+        """
+        Returns the specified range of elements with their scores in the sorted set stored at `key`.
+        Similar to ZRANGE but with a WITHSCORE flag.
+
+        See https://redis.io/commands/zrange/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            Mapping[str , float]: A map of elements and their scores within the specified range.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+
+        Examples:
+            >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
+                {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
+           >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+                {'member4': -2.0, 'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
+        """
+        args = _create_zrange_args(key, range_query, reverse, with_scores=True)
+
+        return cast(
+            Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
         )
 
     async def zrem(

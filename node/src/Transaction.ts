@@ -18,6 +18,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -31,6 +32,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
+    createHvals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -47,6 +49,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPing,
+    createPttl,
     createRPop,
     createRPush,
     createSAdd,
@@ -423,6 +426,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hlen(key: string): T {
         return this.addAndReturn(createHLen(key));
+    }
+
+    /** Returns all values in the hash stored at key.
+     * See https://redis.io/commands/hvals/ for more details.
+     * 
+     * @param key - The key of the hash. 
+     * 
+     * Command Response - a list of values in the hash, or an empty list when the key does not exist.
+     */
+    public hvals(key: string): T {
+        return this.addAndReturn(createHvals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -898,6 +912,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zpopmax(key: string, count?: number): T {
         return this.addAndReturn(createZpopmax(key, count));
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     * 
+     * @param message - The message to be echoed back.
+     * 
+     * Command Response - The provided `message`.
+     */
+    public echo(message: string): T {
+        return this.addAndReturn(createEcho(message));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     * See https://redis.io/commands/pttl for more details.
+     * 
+     * @param key - The key to return its timeout.
+     * 
+     * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     */
+    public pttl(key: string): T {
+        return this.addAndReturn(createPttl(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

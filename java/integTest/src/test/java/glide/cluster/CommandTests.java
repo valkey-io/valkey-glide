@@ -3,6 +3,9 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.getFirstEntryFromMultiValue;
+import static glide.TestUtilities.getValueFromInfo;
+import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
@@ -10,12 +13,14 @@ import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
+import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.RedisClusterClient;
@@ -24,7 +29,9 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.exceptions.RequestException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -128,6 +135,20 @@ public class CommandTests {
         assertEquals(1L, del.getSingleValue());
         var data = clusterClient.get(key).get();
         assertNull(data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping() {
+        String data = clusterClient.ping().get();
+        assertEquals("PONG", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_with_message() {
+        String data = clusterClient.ping("H3LL0").get();
+        assertEquals("H3LL0", data);
     }
 
     @Test
@@ -259,5 +280,90 @@ public class CommandTests {
                         "Section " + section + " is missing");
             }
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId() {
+        var id = clusterClient.clientId().get();
+        assertTrue(id > 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_single_node_route() {
+        var data = clusterClient.clientId(RANDOM).get();
+        assertTrue(data.getSingleValue() > 0L);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_multi_node_route() {
+        var data = clusterClient.clientId(ALL_NODES).get();
+        data.getMultiValue().values().forEach(id -> assertTrue(id > 0));
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
+
+        var name = clusterClient.clientGetName().get();
+
+        assertEquals("clientGetName", name);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_single_node_route() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient
+                .customCommand(
+                        new String[] {"client", "setname", "clientGetName_with_single_node_route"}, ALL_NODES)
+                .get();
+
+        var name = clusterClient.clientGetName(RANDOM).get();
+
+        assertEquals("clientGetName_with_single_node_route", name.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_multi_node_route() {
+        // TODO replace with the corresponding command once implemented
+        clusterClient
+                .customCommand(
+                        new String[] {"client", "setname", "clientGetName_with_multi_node_route"}, ALL_NODES)
+                .get();
+
+        var name = clusterClient.clientGetName(ALL_NODES).get();
+
+        assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
+    }
+
+    @Test
+    @SneakyThrows
+    public void config_reset_stat() {
+        var data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+        String firstNodeInfo = getFirstEntryFromMultiValue(data);
+        int value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+
+        var result = clusterClient.configResetStat().get();
+        assertEquals(OK, result);
+
+        data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+        firstNodeInfo = getFirstEntryFromMultiValue(data);
+        int value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        assertTrue(value_after < value_before);
+    }
+
+    @Test
+    @SneakyThrows
+    public void config_rewrite_non_existent_config_file() {
+        // The setup for the Integration Tests server does not include a configuration file for Redis.
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

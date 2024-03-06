@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
@@ -11,6 +12,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
+import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 
@@ -118,7 +123,6 @@ public class RedisClusterClientTest {
             object = objectToReturn;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
             return (T) object;
@@ -148,6 +152,48 @@ public class RedisClusterClientTest {
         CompletableFuture<String> testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn("PONG");
 
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("PONG", payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_message_returns_success() {
+        // setup
+        String message = "RETURN OF THE PONG";
+        String[] arguments = new String[] {message};
+        CompletableFuture<String> testResponse = new CompletableFuture();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Ping), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.ping(message);
+        String pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("PONG");
+
         Route route = ALL_NODES;
 
         // match on protobuf request
@@ -165,7 +211,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void ping_with_message_returns_success() {
+    public void ping_with_message_with_route_returns_success() {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};
@@ -313,5 +359,175 @@ public class RedisClusterClientTest {
         var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
         assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientId_returns_success() {
+        // setup
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(42L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ClientId), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.clientId();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(42L, response.get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_multi_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("n1", 42L);
+        var client = new TestClient(commandManager, data);
+
+        var value = client.clientId(ALL_NODES).get();
+        assertEquals(data, value.getMultiValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientId_with_single_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var client = new TestClient(commandManager, 42L);
+
+        var value = client.clientId(RANDOM).get();
+        assertEquals(42, value.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientGetName_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn("TEST");
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClientGetName), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientGetName();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals("TEST", response.get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_single_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var client = new TestClient(commandManager, "TEST");
+
+        var value = client.clientGetName(RANDOM).get();
+        assertEquals("TEST", value.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientGetName_with_multi_node_route_returns_success() {
+        var commandManager = new TestCommandManager(null);
+
+        var data = Map.of("n1", "TEST");
+        var client = new TestClient(commandManager, data);
+
+        var value = client.clientGetName(ALL_NODES).get();
+        assertEquals(data, value.getMultiValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void configRewrite_without_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ConfigRewrite), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configRewrite();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configRewrite_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ConfigRewrite), eq(new String[0]), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configRewrite(route);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configResetStat_without_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ConfigResetStat), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configResetStat();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configResetStat_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ConfigResetStat), eq(new String[0]), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configResetStat(route);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }
