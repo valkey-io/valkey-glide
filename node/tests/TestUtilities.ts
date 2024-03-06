@@ -35,13 +35,13 @@ export function flushallOnPort(port: number): Promise<void> {
             } else {
                 resolve();
             }
-        })
+        }),
     );
 }
 
 /// This function takes the first result of the response if it got more than one response (like cluster responses).
 export function getFirstResult(
-    res: string | number | Record<string, string> | Record<string, number>
+    res: string | number | Record<string, string> | Record<string, number>,
 ): string | number {
     if (typeof res == "string" || typeof res == "number") {
         return res;
@@ -51,7 +51,7 @@ export function getFirstResult(
 }
 
 export function transactionTest(
-    baseTransaction: Transaction | ClusterTransaction
+    baseTransaction: Transaction | ClusterTransaction,
 ): ReturnType[] {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -192,7 +192,7 @@ export class RedisCluster {
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
-        loadModule?: string[]
+        loadModule?: string[],
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
             let command = `python3 ../utils/cluster_manager.py start -r ${replicaCount} -n ${shardCount}`;
@@ -204,7 +204,7 @@ export class RedisCluster {
             if (loadModule) {
                 if (loadModule.length === 0) {
                     throw new Error(
-                        "Please provide the path(s) to the module(s) you want to load."
+                        "Please provide the path(s) to the module(s) you want to load.",
                     );
                 }
 
@@ -241,8 +241,8 @@ export class RedisCluster {
                     } else {
                         resolve();
                     }
-                }
-            )
+                },
+            ),
         );
     }
 }

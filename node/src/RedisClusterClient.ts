@@ -93,7 +93,7 @@ export type SingleNodeRoute =
     | RouteByAddress;
 
 function toProtobufRoute(
-    route: Routes | undefined
+    route: Routes | undefined,
 ): redis_request.Routes | undefined {
     if (route === undefined) {
         return undefined;
@@ -149,7 +149,7 @@ function toProtobufRoute(
             if (split.length !== 2) {
                 throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host
+                        host,
                 );
             }
 
@@ -173,7 +173,7 @@ export class RedisClusterClient extends BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: ClusterClientConfiguration
+        options: ClusterClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
@@ -181,23 +181,23 @@ export class RedisClusterClient extends BaseClient {
     }
 
     public static async createClient(
-        options: ClusterClientConfiguration
+        options: ClusterClientConfiguration,
     ): Promise<RedisClusterClient> {
         return await super.createClientInternal(
             options,
             (socket: net.Socket, options?: ClusterClientConfiguration) =>
-                new RedisClusterClient(socket, options)
+                new RedisClusterClient(socket, options),
         );
     }
 
     static async __createClient(
         options: BaseClientConfiguration,
-        connectedSocket: net.Socket
+        connectedSocket: net.Socket,
     ): Promise<RedisClusterClient> {
         return super.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new RedisClusterClient(socket, options)
+            (socket, options) => new RedisClusterClient(socket, options),
         );
     }
 
@@ -233,11 +233,11 @@ export class RedisClusterClient extends BaseClient {
      */
     public exec(
         transaction: ClusterTransaction,
-        route?: SingleNodeRoute
+        route?: SingleNodeRoute,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise(
             transaction.commands,
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -254,7 +254,7 @@ export class RedisClusterClient extends BaseClient {
     public ping(message?: string, route?: Routes): Promise<string> {
         return this.createWritePromise(
             createPing(message),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -270,11 +270,11 @@ export class RedisClusterClient extends BaseClient {
      */
     public info(
         options?: InfoOptions[],
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -289,11 +289,11 @@ export class RedisClusterClient extends BaseClient {
      * its corresponding node response is the value.
      */
     public clientGetName(
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<string | null>> {
         return this.createWritePromise<ClusterResponse<string | null>>(
             createClientGetName(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -308,7 +308,7 @@ export class RedisClusterClient extends BaseClient {
     public configRewrite(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
             createConfigRewrite(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -323,7 +323,7 @@ export class RedisClusterClient extends BaseClient {
     public configResetStat(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
             createConfigResetStat(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -338,7 +338,7 @@ export class RedisClusterClient extends BaseClient {
     public clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -355,11 +355,11 @@ export class RedisClusterClient extends BaseClient {
      */
     public configGet(
         parameters: string[],
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<Record<string, string>>> {
         return this.createWritePromise<ClusterResponse<Record<string, string>>>(
             createConfigGet(parameters),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -379,11 +379,11 @@ export class RedisClusterClient extends BaseClient {
      */
     public configSet(
         parameters: Record<string, string>,
-        route?: Routes
+        route?: Routes,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createConfigSet(parameters),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 }

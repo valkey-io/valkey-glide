@@ -7,28 +7,40 @@
 const { platform, arch } = process;
 let nativeBinding = null;
 switch (platform) {
-    case 'linux':
+    case "linux":
         switch (arch) {
-            case 'x64':
-                nativeBinding = await import("@scope/glide-for-redis-linux-x64");
+            case "x64":
+                nativeBinding = await import(
+                    "@scope/glide-for-redis-linux-x64"
+                );
                 break;
-            case 'arm64':
-                nativeBinding = await import("@scope/glide-for-redis-linux-arm64");
+            case "arm64":
+                nativeBinding = await import(
+                    "@scope/glide-for-redis-linux-arm64"
+                );
                 break;
             default:
-                throw new Error(`Unsupported OS: ${platform}, architecture: ${arch}`);
+                throw new Error(
+                    `Unsupported OS: ${platform}, architecture: ${arch}`,
+                );
         }
         break;
-    case 'darwin':
+    case "darwin":
         switch (arch) {
-            case 'x64':
-                nativeBinding = await import("@scope/glide-for-redis-darwin-x64");
+            case "x64":
+                nativeBinding = await import(
+                    "@scope/glide-for-redis-darwin-x64"
+                );
                 break;
-            case 'arm64':
-                nativeBinding = await import("@scope/glide-for-redis-darwin-arm64");
+            case "arm64":
+                nativeBinding = await import(
+                    "@scope/glide-for-redis-darwin-arm64"
+                );
                 break;
             default:
-                throw new Error(`Unsupported OS: ${platform}, architecture: ${arch}`);
+                throw new Error(
+                    `Unsupported OS: ${platform}, architecture: ${arch}`,
+                );
         }
         break;
     default:
@@ -37,5 +49,18 @@ switch (platform) {
 if (!nativeBinding) {
     throw new Error(`Failed to load native binding`);
 }
-export const { RedisClient, RedisClusterClient, Logger, ExpireOptions, InfoOptions, ClosingError, ExecAbortError, RedisError, RequestError, TimeoutError, ClusterTransaction, Transaction } = nativeBinding;
+export const {
+    RedisClient,
+    RedisClusterClient,
+    Logger,
+    ExpireOptions,
+    InfoOptions,
+    ClosingError,
+    ExecAbortError,
+    RedisError,
+    RequestError,
+    TimeoutError,
+    ClusterTransaction,
+    Transaction,
+} = nativeBinding;
 export default Object.assign(global, nativeBinding);

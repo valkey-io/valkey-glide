@@ -42,7 +42,7 @@ export type BaseClient = RedisClient | RedisClusterClient;
 export function runBaseTests<Context>(config: {
     init: (
         protocol: ProtocolVersion,
-        clientName?: string
+        clientName?: string,
     ) => Promise<{
         context: Context;
         client: BaseClient;
@@ -59,7 +59,7 @@ export function runBaseTests<Context>(config: {
     const runTest = async (
         test: (client: BaseClient) => Promise<void>,
         protocol: ProtocolVersion,
-        clientName?: string
+        clientName?: string,
     ) => {
         const { context, client } = await config.init(protocol, clientName);
         let testSucceeded = false;
@@ -88,7 +88,7 @@ export function runBaseTests<Context>(config: {
                 expect(result).toContain("lib-ver=unknown");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -101,12 +101,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.set("foo", "bar")).toThrow();
                 } catch (e) {
                     expect((e as ClosingError).message).toMatch(
-                        "Unable to execute requests; the client is closed. Please create a new client."
+                        "Unable to execute requests; the client is closed. Please create a new client.",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -119,7 +119,7 @@ export function runBaseTests<Context>(config: {
                 expect(result?.proto).toEqual(3);
             }, ProtocolVersion.RESP3);
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -132,7 +132,7 @@ export function runBaseTests<Context>(config: {
                 expect(result?.proto).toEqual(2);
             }, ProtocolVersion.RESP2);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -143,10 +143,10 @@ export function runBaseTests<Context>(config: {
                     expect(await client.clientGetName()).toBe("TEST_CLIENT");
                 },
                 protocol,
-                "TEST_CLIENT"
+                "TEST_CLIENT",
             );
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -169,7 +169,7 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual("");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -203,7 +203,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("foobar");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -223,7 +223,7 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual(value);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -257,7 +257,7 @@ export function runBaseTests<Context>(config: {
                 expect(mget_result).toEqual([value1, value2, null]);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -280,7 +280,7 @@ export function runBaseTests<Context>(config: {
                 expect(deletedKeysNum).toEqual(0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -290,7 +290,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.clientGetName()).toBeNull();
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -299,7 +299,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const serverInfo = await client.info([InfoOptions.Server]);
                 const conf_file = parseInfoResponse(
-                    getFirstResult(serverInfo).toString()
+                    getFirstResult(serverInfo).toString(),
                 )["config_file"];
 
                 if (conf_file.length > 0) {
@@ -310,13 +310,13 @@ export function runBaseTests<Context>(config: {
                         expect(await client.configRewrite()).toThrow();
                     } catch (e) {
                         expect((e as Error).message).toMatch(
-                            "The server is running without a config file"
+                            "The server is running without a config file",
                         );
                     }
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -331,19 +331,19 @@ export function runBaseTests<Context>(config: {
                     Number(
                         parseInfoResponse(getFirstResult(OldResult).toString())[
                             "total_commands_processed"
-                        ]
-                    )
+                        ],
+                    ),
                 ).toBeGreaterThan(1);
                 expect(await client.configResetStat()).toEqual("OK");
                 const result = await client.info([InfoOptions.Stats]);
                 expect(
                     parseInfoResponse(getFirstResult(result).toString())[
                         "total_commands_processed"
-                    ]
+                    ],
                 ).toEqual("1");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -361,11 +361,11 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
-                    await client.mget([key1, key2, "nonExistingKey", key3])
+                    await client.mget([key1, key2, "nonExistingKey", key3]),
                 ).toEqual([value, value, null, value]);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -382,7 +382,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("16.5");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -401,7 +401,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key3)).toEqual("-0.5");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -415,7 +415,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.incr(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "value is not an integer"
+                        "value is not an integer",
                     );
                 }
 
@@ -423,7 +423,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.incrBy(key, 1)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "value is not an integer"
+                        "value is not an integer",
                     );
                 }
 
@@ -431,12 +431,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.incrByFloat(key, 1.5)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "value is not a valid float"
+                        "value is not a valid float",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -447,7 +447,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.ping("Hello")).toEqual("Hello");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -455,11 +455,11 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(getFirstResult(await client.clientId())).toBeGreaterThan(
-                    0
+                    0,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -474,7 +474,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key)).toEqual("5");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -492,7 +492,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.get(key2)).toEqual("-3");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -506,7 +506,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.decr(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "value is not an integer"
+                        "value is not an integer",
                     );
                 }
 
@@ -514,12 +514,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.decrBy(key, 3)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "value is not an integer"
+                        "value is not an integer",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -530,7 +530,7 @@ export function runBaseTests<Context>(config: {
                     "timeout",
                 ])) as Record<string, string>;
                 expect(await client.configSet({ timeout: "1000" })).toEqual(
-                    "OK"
+                    "OK",
                 );
                 const currTimeout = (await client.configGet([
                     "timeout",
@@ -540,11 +540,11 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.configSet({
                         timeout: prevTimeout["timeout"],
-                    })
+                    }),
                 ).toEqual("OK");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -563,11 +563,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hget(key, field1)).toEqual(value);
                 expect(await client.hget(key, field2)).toEqual(value);
                 expect(await client.hget(key, "nonExistingField")).toEqual(
-                    null
+                    null,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -589,11 +589,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hdel(key, [field1, field2])).toEqual(2);
                 expect(await client.hdel(key, ["nonExistingField"])).toEqual(0);
                 expect(await client.hdel("nonExistingKey", [field3])).toEqual(
-                    0
+                    0,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -614,14 +614,14 @@ export function runBaseTests<Context>(config: {
                         field1,
                         "nonExistingField",
                         field2,
-                    ])
+                    ]),
                 ).toEqual([value, null, value]);
                 expect(
-                    await client.hmget("nonExistingKey", [field1, field2])
+                    await client.hmget("nonExistingKey", [field1, field2]),
                 ).toEqual([null, null]);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -638,14 +638,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hexists(key, field1)).toEqual(true);
                 expect(await client.hexists(key, "nonExistingField")).toEqual(
-                    false
+                    false,
                 );
                 expect(await client.hexists("nonExistingKey", field2)).toEqual(
-                    false
+                    false,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -668,7 +668,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hgetall("nonExistingKey")).toEqual({});
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -684,11 +684,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hincrBy(key, field, 1)).toEqual(11);
                 expect(await client.hincrBy(key, field, 4)).toEqual(15);
                 expect(await client.hincrByFloat(key, field, 1.5)).toEqual(
-                    16.5
+                    16.5,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -702,19 +702,19 @@ export function runBaseTests<Context>(config: {
                     [field]: "10",
                 };
                 expect(
-                    await client.hincrBy("nonExistingKey", field, 1)
+                    await client.hincrBy("nonExistingKey", field, 1),
                 ).toEqual(1);
                 expect(await client.hset(key1, fieldValueMap)).toEqual(1);
                 expect(
-                    await client.hincrBy(key1, "nonExistingField", 2)
+                    await client.hincrBy(key1, "nonExistingField", 2),
                 ).toEqual(2);
                 expect(await client.hset(key2, fieldValueMap)).toEqual(1);
                 expect(
-                    await client.hincrByFloat(key2, "nonExistingField", -0.5)
+                    await client.hincrByFloat(key2, "nonExistingField", -0.5),
                 ).toEqual(-0.5);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -732,22 +732,22 @@ export function runBaseTests<Context>(config: {
                     expect(await client.hincrBy(key, field, 2)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "hash value is not an integer"
+                        "hash value is not an integer",
                     );
                 }
 
                 try {
                     expect(
-                        await client.hincrByFloat(key, field, 1.5)
+                        await client.hincrByFloat(key, field, 1.5),
                     ).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "hash value is not a float"
+                        "hash value is not a float",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -769,7 +769,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hlen("nonExistingHash")).toEqual(0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -791,7 +791,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -812,12 +812,12 @@ export function runBaseTests<Context>(config: {
                     "value3",
                 ]);
                 expect(await client.lrange("nonExistingKey", 0, -1)).toEqual(
-                    []
+                    [],
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -831,7 +831,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.lpush(key, ["bar"])).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -839,7 +839,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.lpop(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -847,12 +847,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.lrange(key, 0, -1)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -873,12 +873,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.llen(key2)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -904,12 +904,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.ltrim(key, 0, 1)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -939,11 +939,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lrem(key, 0, "value2")).toEqual(1);
                 expect(await client.lrange(key, 0, -1)).toEqual(["value1"]);
                 expect(await client.lrem("nonExistingKey", 2, "value")).toEqual(
-                    0
+                    0,
                 );
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -961,7 +961,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -975,7 +975,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.rpush(key, ["bar"])).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -983,12 +983,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.rpop(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -999,7 +999,7 @@ export function runBaseTests<Context>(config: {
                 const valueList = ["member1", "member2", "member3", "member4"];
                 expect(await client.sadd(key, valueList)).toEqual(4);
                 expect(
-                    await client.srem(key, ["member3", "nonExistingMember"])
+                    await client.srem(key, ["member3", "nonExistingMember"]),
                 ).toEqual(1);
                 /// compare the 2 sets.
                 expect((await client.smembers(key)).sort()).toEqual([
@@ -1011,7 +1011,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.scard(key)).toEqual(2);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1019,13 +1019,13 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 expect(await client.srem("nonExistingKey", ["member"])).toEqual(
-                    0
+                    0,
                 );
                 expect(await client.scard("nonExistingKey")).toEqual(0);
                 expect(await client.smembers("nonExistingKey")).toEqual([]);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1039,7 +1039,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.sadd(key, ["bar"])).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -1047,7 +1047,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.srem(key, ["bar"])).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -1055,7 +1055,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.scard(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
 
@@ -1063,12 +1063,12 @@ export function runBaseTests<Context>(config: {
                     expect(await client.smembers(key)).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value"
+                        "Operation against a key holding the wrong kind of value",
                     );
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1082,12 +1082,12 @@ export function runBaseTests<Context>(config: {
                 expect(await client.exists([key1])).toEqual(1);
                 expect(await client.set(key2, value)).toEqual("OK");
                 expect(
-                    await client.exists([key1, "nonExistingKey", key2])
+                    await client.exists([key1, "nonExistingKey", key2]),
                 ).toEqual(2);
                 expect(await client.exists([key1, key1])).toEqual(2);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1102,11 +1102,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(key2, value)).toEqual("OK");
                 expect(await client.set(key3, value)).toEqual("OK");
                 expect(
-                    await client.unlink([key1, key2, "nonExistingKey", key3])
+                    await client.unlink([key1, key2, "nonExistingKey", key3]),
                 ).toEqual(3);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1128,8 +1128,8 @@ export function runBaseTests<Context>(config: {
                         await client.pexpire(
                             key,
                             10000,
-                            ExpireOptions.HasNoExpiry
-                        )
+                            ExpireOptions.HasNoExpiry,
+                        ),
                     ).toEqual(true);
                 }
 
@@ -1143,15 +1143,15 @@ export function runBaseTests<Context>(config: {
                         await client.expire(
                             key,
                             15,
-                            ExpireOptions.HasExistingExpiry
-                        )
+                            ExpireOptions.HasExistingExpiry,
+                        ),
                     ).toEqual(true);
                 }
 
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1163,8 +1163,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.expireAt(
                         key,
-                        Math.floor(Date.now() / 1000) + 10
-                    )
+                        Math.floor(Date.now() / 1000) + 10,
+                    ),
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 const version = await getVersion();
@@ -1173,16 +1173,16 @@ export function runBaseTests<Context>(config: {
                     expect(
                         await client.expireAt(
                             key,
-                            Math.floor(Date.now() / 1000) + 50
-                        )
+                            Math.floor(Date.now() / 1000) + 50,
+                        ),
                     ).toEqual(true);
                 } else {
                     expect(
                         await client.expireAt(
                             key,
                             Math.floor(Date.now() / 1000) + 50,
-                            ExpireOptions.NewExpiryGreaterThanCurrent
-                        )
+                            ExpireOptions.NewExpiryGreaterThanCurrent,
+                        ),
                     ).toEqual(true);
                 }
 
@@ -1196,13 +1196,13 @@ export function runBaseTests<Context>(config: {
                         await client.pexpireAt(
                             key,
                             Date.now() + 50000,
-                            ExpireOptions.HasExistingExpiry
-                        )
+                            ExpireOptions.HasExistingExpiry,
+                        ),
                     ).toEqual(false);
                 }
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1221,21 +1221,21 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.expireAt(
                         key,
-                        Math.floor(Date.now() / 1000) - 50 /// timeout in the past
-                    )
+                        Math.floor(Date.now() / 1000) - 50, /// timeout in the past
+                    ),
                 ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
                     await client.pexpireAt(
                         key,
-                        Date.now() - 50000 /// timeout in the past
-                    )
+                        Date.now() - 50000, /// timeout in the past
+                    ),
                 ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1248,19 +1248,19 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.expireAt(
                         key,
-                        Math.floor(Date.now() / 1000) + 50 /// timeout in the past
-                    )
+                        Math.floor(Date.now() / 1000) + 50, /// timeout in the past
+                    ),
                 ).toEqual(false);
                 expect(
                     await client.pexpireAt(
                         key,
-                        Date.now() + 50000 /// timeout in the past
-                    )
+                        Date.now() + 50000, /// timeout in the past
+                    ),
                 ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1274,13 +1274,13 @@ export function runBaseTests<Context>(config: {
                 expect(await client.invokeScript(script)).toEqual("Hello");
 
                 script = new Script(
-                    "return redis.call('SET', KEYS[1], ARGV[1])"
+                    "return redis.call('SET', KEYS[1], ARGV[1])",
                 );
                 expect(
                     await client.invokeScript(script, {
                         keys: [key1],
                         args: ["value1"],
-                    })
+                    }),
                 ).toEqual("OK");
 
                 /// Reuse the same script with different parameters.
@@ -1288,20 +1288,20 @@ export function runBaseTests<Context>(config: {
                     await client.invokeScript(script, {
                         keys: [key2],
                         args: ["value2"],
-                    })
+                    }),
                 ).toEqual("OK");
 
                 script = new Script("return redis.call('GET', KEYS[1])");
                 expect(
-                    await client.invokeScript(script, { keys: [key1] })
+                    await client.invokeScript(script, { keys: [key1] }),
                 ).toEqual("value1");
 
                 expect(
-                    await client.invokeScript(script, { keys: [key2] })
+                    await client.invokeScript(script, { keys: [key2] }),
                 ).toEqual("value2");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1315,7 +1315,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1327,29 +1327,29 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zadd(key, membersScores, {
                         conditionalChange: "onlyIfExists",
-                    })
+                    }),
                 ).toEqual(0);
 
                 expect(
                     await client.zadd(key, membersScores, {
                         conditionalChange: "onlyIfDoesNotExist",
-                    })
+                    }),
                 ).toEqual(3);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
                         conditionalChange: "onlyIfDoesNotExist",
-                    })
+                    }),
                 ).toEqual(null);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
                         conditionalChange: "onlyIfExists",
-                    })
+                    }),
                 ).toEqual(6.0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1369,8 +1369,8 @@ export function runBaseTests<Context>(config: {
                         {
                             updateOptions: "scoreGreaterThanCurrent",
                         },
-                        true
-                    )
+                        true,
+                    ),
                 ).toEqual(1);
 
                 expect(
@@ -1380,24 +1380,24 @@ export function runBaseTests<Context>(config: {
                         {
                             updateOptions: "scoreLessThanCurrent",
                         },
-                        true
-                    )
+                        true,
+                    ),
                 ).toEqual(0);
 
                 expect(
                     await client.zaddIncr(key, "one", -3.0, {
                         updateOptions: "scoreLessThanCurrent",
-                    })
+                    }),
                 ).toEqual(7.0);
 
                 expect(
                     await client.zaddIncr(key, "one", -3.0, {
                         updateOptions: "scoreGreaterThanCurrent",
-                    })
+                    }),
                 ).toEqual(null);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1409,14 +1409,14 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrem(key, ["one"])).toEqual(1);
                 expect(await client.zrem(key, ["one", "two", "three"])).toEqual(
-                    2
+                    2,
                 );
                 expect(
-                    await client.zrem("non_existing_set", ["member"])
+                    await client.zrem("non_existing_set", ["member"]),
                 ).toEqual(0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1431,7 +1431,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zcard(key)).toEqual(2);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1444,17 +1444,17 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zscore(key1, "one")).toEqual(1.0);
                 expect(await client.zscore(key1, "nonExistingMember")).toEqual(
-                    null
+                    null,
                 );
                 expect(
-                    await client.zscore("nonExistingKey", "nonExistingMember")
+                    await client.zscore("nonExistingKey", "nonExistingMember"),
                 ).toEqual(null);
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1469,48 +1469,48 @@ export function runBaseTests<Context>(config: {
                     await client.zcount(
                         key1,
                         "negativeInfinity",
-                        "positiveInfinity"
-                    )
+                        "positiveInfinity",
+                    ),
                 ).toEqual(3);
                 expect(
                     await client.zcount(
                         key1,
                         { bound: 1, isInclusive: false },
-                        { bound: 3, isInclusive: false }
-                    )
+                        { bound: 3, isInclusive: false },
+                    ),
                 ).toEqual(1);
                 expect(
                     await client.zcount(
                         key1,
                         { bound: 1, isInclusive: false },
-                        { bound: 3 }
-                    )
+                        { bound: 3 },
+                    ),
                 ).toEqual(2);
                 expect(
                     await client.zcount(key1, "negativeInfinity", {
                         bound: 3,
-                    })
+                    }),
                 ).toEqual(3);
                 expect(
                     await client.zcount(key1, "positiveInfinity", {
                         bound: 3,
-                    })
+                    }),
                 ).toEqual(0);
                 expect(
                     await client.zcount(
                         "nonExistingKey",
                         "negativeInfinity",
-                        "positiveInfinity"
-                    )
+                        "positiveInfinity",
+                    ),
                 ).toEqual(0);
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
-                    client.zcount(key2, "negativeInfinity", "positiveInfinity")
+                    client.zcount(key2, "negativeInfinity", "positiveInfinity"),
                 ).rejects.toThrow();
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1551,7 +1551,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.type(key)).toEqual("none");
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1562,7 +1562,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.echo(message)).toEqual(message);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1582,13 +1582,16 @@ export function runBaseTests<Context>(config: {
                 const listKey2Value = uuidv4();
 
                 expect(
-                    await client.lpush(listName, [listKey1Value, listKey2Value])
+                    await client.lpush(listName, [
+                        listKey1Value,
+                        listKey2Value,
+                    ]),
                 ).toEqual(2);
                 // An error is returned when key holds a non-string value
                 await expect(client.strlen(listName)).rejects.toThrow();
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1599,7 +1602,10 @@ export function runBaseTests<Context>(config: {
                 const listKey1Value = uuidv4();
                 const listKey2Value = uuidv4();
                 expect(
-                    await client.lpush(listName, [listKey1Value, listKey2Value])
+                    await client.lpush(listName, [
+                        listKey1Value,
+                        listKey2Value,
+                    ]),
                 ).toEqual(2);
                 expect(await client.lindex(listName, 0)).toEqual(listKey2Value);
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
@@ -1607,7 +1613,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lindex(listName, 3)).toEqual(null);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1628,7 +1634,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zpopmin("notExsitingKey")).toEqual({});
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1649,7 +1655,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zpopmax("notExsitingKey")).toEqual({});
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1667,18 +1673,25 @@ export function runBaseTests<Context>(config: {
                 expect(result).toBeGreaterThan(0);
                 expect(result).toBeLessThanOrEqual(10000);
 
-                expect(await client.expireAt(key, Math.floor(Date.now() / 1000) + 20)).toEqual(true);
+                expect(
+                    await client.expireAt(
+                        key,
+                        Math.floor(Date.now() / 1000) + 20,
+                    ),
+                ).toEqual(true);
                 result = await client.pttl(key);
                 expect(result).toBeGreaterThan(0);
                 expect(result).toBeLessThanOrEqual(20000);
 
-                expect(await client.pexpireAt(key, Date.now() + 30000)).toEqual(true);
+                expect(await client.pexpireAt(key, Date.now() + 30000)).toEqual(
+                    true,
+                );
                 result = await client.pttl(key);
                 expect(result).toBeGreaterThan(0);
                 expect(result).toBeLessThanOrEqual(30000);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 }
 
@@ -1704,7 +1717,7 @@ export function runCommonTests<Context>(config: {
         async () => {
             await runTest((client: Client) => GetAndSetRandomValue(client));
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -1718,7 +1731,7 @@ export function runCommonTests<Context>(config: {
                 expect(result).toEqual(value);
             });
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -1730,7 +1743,7 @@ export function runCommonTests<Context>(config: {
                 expect(result).toEqual(null);
             });
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -1744,7 +1757,7 @@ export function runCommonTests<Context>(config: {
                 expect(result).toEqual("");
             });
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -1771,7 +1784,7 @@ export function runCommonTests<Context>(config: {
                 expect(result).toEqual(value);
             });
         },
-        config.timeout
+        config.timeout,
     );
 
     it(
@@ -1796,6 +1809,6 @@ export function runCommonTests<Context>(config: {
                 await Promise.all(operations);
             });
         },
-        config.timeout
+        config.timeout,
     );
 }
