@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted set Commands</a>
  */
 public interface SortedSetBaseCommands {
+
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
      * If a member is already a part of the sorted set, its score is updated.
@@ -28,6 +29,7 @@ public interface SortedSetBaseCommands {
      *     <pre>
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build(), false).get();
      * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     *
      * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build(), false).get();
      * assert num == 2L //Updates the scores of two existing members in the sorted set "existingSortedSet".
      * </pre>
@@ -48,6 +50,7 @@ public interface SortedSetBaseCommands {
      *     <pre>
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build()).get();
      * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     *
      * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build()).get();
      * assert num == 2L //Updates the scores of two existing members in the sorted set "existingSortedSet".
      * </pre>
@@ -111,6 +114,7 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * Double num = client.zaddIncr("mySortedSet", member, 5.0, ZaddOptions.builder().build()).get();
      * assert num == 5.0
+     *
      * Double num = client.zaddIncr("existingSortedSet", member, 3.0, ZaddOptions.builder().updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT).build()).get();
      * assert num == null
      * }</pre>
