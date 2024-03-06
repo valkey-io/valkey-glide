@@ -2,6 +2,15 @@ name: Node
 
 on:
     push:
+        branches: ["main"]
+        paths:
+            - glide-core/src/**
+            - submodules/**
+            - node/**
+            - utils/cluster_manager.py
+            - .github/workflows/node.yml
+            - .github/workflows/build-node-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
     pull_request:
         paths:
             - glide-core/src/**

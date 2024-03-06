@@ -1,6 +1,12 @@
 name: lint-ts
 on:
     push:
+        branches: ["main"]
+        paths:
+            - benchmarks/node/**
+            - node/**
+            - benchmarks/utilities/*
+            - .github/workflows/lint-ts.yml
     pull_request:
         paths:
             - benchmarks/node/**
