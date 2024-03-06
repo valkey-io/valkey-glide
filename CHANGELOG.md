@@ -12,6 +12,7 @@
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/aws/glide-for-redis/pull/996), [#1009](https://github.com/aws/glide-for-redis/pull/1009))
 * Python: Added ZRANGE command ([#906](https://github.com/aws/glide-for-redis/pull/906))
+* Python, Node: Added PTTL command ([#1036](https://github.com/aws/glide-for-redis/pull/1036), [#1082](https://github.com/aws/glide-for-redis/pull/1082))
 
 #### Features
 
