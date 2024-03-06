@@ -1050,6 +1050,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pttl(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.pttl(key) == -2
+        current_time = int(time.time())
+
+        assert await redis_client.set(key, "value") == OK
+        assert await redis_client.pttl(key) == -1
+
+        assert await redis_client.expire(key, 10)
+        assert 0 < await redis_client.pttl(key) <= 10000
+
+        assert await redis_client.expireat(key, current_time + 20)
+        assert 0 < await redis_client.pttl(key) <= 20000
+
+        assert await redis_client.pexpireat(key, current_time * 1000 + 30000)
+        assert 0 < await redis_client.pttl(key) <= 30000
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_zaddincr(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}

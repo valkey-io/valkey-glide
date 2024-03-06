@@ -1170,6 +1170,31 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
 
+    async def pttl(
+        self,
+        key: str,
+    ) -> int:
+        """
+        Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+        See https://redis.io/commands/pttl for more details.
+
+        Args:
+            key (str): The key to return its timeout.
+
+        Returns:
+            int: TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+
+        Examples:
+            >>> await client.pttl("my_key")
+                5000  # Indicates that the key "my_key" has a remaining time to live of 5000 milliseconds.
+            >>> await client.pttl("non_existing_key")
+                -2  # Indicates that the key "non_existing_key" does not exist.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PTTL, [key]),
+        )
+
     async def echo(self, message: str) -> str:
         """
         Echoes the provided `message` back.

@@ -939,6 +939,22 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.TTL, [key])
 
+    def pttl(
+        self: TTransaction,
+        key: str,
+    ) -> TTransaction:
+        """
+        Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+        See https://redis.io/commands/pttl for more details.
+
+        Args:
+            key (str): The key to return its timeout.
+
+        Commands Response:
+            int: TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+        """
+        return self.append_command(RequestType.PTTL, [key])
+
     def echo(self: TTransaction, message: str) -> TTransaction:
         """
         Echoes the provided `message` back.
