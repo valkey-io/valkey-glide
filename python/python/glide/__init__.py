@@ -40,6 +40,7 @@ from glide.redis_client import RedisClient, RedisClusterClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
+    ByAddressRoute,
     RandomNode,
     SlotIdRoute,
     SlotKeyRoute,
@@ -80,6 +81,7 @@ __all__ = [
     "SlotType",
     "AllNodes",
     "AllPrimaries",
+    "ByAddressRoute",
     "RandomNode",
     "SlotKeyRoute",
     "SlotIdRoute",
