@@ -1050,7 +1050,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.expire("my_key", 60)
-                1  # Indicates that a timeout of 60 seconds has been set for "my_key."
+                True  # Indicates that a timeout of 60 seconds has been set for "my_key."
         """
         args: List[str] = (
             [key, str(seconds)] if option is None else [key, str(seconds), option.value]
@@ -1080,7 +1080,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry)
-                1
+                True
         """
         args = (
             [key, str(unix_seconds)]
@@ -1110,7 +1110,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry)
-                1  # Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
+                True  # Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
         """
         args = (
             [key, str(milliseconds)]
@@ -1142,7 +1142,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry)
-                1
+                True
         """
         args = (
             [key, str(unix_milliseconds)]
