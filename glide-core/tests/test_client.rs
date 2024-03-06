@@ -458,7 +458,7 @@ pub(crate) mod shared_client_tests {
                     Value::Boolean(true),
                     Value::Int(1),
                     Value::Okay,
-                    Value::Double(0.5.into()),
+                    Value::Double(0.5),
                     Value::Int(1),
                 ]),)
             );

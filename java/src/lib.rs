@@ -62,7 +62,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             hashmap
         }
         Value::Double(float) => env
-            .new_object("java/lang/Double", "(D)V", &[float.into_inner().into()])
+            .new_object("java/lang/Double", "(D)V", &[float.into()])
             .unwrap(),
         Value::Boolean(bool) => env
             .new_object("java/lang/Boolean", "(Z)V", &[bool.into()])

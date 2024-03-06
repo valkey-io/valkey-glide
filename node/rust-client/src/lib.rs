@@ -184,9 +184,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             }
             Ok(obj.into_unknown())
         }
-        Value::Double(float) => js_env
-            .create_double(float.into())
-            .map(|val| val.into_unknown()),
+        Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
         // format is ignored, as per the RESP3 recommendations -
         // "Normal client libraries may ignore completely the difference between this"

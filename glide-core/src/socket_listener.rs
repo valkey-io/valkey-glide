@@ -4,6 +4,7 @@
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
+use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::redis_request::{
     command, redis_request, Command, RedisRequest, RequestType, Routes, ScriptInvocation,
     SlotTypes, Transaction,
@@ -217,28 +218,20 @@ async fn write_result(
             Some(response::response::Value::RequestError(request_error))
         }
         Err(ClienUsageError::Redis(err)) => {
-            let error_message = err.to_string();
+            let error_message = error_message(&err);
             log_warn("received error", error_message.as_str());
             log_debug("received error", format!("for callback {}", callback_index));
-            let mut request_error = response::RequestError::default();
-            if err.is_connection_dropped() {
-                request_error.type_ = response::RequestErrorType::Disconnect.into();
-                request_error.message = format!(
-                    "Received connection error `{error_message}`. Will attempt to reconnect"
-                )
-                .into();
-            } else if err.is_timeout() {
-                request_error.type_ = response::RequestErrorType::Timeout.into();
-                request_error.message = error_message.into();
-            } else {
-                request_error.type_ = match err.kind() {
-                    redis::ErrorKind::ExecAbortError => {
-                        response::RequestErrorType::ExecAbort.into()
-                    }
-                    _ => response::RequestErrorType::Unspecified.into(),
-                };
-                request_error.message = error_message.into();
-            }
+            let request_error = response::RequestError {
+                type_: match error_type(&err) {
+                    RequestErrorType::Unspecified => response::RequestErrorType::Unspecified,
+                    RequestErrorType::ExecAbort => response::RequestErrorType::ExecAbort,
+                    RequestErrorType::Timeout => response::RequestErrorType::Timeout,
+                    RequestErrorType::Disconnect => response::RequestErrorType::Disconnect,
+                }
+                .into(),
+                message: error_message.into(),
+                ..Default::default()
+            };
             Some(response::response::Value::RequestError(request_error))
         }
     };

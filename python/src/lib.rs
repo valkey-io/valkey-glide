@@ -139,7 +139,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
                 let set = PySet::new(py, set.iter())?;
                 Ok(set.into_py(py))
             }
-            Value::Double(double) => Ok(PyFloat::new(py, double.into()).into_py(py)),
+            Value::Double(double) => Ok(PyFloat::new(py, double).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
             Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
             Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
