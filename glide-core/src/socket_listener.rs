@@ -363,6 +363,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::HSetNX => Some(cmd("HSETNX")),
         RequestType::SIsMember => Some(cmd("SISMEMBER")),
         RequestType::Hvals => Some(cmd("HVALS")),
+        RequestType::PTTL => Some(cmd("PTTL")),
     }
 }
 
