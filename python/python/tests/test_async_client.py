@@ -35,6 +35,7 @@ from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
+    ByAddressRoute,
     RandomNode,
     Route,
     SlotIdRoute,
@@ -1655,6 +1656,44 @@ class TestClusterRoutes:
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
         assert isinstance(info, str)
         assert "# Server" in info
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_route_by_address_reaches_correct_node(
+        self, redis_client: RedisClusterClient
+    ):
+        cluster_nodes = await redis_client.custom_command(
+            ["cluster", "nodes"], RandomNode()
+        )
+        assert isinstance(cluster_nodes, str)
+        host = (
+            [line for line in cluster_nodes.split("\n") if "myself" in line][0]
+            .split(" ")[1]
+            .split("@")[0]
+        )
+
+        second_result = await redis_client.custom_command(
+            ["cluster", "nodes"], ByAddressRoute(host)
+        )
+
+        assert cluster_nodes == second_result
+
+        host, port = host.split(":")
+        port_as_int = int(port)
+
+        third_result = await redis_client.custom_command(
+            ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
+        )
+
+        assert cluster_nodes == third_result
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_fail_routing_by_address_if_no_port_is_provided(
+        self, redis_client: RedisClusterClient
+    ):
+        with pytest.raises(RequestError) as e:
+            await redis_client.info(route=ByAddressRoute("foo"))
 
 
 @pytest.mark.asyncio
