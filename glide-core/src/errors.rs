@@ -1,10 +1,15 @@
+/*
+ * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
 use redis::RedisError;
 
+#[repr(C)]
 pub enum RequestErrorType {
-    Unspecified,
-    ExecAbort,
-    Timeout,
-    Disconnect,
+    Unspecified = 0,
+    ExecAbort = 1,
+    Timeout = 2,
+    Disconnect = 3,
 }
 
 pub fn error_type(error: &RedisError) -> RequestErrorType {
