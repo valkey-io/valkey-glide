@@ -135,22 +135,24 @@ export function transactionTest(
     args.push(1);
     baseTransaction.smembers(key7);
     args.push(["bar"]);
-    baseTransaction.zadd(key8, { member1: 1, member2: 2, member3: 3.5 });
-    args.push(3);
+    baseTransaction.zadd(key8, { member1: 1, member2: 2, member3: 3.5, member4: 4 });
+    args.push(4);
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);
     baseTransaction.zrem(key8, ["member1"]);
     args.push(1);
     baseTransaction.zcard(key8);
-    args.push(2);
+    args.push(3);
     baseTransaction.zscore(key8, "member2");
     args.push(3.0);
     baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
-    args.push(2);
+    args.push(3);
     baseTransaction.zpopmin(key8);
     args.push({ member2: 3.0 });
     baseTransaction.zpopmax(key8);
-    args.push({ member3: 3.5 });
+    args.push({ member4: 4 });
+    baseTransaction.zremRangeByRank(key8, 0, 1);
+    args.push(1);
     return args;
 }
 
