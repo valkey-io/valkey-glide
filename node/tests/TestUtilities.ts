@@ -68,6 +68,8 @@ export function transactionTest(
     args.push("OK");
     baseTransaction.type(key1);
     args.push("string");
+    baseTransaction.echo(value);
+    args.push(value);
     baseTransaction.set(key2, "baz", {
         returnOldValue: true,
     });
