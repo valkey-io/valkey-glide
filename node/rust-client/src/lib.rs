@@ -328,7 +328,7 @@ pub fn create_leaked_bigint(big_int: BigInt) -> [u32; 2] {
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
 pub fn create_leaked_double(float: f64) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(Value::Double(float.into()))) as *mut Value;
+    let pointer = Box::leak(Box::new(Value::Double(float))) as *mut Value;
     split_pointer(pointer)
 }
 
