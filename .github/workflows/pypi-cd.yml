@@ -6,6 +6,11 @@ on:
     push:
         tags:
             - "v*.*"
+
+concurrency:
+    group: pypi-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     publish-binaries:
         name: Publish packages to PyPi
