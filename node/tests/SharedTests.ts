@@ -773,6 +773,28 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hvals test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const fieldValueMap = {
+                    [field1]: "value1",
+                    [field2]: "value2",
+                };
+
+                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
+                expect(await client.hdel(key1, [field1])).toEqual(1);
+                expect(await client.hvals(key1)).toEqual(["value2"]);
+                expect(await client.hvals("nonExistingHash")).toEqual([]);
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

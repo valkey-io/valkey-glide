@@ -32,6 +32,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
+    createHvals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -424,6 +425,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hlen(key: string): T {
         return this.addAndReturn(createHLen(key));
+    }
+
+    /** Returns all values in the hash stored at key.
+     * See https://redis.io/commands/hvals/ for more details.
+     * 
+     * @param key - The key of the hash. 
+     * 
+     * Command Response - a list of values in the hash, or an empty list when the key does not exist.
+     */
+    public hvals(key: string): T {
+        return this.addAndReturn(createHvals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
