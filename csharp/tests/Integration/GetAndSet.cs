@@ -6,6 +6,8 @@ namespace tests.Integration;
 
 using Glide;
 
+using static tests.Integration.IntegrationTestBase;
+
 public class GetAndSet
 {
     private async Task GetAndSetRandomValues(AsyncClient client)
@@ -20,7 +22,7 @@ public class GetAndSet
     [Test]
     public async Task GetReturnsLastSet()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             await GetAndSetRandomValues(client);
         }
@@ -29,7 +31,7 @@ public class GetAndSet
     [Test]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
@@ -42,7 +44,7 @@ public class GetAndSet
     [Test]
     public async Task GetReturnsNull()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var result = await client.GetAsync(Guid.NewGuid().ToString());
             Assert.That(result, Is.EqualTo(null));
@@ -52,7 +54,7 @@ public class GetAndSet
     [Test]
     public async Task GetReturnsEmptyString()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "";
@@ -65,7 +67,7 @@ public class GetAndSet
     [Test]
     public async Task HandleVeryLargeInput()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = Guid.NewGuid().ToString();
@@ -85,7 +87,7 @@ public class GetAndSet
     [Test]
     public void ConcurrentOperationsWork()
     {
-        using (var client = new AsyncClient("localhost", IntegrationTestBase.STANDALONE_PORTS[0], false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var operations = new List<Task>();
 

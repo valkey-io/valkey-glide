@@ -10,6 +10,13 @@ namespace tests.Integration;
 [SetUpFixture]
 public class IntegrationTestBase
 {
+    internal class TestConfiguration
+    {
+        public static List<uint> STANDALONE_PORTS { get; internal set; } = new();
+        public static List<uint> CLUSTER_PORTS { get; internal set; } = new();
+        public static Version REDIS_VERSION { get; internal set; } = new();
+    }
+
     [OneTimeSetUp]
     public void SetUp()
     {
@@ -20,16 +27,15 @@ public class IntegrationTestBase
         Directory.Delete(Path.Combine(scriptDir, "clusters"), true);
 
         // Start cluster
-        CLUSTER_PORTS = StartRedis(true);
+        TestConfiguration.CLUSTER_PORTS = StartRedis(true);
         // Start standalone
-        STANDALONE_PORTS = StartRedis(false);
-
+        TestConfiguration.STANDALONE_PORTS = StartRedis(false);
         // Get redis version
-        REDIS_VERSION = GetRedisVersion();
+        TestConfiguration.REDIS_VERSION = GetRedisVersion();
 
-        TestContext.Progress.WriteLine($"Cluster ports = {string.Join(',', CLUSTER_PORTS)}");
-        TestContext.Progress.WriteLine($"Standalone ports = {string.Join(',', STANDALONE_PORTS)}");
-        TestContext.Progress.WriteLine($"Redis version = {REDIS_VERSION}");
+        TestContext.Progress.WriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
+        TestContext.Progress.WriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
+        TestContext.Progress.WriteLine($"Redis version = {TestConfiguration.REDIS_VERSION}");
     }
 
     [OneTimeTearDown]
@@ -39,26 +45,20 @@ public class IntegrationTestBase
         StopRedis(true);
     }
 
-    public static List<uint> STANDALONE_PORTS { get; private set; } = new();
-    public static List<uint> CLUSTER_PORTS { get; private set; } = new();
-    public static Version REDIS_VERSION { get; private set; } = new();
-
     private readonly string scriptDir;
 
     // Nunit requires a public default constructor. These variables would be set in SetUp method.
     public IntegrationTestBase()
     {
-        STANDALONE_PORTS = new();
-        CLUSTER_PORTS = new();
-        REDIS_VERSION = new();
+        var projectDir = Directory.GetCurrentDirectory();
+        while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
+            projectDir = Path.GetDirectoryName(projectDir);
 
-        string path = TestContext.CurrentContext.WorkDirectory;
-        if (Path.GetFileName(path) != "csharp")
-            throw new FileNotFoundException("`WorkDirectory` is incorrect or not defined. Please ensure the WorkDirectory was set by passing `-- NUnit.WorkDirectory=<path>` to the `dotnet test` command.");
+        if (projectDir == null)
+            throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
 
-        scriptDir = Path.Combine(path, "..", "utils");
+        scriptDir = Path.Combine(projectDir, "..", "utils");
     }
-
 
     public List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
     {
@@ -74,7 +74,6 @@ public class IntegrationTestBase
         var cmd = $"stop --prefix {name ?? "redis-cluster"} {(keepLogs ? "--keep-folder" : "")}";
         RunClusterManager(cmd, true);
     }
-
 
     private string RunClusterManager(string cmd, bool ignoreExitCode)
     {
