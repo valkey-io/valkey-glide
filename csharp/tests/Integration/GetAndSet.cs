@@ -2,19 +2,14 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-namespace tests;
+namespace tests.Integration;
 
 using Glide;
 
-// TODO - need to start a new redis server for each test?
-public class AsyncClientTests
-{
-    [OneTimeSetUp]
-    public void Setup()
-    {
-        Glide.Logger.SetLoggerConfig(Glide.Level.Info);
-    }
+using static tests.Integration.IntegrationTestBase;
 
+public class GetAndSet
+{
     private async Task GetAndSetRandomValues(AsyncClient client)
     {
         var key = Guid.NewGuid().ToString();
@@ -27,7 +22,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsLastSet()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             await GetAndSetRandomValues(client);
         }
@@ -36,7 +31,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
@@ -49,7 +44,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsNull()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var result = await client.GetAsync(Guid.NewGuid().ToString());
             Assert.That(result, Is.EqualTo(null));
@@ -59,7 +54,7 @@ public class AsyncClientTests
     [Test]
     public async Task GetReturnsEmptyString()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = "";
@@ -72,7 +67,7 @@ public class AsyncClientTests
     [Test]
     public async Task HandleVeryLargeInput()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
             var value = Guid.NewGuid().ToString();
@@ -92,7 +87,7 @@ public class AsyncClientTests
     [Test]
     public void ConcurrentOperationsWork()
     {
-        using (var client = new AsyncClient("localhost", 6379, false))
+        using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var operations = new List<Task>();
 

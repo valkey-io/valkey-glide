@@ -71,13 +71,13 @@ jobs:
               working-directory: ./csharp
               run: dotnet format --verify-no-changes --verbosity diagnostic
 
-            - uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -csharp
-
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: ./csharp
               run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -csharp
 
             - name: Upload test reports
               if: always()
@@ -88,6 +88,7 @@ jobs:
                   path: |
                       csharp/TestReport.html
                       benchmarks/results/*
+                      utils/clusters/**
 
     lint-rust:
         timeout-minutes: 10
