@@ -863,3 +863,10 @@ export function createZpopmax(key: string, count?: number): redis_request.Comman
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMax, args);
 }
+
+/**
+ * @internal
+ */
+export function createEcho(message: string): redis_request.Command {
+    return createCommand(RequestType.Echo, [message]);
+}

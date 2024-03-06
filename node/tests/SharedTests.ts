@@ -1533,6 +1533,17 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `echo test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const message = uuidv4();
+                expect(await client.echo(message)).toEqual(message);
+            }, protocol);
+        },
+        config.timeout
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `strlen test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

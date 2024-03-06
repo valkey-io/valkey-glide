@@ -18,6 +18,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -898,6 +899,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zpopmax(key: string, count?: number): T {
         return this.addAndReturn(createZpopmax(key, count));
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     * 
+     * @param message - The message to be echoed back.
+     * 
+     * Command Response - The provided `message`.
+     */
+    public echo(message: string): T {
+        return this.addAndReturn(createEcho(message));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
