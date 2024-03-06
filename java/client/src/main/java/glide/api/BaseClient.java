@@ -49,7 +49,6 @@ import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
-import glide.api.commands.SetCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.ExpireOptions;
