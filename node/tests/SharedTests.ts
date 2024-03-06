@@ -1651,6 +1651,35 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `Pttl test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.pttl(key)).toEqual(-2);
+
+                expect(await client.set(key, "value")).toEqual("OK");
+                expect(await client.pttl(key)).toEqual(-1);
+
+                expect(await client.expire(key, 10)).toEqual(true);
+                let result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(10000);
+
+                expect(await client.expireAt(key, Math.floor(Date.now() / 1000) + 20)).toEqual(true);
+                result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(20000);
+
+                expect(await client.pexpireAt(key, Date.now() + 30000)).toEqual(true);
+                result = await client.pttl(key);
+                expect(result).toBeGreaterThan(0);
+                expect(result).toBeLessThanOrEqual(30000);
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
