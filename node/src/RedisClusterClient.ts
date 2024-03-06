@@ -57,11 +57,11 @@ export type SlotKeyTypes = {
 export type RouteByAddress = {
     type: "routeByAddress";
     /**
-     * The name of the node. If `port` is not provided, should be in the `{DNS/ip}:{port}` format, as returned from the cluster when sending a request to multiple nodes.
+     *The endpoint of the node. If `port` is not provided, should be in the `${address}:${port}` format, where `address` is the preferred endpoint as shown in the output of the CLUSTER SLOTS request.
      */
     host: string;
     /**
-     * The port to access on the node. If port is not provided, `host` is assumed to be in the format `{hostname}:{port}`.
+     * The port to access on the node. If port is not provided, `host` is assumed to be in the format `${address}:${port}`.
      */
     port?: number;
 };

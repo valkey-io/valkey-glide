@@ -51,11 +51,11 @@ class SlotIdRoute(Route):
 
 class ByAddressRoute(Route):
     def __init__(self, host: str, port: Optional[int] = None) -> None:
-        """Routes a request to a node by its DNS address
+        """Routes a request to a node by its address
 
         Args:
-            host (str): The name of the node. If `port` is not provided, should be in the `{DNS/ip}:{port}` format, as returned from the cluster when sending a request to multiple nodes.
-            port (Optional[int]): The port the node communicates on.
+            host (str): The endpoint of the node. If `port` is not provided, should be in the f"{address}:{port}" format, where `address` is the preferred endpoint as shown in the output of the CLUSTER SLOTS request.
+            port (Optional[int]): The port to access on the node. If port is not provided, `host` is assumed to be in the format f"{address}:{port}".
         """
         super().__init__()
         if port is None:
