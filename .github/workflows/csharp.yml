@@ -73,7 +73,7 @@ jobs:
 
             - name: Test dotnet ${{ matrix.dotnet }}
               working-directory: ./csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror -- NUnit.WorkDirectory=$PWD
+              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
 
             - uses: ./.github/workflows/test-benchmark
               with:
