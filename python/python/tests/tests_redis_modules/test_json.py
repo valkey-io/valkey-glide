@@ -3,8 +3,9 @@
 import json as OuterJson
 
 import pytest
-from glide import json
 from glide.async_commands.core import ConditionalChange, InfoSection
+from glide.async_commands.redis_modules import json
+from glide.async_commands.redis_modules.json import JsonGetOptions
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.redis_client import TRedisClient
@@ -15,7 +16,7 @@ from tests.test_async_client import get_random_string, parse_info_response
 class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_module_loadded(self, redis_client: TRedisClient):
+    async def test_json_module_is_loaded(self, redis_client: TRedisClient):
         res = parse_info_response(await redis_client.info([InfoSection.MODULES]))
         assert "ReJSON" in res["module"]
 
@@ -24,20 +25,18 @@ class TestJson:
     async def test_json_set_get(self, redis_client: TRedisClient):
         key = get_random_string(5)
 
-        assert (
-            await json.set(redis_client, key, "$", OuterJson.dumps({"a": 1.0, "b": 2}))
-            == OK
-        )
+        json_value = {"a": 1.0, "b": 2}
+        assert await json.set(redis_client, key, "$", OuterJson.dumps(json_value)) == OK
 
-        result = await json.get(redis_client, key, "$")
+        result = await json.get(redis_client, key, ".")
         assert isinstance(result, str)
-        assert OuterJson.loads(result) == [{"a": 1.0, "b": 2}]
+        assert OuterJson.loads(result) == json_value
 
         result = await json.get(redis_client, key, ["$.a", "$.b"])
         assert isinstance(result, str)
         assert OuterJson.loads(result) == {"$.a": [1.0], "$.b": [2]}
 
-        assert await json.get(redis_client, "non_existing_key", "$", "bar") is None
+        assert await json.get(redis_client, "non_existing_key", "$") is None
         assert await json.get(redis_client, key, "$.d") == "[]"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -50,18 +49,18 @@ class TestJson:
                 redis_client,
                 key,
                 "$",
-                OuterJson.dumps({"a": {"c": 1, "d": 4}, "b": {"c": 2}, "c": 3}),
+                OuterJson.dumps({"a": {"c": 1, "d": 4}, "b": {"c": 2}, "c": True}),
             )
             == OK
         )
 
         result = await json.get(redis_client, key, "$..c")
         assert isinstance(result, str)
-        assert OuterJson.loads(result) == [3, 1, 2]
+        assert OuterJson.loads(result) == [True, 1, 2]
 
         result = await json.get(redis_client, key, ["$..c", "$.c"])
         assert isinstance(result, str)
-        assert OuterJson.loads(result) == {"$..c": [3, 1, 2], "$.c": [3]}
+        assert OuterJson.loads(result) == {"$..c": [True, 1, 2], "$.c": [True]}
 
         assert await json.set(redis_client, key, "$..c", '"new_value"') == OK
         result = await json.get(redis_client, key, "$..c")
@@ -135,14 +134,14 @@ class TestJson:
         )
 
         result = await json.get(
-            redis_client, key, "$", indent="  ", newline="\n", space=" "
+            redis_client, key, "$", JsonGetOptions(indent="  ", newline="\n", space=" ")
         )
 
         expected_result = '[\n  {\n    "a": 1.0,\n    "b": 2,\n    "c": {\n      "d": 3,\n      "e": 4\n    }\n  }\n]'
         assert result == expected_result
 
         result = await json.get(
-            redis_client, key, "$", indent="~", newline="\n", space="*"
+            redis_client, key, "$", JsonGetOptions(indent="~", newline="\n", space="*")
         )
 
         expected_result = (

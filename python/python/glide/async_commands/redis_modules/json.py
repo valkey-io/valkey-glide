@@ -6,14 +6,14 @@
         >>> from glide import json as redisJson
         >>> import json
         >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = json.dumps(value)
+        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
         >>> await redisJson.set(client, "doc", "$", json_str)
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at 'doc'.
-        >>> await redisJson.get(client, "doc", "$")
-            "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at 'doc'.
-        >>> json_get = await redisJson.get(client, "doc", "$")
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+        >>> json_get = await redisJson.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
+        >>> print(json_get)
+            "[{\"a\":1.0,\"b\":2}]" 
         >>> json.loads(json_get)
-            [{"a": 1.0, "b" :2}]
+            [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
         """
 from typing import List, Optional, Union, cast
 
@@ -21,6 +21,37 @@ from glide.async_commands.core import ConditionalChange
 from glide.constants import TOK
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.redis_client import TRedisClient
+
+
+class JsonGetOptions:
+    """
+    Represents options for formatting JSON data, to be used in  the [JSON.GET](https://redis.io/commands/json.get/) command.
+
+    Args:
+        indent (Optional[str]): Sets an indentation string for nested levels. Defaults to None.
+        newline (Optional[str]): Sets a string that's printed at the end of each line. Defaults to None.
+        space (Optional[str]): Sets a string that's put between a key and a value. Defaults to None.
+    """
+
+    def __init__(
+        self,
+        indent: Optional[str] = None,
+        newline: Optional[str] = None,
+        space: Optional[str] = None,
+    ):
+        self.indent = indent
+        self.new_line = newline
+        self.space = space
+
+    def get_options(self) -> List[str]:
+        args = []
+        if self.indent:
+            args.extend(["INDENT", self.indent])
+        if self.new_line:
+            args.extend(["NEWLINE", self.new_line])
+        if self.space:
+            args.extend(["SPACE", self.space])
+        return args
 
 
 async def set(
@@ -67,9 +98,7 @@ async def get(
     client: TRedisClient,
     key: str,
     paths: Optional[Union[str, List[str]]] = None,
-    indent: Optional[str] = None,
-    newline: Optional[str] = None,
-    space: Optional[str] = None,
+    options: Optional[JsonGetOptions] = None,
 ) -> Optional[str]:
     """
     Retrieves the JSON value at the specified `paths` stored at `key`.
@@ -79,10 +108,8 @@ async def get(
     Args:
         client (TRedisClient): The Redis client to execute the command.
         key (str): The key of the JSON document.
-        paths (Optional[Union[str, List[str]]]): The path or list of paths within the JSON document.
-        indent (Optional[str]): Sets an indentation string for nested levels. Defaults to None.
-        newline (Optional[str]): Sets a string that's printed at the end of each line. Defaults to None.
-        space (Optional[str]): Sets a string that's put between a key and a value. Defaults to None.
+        paths (Optional[Union[str, List[str]]]): The path or list of paths within the JSON document. Default is root `$`.
+        options (Optional[JsonGetOptions]): Options for formatting the string representation of the JSON data. See `JsonGetOptions`.
 
     Returns:
         str: A bulk string representation of the returned value.
@@ -96,20 +123,14 @@ async def get(
             [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
         >>> await redisJson.get(client, "doc", "$")
             "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await redisJson.get(client, "doc", ["$.a", "$.b"], indent="  ", newline="\n", space=" ")
+        >>> await redisJson.get(client, "doc", ["$.a", "$.b"], json.JsonGetOptions(indent="  ", newline="\n", space=" "))
             "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
         >>> await redisJson.get(client, "doc", "$.non_existing_path")
             "[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
     """
     args = [key]
-
-    if indent:
-        args.extend(["INDENT", indent])
-    if newline:
-        args.extend(["NEWLINE", newline])
-    if space:
-        args.extend(["SPACE", space])
-
+    if options:
+        args.extend(options.get_options())
     if paths:
         if isinstance(paths, str):
             paths = [paths]
