@@ -3,6 +3,8 @@ package glide.api;
 
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -180,5 +182,29 @@ public class RedisClusterClient extends BaseClient
                         route.isSingleNodeRoute()
                                 ? ClusterValue.of(handleStringOrNullResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite() {
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configRewrite(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigRewrite, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat() {
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configResetStat(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ConfigResetStat, new String[0], route, this::handleStringResponse);
     }
 }

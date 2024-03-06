@@ -3,11 +3,13 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.getValueFromInfo;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -159,5 +161,28 @@ public class CommandTests {
         var name = regularClient.clientGetName().get();
 
         assertEquals("clientGetName", name);
+    }
+
+    @Test
+    @SneakyThrows
+    public void config_reset_stat() {
+        String data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        int value_before = getValueFromInfo(data, "total_net_input_bytes");
+
+        var result = regularClient.configResetStat().get();
+        assertEquals(OK, result);
+
+        data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        int value_after = getValueFromInfo(data, "total_net_input_bytes");
+        assertTrue(value_after < value_before);
+    }
+
+    @Test
+    @SneakyThrows
+    public void config_rewrite_non_existent_config_file() {
+        // The setup for the Integration Tests server does not include a configuration file for Redis.
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

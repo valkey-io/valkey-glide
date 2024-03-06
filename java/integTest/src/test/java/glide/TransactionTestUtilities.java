@@ -79,6 +79,8 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.smembers(key7);
 
+        baseTransaction.configResetStat();
+
         return baseTransaction;
     }
 
@@ -122,6 +124,7 @@ public class TransactionTestUtilities {
             1L,
             1L,
             Set.of("baz"),
+            OK
         };
     }
 }
