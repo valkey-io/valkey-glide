@@ -49,6 +49,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPing,
+    createPttl,
     createRPop,
     createRPush,
     createSAdd,
@@ -922,6 +923,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public echo(message: string): T {
         return this.addAndReturn(createEcho(message));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     * See https://redis.io/commands/pttl for more details.
+     * 
+     * @param key - The key to return its timeout.
+     * 
+     * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     */
+    public pttl(key: string): T {
+        return this.addAndReturn(createPttl(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

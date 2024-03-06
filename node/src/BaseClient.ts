@@ -47,6 +47,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPttl,
     createRPop,
     createRPush,
     createSAdd,
@@ -1158,6 +1159,16 @@ export class BaseClient {
      */
     public echo(message: string): Promise<string> {
         return this.createWritePromise(createEcho(message));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     * See https://redis.io/commands/pttl for more details.
+     * 
+     * @param key - The key to return its timeout.
+     * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     */
+    public pttl(key: string): Promise<number> {
+        return this.createWritePromise(createPttl(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
