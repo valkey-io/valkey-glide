@@ -180,6 +180,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
+        // The setup for the Integration Tests server does not include a configuration file for Redis.
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
         assertTrue(executionException.getCause() instanceof RequestException);

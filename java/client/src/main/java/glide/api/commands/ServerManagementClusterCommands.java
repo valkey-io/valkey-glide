@@ -106,7 +106,7 @@ public interface ServerManagementClusterCommands {
     /**
      * Resets the statistics reported by Redis using the <a
      * href="https://redis.io/commands/info/">INFO</a> and <a
-     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM </a> commands.<br>
+     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.<br>
      * The command will be routed automatically to all nodes.
      *
      * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
@@ -122,7 +122,7 @@ public interface ServerManagementClusterCommands {
     /**
      * Resets the statistics reported by Redis using the <a
      * href="https://redis.io/commands/info/">INFO</a> and <a
-     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM </a> commands.
+     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
      * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
      * @param route Routing configuration for the command. Client will route the command to the nodes
