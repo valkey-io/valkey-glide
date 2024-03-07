@@ -1705,11 +1705,26 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zremRangeByRank(key, 0, 1)).toEqual(2);
                 expect(await client.zremRangeByRank(key, 0, 10)).toEqual(1);
                 expect(
-                    await client.zremRangeByRank("nonExistingKey", 0, -1)
+                    await client.zremRangeByRank("nonExistingKey", 0, -1),
                 ).toEqual(0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `persist test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.persist(key)).toEqual(false);
+
+                expect(await client.expire(key, 10)).toEqual(true);
+                expect(await client.persist(key)).toEqual(true);
+            }, protocol);
+        },
+        config.timeout,
     );
 }
 
