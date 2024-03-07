@@ -875,6 +875,22 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zadd_and_zaddIncr_wrong_type(BaseClient client) {
+        assertEquals(OK, client.set("foo", "bar").get());
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+
+        ExecutionException executionExceptionZadd =
+                assertThrows(ExecutionException.class, () -> client.zadd("foo", membersScores).get());
+        assertTrue(executionExceptionZadd.getCause() instanceof RequestException);
+
+        ExecutionException executionExceptionZaddIncr =
+                assertThrows(ExecutionException.class, () -> client.zaddIncr("foo", "one", 2.0).get());
+        assertTrue(executionExceptionZaddIncr.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr_with_NX_XX(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
