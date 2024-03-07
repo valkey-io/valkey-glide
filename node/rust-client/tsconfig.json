@@ -1,15 +1,15 @@
 {
-  "compilerOptions": {
-    "target": "ES2018",
-    "strict": true,
-    "moduleResolution": "node",
-    "module": "CommonJS",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "outDir": "./build-ts"
-  },
-  "include": ["."],
-  "exclude": ["node_modules"]
+    "compilerOptions": {
+        "target": "ES2018",
+        "strict": true,
+        "moduleResolution": "node",
+        "module": "CommonJS",
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "outDir": "./build-ts"
+    },
+    "include": ["."],
+    "exclude": ["node_modules"]
 }

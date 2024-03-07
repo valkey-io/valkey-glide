@@ -31,14 +31,14 @@ describe("RedisModules", () => {
     beforeAll(async () => {
         const args = process.argv.slice(2);
         const loadModuleArgs = args.filter((arg) =>
-            arg.startsWith("--load-module=")
+            arg.startsWith("--load-module="),
         );
         const loadModuleValues = loadModuleArgs.map((arg) => arg.split("=")[1]);
         cluster = await RedisCluster.createCluster(
             true,
             3,
             0,
-            loadModuleValues
+            loadModuleValues,
         );
     }, 20000);
 
@@ -87,10 +87,10 @@ describe("RedisModules", () => {
 
     it("simple search test", async () => {
         const client = await RedisClusterClient.createClient(
-            getOptions(cluster.ports())
+            getOptions(cluster.ports()),
         );
         const info = parseInfoResponse(
-            getFirstResult(await client.info([InfoOptions.Modules])).toString()
+            getFirstResult(await client.info([InfoOptions.Modules])).toString(),
         )["module"];
         expect(info).toEqual(expect.stringContaining("search"));
         client.close();
@@ -98,10 +98,10 @@ describe("RedisModules", () => {
 
     it("simple json test", async () => {
         const client = await RedisClusterClient.createClient(
-            getOptions(cluster.ports())
+            getOptions(cluster.ports()),
         );
         const info = parseInfoResponse(
-            getFirstResult(await client.info([InfoOptions.Modules])).toString()
+            getFirstResult(await client.info([InfoOptions.Modules])).toString(),
         )["module"];
         expect(info).toEqual(expect.stringContaining("ReJSON"));
         client.close();

@@ -191,7 +191,7 @@ export type ScriptOptions = {
 };
 
 function getRequestErrorClass(
-    type: response.RequestErrorType | null | undefined
+    type: response.RequestErrorType | null | undefined,
 ): typeof RequestError {
     if (type === response.RequestErrorType.Disconnect) {
         return ConnectionError;
@@ -216,7 +216,7 @@ export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
         PromiseFunction,
-        ErrorFunction
+        ErrorFunction,
     ][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private requestWriter = new BufferWriter();
@@ -263,10 +263,10 @@ export class BaseClient {
 
             if (message.requestError != null) {
                 const errorType = getRequestErrorClass(
-                    message.requestError.type
+                    message.requestError.type,
                 );
                 reject(
-                    new errorType(message.requestError.message ?? undefined)
+                    new errorType(message.requestError.message ?? undefined),
                 );
             } else if (message.respPointer != null) {
                 const pointer = message.respPointer;
@@ -293,7 +293,7 @@ export class BaseClient {
      */
     protected constructor(
         socket: net.Socket,
-        options?: BaseClientConfiguration
+        options?: BaseClientConfiguration,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -337,11 +337,11 @@ export class BaseClient {
             | redis_request.Command
             | redis_request.Command[]
             | redis_request.ScriptInvocation,
-        route?: redis_request.Routes
+        route?: redis_request.Routes,
     ): Promise<T> {
         if (this.isClosed) {
             throw new ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
+                "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
 
@@ -358,7 +358,7 @@ export class BaseClient {
             | redis_request.Command
             | redis_request.Command[]
             | redis_request.ScriptInvocation,
-        route?: redis_request.Routes
+        route?: redis_request.Routes,
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
@@ -368,27 +368,27 @@ export class BaseClient {
                   }),
               })
             : command instanceof redis_request.Command
-            ? redis_request.RedisRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-              })
-            : redis_request.RedisRequest.create({
-                  callbackIdx,
-                  scriptInvocation: command,
-              });
+              ? redis_request.RedisRequest.create({
+                    callbackIdx,
+                    singleCommand: command,
+                })
+              : redis_request.RedisRequest.create({
+                    callbackIdx,
+                    scriptInvocation: command,
+                });
         message.route = route;
 
         this.writeOrBufferRequest(
             message,
             (message: redis_request.RedisRequest, writer: Writer) => {
                 redis_request.RedisRequest.encodeDelimited(message, writer);
-            }
+            },
         );
     }
 
     private writeOrBufferRequest<TRequest>(
         message: TRequest,
-        encodeDelimited: (message: TRequest, writer: Writer) => void
+        encodeDelimited: (message: TRequest, writer: Writer) => void,
     ) {
         encodeDelimited(message, this.requestWriter);
 
@@ -422,7 +422,7 @@ export class BaseClient {
     public set(
         key: string,
         value: string,
-        options?: SetOptions
+        options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
     }
@@ -535,7 +535,7 @@ export class BaseClient {
      */
     public hset(
         key: string,
-        fieldValueMap: Record<string, string>
+        fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
     }
@@ -601,7 +601,7 @@ export class BaseClient {
     public hincrBy(
         key: string,
         field: string,
-        amount: number
+        amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrBy(key, field, amount));
     }
@@ -619,14 +619,14 @@ export class BaseClient {
     public hincrByFloat(
         key: string,
         field: string,
-        amount: number
+        amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
     }
 
     /** Returns the number of fields contained in the hash stored at `key`.
      * See https://redis.io/commands/hlen/ for more details.
-     * 
+     *
      * @param key - The key of the hash.
      * @returns The number of fields in the hash, or 0 when the key does not exist.
      */
@@ -636,8 +636,8 @@ export class BaseClient {
 
     /** Returns all values in the hash stored at key.
      * See https://redis.io/commands/hvals/ for more details.
-     * 
-     * @param key - The key of the hash. 
+     *
+     * @param key - The key of the hash.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      */
     public hvals(key: string): Promise<string[]> {
@@ -863,7 +863,7 @@ export class BaseClient {
     public expire(
         key: string,
         seconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(createExpire(key, seconds, option));
     }
@@ -883,10 +883,10 @@ export class BaseClient {
     public expireAt(
         key: string,
         unixSeconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(
-            createExpireAt(key, unixSeconds, option)
+            createExpireAt(key, unixSeconds, option),
         );
     }
 
@@ -905,10 +905,10 @@ export class BaseClient {
     public pexpire(
         key: string,
         milliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(
-            createPExpire(key, milliseconds, option)
+            createPExpire(key, milliseconds, option),
         );
     }
 
@@ -927,10 +927,10 @@ export class BaseClient {
     public pexpireAt(
         key: string,
         unixMilliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createPExpireAt(key, unixMilliseconds, option)
+            createPExpireAt(key, unixMilliseconds, option),
         );
     }
 
@@ -964,7 +964,7 @@ export class BaseClient {
      */
     public invokeScript(
         script: Script,
-        option?: ScriptOptions
+        option?: ScriptOptions,
     ): Promise<ReturnType> {
         const scriptInvocation = redis_request.ScriptInvocation.create({
             hash: script.getHash(),
@@ -997,15 +997,15 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZaddOptions,
-        changed?: boolean
+        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
             createZadd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined
-            )
+                changed ? "CH" : undefined,
+            ),
         );
     }
 
@@ -1032,10 +1032,10 @@ export class BaseClient {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions
+        options?: ZaddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZadd(key, { [member]: increment }, options, "INCR")
+            createZadd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
@@ -1089,7 +1089,7 @@ export class BaseClient {
     public zcount(
         key: string,
         minScore: ScoreLimit,
-        maxScore: ScoreLimit
+        maxScore: ScoreLimit,
     ): Promise<number> {
         return this.createWritePromise(createZcount(key, minScore, maxScore));
     }
@@ -1128,7 +1128,7 @@ export class BaseClient {
      */
     public zpopmin(
         key: string,
-        count?: number
+        count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZpopmin(key, count));
     }
@@ -1137,7 +1137,7 @@ export class BaseClient {
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
      * See https://redis.io/commands/zpopmax for more details.
-     * 
+     *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
      * @returns A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
@@ -1146,14 +1146,14 @@ export class BaseClient {
      */
     public zpopmax(
         key: string,
-        count?: number
+        count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZpopmax(key, count));
     }
 
     /** Echoes the provided `message` back.
      * See https://redis.io/commands/echo for more details.
-     * 
+     *
      * @param message - The message to be echoed back.
      * @returns The provided `message`.
      */
@@ -1163,7 +1163,7 @@ export class BaseClient {
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
      * See https://redis.io/commands/pttl for more details.
-     * 
+     *
      * @param key - The key to return its timeout.
      * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
@@ -1198,7 +1198,7 @@ export class BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: BaseClientConfiguration
+        options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
@@ -1236,20 +1236,20 @@ export class BaseClient {
             this.promiseCallbackFunctions[0] = [resolve, reject];
 
             const message = connection_request.ConnectionRequest.create(
-                this.createClientRequest(options)
+                this.createClientRequest(options),
             );
 
             this.writeOrBufferRequest(
                 message,
                 (
                     message: connection_request.ConnectionRequest,
-                    writer: Writer
+                    writer: Writer,
                 ) => {
                     connection_request.ConnectionRequest.encodeDelimited(
                         message,
-                        writer
+                        writer,
                     );
-                }
+                },
             );
         });
     }
@@ -1272,14 +1272,14 @@ export class BaseClient {
      * @internal
      */
     protected static async __createClientInternal<
-        TConnection extends BaseClient
+        TConnection extends BaseClient,
     >(
         options: BaseClientConfiguration,
         connectedSocket: net.Socket,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration
-        ) => TConnection
+            options?: BaseClientConfiguration,
+        ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
@@ -1307,15 +1307,15 @@ export class BaseClient {
         options: BaseClientConfiguration,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration
-        ) => TConnection
+            options?: BaseClientConfiguration,
+        ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
         return await this.__createClientInternal<TConnection>(
             options,
             socket,
-            constructor
+            constructor,
         );
     }
 }

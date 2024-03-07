@@ -1,74 +1,74 @@
 {
-  "name": "glide-rs",
-  "version": "0.1.0",
-  "description": "Redis client",
-  "main": "index.js",
-  "license": "Apache-2.0",
-  "files": [
-    "index.d.ts",
-    "index.js",
-    "glide*.*.node"
-  ],
-  "napi": {
     "name": "glide-rs",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "x86_64-unknown-linux-musl",
-        "aarch64-unknown-linux-gnu",
-        "armv7-unknown-linux-gnueabihf",
-        "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "x86_64-unknown-freebsd",
-        "aarch64-unknown-linux-musl",
-        "armv7-linux-androideabi"
-      ]
-    }
-  },
-  "engines": {
-    "node": ">= 10"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
-  },
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
-    "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
-    "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
-    "format": "run-p format:prettier format:rs",
-    "format:prettier": "prettier . -w",
-    "format:rs": "cargo fmt",
-    "lint": "eslint . -c ./.eslintrc.yml",
-    "prepublishOnly": "napi prepublish -t npm",
-    "version": "napi version"
-  },
-  "devDependencies": {
-    "@napi-rs/cli": "^2.7.0",
-    "@typescript-eslint/eslint-plugin": "^5.22.0",
-    "@typescript-eslint/parser": "^5.22.0",
-    "eslint": "^8.14.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-import": "^2.26.0",
-    "eslint-plugin-prettier": "^4.0.0",
-    "lint-staged": "^12.4.1",
-    "npm-run-all": "^4.1.5",
-    "prettier": "^2.7.1"
-  },
-  "lint-staged": {
-    "*.@(js|ts|tsx)": [
-      "eslint -c .eslintrc.yml --fix"
+    "version": "0.1.0",
+    "description": "Redis client",
+    "main": "index.js",
+    "license": "Apache-2.0",
+    "files": [
+        "index.d.ts",
+        "index.js",
+        "glide*.*.node"
     ],
-    "*.@(js|ts|tsx|yml|yaml|md|json)": [
-      "prettier --write"
-    ]
-  },
-  "prettier": {
-    "printWidth": 120,
-    "semi": false,
-    "trailingComma": "all",
-    "singleQuote": true,
-    "arrowParens": "always"
-  }
+    "napi": {
+        "name": "glide-rs",
+        "triples": {
+            "defaults": true,
+            "additional": [
+                "x86_64-unknown-linux-musl",
+                "aarch64-unknown-linux-gnu",
+                "armv7-unknown-linux-gnueabihf",
+                "aarch64-apple-darwin",
+                "aarch64-linux-android",
+                "x86_64-unknown-freebsd",
+                "aarch64-unknown-linux-musl",
+                "armv7-linux-androideabi"
+            ]
+        }
+    },
+    "engines": {
+        "node": ">= 10"
+    },
+    "publishConfig": {
+        "registry": "https://registry.npmjs.org/",
+        "access": "public"
+    },
+    "scripts": {
+        "artifacts": "napi artifacts",
+        "build": "npm install && napi build --features testing_utilities --platform --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:release": "npm install && napi build --platform --release --strip --pipe \"prettier -w\" $npm_config_build_flags",
+        "build:benchmark": "npm install && napi build --features testing_utilities --platform --release --pipe \"prettier -w\" $npm_config_build_flags",
+        "format": "run-p format:prettier format:rs",
+        "format:prettier": "prettier . -w",
+        "format:rs": "cargo fmt",
+        "lint": "eslint . -c ./.eslintrc.yml",
+        "prepublishOnly": "napi prepublish -t npm",
+        "version": "napi version"
+    },
+    "devDependencies": {
+        "@napi-rs/cli": "^2.7.0",
+        "@typescript-eslint/eslint-plugin": "^5.22.0",
+        "@typescript-eslint/parser": "^5.22.0",
+        "eslint": "^8.14.0",
+        "eslint-config-prettier": "^8.5.0",
+        "eslint-plugin-import": "^2.26.0",
+        "eslint-plugin-prettier": "^4.0.0",
+        "lint-staged": "^12.4.1",
+        "npm-run-all": "^4.1.5",
+        "prettier": "^2.7.1"
+    },
+    "lint-staged": {
+        "*.@(js|ts|tsx)": [
+            "eslint -c .eslintrc.yml --fix"
+        ],
+        "*.@(js|ts|tsx|yml|yaml|md|json)": [
+            "prettier --write"
+        ]
+    },
+    "prettier": {
+        "printWidth": 120,
+        "semi": false,
+        "trailingComma": "all",
+        "singleQuote": true,
+        "arrowParens": "always"
+    }
 }

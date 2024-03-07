@@ -46,7 +46,7 @@ describe("RedisClient", () => {
         if (testsFailed === 0) {
             await cluster.close();
         }
-    });
+    }, TIMEOUT);
 
     const getAddress = (port: number) => {
         return [{ host: "localhost", port }];
@@ -54,7 +54,7 @@ describe("RedisClient", () => {
 
     const getOptions = (
         port: number,
-        protocol: ProtocolVersion
+        protocol: ProtocolVersion,
     ): BaseClientConfiguration => {
         return {
             addresses: getAddress(port),
@@ -111,23 +111,23 @@ describe("RedisClient", () => {
         "info without parameters",
         async (protocol) => {
             const client = await RedisClient.createClient(
-                getOptions(port, protocol)
+                getOptions(port, protocol),
             );
             const result = await client.info();
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.stringContaining("# Replication"));
             expect(result).toEqual(
-                expect.not.stringContaining("# Latencystats")
+                expect.not.stringContaining("# Latencystats"),
             );
             client.close();
-        }
+        },
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "simple select test",
         async (protocol) => {
             const client = await RedisClient.createClient(
-                getOptions(port, protocol)
+                getOptions(port, protocol),
             );
             let selectResult = await client.select(0);
             expect(selectResult).toEqual("OK");
@@ -145,14 +145,14 @@ describe("RedisClient", () => {
             expect(selectResult).toEqual("OK");
             expect(await client.get(key)).toEqual(value);
             client.close();
-        }
+        },
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
             const client = await RedisClient.createClient(
-                getOptions(port, protocol)
+                getOptions(port, protocol),
             );
             const transaction = new Transaction();
             const expectedRes = transactionTest(transaction);
@@ -161,17 +161,17 @@ describe("RedisClient", () => {
             expectedRes.push("OK");
             expect(result).toEqual(expectedRes);
             client.close();
-        }
+        },
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "can return null on WATCH transaction failures",
         async (protocol) => {
             const client1 = await RedisClient.createClient(
-                getOptions(port, protocol)
+                getOptions(port, protocol),
             );
             const client2 = await RedisClient.createClient(
-                getOptions(port, protocol)
+                getOptions(port, protocol),
             );
             const transaction = new Transaction();
             transaction.get("key");
@@ -186,7 +186,7 @@ describe("RedisClient", () => {
 
             client1.close();
             client2.close();
-        }
+        },
     );
 
     runBaseTests<Context>({

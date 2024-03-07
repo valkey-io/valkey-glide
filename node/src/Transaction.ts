@@ -129,7 +129,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Ping the Redis server.
      * See https://redis.io/commands/ping/ for details.
      *
-     * @param message - An optional message to include in the PING command. 
+     * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
      *
@@ -419,9 +419,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Returns the number of fields contained in the hash stored at `key`.
      * See https://redis.io/commands/hlen/ for more details.
-     * 
+     *
      * @param key - The key of the hash.
-     * 
+     *
      * Command Response - The number of fields in the hash, or 0 when the key does not exist.
      */
     public hlen(key: string): T {
@@ -430,9 +430,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Returns all values in the hash stored at key.
      * See https://redis.io/commands/hvals/ for more details.
-     * 
-     * @param key - The key of the hash. 
-     * 
+     *
+     * @param key - The key of the hash.
+     *
      * Command Response - a list of values in the hash, or an empty list when the key does not exist.
      */
     public hvals(key: string): T {
@@ -458,7 +458,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://redis.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
-     * 
+     *
      * Command Response - The value of the first element.
      * If `key` does not exist null will be returned.
      */
@@ -471,7 +471,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * 
+     *
      * Command Response - A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
@@ -564,7 +564,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://redis.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
-     * 
+     *
      * Command Response - The value of the last element.
      * If `key` does not exist null will be returned.
      */
@@ -577,7 +577,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * 
+     *
      * Command Response - A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
@@ -692,7 +692,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public expireAt(
         key: string,
         unixSeconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
@@ -713,7 +713,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public pexpire(
         key: string,
         milliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createPExpire(key, milliseconds, option));
     }
@@ -734,10 +734,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public pexpireAt(
         key: string,
         unixMilliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(
-            createPExpireAt(key, unixMilliseconds, option)
+            createPExpireAt(key, unixMilliseconds, option),
         );
     }
 
@@ -768,15 +768,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZaddOptions,
-        changed?: boolean
+        changed?: boolean,
     ): T {
         return this.addAndReturn(
             createZadd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined
-            )
+                changed ? "CH" : undefined,
+            ),
         );
     }
 
@@ -797,10 +797,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions
+        options?: ZaddOptions,
     ): T {
         return this.addAndReturn(
-            createZadd(key, { [member]: increment }, options, "INCR")
+            createZadd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
@@ -861,9 +861,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Returns the string representation of the type of the value stored at `key`.
      * See https://redis.io/commands/type/ for more details.
-     * 
+     *
      * @param key - The key to check its data type.
-     * 
+     *
      * Command Response - If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
      */
     public type(key: string): T {
@@ -874,7 +874,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://redis.io/commands/strlen/ for more details.
      *
      * @param key - The `key` to check its length.
-     * 
+     *
      * Command Response - The length of the string value stored at `key`
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
      */
@@ -902,10 +902,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
      * See https://redis.io/commands/zpopmax for more details.
-     * 
+     *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
-     * 
+     *
      * Command Response - A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
@@ -916,9 +916,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Echoes the provided `message` back.
      * See https://redis.io/commands/echo for more details.
-     * 
+     *
      * @param message - The message to be echoed back.
-     * 
+     *
      * Command Response - The provided `message`.
      */
     public echo(message: string): T {
@@ -927,9 +927,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
      * See https://redis.io/commands/pttl for more details.
-     * 
+     *
      * @param key - The key to return its timeout.
-     * 
+     *
      * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
     public pttl(key: string): T {

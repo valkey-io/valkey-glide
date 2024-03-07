@@ -62,7 +62,7 @@ export class RedisClient extends BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: RedisClientConfiguration
+        options: RedisClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.databaseId = options.databaseId;
@@ -71,22 +71,22 @@ export class RedisClient extends BaseClient {
     }
 
     public static createClient(
-        options: RedisClientConfiguration
+        options: RedisClientConfiguration,
     ): Promise<RedisClient> {
         return super.createClientInternal<RedisClient>(
             options,
-            (socket: net.Socket) => new RedisClient(socket)
+            (socket: net.Socket) => new RedisClient(socket),
         );
     }
 
     static async __createClient(
         options: BaseClientConfiguration,
-        connectedSocket: net.Socket
+        connectedSocket: net.Socket,
     ): Promise<RedisClient> {
         return this.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new RedisClient(socket, options)
+            (socket, options) => new RedisClient(socket, options),
         );
     }
 
@@ -121,7 +121,7 @@ export class RedisClient extends BaseClient {
     /** Ping the Redis server.
      * See https://redis.io/commands/ping/ for details.
      *
-     * @param message - An optional message to include in the PING command. 
+     * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
