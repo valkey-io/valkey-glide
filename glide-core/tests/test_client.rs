@@ -113,15 +113,18 @@ pub(crate) mod shared_client_tests {
             let mut pipe = redis::pipe();
             pipe.cmd("GET").arg(key);
             pipe.atomic();
-            let _ = test_basics
-                .client
-                .send_transaction(&pipe, None)
-                .await
-                .unwrap();
+
+            for _ in 0..4 {
+                let _ = test_basics
+                    .client
+                    .send_transaction(&pipe, None)
+                    .await
+                    .unwrap();
+            }
 
             // Gather info from each server
             let mut cmd = redis::cmd("INFO");
-            cmd.arg("STATS");
+            cmd.arg("commandstats");
             let values = test_basics
                 .client
                 .send_command(
@@ -134,25 +137,25 @@ pub(crate) mod shared_client_tests {
                 .await
                 .unwrap();
 
-            let mut values: Vec<_> = match values {
+            let values: Vec<_> = match values {
                 Value::Map(map) => map.into_iter().filter_map(|(_, value)| {
-                    InfoDict::from_owned_redis_value(value)
-                        .unwrap()
-                        .get::<u32>("total_commands_processed")
+                    let map = InfoDict::from_owned_redis_value(value).unwrap();
+                    map.get::<String>("cmdstat_get")?
+                        .split_once(',')?
+                        .0
+                        .split_at(6) // split after `calls=``
+                        .1
+                        .parse::<u32>()
+                        .ok()
                 }),
 
                 _ => panic!("Expected map, got `{values:?}`"),
             }
             .collect();
 
-            // Check that all nodes except for one has processed the same number of commands.
-            values.sort();
-            assert_eq!(values.len(), 6);
-            assert_eq!(values[0], values[1]);
-            assert_eq!(values[1], values[2]);
-            assert_eq!(values[2], values[3]);
-            assert_eq!(values[3], values[4]);
-            assert_eq!(values[4] + 3, values[5]); // + MULTI, GET, EXEC
+            // Check that only one node received all of the GET calls.
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0], 4);
         });
     }
 

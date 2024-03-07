@@ -323,24 +323,16 @@ export function runBaseTests<Context>(config: {
         `info stats before and after Config ResetStat is different_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                /// we execute set and info so the total_commands_processed will be greater than 1
-                /// after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
+                /// we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
+                /// after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
                 await client.set("foo", "bar");
-                const OldResult = await client.info([InfoOptions.Stats]);
-                expect(
-                    Number(
-                        parseInfoResponse(getFirstResult(OldResult).toString())[
-                            "total_commands_processed"
-                        ],
-                    ),
-                ).toBeGreaterThan(1);
+                const OldResult = await client.info([InfoOptions.Commandstats]);
+                expect(JSON.stringify(OldResult)).toContain("cmdstat_set");
+
                 expect(await client.configResetStat()).toEqual("OK");
-                const result = await client.info([InfoOptions.Stats]);
-                expect(
-                    parseInfoResponse(getFirstResult(result).toString())[
-                        "total_commands_processed"
-                    ],
-                ).toEqual("1");
+
+                const result = await client.info([InfoOptions.Commandstats]);
+                expect(JSON.stringify(result)).not.toContain("cmdstat_set");
             }, protocol);
         },
         config.timeout,

@@ -443,20 +443,18 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_reset_stat(self, redis_client: TRedisClient):
-        # we execute set and info so the total_commands_processed will be greater than 1
-        # after the configResetStat call we initiate an info command and the the total_commands_processed will be 1.
+        # we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
+        # after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
         await redis_client.set("foo", "bar")
-        info_stats = parse_info_response(
-            get_first_result(await redis_client.info([InfoSection.STATS]))
-        )
-        assert int(info_stats["total_commands_processed"]) > 1
+        info_stats = str(await redis_client.info([InfoSection.COMMAND_STATS]))
+
+        assert "cmdstat_set" in info_stats
+
         assert await redis_client.config_resetstat() == OK
-        info_stats = parse_info_response(
-            get_first_result(await redis_client.info([InfoSection.STATS]))
-        )
+        info_stats = str(await redis_client.info([InfoSection.COMMAND_STATS]))
 
         # 1 stands for the second info command
-        assert info_stats["total_commands_processed"] == "1"
+        assert "cmdstat_set" not in info_stats
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
