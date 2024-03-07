@@ -143,6 +143,30 @@ public interface ListBaseCommands {
     CompletableFuture<Long> llen(String key);
 
     /**
+     * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
+     * the list stored at <code>key</code>.<br>
+     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
+     * head to tail.<br>
+     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
+     * tail to head.<br>
+     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
+     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.<br>
+     *
+     * @see <a href="https://redis.io/commands/lrem/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     * @param element The element to remove from the list.
+     * @return The number of the removed elements.<br>
+     *     If <code>key</code> does not exist, 0 is returned.<br>
+     * @example
+     *     <pre>{@code
+     * Long num = client.rem("my_list", 2, "value").get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lrem(String key, long count, String element);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as

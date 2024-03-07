@@ -30,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -182,6 +183,11 @@ public class TransactionTests {
 
         transaction.llen("key");
         results.add(Pair.of(LLen, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.lrem("key", 1, "element");
+        results.add(
+                Pair.of(
+                        LRem, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("element").build()));
 
         transaction.rpush("key", new String[] {"element"});
         results.add(Pair.of(RPush, ArgsArray.newBuilder().addArgs("key").addArgs("element").build()));

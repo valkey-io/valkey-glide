@@ -26,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -382,6 +383,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> llen(@NonNull String key) {
         return commandManager.submitNewCommand(LLen, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lrem(@NonNull String key, long count, @NonNull String element) {
+        return commandManager.submitNewCommand(
+                LRem, new String[] {key, Long.toString(count), element}, this::handleLongResponse);
     }
 
     @Override

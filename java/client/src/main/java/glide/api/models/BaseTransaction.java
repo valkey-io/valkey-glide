@@ -30,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -597,6 +598,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(LLen, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
+     * the list stored at <code>key</code>.<br>
+     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
+     * head to tail.<br>
+     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
+     * tail to head.<br>
+     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
+     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.<br>
+     *
+     * @see <a href="https://redis.io/commands/lrem/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     * @param element The element to remove from the list.
+     * @return Command Response - The number of the removed elements.<br>
+     *     If <code>key</code> does not exist, 0 is returned.<br>
+     */
+    public T lrem(@NonNull String key, long count, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count), element);
+
+        protobufTransaction.addCommands(buildCommand(LRem, commandArgs));
         return getThis();
     }
 

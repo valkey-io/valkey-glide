@@ -40,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
+import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -1114,6 +1115,31 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.llen(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lrem_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String element = "value";
+        String[] args = new String[] {key, Long.toString(count), element};
+        long value = 2L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LRem), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lrem(key, count, element);
         Long payload = response.get();
 
         // verify
