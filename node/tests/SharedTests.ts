@@ -1705,11 +1705,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zremRangeByRank(key, 0, 1)).toEqual(2);
                 expect(await client.zremRangeByRank(key, 0, 10)).toEqual(1);
                 expect(
-                    await client.zremRangeByRank("nonExistingKey", 0, -1)
+                    await client.zremRangeByRank("nonExistingKey", 0, -1),
                 ).toEqual(0);
             }, protocol);
         },
-        config.timeout
+        config.timeout,
     );
 }
 

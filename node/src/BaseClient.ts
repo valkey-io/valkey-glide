@@ -1176,7 +1176,7 @@ export class BaseClient {
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
      * See https://redis.io/commands/zremrangebyrank/ for more details.
-     * 
+     *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
@@ -1185,7 +1185,11 @@ export class BaseClient {
      * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
      * If `key` does not exist 0 will be returned.
      */
-    public zremRangeByRank(key: string, start: number, end: number): Promise<number> {
+    public zremRangeByRank(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<number> {
         return this.createWritePromise(createZremRangeByRank(key, start, end));
     }
 
