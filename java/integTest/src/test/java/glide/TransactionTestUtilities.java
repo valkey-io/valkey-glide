@@ -63,7 +63,7 @@ public class TransactionTestUtilities {
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
 
-        baseTransaction.lpush(key5, new String[] {value1, value2, value3, value3});
+        baseTransaction.lpush(key5, new String[] {value1, value1, value2, value3, value3});
         baseTransaction.llen(key5);
         baseTransaction.lrem(key5, 1, value1);
         baseTransaction.ltrim(key5, 1, -1);
