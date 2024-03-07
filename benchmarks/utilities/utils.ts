@@ -24,7 +24,7 @@ export function createRedisClient(
     host: string,
     isCluster: boolean,
     tls: boolean,
-    port: number
+    port: number,
 ): RedisClusterType | RedisClientType {
     return isCluster
         ? createCluster({

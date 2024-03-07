@@ -72,7 +72,7 @@ function createLeakedValue(value: ReturnType): Long {
         if ("attributes" in value) {
             pair = createLeakedAttribute(
                 value.value as string,
-                value.attributes as Record<string, string>
+                value.attributes as Record<string, string>,
             );
         } else {
             pair = createLeakedMap(value as Record<string, string>);
@@ -94,7 +94,7 @@ function sendResponse(
         message?: string;
         value?: ReturnType;
         requestErrorType?: response.RequestErrorType;
-    }
+    },
 ) {
     const new_response = response.Response.create();
     new_response.callbackIdx = callbackIndex;
@@ -125,7 +125,7 @@ function sendResponse(
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
     connectionOptions?: ClusterClientConfiguration | RedisClientConfiguration,
-    isCluster?: boolean
+    isCluster?: boolean,
 ): Promise<{
     socket: net.Socket;
     connection: RedisClient | RedisClusterClient;
@@ -133,7 +133,7 @@ function getConnectionAndSocket(
 }> {
     return new Promise((resolve, reject) => {
         const temporaryFolder = fs.mkdtempSync(
-            path.join(os.tmpdir(), `socket_listener`)
+            path.join(os.tmpdir(), `socket_listener`),
         );
         const socketName = path.join(temporaryFolder, "read");
         let connectionPromise: Promise<RedisClient | RedisClusterClient>; // eslint-disable-line prefer-const
@@ -143,12 +143,12 @@ function getConnectionAndSocket(
                     const reader = Reader.create(data);
                     const request =
                         connection_request.ConnectionRequest.decodeDelimited(
-                            reader
+                            reader,
                         );
 
                     if (checkRequest && !checkRequest(request)) {
                         reject(
-                            `${JSON.stringify(request)}  did not pass condition`
+                            `${JSON.stringify(request)}  did not pass condition`,
                         );
                     }
 
@@ -186,7 +186,7 @@ function getConnectionAndSocket(
 function closeTestResources(
     connection: RedisClient | RedisClusterClient,
     server: net.Server,
-    socket: net.Socket
+    socket: net.Socket,
 ) {
     connection.close();
     server.close();
@@ -196,13 +196,13 @@ function closeTestResources(
 async function testWithResources(
     testFunction: (
         connection: RedisClient | RedisClusterClient,
-        socket: net.Socket
+        socket: net.Socket,
     ) => Promise<void>,
-    connectionOptions?: BaseClientConfiguration
+    connectionOptions?: BaseClientConfiguration,
 ) {
     const { connection, server, socket } = await getConnectionAndSocket(
         undefined,
-        connectionOptions
+        connectionOptions,
     );
 
     await testFunction(connection, socket);
@@ -213,14 +213,14 @@ async function testWithResources(
 async function testWithClusterResources(
     testFunction: (
         connection: RedisClusterClient,
-        socket: net.Socket
+        socket: net.Socket,
     ) => Promise<void>,
-    connectionOptions?: BaseClientConfiguration
+    connectionOptions?: BaseClientConfiguration,
 ) {
     const { connection, server, socket } = await getConnectionAndSocket(
         undefined,
         connectionOptions,
-        true
+        true,
     );
 
     try {
@@ -261,10 +261,10 @@ describe("SocketConnectionInternals", () => {
                     const reader = Reader.create(data);
                     const request = RedisRequest.decodeDelimited(reader);
                     expect(request.singleCommand?.requestType).toEqual(
-                        RequestType.GetString
+                        RequestType.GetString,
                     );
                     expect(
-                        request.singleCommand?.argsArray?.args?.length
+                        request.singleCommand?.argsArray?.args?.length,
                     ).toEqual(1);
 
                     sendResponse(
@@ -273,7 +273,7 @@ describe("SocketConnectionInternals", () => {
                         request.callbackIdx,
                         {
                             value: expected,
-                        }
+                        },
                     );
                 });
                 const result = await connection.get("foo");
@@ -315,10 +315,10 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1
+                    1,
                 );
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
@@ -335,11 +335,11 @@ describe("SocketConnectionInternals", () => {
                 const request = RedisRequest.decodeDelimited(reader);
 
                 expect(
-                    request.transaction?.commands?.at(0)?.requestType
+                    request.transaction?.commands?.at(0)?.requestType,
                 ).toEqual(RequestType.SetString);
                 expect(
                     request.transaction?.commands?.at(0)?.argsArray?.args
-                        ?.length
+                        ?.length,
                 ).toEqual(2);
                 expect(request.route?.slotKeyRoute?.slotKey).toEqual("key");
                 expect(request.route?.slotKeyRoute?.slotType).toEqual(0); // Primary = 0
@@ -364,14 +364,14 @@ describe("SocketConnectionInternals", () => {
                 const request = RedisRequest.decodeDelimited(reader);
 
                 expect(
-                    request.transaction?.commands?.at(0)?.requestType
+                    request.transaction?.commands?.at(0)?.requestType,
                 ).toEqual(RequestType.Info);
                 expect(
                     request.transaction?.commands?.at(0)?.argsArray?.args
-                        ?.length
+                        ?.length,
                 ).toEqual(1);
                 expect(request.route?.simpleRoutes).toEqual(
-                    redis_request.SimpleRoutes.Random
+                    redis_request.SimpleRoutes.Random,
                 );
 
                 sendResponse(socket, ResponseType.Value, request.callbackIdx, {
@@ -391,10 +391,10 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.SetString
+                    RequestType.SetString,
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    2
+                    2,
                 );
 
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
@@ -411,16 +411,16 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1
+                    1,
                 );
                 sendResponse(
                     socket,
                     ResponseType.RequestError,
                     request.callbackIdx,
-                    { message: error }
+                    { message: error },
                 );
             });
             const request = connection.get("foo");
@@ -436,16 +436,16 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 expect(request.singleCommand?.argsArray?.args?.length).toEqual(
-                    1
+                    1,
                 );
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
                     request.callbackIdx,
-                    { message: error }
+                    { message: error },
                 );
             });
             const request1 = connection.get("foo");
@@ -464,13 +464,13 @@ describe("SocketConnectionInternals", () => {
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 sendResponse(
                     socket,
                     ResponseType.ClosingError,
                     Number.MAX_SAFE_INTEGER,
-                    { message: error }
+                    { message: error },
                 );
             });
             const request1 = connection.get("foo");
@@ -487,7 +487,7 @@ describe("SocketConnectionInternals", () => {
                 const reader = Reader.create(data);
                 const request = RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.SetString
+                    RequestType.SetString,
                 );
                 const args = request.singleCommand?.argsArray?.args;
 
@@ -520,7 +520,7 @@ describe("SocketConnectionInternals", () => {
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 expect(request.singleCommand?.argsVecPointer).not.toBeNull();
                 expect(request.singleCommand?.argsArray).toBeNull();
@@ -541,7 +541,7 @@ describe("SocketConnectionInternals", () => {
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.GetString
+                    RequestType.GetString,
                 );
                 expect(request.singleCommand?.argsArray).not.toBeNull();
                 expect(request.singleCommand?.argsVecPointer).toBeNull();
@@ -565,7 +565,7 @@ describe("SocketConnectionInternals", () => {
             {
                 addresses: [{ host: "foo" }],
                 credentials: { username, password },
-            }
+            },
         );
         closeTestResources(connection, server, socket);
     });
@@ -577,7 +577,7 @@ describe("SocketConnectionInternals", () => {
             {
                 addresses: [{ host: "foo" }],
                 databaseId: 42,
-            }
+            },
         );
         closeTestResources(connection, server, socket);
     });
@@ -594,12 +594,12 @@ describe("SocketConnectionInternals", () => {
                 const request =
                     redis_request.RedisRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
-                    RequestType.CustomCommand
+                    RequestType.CustomCommand,
                 );
 
                 if (request.singleCommand?.argsArray?.args?.at(0) === "SET") {
                     expect(request.route?.simpleRoutes).toEqual(
-                        redis_request.SimpleRoutes.AllPrimaries
+                        redis_request.SimpleRoutes.AllPrimaries,
                     );
                 } else if (
                     request.singleCommand?.argsArray?.args?.at(0) === "GET"
@@ -616,13 +616,13 @@ describe("SocketConnectionInternals", () => {
             });
             const result1 = await connection.customCommand(
                 ["SET", "foo", "bar"],
-                route1
+                route1,
             );
             expect(result1).toBeNull();
 
             const result2 = await connection.customCommand(
                 ["GET", "foo"],
-                route2
+                route2,
             );
             expect(result2).toBeNull();
         });
