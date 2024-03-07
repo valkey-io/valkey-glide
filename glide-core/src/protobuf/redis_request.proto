@@ -127,6 +127,7 @@ enum RequestType {
     SIsMember = 83;
     Hvals = 84;
     PTTL = 85;
+    ZRemRangeByRank = 86;
 }
 
 message Command {

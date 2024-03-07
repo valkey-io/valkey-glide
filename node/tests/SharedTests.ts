@@ -1693,6 +1693,24 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zremRangeByRank test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zremRangeByRank(key, 2, 1)).toEqual(0);
+                expect(await client.zremRangeByRank(key, 0, 1)).toEqual(2);
+                expect(await client.zremRangeByRank(key, 0, 10)).toEqual(1);
+                expect(
+                    await client.zremRangeByRank("nonExistingKey", 0, -1)
+                ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout
+    );
 }
 
 export function runCommonTests<Context>(config: {
