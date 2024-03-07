@@ -897,11 +897,18 @@ export function createPttl(key: string): redis_request.Command {
 export function createZremRangeByRank(
     key: string,
     start: number,
-    stop: number
+    stop: number,
 ): redis_request.Command {
     return createCommand(RequestType.ZRemRangeByRank, [
         key,
         start.toString(),
         stop.toString(),
     ]);
+}
+
+/**
+ * @internal
+ */
+export function createPersist(key: string): redis_request.Command {
+    return createCommand(RequestType.Persist, [key]);
 }
