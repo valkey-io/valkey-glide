@@ -1059,7 +1059,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     number of elements changed.
      * @return Command Response - The number of elements added to the sorted set. <br>
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
-     *     <br>
      */
     public T zadd(
             @NonNull String key,
@@ -1106,7 +1105,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     number of elements changed.
      * @return Command Response - The number of elements added to the sorted set. <br>
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
-     *     <br>
      */
     public T zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
