@@ -59,6 +59,7 @@ import {
     createSRem,
     createSelect,
     createSet,
+    createSismember,
     createStrlen,
     createTTL,
     createType,
@@ -634,6 +635,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public scard(key: string): T {
         return this.addAndReturn(createSCard(key));
+    }
+
+    /** Returns if `member` is a member of the set stored at `key`.
+     * See https://redis.io/commands/sismember/ for more details.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     *
+     * Command Response - `true` if the member exists in the set, `false` otherwise.
+     * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
+     */
+    public sismember(key: string, member: string): T {
+        return this.addAndReturn(createSismember(key, member));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
