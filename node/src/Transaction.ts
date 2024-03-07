@@ -48,6 +48,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPersist,
     createPing,
     createPttl,
     createRPop,
@@ -941,11 +942,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
      * See https://redis.io/commands/zremrangebyrank/ for more details.
-     * 
+     *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
-     * 
+     *
      * Command Response - The number of members removed.
      * If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, 0 returned.
      * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
@@ -953,6 +954,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByRank(key: string, start: number, end: number): T {
         return this.addAndReturn(createZremRangeByRank(key, start, end));
+    }
+
+    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+     * persistent (a key that will never expire as no timeout is associated).
+     * See https://redis.io/commands/persist/ for more details.
+     *
+     * @param key - The key to remove the existing timeout on.
+     *
+     * Command Response - `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
+     */
+    public persist(key: string): T {
+        return this.addAndReturn(createPersist(key));
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
