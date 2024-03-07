@@ -24,15 +24,14 @@ public interface SortedSetBaseCommands {
      *     number of elements changed.
      * @return The number of elements added to the sorted set. <br>
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
-     *     <br>
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build(), false).get();
-     * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     * assert num == 2L; // Indicates that two elements have been added or updated in the sorted set "mySortedSet".
      *
      * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build(), false).get();
-     * assert num == 2L //Updates the scores of two existing members in the sorted set "existingSortedSet".
-     * </pre>
+     * assert num == 2L; // Updates the scores of two existing members in the sorted set "existingSortedSet".
+     * }</pre>
      */
     CompletableFuture<Long> zadd(
             String key, Map<String, Double> membersScoresMap, ZaddOptions options, boolean changed);
@@ -47,13 +46,13 @@ public interface SortedSetBaseCommands {
      * @param options The Zadd options.
      * @return The number of elements added to the sorted set.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build()).get();
-     * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     * assert num == 2L; // Indicates that two elements have been added or updated in the sorted set "mySortedSet".
      *
      * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build()).get();
-     * assert num == 2L //Updates the scores of two existing members in the sorted set "existingSortedSet".
-     * </pre>
+     * assert num == 2L; // Updates the scores of two existing members in the sorted set "existingSortedSet".
+     * }</pre>
      */
     CompletableFuture<Long> zadd(
             String key, Map<String, Double> membersScoresMap, ZaddOptions options);
@@ -71,10 +70,10 @@ public interface SortedSetBaseCommands {
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
      *     <br>
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), false).get();
-     * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
-     * </pre>
+     * assert num == 2L; // Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     * }</pre>
      */
     CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap, boolean changed);
 
@@ -89,7 +88,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2)).get();
-     * assert num == 2L //Indicates that two elements have been added or updated in the sorted set "mySortedSet".
+     * assert num == 2L; // Indicates that two elements have been added or updated in the sorted set "mySortedSet".
      * }</pre>
      */
     CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap);
@@ -113,10 +112,10 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Double num = client.zaddIncr("mySortedSet", member, 5.0, ZaddOptions.builder().build()).get();
-     * assert num == 5.0
+     * assert num == 5.0;
      *
      * Double num = client.zaddIncr("existingSortedSet", member, 3.0, ZaddOptions.builder().updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT).build()).get();
-     * assert num == null
+     * assert num == null;
      * }</pre>
      */
     CompletableFuture<Double> zaddIncr(
@@ -138,7 +137,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Double num = client.zaddIncr("mySortedSet", member, 5.0).get();
-     * assert num == 5.0
+     * assert num == 5.0;
      * }</pre>
      */
     CompletableFuture<Double> zaddIncr(String key, String member, double increment);
