@@ -548,6 +548,16 @@ export function createSCard(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createSismember(
+    key: string,
+    member: string,
+): redis_request.Command {
+    return createCommand(RequestType.SIsMember, [key, member]);
+}
+
+/**
+ * @internal
+ */
 export function createCustomCommand(args: string[]) {
     return createCommand(RequestType.CustomCommand, args);
 }

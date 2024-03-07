@@ -1072,6 +1072,30 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sismember test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                expect(await client.sadd(key1, ["member1"])).toEqual(1);
+                expect(await client.sismember(key1, "member1")).toEqual(true);
+                expect(
+                    await client.sismember(key1, "nonExistingMember"),
+                ).toEqual(false);
+                expect(
+                    await client.sismember("nonExistingKey", "member1"),
+                ).toEqual(false);
+
+                expect(await client.set(key2, "foo")).toEqual("OK");
+                await expect(
+                    client.sismember(key2, "member1"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `exists with existing keys, an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

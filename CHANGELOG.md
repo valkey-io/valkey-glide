@@ -2,7 +2,7 @@
 
 * Python Node: Allow routing Cluster requests by address. ([#1021](https://github.com/aws/glide-for-redis/pull/1021))
 * Python: Added HSETNX command. ([#954](https://github.com/aws/glide-for-redis/pull/954))
-* Python: Added SISMEMBER command ([#971](https://github.com/aws/glide-for-redis/pull/971))
+* Python, Node: Added SISMEMBER command ([#972](https://github.com/aws/glide-for-redis/pull/972), [#1083](https://github.com/aws/glide-for-redis/pull/1083))
 * Python, Node: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945), [#980](https://github.com/aws/glide-for-redis/pull/980))
 * Python, Node: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944), [#981](https://github.com/aws/glide-for-redis/pull/981))
 * Python, Node: Added ZCOUNT command ([#878](https://github.com/aws/glide-for-redis/pull/878)) ([#909](https://github.com/aws/glide-for-redis/pull/909))
