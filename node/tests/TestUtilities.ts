@@ -135,6 +135,8 @@ export function transactionTest(
     args.push(1);
     baseTransaction.scard(key7);
     args.push(1);
+    baseTransaction.sismember(key7, "bar");
+    args.push(true);
     baseTransaction.smembers(key7);
     args.push(["bar"]);
     baseTransaction.zadd(key8, {

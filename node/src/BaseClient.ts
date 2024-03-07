@@ -56,6 +56,7 @@ import {
     createSMembers,
     createSRem,
     createSet,
+    createSismember,
     createStrlen,
     createTTL,
     createType,
@@ -825,6 +826,18 @@ export class BaseClient {
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
+    }
+
+    /** Returns if `member` is a member of the set stored at `key`.
+     * See https://redis.io/commands/sismember/ for more details.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns `true` if the member exists in the set, `false` otherwise.
+     * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
+     */
+    public sismember(key: string, member: string): Promise<boolean> {
+        return this.createWritePromise(createSismember(key, member));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
