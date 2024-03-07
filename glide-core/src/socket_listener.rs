@@ -357,6 +357,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::SIsMember => Some(cmd("SISMEMBER")),
         RequestType::Hvals => Some(cmd("HVALS")),
         RequestType::PTTL => Some(cmd("PTTL")),
+        RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
     }
 }
 
