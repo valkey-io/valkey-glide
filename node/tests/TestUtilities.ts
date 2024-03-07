@@ -70,6 +70,8 @@ export function transactionTest(
     args.push("string");
     baseTransaction.echo(value);
     args.push(value);
+    baseTransaction.persist(key1);
+    args.push(false);
     baseTransaction.set(key2, "baz", {
         returnOldValue: true,
     });
@@ -135,7 +137,12 @@ export function transactionTest(
     args.push(1);
     baseTransaction.smembers(key7);
     args.push(["bar"]);
-    baseTransaction.zadd(key8, { member1: 1, member2: 2, member3: 3.5, member4: 4 });
+    baseTransaction.zadd(key8, {
+        member1: 1,
+        member2: 2,
+        member3: 3.5,
+        member4: 4,
+    });
     args.push(4);
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);
