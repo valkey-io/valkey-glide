@@ -19,7 +19,7 @@ describe("AsyncClient", () => {
     let port: number;
     beforeAll(async () => {
         port = await FreePort(PORT_NUMBER).then(
-            ([free_port]: number[]) => free_port
+            ([free_port]: number[]) => free_port,
         );
         server = await new Promise((resolve, reject) => {
             const server = new RedisServer(port);
@@ -44,7 +44,7 @@ describe("AsyncClient", () => {
     runCommonTests<EmptyObject>({
         init: async () => {
             const client = await AsyncClient.CreateConnection(
-                "redis://localhost:" + port
+                "redis://localhost:" + port,
             );
 
             return { client, context: {} };

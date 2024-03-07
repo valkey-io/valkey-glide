@@ -14,7 +14,7 @@ async function fill_database(
     host: string,
     isCluster: boolean,
     tls: boolean,
-    port: number
+    port: number,
 ) {
     const client = await createRedisClient(host, isCluster, tls, port);
     const data = generateValue(data_size);
@@ -27,7 +27,7 @@ async function fill_database(
                 const key = (i * CONCURRENT_SETS + index).toString();
                 await client.set(key, data);
             }
-        }
+        },
     );
 
     await Promise.all(sets);
@@ -37,14 +37,14 @@ async function fill_database(
 Promise.resolve()
     .then(async () => {
         console.log(
-            `Filling ${receivedOptions.host} with data size ${receivedOptions.dataSize}`
+            `Filling ${receivedOptions.host} with data size ${receivedOptions.dataSize}`,
         );
         await fill_database(
             receivedOptions.dataSize,
             receivedOptions.host,
             receivedOptions.clusterModeEnabled,
             receivedOptions.tls,
-            receivedOptions.port
+            receivedOptions.port,
         );
     })
     .then(() => {
