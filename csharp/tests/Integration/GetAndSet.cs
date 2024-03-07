@@ -4,6 +4,8 @@
 
 namespace tests.Integration;
 
+using System.Runtime.InteropServices;
+
 using Glide;
 
 using static tests.Integration.IntegrationTestBase;
@@ -65,9 +67,10 @@ public class GetAndSet
     }
 
     [Test]
-    [Ignore("Flaky on MacOS")]
     public async Task HandleVeryLargeInput()
     {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            Assert.Ignore("Flaky on MacOS");
         using (var client = new AsyncClient("localhost", TestConfiguration.STANDALONE_PORTS[0], false))
         {
             var key = Guid.NewGuid().ToString();
