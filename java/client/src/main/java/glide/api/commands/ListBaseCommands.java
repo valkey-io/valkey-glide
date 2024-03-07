@@ -21,12 +21,13 @@ public interface ListBaseCommands {
      * @param elements The elements to insert at the head of the list stored at <code>key</code>.
      * @return The length of the list after the push operations.
      * @example
-     *     <pre>
-     * Long pushCount1 = client.lpush("my_list", new String[] {"value1", "value2"}).get()
-     * assert pushCount1 == 2L
-     * Long pushCount2 = client.lpush("nonexistent_list", new String[] {"new_value"}).get()
-     * assert pushCount2 == 1L
-     * </pre>
+     *     <pre>{@code
+     * Long pushCount1 = client.lpush("my_list", new String[] {"value1", "value2"}).get();
+     * assert pushCount1 == 2L;
+     *
+     * Long pushCount2 = client.lpush("nonexistent_list", new String[] {"new_value"}).get();
+     * assert pushCount2 == 1L;
+     * }</pre>
      */
     CompletableFuture<Long> lpush(String key, String[] elements);
 
@@ -39,12 +40,13 @@ public interface ListBaseCommands {
      * @return The value of the first element. <br>
      *     If <code>key</code> does not exist, null will be returned. <br>
      * @example
-     *     <pre>
-     * String value1 = client.lpop("my_list").get()
-     * assert value1.equals("value1")
-     * String value2 = client.lpop("non_exiting_key").get()
-     * assert value2.equals(null)
-     * </pre>
+     *     <pre>{@code
+     * String value1 = client.lpop("my_list").get();
+     * assert value1.equals("value1");
+     *
+     * String value2 = client.lpop("non_exiting_key").get();
+     * assert value2.equals(null);
+     * }</pre>
      */
     CompletableFuture<String> lpop(String key);
 
@@ -58,12 +60,13 @@ public interface ListBaseCommands {
      * @return An array of the popped elements will be returned depending on the list's length.<br>
      *     If <code>key</code> does not exist, null will be returned.<br>
      * @example
-     *     <pre>
-     * String[] values1 = client.lpopCount("my_list", 2).get()
-     * assert values1.equals(new String[] {"value1", "value2"})
-     * String[] values2 = client.lpopCount("non_exiting_key" , 7).get()
-     * assert values2.equals(null)
-     * </pre>
+     *     <pre>{@code
+     * String[] values1 = client.lpopCount("my_list", 2).get();
+     * assert values1.equals(new String[] {"value1", "value2"});
+     *
+     * String[] values2 = client.lpopCount("non_exiting_key" , 7).get();
+     * assert values2.equals(null);
+     * }</pre>
      */
     CompletableFuture<String[]> lpopCount(String key, long count);
 
@@ -85,14 +88,16 @@ public interface ListBaseCommands {
      *     end of the list.<br>
      *     If <code>key</code> does not exist an empty array will be returned.<br>
      * @example
-     *     <pre>
+     *     <pre>{@code
      * String[] payload = lient.lrange("my_list", 0, 2).get()
      * assert payload.equals(new String[] {"value1", "value2", "value3"})
+     *
      * String[] payload = client.lrange("my_list", -2, -1).get()
      * assert payload.equals(new String[] {"value2", "value3"})
+     *
      * String[] payload = client.lrange("non_exiting_key", 0, 2).get()
      * assert payload.equals(new String[] {})
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
@@ -115,10 +120,10 @@ public interface ListBaseCommands {
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.
      * @example
-     *     <pre>
-     * String payload = client.ltrim("my_list", 0, 1).get()
-     * assert payload.equals("OK")
-     * </pre>
+     *     <pre>{@code
+     * String payload = client.ltrim("my_list", 0, 1).get();
+     * assert payload.equals("OK");
+     * }</pre>
      */
     CompletableFuture<String> ltrim(String key, long start, long end);
 
@@ -130,10 +135,10 @@ public interface ListBaseCommands {
      * @return The length of the list at <code>key</code>.<br>
      *     If <code>key</code> does not exist, it is interpreted as an empty list and 0 is returned.
      * @example
-     *     <pre>
-     * Long lenList = client.llen("my_list").get()
-     * assert lenList == 3L //Indicates that there are 3 elements in the list.
-     * </pre>
+     *     <pre>{@code
+     * Long lenList = client.llen("my_list").get();
+     * assert lenList == 3L //Indicates that there are 3 elements in the list.;
+     * }</pre>
      */
     CompletableFuture<Long> llen(String key);
 
@@ -148,12 +153,13 @@ public interface ListBaseCommands {
      * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
      * @return The length of the list after the push operations.
      * @example
-     *     <pre>
+     *     <pre>{@code
      * Long pushCount1 = client.rpush("my_list", new String[] {"value1", "value2"}).get()
      * assert pushCount1 == 2L
+     *
      * Long pushCount2 = client.rpush("nonexistent_list", new String[] {"new_value"}).get()
      * assert pushCount2 == 1L
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Long> rpush(String key, String[] elements);
 
@@ -166,12 +172,13 @@ public interface ListBaseCommands {
      * @return The value of the last element.<br>
      *     If <code>key</code> does not exist, null will be returned.<br>
      * @example
-     *     <pre>
-     * String value1 = client.rpop("my_list").get()
-     * assert value1.equals("value1")
-     * String value2 = client.rpop("non_exiting_key").get()
-     * assert value2.equals(null)
-     * </pre>
+     *     <pre>{@code
+     * String value1 = client.rpop("my_list").get();
+     * assert value1.equals("value1");
+     *
+     * String value2 = client.rpop("non_exiting_key").get();
+     * assert value2.equals(null);
+     * }</pre>
      */
     CompletableFuture<String> rpop(String key);
 
@@ -184,12 +191,13 @@ public interface ListBaseCommands {
      * @returns An array of popped elements will be returned depending on the list's length.<br>
      *     If <code>key</code> does not exist, null will be returned.<br>
      * @example
-     *     <pre>
-     * String[] values1 = client.rpopCount("my_list", 2).get()
-     * assert values1.equals(new String[] {"value1", "value2"})
-     * String[] values2 = client.rpopCount("non_exiting_key" , 7).get()
-     * assert values2.equals(null)
-     * </pre>
+     *     <pre>{@code
+     * String[] values1 = client.rpopCount("my_list", 2).get();
+     * assert values1.equals(new String[] {"value1", "value2"});
+     *
+     * String[] values2 = client.rpopCount("non_exiting_key" , 7).get();
+     * assert values2.equals(null);
+     * }</pre>
      */
     CompletableFuture<String[]> rpopCount(String key, long count);
 }
