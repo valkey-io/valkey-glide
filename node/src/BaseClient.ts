@@ -47,6 +47,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPersist,
     createPttl,
     createRPop,
     createRPush,
@@ -1176,7 +1177,7 @@ export class BaseClient {
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
      * See https://redis.io/commands/zremrangebyrank/ for more details.
-     * 
+     *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
@@ -1185,7 +1186,11 @@ export class BaseClient {
      * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
      * If `key` does not exist 0 will be returned.
      */
-    public zremRangeByRank(key: string, start: number, end: number): Promise<number> {
+    public zremRangeByRank(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<number> {
         return this.createWritePromise(createZremRangeByRank(key, start, end));
     }
 
@@ -1210,6 +1215,17 @@ export class BaseClient {
      */
     public lindex(key: string, index: number): Promise<string | null> {
         return this.createWritePromise(createLindex(key, index));
+    }
+
+    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+     * persistent (a key that will never expire as no timeout is associated).
+     * See https://redis.io/commands/persist/ for more details.
+     *
+     * @param key - The key to remove the existing timeout on.
+     * @returns `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
+     */
+    public persist(key: string): Promise<boolean> {
+        return this.createWritePromise(createPersist(key));
     }
 
     /**

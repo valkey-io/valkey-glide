@@ -6,13 +6,15 @@
 * Python, Node: Added TYPE command ([#945](https://github.com/aws/glide-for-redis/pull/945), [#980](https://github.com/aws/glide-for-redis/pull/980))
 * Python, Node: Added HLEN command ([#944](https://github.com/aws/glide-for-redis/pull/944), [#981](https://github.com/aws/glide-for-redis/pull/981))
 * Python, Node: Added ZCOUNT command ([#878](https://github.com/aws/glide-for-redis/pull/878)) ([#909](https://github.com/aws/glide-for-redis/pull/909))
-* Python: Added ECHO command ([#953](https://github.com/aws/glide-for-redis/pull/953))
+* Python, Node: Added ECHO command ([#953](https://github.com/aws/glide-for-redis/pull/953), [#1010](https://github.com/aws/glide-for-redis/pull/1010))
 * Python, Node: Added ZPOPMIN command ([#975](https://github.com/aws/glide-for-redis/pull/975), [#1008](https://github.com/aws/glide-for-redis/pull/1008))
 * Node: Added STRLEN command ([#993](https://github.com/aws/glide-for-redis/pull/993))
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/aws/glide-for-redis/pull/996), [#1009](https://github.com/aws/glide-for-redis/pull/1009))
 * Python: Added ZRANGE command ([#906](https://github.com/aws/glide-for-redis/pull/906))
 * Python, Node: Added PTTL command ([#1036](https://github.com/aws/glide-for-redis/pull/1036), [#1082](https://github.com/aws/glide-for-redis/pull/1082))
+* Node: Added HVAL command ([#1022](https://github.com/aws/glide-for-redis/pull/1022))
+* Node: Added PERSIST command ([#1023](https://github.com/aws/glide-for-redis/pull/1023))
 
 #### Features
 
