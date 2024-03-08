@@ -25,6 +25,9 @@ dependencies {
     // junit
     testImplementation 'org.junit.jupiter:junit-jupiter:5.6.2'
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
+
+    // semver4j for semantic versioning
+    implementation 'com.vdurmont:semver4j:3.1.0'
 }
 
 def standaloneRedisPorts = []
