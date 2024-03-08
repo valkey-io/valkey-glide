@@ -29,7 +29,7 @@ pub struct NodeAddress {
 
 impl ::std::fmt::Display for NodeAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        write!(f, "Host: `{}`, port: {}", self.host, self.port)
+        write!(f, "Host: `{}`, Port: {}", self.host, self.port)
     }
 }
 
