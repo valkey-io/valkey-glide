@@ -99,7 +99,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multiple_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
-        if (REDIS_VERSION.feature() >= 7) {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();

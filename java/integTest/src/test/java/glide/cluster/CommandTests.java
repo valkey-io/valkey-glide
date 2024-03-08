@@ -60,7 +60,7 @@ public class CommandTests {
                     "Cluster",
                     "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
-            REDIS_VERSION.feature() >= 7
+            REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")
                     // Latencystats was added in redis 7
                     ? List.of(
                             "Server",
@@ -204,7 +204,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multiple_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
-        if (REDIS_VERSION.feature() >= 7) {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();
@@ -249,7 +249,7 @@ public class CommandTests {
                 (String) ((Object[]) ((Object[]) ((Object[]) slotData.getSingleValue())[0])[2])[2];
 
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
-        if (REDIS_VERSION.feature() >= 7) {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
         InfoOptions options = builder.build();
@@ -267,7 +267,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multi_node_route_and_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
-        if (REDIS_VERSION.feature() >= 7) {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
         InfoOptions options = builder.build();
