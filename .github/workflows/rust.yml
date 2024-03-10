@@ -17,6 +17,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
 
+concurrency:
+    group: rust-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 env:
     CARGO_TERM_COLOR: always
 
