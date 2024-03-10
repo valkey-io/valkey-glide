@@ -7,6 +7,8 @@ import {
     InfoOptions,
     ScoreLimit,
     SetOptions,
+    StreamAddOptions,
+    StreamTrimOptions,
     ZaddOptions,
     createClientGetName,
     createClientId,
@@ -64,6 +66,8 @@ import {
     createTTL,
     createType,
     createUnlink,
+    createXadd,
+    createXtrim,
     createZadd,
     createZcard,
     createZcount,
@@ -1010,6 +1014,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lindex(key: string, index: number): T {
         return this.addAndReturn(createLindex(key, index));
+    }
+
+    /**
+     * Adds an entry to the specified stream.
+     * See https://redis.io/commands/xadd/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param values - field-value pairs to be added to the entry.
+     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     */
+    public xadd(
+        key: string,
+        values: [string, string][],
+        options?: StreamAddOptions,
+    ): T {
+        return this.addAndReturn(createXadd(key, values, options));
+    }
+
+    /**
+     * Trims the stream by evicting older entries.
+     * See https://redis.io/commands/xtrim/ for more details.
+     *
+     * @param key - the key of the stream
+     * @param options - options detailing how to trim the stream.
+     * @returns The number of entries deleted from the stream.
+     */
+    public xtrim(key: string, options: StreamTrimOptions): T {
+        return this.addAndReturn(createXtrim(key, options));
     }
 }
 
