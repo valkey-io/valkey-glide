@@ -10,6 +10,11 @@ on:
     push:
         tags:
             - "v*.*"
+
+concurrency:
+    group: npm-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     publish-binaries:
         if: github.repository_owner == 'aws'
