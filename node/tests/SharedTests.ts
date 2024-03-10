@@ -1742,6 +1742,93 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `streams add and trim test_%p`,
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+
+                const nullResult = await client.xadd(
+                    key,
+                    [
+                        [field1, "foo"],
+                        [field2, "bar"],
+                    ],
+                    {
+                        makeStream: false,
+                    },
+                );
+                expect(nullResult).toBeNull();
+
+                const timestamp1 = await client.xadd(
+                    key,
+                    [
+                        [field1, "foo1"],
+                        [field2, "bar1"],
+                    ],
+                    { id: "0-1" },
+                );
+                expect(timestamp1).toEqual("0-1");
+                expect(
+                    await client.xadd(key, [
+                        [field1, "foo2"],
+                        [field2, "bar2"],
+                    ]),
+                ).not.toBeNull();
+                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+
+                // this will trim the first entry.
+                const id = await client.xadd(
+                    key,
+                    [
+                        [field1, "foo3"],
+                        [field2, "bar3"],
+                    ],
+                    {
+                        trim: {
+                            method: "maxlen",
+                            threshold: 2,
+                            exact: true,
+                        },
+                    },
+                );
+                expect(id).not.toBeNull();
+                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+
+                // this will trim the 2nd entry.
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            [field1, "foo4"],
+                            [field2, "bar4"],
+                        ],
+                        {
+                            trim: {
+                                method: "minid",
+                                threshold: id as string,
+                                exact: true,
+                            },
+                        },
+                    ),
+                ).not.toBeNull();
+                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+
+                expect(
+                    await client.xtrim(key, {
+                        method: "maxlen",
+                        threshold: 1,
+                        exact: true,
+                    }),
+                ).toEqual(1);
+                expect(await client.customCommand(["XLEN", key])).toEqual(1);
+            }, ProtocolVersion.RESP2);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

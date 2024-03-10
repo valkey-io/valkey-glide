@@ -916,9 +916,116 @@ export function createZremRangeByRank(
     ]);
 }
 
+export function createPersist(key: string): redis_request.Command {
+    return createCommand(RequestType.Persist, [key]);
+}
+
+export type StreamTrimOptions = (
+    | {
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Redis API.
+           */
+          method: "minid";
+          threshold: string;
+      }
+    | {
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Redis API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
+) & {
+    /**
+     * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the Redis API. Otherwise the stream will be trimmed in a near-exact manner, which is more efficient, equivalent to `~` in the Redis API.
+     */
+    exact: boolean;
+    /**
+     * If set, sets the maximal amount of entries that will be deleted.
+     */
+    limit?: number;
+};
+
+export type StreamAddOptions = {
+    /**
+     * If set, the new entry will be added with this ID.
+     */
+    id?: string;
+    /**
+     * If set to `false`, a new stream won't be created if no stream matches the given key.
+     * Equivalent to `NOMKSTREAM` in the Redis API.
+     */
+    makeStream?: boolean;
+    /**
+     * If set, the add operation will also trim the older entries in the stream.
+     */
+    trim?: StreamTrimOptions;
+};
+
+function addTrimOptions(options: StreamTrimOptions, args: string[]) {
+    if (options.method === "maxlen") {
+        args.push("MAXLEN");
+    } else if (options.method === "minid") {
+        args.push("MINID");
+    }
+
+    if (options.exact) {
+        args.push("=");
+    } else {
+        args.push("~");
+    }
+
+    if (options.method === "maxlen") {
+        args.push(options.threshold.toString());
+    } else if (options.method === "minid") {
+        args.push(options.threshold);
+    }
+
+    if (options.limit) {
+        args.push("LIMIT");
+        args.push(options.limit.toString());
+    }
+}
+
+export function createXadd(
+    key: string,
+    values: [string, string][],
+    options?: StreamAddOptions,
+): redis_request.Command {
+    const args = [key];
+
+    if (options?.makeStream === false) {
+        args.push("NOMKSTREAM");
+    }
+
+    if (options?.trim) {
+        addTrimOptions(options.trim, args);
+    }
+
+    if (options?.id) {
+        args.push(options.id);
+    } else {
+        args.push("*");
+    }
+
+    values.forEach(([field, value]) => {
+        args.push(field);
+        args.push(value);
+    });
+
+    return createCommand(RequestType.XAdd, args);
+}
+
 /**
  * @internal
  */
-export function createPersist(key: string): redis_request.Command {
-    return createCommand(RequestType.Persist, [key]);
+export function createXtrim(
+    key: string,
+    options: StreamTrimOptions,
+): redis_request.Command {
+    const args = [key];
+    addTrimOptions(options, args);
+    return createCommand(RequestType.XTrim, args);
 }

@@ -627,4 +627,147 @@ describe("SocketConnectionInternals", () => {
             expect(result2).toBeNull();
         });
     });
+
+    it("should set arguments according to xadd options", async () => {
+        let counter = 0;
+        await testWithClusterResources(async (connection, socket) => {
+            socket.on("data", (data) => {
+                const reader = Reader.create(data);
+                const request =
+                    redis_request.RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.XAdd,
+                );
+
+                if (counter === 0) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "foo",
+                        "*",
+                        "a",
+                        "1",
+                        "b",
+                        "2",
+                    ]);
+                } else if (counter === 1) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "bar",
+                        "YOLO",
+                        "a",
+                        "1",
+                    ]);
+                } else if (counter === 2) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "baz",
+                        "MAXLEN",
+                        "=",
+                        "1000",
+                        "*",
+                        "c",
+                        "3",
+                    ]);
+                } else if (counter === 3) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "foobar",
+                        "NOMKSTREAM",
+                        "MINID",
+                        "~",
+                        "foo",
+                        "LIMIT",
+                        "1000",
+                        "*",
+                        "d",
+                        "4",
+                    ]);
+                } else {
+                    throw new Error("too many requests! " + counter);
+                }
+
+                counter = counter + 1;
+
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
+            });
+            await connection.xadd("foo", [
+                ["a", "1"],
+                ["b", "2"],
+            ]);
+
+            await connection.xadd("bar", [["a", "1"]], {
+                id: "YOLO",
+                makeStream: true,
+            });
+
+            await connection.xadd("baz", [["c", "3"]], {
+                trim: {
+                    method: "maxlen",
+                    threshold: 1000,
+                    exact: true,
+                },
+            });
+
+            await connection.xadd("foobar", [["d", "4"]], {
+                makeStream: false,
+                trim: {
+                    method: "minid",
+                    threshold: "foo",
+                    exact: false,
+                    limit: 1000,
+                },
+            });
+
+            expect(counter).toEqual(4);
+        });
+    });
+
+    it("should set arguments according to xtrim options", async () => {
+        let counter = 0;
+        await testWithClusterResources(async (connection, socket) => {
+            socket.on("data", (data) => {
+                const reader = Reader.create(data);
+                const request =
+                    redis_request.RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.XTrim,
+                );
+
+                if (counter === 0) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "foo",
+                        "MAXLEN",
+                        "=",
+                        "1000",
+                    ]);
+                } else if (counter === 1) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "bar",
+                        "MINID",
+                        "~",
+                        "foo",
+                        "LIMIT",
+                        "1000",
+                    ]);
+                } else {
+                    throw new Error("too many requests! " + counter);
+                }
+
+                counter = counter + 1;
+
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
+            });
+
+            await connection.xtrim("foo", {
+                method: "maxlen",
+                threshold: 1000,
+                exact: true,
+            });
+
+            await connection.xtrim("bar", {
+                method: "minid",
+                threshold: "foo",
+                exact: false,
+                limit: 1000,
+            });
+
+            expect(counter).toEqual(2);
+        });
+    });
 });

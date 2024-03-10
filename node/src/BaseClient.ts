@@ -14,6 +14,8 @@ import {
     ExpireOptions,
     ScoreLimit,
     SetOptions,
+    StreamAddOptions,
+    StreamTrimOptions,
     ZaddOptions,
     createDecr,
     createDecrBy,
@@ -61,6 +63,8 @@ import {
     createTTL,
     createType,
     createUnlink,
+    createXadd,
+    createXtrim,
     createZadd,
     createZcard,
     createZcount,
@@ -1205,6 +1209,34 @@ export class BaseClient {
         end: number,
     ): Promise<number> {
         return this.createWritePromise(createZremRangeByRank(key, start, end));
+    }
+
+    /**
+     * Adds an entry to the specified stream.
+     * See https://redis.io/commands/xadd/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param values - field-value pairs to be added to the entry.
+     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     */
+    public xadd(
+        key: string,
+        values: [string, string][],
+        options?: StreamAddOptions,
+    ): Promise<string | null> {
+        return this.createWritePromise(createXadd(key, values, options));
+    }
+
+    /**
+     * Trims the stream by evicting older entries.
+     * See https://redis.io/commands/xtrim/ for more details.
+     *
+     * @param key - the key of the stream
+     * @param options - options detailing how to trim the stream.
+     * @returns The number of entries deleted from the stream.
+     */
+    public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
+        return this.createWritePromise(createXtrim(key, options));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
