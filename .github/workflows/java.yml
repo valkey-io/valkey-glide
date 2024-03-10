@@ -23,6 +23,10 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
 
+concurrency:
+    group: java-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 jobs:
     build-and-test-java-client:
         timeout-minutes: 25
