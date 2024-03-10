@@ -16,6 +16,11 @@ on:
             - go/**
             - .github/workflows/go.yml
 
+concurrency:
+    group: go-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+
 jobs:
     build-and-test-go-client:
         timeout-minutes: 20

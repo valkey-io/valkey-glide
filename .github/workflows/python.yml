@@ -24,6 +24,9 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-redis-modules/action.yml
 
+concurrency:
+    group: python-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
 
 permissions:
     contents: read

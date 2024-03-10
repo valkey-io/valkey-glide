@@ -21,6 +21,10 @@ on:
             - .github/workflows/build-node-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
 
+concurrency:
+    group: node-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 env:
     CARGO_TERM_COLOR: always
 
