@@ -22,11 +22,14 @@
 * Node: Added Time command. ([#1114](https://github.com/aws/glide-for-redis/pull/1114))
 * Python, Node: Added LINDEX command ([#1058](https://github.com/aws/glide-for-redis/pull/1058), [#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065))
+* Core: Enabled Cluster Mode periodic checks by default ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
 
 #### Features
 
 * Python: Allow chaining function calls on transaction. ([#987](https://github.com/aws/glide-for-redis/pull/987))
 * Node: Adding support for GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules. ([#1132](https://github.com/aws/glide-for-redis/pull/1132))
+* Python: Added Cluster Mode configuration for periodic checks interval ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
+
 
 ## 0.2.0 (2024-02-11)
 
