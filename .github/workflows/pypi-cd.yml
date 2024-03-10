@@ -82,6 +82,8 @@ jobs:
             - name: Set up Python older versions for MacOS
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
+                brew update
+                brew upgrade || true
                 brew install python@3.8 python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
