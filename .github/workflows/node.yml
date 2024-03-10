@@ -99,6 +99,8 @@ jobs:
 
             - name: Install NodeJS
               run: |
+                  brew update
+                  brew upgrade || true
                   brew install node
 
             - name: Downgrade npm major version to 8
