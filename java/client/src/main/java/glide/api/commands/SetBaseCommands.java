@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
-public interface SetCommands {
+public interface SetBaseCommands {
     /**
      * Add specified members to the set stored at <code>key</code>. Specified members that are already
      * a member of this set are ignored.
