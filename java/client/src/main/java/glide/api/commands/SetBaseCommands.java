@@ -5,7 +5,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Set Commands interface.
+ * Supports commands and transactions for the "Set Commands" group for standalone clients and
+ * cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
