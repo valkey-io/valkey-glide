@@ -1021,10 +1021,10 @@ export class BaseClient {
      * If `changed` is set, returns the number of elements updated in the sorted set.
      *
      * @example
-     *      await zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
-     *      2 (Indicates that two elements have been added or updated in the sorted set "mySortedSet".)
+     *      await client.zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
+     *      2 (Indicates that two elements have been added to the sorted set "mySortedSet".)
      *
-     *      await zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \});
+     *      await client.zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \} , true);
      *      2 (Updates the scores of two existing members in the sorted set "existingSortedSet".)
      *
      */
@@ -1057,10 +1057,10 @@ export class BaseClient {
      * If there was a conflict with the options, the operation aborts and null is returned.
      *
      * @example
-     *      await zaddIncr("mySortedSet", member , 5.0)
+     *      await client.zaddIncr("mySortedSet", member , 5.0)
      *      5.0
      *
-     *      await zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
+     *      await client.zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
      *      null
      */
     public zaddIncr(

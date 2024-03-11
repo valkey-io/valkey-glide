@@ -1264,8 +1264,8 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2})
-                2  # Indicates that two elements have been added or updated in the sorted set "my_sorted_set."
-            >>> await client.zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX)
+                2  # Indicates that two elements have been added to the sorted set "my_sorted_set."
+            >>> await client.zadd("existing_sorted_set", {"member1": 15.0, "member2": 5.5}, existing_options=ConditionalChange.XX, changed=True)
                 2  # Updates the scores of two existing members in the sorted set "existing_sorted_set."
         """
         args = [key]
@@ -1326,9 +1326,9 @@ class CoreCommands(Protocol):
             If there was a conflict with choosing the XX/NX/LT/GT options, the operation aborts and None is returned.
 
         Examples:
-            >>> await client.zaddIncr("my_sorted_set", member , 5.0)
+            >>> await client.zadd_incr("my_sorted_set", member , 5.0)
                 5.0
-            >>> await client.zaddIncr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
+            >>> await client.zadd_incr("existing_sorted_set", member , "3.0" , UpdateOptions.LESS_THAN)
                 None
         """
         args = [key]
