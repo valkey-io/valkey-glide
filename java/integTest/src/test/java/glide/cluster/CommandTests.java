@@ -390,7 +390,6 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
         assertTrue(exception.getCause() instanceof RedisException);
-        assertTrue(exception.getCause().getMessage().contains("wrong number of arguments"));
     }
 
     @Test

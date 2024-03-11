@@ -161,19 +161,19 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
      *     for.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return A <code>map</code> of values corresponding to the configuration parameters.<br>
      *     When specifying a route other than a single node, it returns a dictionary where each
      *     address is the key and its corresponding node response is the value.
      * @example
      *     <pre>{@code
-     * Map<String, String> configParams = client.configGet("timeout", Random).get().getSingleValue();
+     * Map<String, String> configParams = client.configGet("timeout", RANDOM).get().getSingleValue();
      * assert configParams.get("timeout").equals("1000");
      *
      * Map<String, Map<String, String>> configParamsPerNode = client.configGet("maxmemory", ALL_NODES).get().getMultiValue();
-     * assert configParamsPerNode.get("<node1 address>").get("maxmemory").equals("1GB");
-     * assert configParamsPerNode.get("<node2 address>").get("maxmemory").equals("2GB");
+     * assert configParamsPerNode.get("node1.example.com:6379").get("maxmemory").equals("1GB");
+     * assert configParamsPerNode.get("node2.example.com:6379").get("maxmemory").equals("2GB");
      * }</pre>
      */
     CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route);
@@ -190,7 +190,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters);
@@ -201,14 +201,14 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB"), ALL_PRIMARIES).get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters, Route route);

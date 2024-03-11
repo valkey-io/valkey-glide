@@ -81,8 +81,8 @@ public interface ServerManagementCommands {
      * @example
      *     <pre>{@code
      * Map<String, String> configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
-     * assert configParams.get("timeout").equals("1000);
-     * assert configParams.get("maxmemory").equals("1GB)'
+     * assert configParams.get("timeout").equals("1000");
+     * assert configParams.get("maxmemory").equals("1GB");
      * }</pre>
      */
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
@@ -98,7 +98,7 @@ public interface ServerManagementCommands {
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters);
