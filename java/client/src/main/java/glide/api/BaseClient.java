@@ -564,8 +564,13 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleOrNullResponse);
     }
 
+    @Override
     public CompletableFuture<Double> zaddIncr(
             @NonNull String key, @NonNull String member, double increment) {
-        return this.zaddIncr(key, member, increment, ZaddOptions.builder().build());
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
+
+        return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleResponse);
     }
 }
