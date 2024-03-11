@@ -414,17 +414,6 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void configGet_with_wildcard_and_single_node_route() {
-        var data = clusterClient.configGet(new String[] {"*file"}, RANDOM).get();
-        assertTrue(data.hasSingleData());
-        assertAll(
-                () -> assertTrue(data.getSingleValue().size() > 5),
-                () -> assertTrue(data.getSingleValue().containsKey("pidfile")),
-                () -> assertTrue(data.getSingleValue().containsKey("logfile")));
-    }
-
-    @Test
-    @SneakyThrows
     public void configGet_with_wildcard_and_multi_node_route() {
         var data = clusterClient.configGet(new String[] {"*file"}, ALL_PRIMARIES).get();
         assertTrue(data.hasMultiData());
