@@ -299,8 +299,6 @@ public class TransactionTests {
         transaction.configResetStat();
         results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
 
-        transaction.configGet(new String[] {"Foster", "The", "Fluffy", "Dogster"});
-        results.add(Pair.of(ConfigGet, transaction.buildArgs("Foster", "The", "Fluffy", "Dogster")));
         transaction.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
         results.add(
                 Pair.of(
