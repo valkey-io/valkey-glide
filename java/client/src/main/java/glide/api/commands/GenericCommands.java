@@ -5,8 +5,7 @@ import glide.api.models.Transaction;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Generic Commands interface to handle generic command and transaction requests for standalone
- * client.
+ * Supports commands and transactions for the "Generic Commands" group for standalone clients.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
