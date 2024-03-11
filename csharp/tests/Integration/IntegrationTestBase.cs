@@ -46,13 +46,14 @@ public class IntegrationTestBase
     }
 
     private const string ClusterManagerScript = "cluster_manager.py";
+    private const string ClusterManagerScript = "cluster_manager.py";
     private readonly string _scriptDir;
 
     // Nunit requires a public default constructor. These variables would be set in SetUp method.
     public IntegrationTestBase()
     {
-        DirectoryInfo? projectDir = new (Environment.CurrentDirectory);
-        while (projectDir is {} && projectDir.Name != "csharp")
+        DirectoryInfo? projectDir = new(Environment.CurrentDirectory);
+        while (projectDir is { } && projectDir.Name != "csharp")
             projectDir = projectDir.Parent;
 
         if (projectDir == null)
