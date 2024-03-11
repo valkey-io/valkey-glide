@@ -23,9 +23,11 @@ public interface ServerManagementClusterCommands {
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
      *     each address as the key and its corresponding value is the information for the node.
      * @example
-     *     <p><code>
-     *     {@literal Map<String, String>} routedInfoResult = clusterClient.info().get().getMultiValue();
-     *     </code>
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info().get();
+     * assert payload.getMultiValue().get("node1.example.com:6379").contains("# Stats");
+     * assert payload.getMultiValue().get("node2.example.com:6379").contains("# Stats");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info();
 
@@ -40,6 +42,12 @@ public interface ServerManagementClusterCommands {
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info().get(ALL_NODES);
+     * assert payload.getMultiValue().get("node1.example.com:6379").contains("# Stats");
+     * assert payload.getMultiValue().get("node2.example.com:6379").contains("# Stats");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(Route route);
 
@@ -54,6 +62,12 @@ public interface ServerManagementClusterCommands {
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
      *     each address as the key and its corresponding value is the information of the sections
      *     requested for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+     * assert payload.getMultiValue().get("node1.example.com:6379").contains("total_net_input_bytes");
+     * assert payload.getMultiValue().get("node2.example.com:6379").contains("total_net_input_bytes");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
 
@@ -70,6 +84,11 @@ public interface ServerManagementClusterCommands {
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information of the sections requested for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build(), RANDOM).get();
+     * assert data.getSingleValue().contains("total_net_input_bytes");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route);
 
@@ -83,7 +102,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configRewrite();
@@ -99,7 +118,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configRewrite(ALL_PRIMARIES).get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configRewrite(Route route);
@@ -115,7 +134,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat().get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configResetStat();
@@ -132,7 +151,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat(ALL_PRIMARIES).get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configResetStat(Route route);
