@@ -45,22 +45,23 @@ public class IntegrationTestBase
         StopRedis(true);
     }
 
+    private const string ClusterManagerScript = "cluster_manager.py";
     private readonly string _scriptDir;
 
     // Nunit requires a public default constructor. These variables would be set in SetUp method.
     public IntegrationTestBase()
     {
-        string? projectDir = Directory.GetCurrentDirectory();
-        while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
-            projectDir = Path.GetDirectoryName(projectDir);
+        DirectoryInfo? projectDir = new (Environment.CurrentDirectory);
+        while (projectDir is {} && projectDir.Name != "csharp")
+            projectDir = projectDir.Parent;
 
         if (projectDir == null)
             throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
 
-        _scriptDir = Path.Combine(projectDir, "..", "utils");
+        _scriptDir = Path.Combine(projectDir.FullName, "..", "utils");
     }
 
-    internal List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
+    private List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
     {
         string cmd = $"start {(cluster ? "--cluster-mode" : "-r 0")} {(tls ? " --tls" : "")} {(name != null ? " --prefix " + name : "")}";
         return ParsePortsFromOutput(RunClusterManager(cmd, false));
@@ -81,7 +82,7 @@ public class IntegrationTestBase
         {
             WorkingDirectory = _scriptDir,
             FileName = "python3",
-            Arguments = "cluster_manager.py " + cmd,
+            Arguments = $"{ClusterManagerScript} {cmd}",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -92,10 +93,10 @@ public class IntegrationTestBase
         string? output = script?.StandardOutput.ReadToEnd();
         int? exit_code = script?.ExitCode;
 
-        TestContext.Progress.WriteLine($"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
+        TestContext.Progress.WriteLine($"{ClusterManagerScript} stdout\n====\n{output}\n====\n{ClusterManagerScript} stderr\n====\n{error}\n====\n");
 
         if (!ignoreExitCode && exit_code != 0)
-            throw new ApplicationException($"cluster_manager.py script failed: exit code {exit_code}.");
+            throw new ApplicationException($"{ClusterManagerScript} script failed: exit code {exit_code}.");
 
         return output ?? "";
     }
