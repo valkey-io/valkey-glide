@@ -129,6 +129,8 @@ enum RequestType {
     PTTL = 85;
     ZRemRangeByRank = 86;
     Persist = 87;
+    JsonSet = 88;
+    JsonGet = 89;
 }
 
 message Command {
