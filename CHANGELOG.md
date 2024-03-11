@@ -16,6 +16,7 @@
 * Node: Added HVAL command ([#1022](https://github.com/aws/glide-for-redis/pull/1022))
 * Node: Added PERSIST command ([#1023](https://github.com/aws/glide-for-redis/pull/1023))
 * Node: Added Xadd, Xtrim commands. ([#1057](https://github.com/aws/glide-for-redis/pull/1057))
+* Python: Added json module and JSON.SET JSON.GET commands  ([#1056](https://github.com/aws/glide-for-redis/pull/1056))
 
 #### Features
 

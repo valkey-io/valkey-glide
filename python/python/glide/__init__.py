@@ -8,6 +8,7 @@ from glide.async_commands.core import (
     InfoSection,
     UpdateOptions,
 )
+from glide.async_commands.redis_modules import json
 from glide.async_commands.sorted_set import (
     InfBound,
     LexBoundary,
@@ -60,6 +61,7 @@ __all__ = [
     "ExpiryType",
     "InfBound",
     "InfoSection",
+    "json",
     "LexBoundary",
     "Limit",
     "RangeByIndex",
