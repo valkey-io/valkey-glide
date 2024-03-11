@@ -15,6 +15,11 @@ public interface ConnectionManagementCommands {
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @return <code>String</code> with <code>"PONG"</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ping().get();
+     * assert payload.equals("PONG");
+     * }</pre>
      */
     CompletableFuture<String> ping();
 
@@ -24,6 +29,11 @@ public interface ConnectionManagementCommands {
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The server will respond with a copy of the message.
      * @return <code>String</code> with a copy of the argument <code>message</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ping("GLIDE").get();
+     * assert payload.equals("GLIDE");
+     * }</pre>
      */
     CompletableFuture<String> ping(String message);
 
