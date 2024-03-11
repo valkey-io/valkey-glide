@@ -43,9 +43,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 
 import glide.api.commands.GenericBaseCommands;
-import glide.api.commands.HashCommands;
+import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
-import glide.api.commands.SetCommands;
+import glide.api.commands.SetBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
@@ -77,9 +77,9 @@ public abstract class BaseClient
         implements AutoCloseable,
                 GenericBaseCommands,
                 StringCommands,
-                HashCommands,
+                HashBaseCommands,
                 ListBaseCommands,
-                SetCommands {
+                SetBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();

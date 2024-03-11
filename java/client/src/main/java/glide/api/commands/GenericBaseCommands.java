@@ -5,7 +5,8 @@ import glide.api.models.commands.ExpireOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Generic Commands interface to handle generic commands for all server requests.
+ * Supports commands and transactions for the "Generic Commands" group for standalone clients and
+ * cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */

@@ -8,9 +8,10 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Server Management Commands interface for cluster client.
+ * Supports commands and transactions for the "Set Commands" group for standalone clients and
+ * cluster clients.
  *
- * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
+ * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
 public interface ServerManagementClusterCommands {
 

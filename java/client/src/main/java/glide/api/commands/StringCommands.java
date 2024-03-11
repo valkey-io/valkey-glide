@@ -8,7 +8,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * String Commands interface to handle single commands.
+ * Supports commands and transactions for the "String Commands" group for standalone clients and
+ * cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=string">String Commands</a>
  */
