@@ -6,9 +6,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Sorted set Commands interface for both standalone and cluster clients.
+ * Supports commands and transactions for the "Sorted Set Commands" group for standalone clients and
+ * cluster clients.
  *
- * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted set Commands</a>
+ * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
 
