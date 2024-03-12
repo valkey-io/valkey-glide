@@ -4,7 +4,7 @@ package glide.api.commands;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Connection Management Commands interface for standalone client.
+ * Supports commands and transactions for the "Connection Management" group for standalone clients.
  *
  * @see <a href="https://redis.io/commands/?group=connection">Connection Management Commands</a>
  */
