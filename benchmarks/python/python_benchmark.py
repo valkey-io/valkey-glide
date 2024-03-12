@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import functools
 import json
+import math
 import random
 import time
 from datetime import datetime, timezone
@@ -14,7 +15,6 @@ from typing import List
 
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
-
 from glide import (
     BaseClientConfiguration,
     Logger,
@@ -98,6 +98,11 @@ running_tasks = set()
 bench_json_results: List[str] = []
 
 
+def truncate_decimal(number: float, digits: int = 3) -> float:
+    stepper = 10**digits
+    return math.floor(number * stepper) / stepper
+
+
 def generate_value(size):
     return str("0" * size)
 
@@ -157,8 +162,8 @@ async def execute_commands(clients, total_commands, data_size, action_latencies)
         elif chosen_action == ChosenAction.SET:
             await client.set(generate_key_set(), generate_value(data_size))
         toc = time.perf_counter()
-        execution_time = toc - tic
-        action_latencies[chosen_action].append(execution_time)
+        execution_time_milli = (toc - tic) * 1000
+        action_latencies[chosen_action].append(truncate_decimal(execution_time_milli))
     return True
 
 
@@ -184,8 +189,8 @@ def latency_results(prefix, latencies):
     result[prefix + "_p50_latency"] = calculate_latency(latencies, 50)
     result[prefix + "_p90_latency"] = calculate_latency(latencies, 90)
     result[prefix + "_p99_latency"] = calculate_latency(latencies, 9)
-    result[prefix + "_average_latency"] = mean(latencies)
-    result[prefix + "_std_dev"] = np.std(latencies)
+    result[prefix + "_average_latency"] = truncate_decimal(mean(latencies))
+    result[prefix + "_std_dev"] = truncate_decimal(np.std(latencies))
 
     return result
 
