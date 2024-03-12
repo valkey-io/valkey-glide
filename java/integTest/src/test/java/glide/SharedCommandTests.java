@@ -750,7 +750,7 @@ public class SharedCommandTests {
 
         // set command clears the timeout.
         assertEquals(OK, client.set(key, "pexpire_timeout").get());
-        if (REDIS_VERSION.feature() < 7) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpire(key, 10000L).get());
         } else {
             assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
@@ -758,7 +758,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // TTL will be updated to the new value = 15
-        if (REDIS_VERSION.feature() < 7) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expire(key, 15L).get());
         } else {
             assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
@@ -776,7 +776,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // extend TTL
-        if (REDIS_VERSION.feature() < 7) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
         } else {
             assertTrue(
@@ -789,7 +789,7 @@ public class SharedCommandTests {
         }
         assertTrue(client.ttl(key).get() <= 50L);
 
-        if (REDIS_VERSION.feature() < 7) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
         } else {
             // set command clears the timeout.
