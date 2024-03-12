@@ -1029,3 +1029,44 @@ export function createXtrim(
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
 }
+
+export type ScanOptions = {
+    /**
+     * If set, only keys matching this pattern will be returned.
+     */
+    match?: string;
+    /**
+     * If set, specifies the amount of work that should be done at every call in order to retrieve elements from the collection.
+     */
+    count?: number;
+    /**
+     * If set, only keys of this type will be returned. https://redis.io/commands/type/.
+     */
+    type?: "hash" | "list" | "set" | "string" | "zset" | "stream";
+};
+
+/**
+ * @internal
+ */
+export function createScan(
+    cursor: number,
+    options?: ScanOptions,
+): redis_request.Command {
+    const args: string[] = [cursor.toString()];
+
+    if (options) {
+        if (options.match) {
+            args.push("MATCH", options.match);
+        }
+
+        if (options.count) {
+            args.push("COUNT", options.count.toString());
+        }
+
+        if (options.type) {
+            args.push("TYPE", options.type.toString());
+        }
+    }
+
+    return createCommand(RequestType.Scan, args);
+}

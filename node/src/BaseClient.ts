@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     ExpireOptions,
+    ScanOptions,
     ScoreLimit,
     SetOptions,
     StreamAddOptions,
@@ -57,6 +58,7 @@ import {
     createSCard,
     createSMembers,
     createSRem,
+    createScan,
     createSet,
     createSismember,
     createStrlen,
@@ -84,7 +86,6 @@ import {
 } from "./Errors";
 import { Logger } from "./Logger";
 import { connection_request, redis_request, response } from "./ProtobufMessage";
-
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
@@ -1271,6 +1272,39 @@ export class BaseClient {
      */
     public persist(key: string): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
+    }
+
+    /** Iterates the set of keys in the currently selected Redis database.
+     * SCAN is a cursor based iterator. This means that at every call of the command,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to 0, and terminates when the cursor returned by the server is 0.
+     * See https://redis.io/commands/scan/ for more details.
+     *
+     * @param cursor - In the first call the `cursor` should be set to 0.
+     * In the next calls it should be the return value of the previous call.
+     * @param options - The scan options - \{
+     * `match`?: string; If set, only keys matching this pattern will be returned.
+     * `count`?: number; If set,
+     *  specifies the amount of work that should be done at every call in order to retrieve elements from the collection.
+     * `type`?: RedisGeneralDataTypes; If set, only keys of this type will be returned.
+     * \};
+     * @returns Two element array, where the first element is a string representing an unsigned 64 bit number (the cursor),
+     * and the second element is an array of list of keys.
+     *
+     * @example
+     *      await scan(0, \{match: "user:*", count: 10\})
+     *      ["10",
+     *      ["user:123", "user:456", "user:789", ... (approximatlly up to 10 keys)]]
+     *
+     *      await scan(10, \{type: string\});
+     *      ["0",
+     *      ["key1", "key2", "key3", ... (approximatlly up to 10 keys)]]
+     */
+    public scan(
+        cursor: number,
+        options?: ScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createScan(cursor, options));
     }
 
     /**
