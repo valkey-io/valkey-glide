@@ -1829,6 +1829,41 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `scan test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                for (let i = 0; i < 20; i++) {
+                    expect(await client.set(`key${i}`, `value${i}`)).toEqual(
+                        "OK",
+                    );
+                }
+
+                let result = await client.scan(0, {
+                    match: "key*",
+                });
+                // Test that the result fit the expected format
+                expect(result.length).toEqual(2);
+                const cursor = Number(result[0]);
+                result = await client.scan(cursor, {
+                    match: "Something thats not exsit",
+                });
+                // Test that when not matched the pattern, the result is empty
+                expect(result[1].length).toEqual(0);
+                result = await client.scan(cursor, {
+                    type: "hash",
+                });
+                // Test that when not matched the type, the result is empty
+                expect(result[1].length).toEqual(0);
+                result = await client.scan(cursor, {
+                    type: "string",
+                });
+                // Test that with the right type, the result is not empty
+                expect(result[1].length).toBeGreaterThan(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

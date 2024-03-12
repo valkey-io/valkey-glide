@@ -173,6 +173,10 @@ export function transactionTest(
         exact: true,
     });
     args.push(1);
+    baseTransaction.scan(0, {
+        match: "Something that defentlly not fit any data in the db",
+    });
+    args.push(["0", []]);
     return args;
 }
 
