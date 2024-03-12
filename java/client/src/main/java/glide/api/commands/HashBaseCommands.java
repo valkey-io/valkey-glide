@@ -5,11 +5,12 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Hash Commands interface for both standalone and cluster clients.
+ * Supports commands and transactions for the "Hash Commands" group for standalone clients and
+ * cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=hash">Hash Commands</a>
  */
-public interface HashCommands {
+public interface HashBaseCommands {
 
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.

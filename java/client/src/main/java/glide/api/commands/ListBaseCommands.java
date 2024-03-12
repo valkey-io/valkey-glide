@@ -4,7 +4,8 @@ package glide.api.commands;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * List Commands interface for both standalone and cluster clients.
+ * Supports commands and transactions for the "List Commands" group for standalone clients and
+ * cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
  */
