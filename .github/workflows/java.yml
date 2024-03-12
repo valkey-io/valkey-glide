@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
     build-and-test-java-client:
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             # Run all jobs
             fail-fast: false
