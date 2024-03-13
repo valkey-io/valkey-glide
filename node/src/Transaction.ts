@@ -75,6 +75,7 @@ import {
     createZpopmin,
     createZrem,
     createZremRangeByRank,
+    createZremRangeByScore,
     createZscore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
@@ -972,6 +973,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByRank(key: string, start: number, end: number): T {
         return this.addAndReturn(createZremRangeByRank(key, start, end));
+    }
+
+    /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
+     * See https://redis.io/commands/zremrangebyscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to remove to. Can be positive/negative infinity, or specific score and inclusivity.
+     *
+     * Command Response - the number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minScore` is greater than `maxScore`, 0 is returned.
+     */
+    public zremRangeByScore(
+        key: string,
+        minScore: ScoreLimit,
+        maxScore: ScoreLimit,
+    ): T {
+        return this.addAndReturn(
+            createZremRangeByScore(key, minScore, maxScore),
+        );
     }
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to

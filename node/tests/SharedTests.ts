@@ -1829,6 +1829,42 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zremRangeByScore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(
+                    await client.zremRangeByScore(
+                        key,
+                        { bound: 1, isInclusive: false },
+                        { bound: 2 },
+                    ),
+                ).toEqual(1);
+
+                expect(
+                    await client.zremRangeByScore(
+                        key,
+                        { bound: 1 },
+                        "negativeInfinity",
+                    ),
+                ).toEqual(0);
+
+                expect(
+                    await client.zremRangeByScore(
+                        "nonExistingKey",
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

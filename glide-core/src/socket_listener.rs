@@ -361,6 +361,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Persist => Some(cmd("PERSIST")),
         RequestType::JsonSet => Some(cmd("JSON.SET")),
         RequestType::JsonGet => Some(cmd("JSON.GET")),
+        RequestType::ZRemRangeByScore => Some(cmd("ZREMRANGEBYSCORE")),
     }
 }
 
