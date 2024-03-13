@@ -388,7 +388,7 @@ export class RedisClusterClient extends BaseClient {
         );
     }
 
-    /** Returns the server time
+    /** Returns the server time.
      * See https://redis.io/commands/time/ for details.
      *
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
