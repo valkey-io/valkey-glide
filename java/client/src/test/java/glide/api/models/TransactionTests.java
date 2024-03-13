@@ -57,7 +57,6 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -313,7 +312,15 @@ public class TransactionTests {
         configSetMap.put("save", "60");
 
         transaction.configSet(configSetMap);
-        results.add(Pair.of(ConfigSet, transaction.buildArgs("maxmemory", "100mb", "save", "60")));
+        results.add(
+                Pair.of(
+                        ConfigSet,
+                        ArgsArray.newBuilder()
+                                .addArgs("maxmemory")
+                                .addArgs("100mb")
+                                .addArgs("save")
+                                .addArgs("60")
+                                .build()));
 
         Map<String, Double> membersScores = new LinkedHashMap<>();
         membersScores.put("member1", 1.0);

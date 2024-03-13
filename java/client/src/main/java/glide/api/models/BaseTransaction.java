@@ -1,9 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -781,7 +778,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     Otherwise, the transaction fails with an error.
      */
     public T configSet(@NonNull Map<String, String> parameters) {
-        ArgsArray commandArgs = buildArgs(convertMapToArgArray(parameters));
+        ArgsArray commandArgs = buildArgs(convertMapToKeyValueStringArray(parameters));
 
         protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
         return getThis();

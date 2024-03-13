@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -233,13 +233,13 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<String> configSet(@NonNull Map<String, String> parameters) {
         return commandManager.submitNewCommand(
-                ConfigSet, convertMapToArgArray(parameters), this::handleStringResponse);
+                ConfigSet, convertMapToKeyValueStringArray(parameters), this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> configSet(
             @NonNull Map<String, String> parameters, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                ConfigSet, convertMapToArgArray(parameters), route, this::handleStringResponse);
+                ConfigSet, convertMapToKeyValueStringArray(parameters), route, this::handleStringResponse);
     }
 }

@@ -404,7 +404,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void configGet_with_multiple_params() {
-        assumeTrue(REDIS_VERSION.feature() >= 7, "This feature added in redis 7");
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         var data = clusterClient.configGet(new String[] {"pidfile", "logfile"}).get();
         assertAll(
                 () -> assertEquals(2, data.size()),
