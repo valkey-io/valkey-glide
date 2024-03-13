@@ -787,6 +787,29 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetnx test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const field = uuidv4();
+
+                expect(await client.hsetnx(key1, field, "value")).toEqual(true);
+                expect(await client.hsetnx(key1, field, "newValue")).toEqual(
+                    false,
+                );
+                expect(await client.hget(key1, field)).toEqual("value");
+
+                expect(await client.set(key2, "value")).toEqual("OK");
+                await expect(
+                    client.hsetnx(key2, field, "value"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
