@@ -201,8 +201,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @param route @param route Specifies the routing configuration for the command. The client will
-     *     route the command to the nodes defined by <code>route</code>.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
