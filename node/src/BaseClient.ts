@@ -34,6 +34,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
+    createHSetNX,
     createHvals,
     createIncr,
     createIncrBy,
@@ -546,6 +547,20 @@ export class BaseClient {
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
+    }
+
+    /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
+     * If `key` does not exist, a new key holding a hash is created.
+     * If `field` already exists, this operation has no effect.
+     * See https://redis.io/commands/hsetnx/ for more details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field to set the value for.
+     * @param value - The value to set.
+     * @returns `true` if the field was set, `false` if the field already existed and was not set.
+     */
+    public hsetnx(key: string, field: string, value: string): Promise<boolean> {
+        return this.createWritePromise(createHSetNX(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
