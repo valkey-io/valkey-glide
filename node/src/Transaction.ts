@@ -1083,7 +1083,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createXtrim(key, options));
     }
 
-    /** Returns the server time
+    /** Returns the server time.
      * See https://redis.io/commands/time/ for details.
      *
      * @returns - The current server time as a two items `array`:
