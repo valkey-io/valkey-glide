@@ -162,7 +162,7 @@ public interface ServerManagementClusterCommands {
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
      *     for.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>map</code> of values corresponding to the configuration parameters.<br>
      *     When specifying a route other than a single node, it returns a dictionary where each
      *     address is the key and its corresponding node response is the value.
@@ -201,8 +201,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     * @param route @param route Specifies the routing configuration for the command. The client will
+     *     route the command to the nodes defined by <code>route</code>.
      * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
      *     error.
      * @example
