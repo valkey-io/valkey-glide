@@ -44,7 +44,7 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>String</code> with <code>"PONG"</code>.
      * @example
      *     <pre>{@code
@@ -60,7 +60,7 @@ public interface ConnectionManagementClusterCommands {
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The ping argument that will be returned.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>String</code> with a copy of the argument <code>message</code>.
      * @example
      *     <pre>{@code
@@ -89,7 +89,7 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     *     command to the nodes defined by <code>route</code>.
      * @return A {@link ClusterValue} which holds a single value if single node route is used or a
      *     dictionary where each address is the key and its corresponding node response is the value.
      *     The value is the id of the client on that node.
@@ -124,7 +124,7 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the defined nodes.
+     *     command to the nodes defined by <code>route</code>.
      * @return A {@link ClusterValue} which holds a single value if single node route is used or a
      *     dictionary where each address is the key and its corresponding node response is the value.
      *     The value is the name of the client connection as a string if a name is set, or null if no
