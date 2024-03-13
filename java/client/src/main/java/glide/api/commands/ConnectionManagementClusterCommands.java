@@ -17,6 +17,11 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @return <code>String</code> with <code>"PONG"</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = clusterClient.ping().get();
+     * assert payload.equals("PONG");
+     * }</pre>
      */
     CompletableFuture<String> ping();
 
@@ -26,6 +31,11 @@ public interface ConnectionManagementClusterCommands {
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The server will respond with a copy of the message.
      * @return <code>String</code> with a copy of the argument <code>message</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = clusterClient.ping("GLIDE").get();
+     * assert payload.equals("GLIDE");
+     * }</pre>
      */
     CompletableFuture<String> ping(String message);
 
@@ -33,9 +43,14 @@ public interface ConnectionManagementClusterCommands {
      * Ping the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return <code>String</code> with <code>"PONG"</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = clusterClient.ping(ALL_NODES).get();
+     * assert payload.equals("PONG");
+     * }</pre>
      */
     CompletableFuture<String> ping(Route route);
 
@@ -44,9 +59,14 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The ping argument that will be returned.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return <code>String</code> with a copy of the argument <code>message</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = clusterClient.ping("GLIDE", RANDOM).get();
+     * assert payload.equals("GLIDE");
+     * }</pre>
      */
     CompletableFuture<String> ping(String message, Route route);
 
@@ -68,8 +88,8 @@ public interface ConnectionManagementClusterCommands {
      * Gets the current connection id.
      *
      * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return A {@link ClusterValue} which holds a single value if single node route is used or a
      *     dictionary where each address is the key and its corresponding node response is the value.
      *     The value is the id of the client on that node.
@@ -79,7 +99,7 @@ public interface ConnectionManagementClusterCommands {
      * assert id > 0;
      *
      * Map<String, Long> idPerNode = client.clientId(ALL_NODES).get().getMultiValue();
-     * assert idPerNode.get("<node 1 address>") > 0;
+     * assert idPerNode.get("node1.example.com:6379") > 0;
      * </pre>
      */
     CompletableFuture<ClusterValue<Long>> clientId(Route route);
@@ -103,8 +123,8 @@ public interface ConnectionManagementClusterCommands {
      * Gets the name of the current connection.
      *
      * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the defined nodes.
      * @return A {@link ClusterValue} which holds a single value if single node route is used or a
      *     dictionary where each address is the key and its corresponding node response is the value.
      *     The value is the name of the client connection as a string if a name is set, or null if no
@@ -115,7 +135,7 @@ public interface ConnectionManagementClusterCommands {
      * assert clientName != null;
      *
      * Map<String, String> clientNamePerNode = client.clientGetName(ALL_NODES).get().getMultiValue();
-     * assert clientNamePerNode.get("<node 1 address>") != null
+     * assert clientNamePerNode.get("node1.example.com:6379") != null;
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> clientGetName(Route route);
