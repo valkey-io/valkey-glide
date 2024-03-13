@@ -1888,6 +1888,23 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "time test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Take the time now, convert to 10 digits and subtract 1 second
+                const now = Math.floor(new Date().getTime() / 1000 - 1);
+                const result = await client.time();
+                expect(result?.length).toEqual(2);
+                expect(Number(result?.at(0))).toBeGreaterThan(now);
+                // Test its not more than 1 second
+                expect(Number(result?.at(1))).toBeLessThan(1000000);
+                client.close();
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
