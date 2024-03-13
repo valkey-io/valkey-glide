@@ -3,7 +3,9 @@ package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
-import static glide.utils.ArrayTransformUtils.convertMapToArgArray;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -41,14 +43,17 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
+import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -79,7 +84,8 @@ public abstract class BaseClient
                 StringCommands,
                 HashBaseCommands,
                 ListBaseCommands,
-                SetBaseCommands {
+                SetBaseCommands,
+                SortedSetBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -205,6 +211,10 @@ public abstract class BaseClient
         return handleRedisResponse(Double.class, false, response);
     }
 
+    protected Double handleDoubleOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(Double.class, true, response);
+    }
+
     protected Object[] handleArrayResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, false, response);
     }
@@ -260,7 +270,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToArgArray(keyValueMap);
+        String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 
@@ -301,7 +311,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hset(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
-        String[] args = ArrayUtils.addFirst(convertMapToArgArray(fieldValueMap), key);
+        String[] args = ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key);
         return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
     }
 
@@ -505,5 +515,62 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull String key,
+            @NonNull Map<String, Double> membersScoresMap,
+            @NonNull ZaddOptions options,
+            boolean changed) {
+        String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
+        String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
+
+        String[] arguments =
+                concatenateArrays(new String[] {key}, options.toArgs(), changedArg, membersScores);
+
+        return commandManager.submitNewCommand(Zadd, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull String key,
+            @NonNull Map<String, Double> membersScoresMap,
+            @NonNull ZaddOptions options) {
+        return this.zadd(key, membersScoresMap, options, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
+        return this.zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
+        return this.zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(
+            @NonNull String key, @NonNull String member, double increment, @NonNull ZaddOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"INCR", Double.toString(increment), member});
+
+        return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(
+            @NonNull String key, @NonNull String member, double increment) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
+
+        return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleResponse);
     }
 }

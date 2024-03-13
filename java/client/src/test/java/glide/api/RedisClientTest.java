@@ -5,9 +5,12 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -57,11 +60,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
+import glide.api.models.commands.ZaddOptions;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.LinkedHashMap;
@@ -1311,6 +1316,148 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.scard(key);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zadd_noOptions_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put("testMember1", 1.0);
+        membersScores.put("testMember2", 2.0);
+        String[] membersScoresArgs = convertMapToValueKeyStringArray(membersScores);
+        String[] arguments = ArrayUtils.addFirst(membersScoresArgs, key);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Zadd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zadd(key, membersScores, ZaddOptions.builder().build(), false);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zadd_withOptions_returns_success() {
+        // setup
+        String key = "testKey";
+        ZaddOptions options =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        Map<String, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put("testMember1", 1.0);
+        membersScores.put("testMember2", 2.0);
+        String[] membersScoresArgs = convertMapToValueKeyStringArray(membersScores);
+        String[] arguments = ArrayUtils.addAll(new String[] {key}, options.toArgs());
+        arguments = ArrayUtils.addAll(arguments, membersScoresArgs);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Zadd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zadd(key, membersScores, options, false);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zadd_withIllegalArgument_throws_exception() {
+        // setup
+        String key = "testKey";
+        ZaddOptions options =
+                ZaddOptions.builder()
+                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        Map<String, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put("testMember1", 1.0);
+        membersScores.put("testMember2", 2.0);
+
+        assertThrows(
+                IllegalArgumentException.class, () -> service.zadd(key, membersScores, options, false));
+    }
+
+    @SneakyThrows
+    @Test
+    public void zaddIncr_noOptions_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "member";
+        double increment = 3.0;
+        String[] arguments = new String[] {key, "INCR", Double.toString(increment), member};
+        Double value = 3.0;
+
+        CompletableFuture<Double> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(Zadd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response =
+                service.zaddIncr(key, member, increment, ZaddOptions.builder().build());
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zaddIncr_withOptions_returns_success() {
+        // setup
+        String key = "testKey";
+        ZaddOptions options =
+                ZaddOptions.builder()
+                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        String member = "member";
+        double increment = 3.0;
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"INCR", Double.toString(increment), member});
+        Double value = 3.0;
+
+        CompletableFuture<Double> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(Zadd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zaddIncr(key, member, increment, options);
+        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
