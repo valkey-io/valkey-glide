@@ -14,11 +14,13 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,6 +32,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RequestException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -365,5 +368,49 @@ public class CommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
+    public void cluster_route_by_address_reaches_correct_node() {
+        String initialNode =
+                (String)
+                        clusterClient
+                                .customCommand(new String[] {"cluster", "nodes"}, RANDOM)
+                                .get()
+                                .getSingleValue();
+
+        String host =
+                Arrays.stream(initialNode.split("\n"))
+                        .filter(line -> line.contains("myself"))
+                        .findFirst()
+                        .map(line -> line.split(" ")[1].split("@")[0])
+                        .orElse(null);
+        assertNotNull(host);
+
+        String specifiedClusterNode1 =
+                (String)
+                        clusterClient
+                                .customCommand(new String[] {"cluster", "nodes"}, new ByAddressRoute(host))
+                                .get()
+                                .getSingleValue();
+        assertEquals(initialNode, specifiedClusterNode1);
+
+        String[] splitHost = host.split(":");
+        String specifiedClusterNode2 =
+                (String)
+                        clusterClient
+                                .customCommand(
+                                        new String[] {"cluster", "nodes"},
+                                        new ByAddressRoute(splitHost[0], Integer.parseInt(splitHost[1])))
+                                .get()
+                                .getSingleValue();
+        assertEquals(initialNode, specifiedClusterNode2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void cluster_fail_routing_by_address_if_no_port_is_provided() {
+        assertThrows(RequestException.class, () -> clusterClient.info(new ByAddressRoute("foo")).get());
     }
 }

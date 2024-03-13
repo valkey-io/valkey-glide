@@ -16,10 +16,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Transaction;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
+import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.LinkedList;
 import java.util.Map;
@@ -222,13 +224,37 @@ public class CommandManagerTest {
     }
 
     @Test
+    public void prepare_request_with_by_address_route() {
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
+        when(channelHandler.isClosed()).thenReturn(false);
+
+        ArgumentCaptor<RedisRequest.Builder> captor =
+                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+
+        service.submitNewCommand(
+                CustomCommand, new String[0], new ByAddressRoute("testhost", 6379), r -> null);
+        verify(channelHandler).write(captor.capture(), anyBoolean());
+        var requestBuilder = captor.getValue();
+
+        assertAll(
+                () -> assertTrue(requestBuilder.hasRoute()),
+                () -> assertTrue(requestBuilder.getRoute().hasByAddressRoute()),
+                () -> assertEquals("testhost", requestBuilder.getRoute().getByAddressRoute().getHost()),
+                () -> assertEquals(6379, requestBuilder.getRoute().getByAddressRoute().getPort()),
+                () -> assertFalse(requestBuilder.getRoute().hasSimpleRoutes()),
+                () -> assertFalse(requestBuilder.getRoute().hasSlotIdRoute()),
+                () -> assertFalse(requestBuilder.getRoute().hasSlotKeyRoute()));
+    }
+
+    @Test
     public void prepare_request_with_unknown_route_type() {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
 
         var exception =
                 assertThrows(
-                        IllegalArgumentException.class,
+                        RequestException.class,
                         () -> service.submitNewCommand(CustomCommand, new String[0], () -> false, r -> null));
         assertEquals("Unknown type of route", exception.getMessage());
     }
