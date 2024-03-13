@@ -3,11 +3,13 @@ package glide.managers;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Transaction;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.Optional;
@@ -231,8 +233,15 @@ public class CommandManager {
                                             .setSlotKey(((SlotKeyRoute) route).getSlotKey())
                                             .setSlotType(
                                                     SlotTypes.forNumber(((SlotKeyRoute) route).getSlotType().ordinal()))));
+        } else if (route instanceof ByAddressRoute) {
+            builder.setRoute(
+                    Routes.newBuilder()
+                            .setByAddressRoute(
+                                    RedisRequestOuterClass.ByAddressRoute.newBuilder()
+                                            .setHost(((ByAddressRoute) route).getHost())
+                                            .setPort(((ByAddressRoute) route).getPort())));
         } else {
-            throw new IllegalArgumentException("Unknown type of route");
+            throw new RequestException("Unknown type of route");
         }
         return builder;
     }
