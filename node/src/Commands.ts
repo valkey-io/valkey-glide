@@ -800,9 +800,19 @@ export type ScoreLimit =
           isInclusive?: boolean;
       };
 
-const positiveInfinityArg = "+inf";
-const negativeInfinityArg = "-inf";
-const isInclusiveArg = "(";
+function getScoreLimitArg(score: ScoreLimit): string {
+    if (score == "positiveInfinity") {
+        return "+inf";
+    } else if (score == "negativeInfinity") {
+        return "-inf";
+    }
+
+    const value =
+        score.isInclusive == false
+            ? "(" + score.bound.toString()
+            : score.bound.toString();
+    return value;
+}
 
 /**
  * @internal
@@ -813,31 +823,8 @@ export function createZcount(
     maxScore: ScoreLimit,
 ): redis_request.Command {
     const args = [key];
-
-    if (minScore == "positiveInfinity") {
-        args.push(positiveInfinityArg);
-    } else if (minScore == "negativeInfinity") {
-        args.push(negativeInfinityArg);
-    } else {
-        const value =
-            minScore.isInclusive == false
-                ? isInclusiveArg + minScore.bound.toString()
-                : minScore.bound.toString();
-        args.push(value);
-    }
-
-    if (maxScore == "positiveInfinity") {
-        args.push(positiveInfinityArg);
-    } else if (maxScore == "negativeInfinity") {
-        args.push(negativeInfinityArg);
-    } else {
-        const value =
-            maxScore.isInclusive == false
-                ? isInclusiveArg + maxScore.bound.toString()
-                : maxScore.bound.toString();
-        args.push(value);
-    }
-
+    args.push(getScoreLimitArg(minScore));
+    args.push(getScoreLimitArg(maxScore));
     return createCommand(RequestType.Zcount, args);
 }
 
@@ -914,6 +901,20 @@ export function createZremRangeByRank(
         start.toString(),
         stop.toString(),
     ]);
+}
+
+/**
+ * @internal
+ */
+export function createZremRangeByScore(
+    key: string,
+    minScore: ScoreLimit,
+    maxScore: ScoreLimit,
+): redis_request.Command {
+    const args = [key];
+    args.push(getScoreLimitArg(minScore));
+    args.push(getScoreLimitArg(maxScore));
+    return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
 export function createPersist(key: string): redis_request.Command {

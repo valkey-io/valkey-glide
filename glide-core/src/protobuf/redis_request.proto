@@ -131,6 +131,7 @@ enum RequestType {
     Persist = 87;
     JsonSet = 88;
     JsonGet = 89;
+    ZRemRangeByScore = 90;
 }
 
 message Command {
