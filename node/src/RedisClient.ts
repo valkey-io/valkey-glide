@@ -16,6 +16,7 @@ import {
     createInfo,
     createPing,
     createSelect,
+    createTime,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -212,5 +213,16 @@ export class RedisClient extends BaseClient {
      */
     public configSet(parameters: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters));
+    }
+
+    /** Returns the server time
+     * See https://redis.io/commands/time/ for details.
+     *
+     * @returns - The current server time as a two items `array`:
+     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
+     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     */
+    public time(): Promise<[string, string]> {
+        return this.createWritePromise(createTime());
     }
 }
