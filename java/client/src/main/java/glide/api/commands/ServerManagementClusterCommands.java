@@ -29,7 +29,7 @@ public interface ServerManagementClusterCommands {
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
      *     String nodeName = entry.getKey();
      *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("# Stats") :
+     *     assert nodeInfo.contains("# Stats");
      * }
      * }</pre>
      */
@@ -53,7 +53,7 @@ public interface ServerManagementClusterCommands {
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
      *     String nodeName = entry.getKey();
      *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("# Stats") :
+     *     assert nodeInfo.contains("# Stats");
      * }
      * }</pre>
      */
@@ -77,7 +77,7 @@ public interface ServerManagementClusterCommands {
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
      *     String nodeName = entry.getKey();
      *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("total_net_input_bytes") :
+     *     assert nodeInfo.contains("total_net_input_bytes");
      * }
      * }</pre>
      */
