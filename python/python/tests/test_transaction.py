@@ -109,6 +109,8 @@ def transaction_test(
     args.append(4)
     transaction.llen(key5)
     args.append(4)
+    transaction.lindex(key5, 0)
+    args.append(value2)
     transaction.lpop(key5)
     args.append(value2)
     transaction.lrem(key5, 1, value)
