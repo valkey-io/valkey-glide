@@ -47,7 +47,8 @@ public interface GenericClusterCommands {
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
      * @param args Arguments for the custom command including the command name
-     * @param route Routing configuration for the command
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
      *     <pre>{@code
@@ -92,8 +93,8 @@ public interface GenericClusterCommands {
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
-     * @param route Routing configuration for the transaction. The client will route the transaction
-     *     to the nodes defined by <code>route</code>.
+     * @param route Specifies the routing configuration for the transaction. The client will route the
+     *     transaction to the nodes defined by <code>route</code>.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
