@@ -1041,3 +1041,10 @@ export function createXtrim(
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
 }
+
+/**
+ * @internal
+ */
+export function createTime(): redis_request.Command {
+    return createCommand(RequestType.Time, []);
+}

@@ -65,6 +65,7 @@ import {
     createSismember,
     createStrlen,
     createTTL,
+    createTime,
     createType,
     createUnlink,
     createXadd,
@@ -1080,6 +1081,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXtrim(key, options));
+    }
+
+    /** Returns the server time.
+     * See https://redis.io/commands/time/ for details.
+     *
+     * @returns - The current server time as a two items `array`:
+     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
+     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     */
+    public time(): T {
+        return this.addAndReturn(createTime());
     }
 }
 
