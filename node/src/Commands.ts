@@ -1048,3 +1048,60 @@ export function createXtrim(
 export function createTime(): redis_request.Command {
     return createCommand(RequestType.Time, []);
 }
+
+export type StreamReadOptions = {
+    /**
+     * If set, the read request will block for the set amount of milliseconds or until the server has the required number of entries.
+     * Equivalent to `BLOCK` in the Redis API.
+     */
+    block?: number;
+    /**
+     * The maximal number of elements requested.
+     * Equivalent to `COUNT` in the Redis API.
+     */
+    count?: number;
+};
+
+function addReadOptions(options: StreamReadOptions, args: string[]) {
+    if (options.count !== undefined) {
+        args.push("COUNT");
+        args.push(options.count.toString());
+    }
+
+    if (options.block !== undefined) {
+        args.push("BLOCK");
+        args.push(options.block.toString());
+    }
+}
+
+function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
+    args.push("STREAMS");
+
+    const pairs = Object.entries(keys_and_ids);
+
+    for (const [key] of pairs) {
+        args.push(key);
+    }
+
+    for (const [, id] of pairs) {
+        args.push(id);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createXread(
+    keys_and_ids: Record<string, string>,
+    options?: StreamReadOptions,
+): redis_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        addReadOptions(options, args);
+    }
+
+    addStreamsArgs(keys_and_ids, args);
+
+    return createCommand(RequestType.XRead, args);
+}

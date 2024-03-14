@@ -1903,6 +1903,64 @@ export function runBaseTests<Context>(config: {
                 client.close();
             }, protocol);
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `streams read test_%p`,
+        async () => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = `{${key1}}${uuidv4()}`;
+                const field1 = "foo";
+                const field2 = "bar";
+                const field3 = "barvaz";
+
+                const timestamp_1_1 = await client.xadd(key1, [
+                    [field1, "foo1"],
+                    [field3, "barvaz1"],
+                ]);
+                expect(timestamp_1_1).not.toBeNull();
+                const timestamp_2_1 = await client.xadd(key2, [
+                    [field2, "bar1"],
+                ]);
+                expect(timestamp_2_1).not.toBeNull();
+                const timestamp_1_2 = await client.xadd(key1, [
+                    [field1, "foo2"],
+                ]);
+                const timestamp_2_2 = await client.xadd(key2, [
+                    [field2, "bar2"],
+                ]);
+                const timestamp_1_3 = await client.xadd(key1, [
+                    [field1, "foo3"],
+                    [field3, "barvaz3"],
+                ]);
+                const timestamp_2_3 = await client.xadd(key2, [
+                    [field2, "bar3"],
+                ]);
+
+                const result = await client.xread(
+                    {
+                        [key1]: timestamp_1_1 as string,
+                        [key2]: timestamp_2_1 as string,
+                    },
+                    {
+                        block: 1,
+                    },
+                );
+
+                const expected = {
+                    [key1]: [
+                        [timestamp_1_2, [field1, "foo2"]],
+                        [timestamp_1_3, [field1, "foo3", field3, "barvaz3"]],
+                    ],
+                    [key2]: [
+                        [timestamp_2_2, ["bar", "bar2"]],
+                        [timestamp_2_3, ["bar", "bar3"]],
+                    ],
+                };
+                expect(result).toEqual(expected);
+            }, ProtocolVersion.RESP2);
+        },
         config.timeout,
     );
 }

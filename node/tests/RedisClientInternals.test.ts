@@ -770,4 +770,68 @@ describe("SocketConnectionInternals", () => {
             expect(counter).toEqual(2);
         });
     });
+
+    it("should set arguments according to xread options", async () => {
+        let counter = 0;
+        await testWithClusterResources(async (connection, socket) => {
+            socket.on("data", (data) => {
+                const reader = Reader.create(data);
+                const request =
+                    redis_request.RedisRequest.decodeDelimited(reader);
+                expect(request.singleCommand?.requestType).toEqual(
+                    RequestType.XRead,
+                );
+
+                if (counter === 0) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "STREAMS",
+                        "foo",
+                        "foobar",
+                        "bar",
+                        "baz",
+                    ]);
+                } else if (counter === 1) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "BLOCK",
+                        "100",
+                        "STREAMS",
+                        "foo",
+                        "bar",
+                    ]);
+                } else if (counter === 2) {
+                    expect(request.singleCommand?.argsArray?.args).toEqual([
+                        "COUNT",
+                        "2",
+                        "STREAMS",
+                        "bar",
+                        "baz",
+                    ]);
+                } else {
+                    throw new Error("too many requests! " + counter);
+                }
+
+                counter = counter + 1;
+
+                sendResponse(socket, ResponseType.Null, request.callbackIdx);
+            });
+
+            await connection.xread({ foo: "bar", foobar: "baz" });
+
+            await connection.xread(
+                { foo: "bar" },
+                {
+                    block: 100,
+                },
+            );
+
+            await connection.xread(
+                { bar: "baz" },
+                {
+                    count: 2,
+                },
+            );
+
+            expect(counter).toEqual(3);
+        });
+    });
 });

@@ -172,10 +172,19 @@ export function transactionTest(
         "positiveInfinity",
     );
     args.push(1);
-    baseTransaction.xadd(key9, [["foo", "bar"]], { id: "0-1" });
+    baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
     args.push("0-1");
-    baseTransaction.xadd(key9, [["foo", "bar"]], { id: "0-2" });
+    baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
     args.push("0-2");
+    baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
+    args.push("0-3");
+    baseTransaction.xread({ [key9]: "0-1" });
+    args.push({
+        [key9]: [
+            ["0-2", ["field", "value2"]],
+            ["0-3", ["field", "value3"]],
+        ],
+    });
     baseTransaction.xtrim(key9, {
         method: "minid",
         threshold: "0-2",
