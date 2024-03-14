@@ -25,8 +25,12 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info().get();
-     * assert payload.getMultiValue().get("node1.example.com:6379").contains("# Stats");
-     * assert payload.getMultiValue().get("node2.example.com:6379").contains("# Stats");
+     * // By default, the command is routed to multiple nodes, expecting a MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     String nodeName = entry.getKey();
+     *     String nodeInfo = entry.getValue();
+     *     assert nodeInfo.contains("# Stats") :
+     * }
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info();
@@ -45,8 +49,12 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(ALL_NODES).get();
-     * assert payload.getMultiValue().get("node1.example.com:6379").contains("# Stats");
-     * assert payload.getMultiValue().get("node2.example.com:6379").contains("# Stats");
+     * // Command is routed to all nodes, expecting a MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     String nodeName = entry.getKey();
+     *     String nodeInfo = entry.getValue();
+     *     assert nodeInfo.contains("# Stats") :
+     * }
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(Route route);
@@ -65,8 +73,12 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
-     * assert payload.getMultiValue().get("node1.example.com:6379").contains("total_net_input_bytes");
-     * assert payload.getMultiValue().get("node2.example.com:6379").contains("total_net_input_bytes");
+     * // By default, the command is routed to multiple nodes, expecting a MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     String nodeName = entry.getKey();
+     *     String nodeInfo = entry.getValue();
+     *     assert nodeInfo.contains("total_net_input_bytes") :
+     * }
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
@@ -87,6 +99,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build(), RANDOM).get();
+     * // Command is routed to a single, randomly chosen node, expecting a SingleValue result.
      * assert data.getSingleValue().contains("total_net_input_bytes");
      * }</pre>
      */
@@ -151,6 +164,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat(ALL_PRIMARIES).get();
+     * // Command is routed to all primary nodes.
      * assert response.equals("OK");
      * }</pre>
      */
