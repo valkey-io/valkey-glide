@@ -5,7 +5,6 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.removeTimeStampsFromClusterNodesOutput;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -371,28 +370,32 @@ public class CommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
+    // returns the line that contains the word "myself", up to that point. This is done because the
+    // values after it might change with time.
+    private String cleanResult(String value) {
+        return Arrays.stream(value.split("\n"))
+                .filter(line -> line.contains("myself"))
+                .findFirst()
+                .orElse(null);
+    }
+
     @Test
     @SneakyThrows
     public void cluster_route_by_address_reaches_correct_node() {
         // Masks timestamps in the cluster nodes output to avoid flakiness due to dynamic values.
         String initialNode =
-                removeTimeStampsFromClusterNodesOutput(
+                cleanResult(
                         (String)
                                 clusterClient
                                         .customCommand(new String[] {"cluster", "nodes"}, RANDOM)
                                         .get()
                                         .getSingleValue());
 
-        String host =
-                Arrays.stream(initialNode.split("\n"))
-                        .filter(line -> line.contains("myself"))
-                        .findFirst()
-                        .map(line -> line.split(" ")[1].split("@")[0])
-                        .orElse(null);
+        String host = initialNode.split(" ")[1].split("@")[0];
         assertNotNull(host);
 
         String specifiedClusterNode1 =
-                removeTimeStampsFromClusterNodesOutput(
+                cleanResult(
                         (String)
                                 clusterClient
                                         .customCommand(new String[] {"cluster", "nodes"}, new ByAddressRoute(host))
@@ -402,7 +405,7 @@ public class CommandTests {
 
         String[] splitHost = host.split(":");
         String specifiedClusterNode2 =
-                removeTimeStampsFromClusterNodesOutput(
+                cleanResult(
                         (String)
                                 clusterClient
                                         .customCommand(
