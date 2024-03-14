@@ -792,6 +792,17 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lindex(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value_list = [get_random_string(5), get_random_string(5)]
+        assert await redis_client.lpush(key, value_list) == 2
+        assert await redis_client.lindex(key, 0) == value_list[1]
+        assert await redis_client.lindex(key, 1) == value_list[0]
+        assert await redis_client.lindex(key, 3) is None
+        assert await redis_client.lindex("non_existing_key", 0) is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_rpush_rpop(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
