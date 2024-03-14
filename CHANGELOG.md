@@ -19,6 +19,7 @@
 * Node: Added ZREMRANGEBYRANK command ([#924](https://github.com/aws/glide-for-redis/pull/924))
 * Node: Added Xadd, Xtrim commands. ([#1057](https://github.com/aws/glide-for-redis/pull/1057))
 * Python: Added json module and JSON.SET JSON.GET commands  ([#1056](https://github.com/aws/glide-for-redis/pull/1056))
+* Node: Added Time command. ([#1114](https://github.com/aws/glide-for-redis/pull/1114))
 
 #### Features
 
