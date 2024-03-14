@@ -34,8 +34,8 @@ public interface ServerManagementClusterCommands {
      * {@link Section#DEFAULT} option is assumed.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return Response from Redis cluster with a <code>String</code> with the requested Sections.
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
@@ -64,8 +64,8 @@ public interface ServerManagementClusterCommands {
      * @param options A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return Response from Redis cluster with a <code>String</code> with the requested sections.
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
@@ -92,8 +92,8 @@ public interface ServerManagementClusterCommands {
      * Rewrites the configuration file with the current configuration.
      *
      * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
      *     thrown.
      * @example
@@ -126,8 +126,8 @@ public interface ServerManagementClusterCommands {
      * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
      * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
-     * @param route Routing configuration for the command. Client will route the command to the nodes
-     *     defined.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code> to confirm that the statistics were successfully reset.
      * @example
      *     <pre>{@code
