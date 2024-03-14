@@ -374,6 +374,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void cluster_route_by_address_reaches_correct_node() {
+        // Masks timestamps in the cluster nodes output to avoid flakiness due to dynamic values.
         String initialNode =
                 removeTimeStampsFromClusterNodesOutput(
                         (String)
