@@ -5,6 +5,7 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.removeTimeStampsFromClusterNodesOutput;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -373,12 +374,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void cluster_route_by_address_reaches_correct_node() {
+        // Masks timestamps in the cluster nodes output to avoid flakiness due to dynamic values.
         String initialNode =
-                (String)
-                        clusterClient
-                                .customCommand(new String[] {"cluster", "nodes"}, RANDOM)
-                                .get()
-                                .getSingleValue();
+                removeTimeStampsFromClusterNodesOutput(
+                        (String)
+                                clusterClient
+                                        .customCommand(new String[] {"cluster", "nodes"}, RANDOM)
+                                        .get()
+                                        .getSingleValue());
 
         String host =
                 Arrays.stream(initialNode.split("\n"))
@@ -389,22 +392,24 @@ public class CommandTests {
         assertNotNull(host);
 
         String specifiedClusterNode1 =
-                (String)
-                        clusterClient
-                                .customCommand(new String[] {"cluster", "nodes"}, new ByAddressRoute(host))
-                                .get()
-                                .getSingleValue();
+                removeTimeStampsFromClusterNodesOutput(
+                        (String)
+                                clusterClient
+                                        .customCommand(new String[] {"cluster", "nodes"}, new ByAddressRoute(host))
+                                        .get()
+                                        .getSingleValue());
         assertEquals(initialNode, specifiedClusterNode1);
 
         String[] splitHost = host.split(":");
         String specifiedClusterNode2 =
-                (String)
-                        clusterClient
-                                .customCommand(
-                                        new String[] {"cluster", "nodes"},
-                                        new ByAddressRoute(splitHost[0], Integer.parseInt(splitHost[1])))
-                                .get()
-                                .getSingleValue();
+                removeTimeStampsFromClusterNodesOutput(
+                        (String)
+                                clusterClient
+                                        .customCommand(
+                                                new String[] {"cluster", "nodes"},
+                                                new ByAddressRoute(splitHost[0], Integer.parseInt(splitHost[1])))
+                                        .get()
+                                        .getSingleValue());
         assertEquals(initialNode, specifiedClusterNode2);
     }
 
