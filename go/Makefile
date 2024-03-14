@@ -21,11 +21,8 @@ install-tools-go1.22.0: install-build-tools install-dev-tools-go1.22.0
 
 install-tools: install-tools-go1.22.0
 
-build: build-glide-core build-glide-client generate-protobuf
+build: build-glide-client generate-protobuf
 	go build ./...
-
-build-glide-core:
-	cd ../glide-core; cargo build --release
 
 build-glide-client:
 	cargo build --release
@@ -55,8 +52,8 @@ format:
 	golines -w --shorten-comments -m 127 .
 
 test:
-	go test -v -race `go list ./... | grep -v protobuf`
+	go test -v -race ./...
 
 test-and-report:
 	mkdir -p reports
-	go test -v -race `go list ./... | grep -v protobuf` -json | go-test-report -o reports/test-report.html
+	go test -v -race ./... -json | go-test-report -o reports/test-report.html
