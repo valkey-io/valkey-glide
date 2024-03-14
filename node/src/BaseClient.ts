@@ -15,6 +15,7 @@ import {
     ScoreLimit,
     SetOptions,
     StreamAddOptions,
+    StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
     createDecr,
@@ -65,6 +66,7 @@ import {
     createType,
     createUnlink,
     createXadd,
+    createXread,
     createXtrim,
     createZadd,
     createZcard,
@@ -1273,6 +1275,21 @@ export class BaseClient {
      */
     public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
         return this.createWritePromise(createXtrim(key, options));
+    }
+
+    /**
+     * Reads entries from the given streams.
+     * See https://redis.io/commands/xread/ for more details.
+     *
+     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     * @param options - options detailing how to read the stream.
+     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     */
+    public xread(
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadOptions,
+    ): Promise<Record<string, [string, string[]][]>> {
+        return this.createWritePromise(createXread(keys_and_ids, options));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
