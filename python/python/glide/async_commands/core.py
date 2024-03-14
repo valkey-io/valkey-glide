@@ -766,7 +766,7 @@ class CoreCommands(Protocol):
             >>> await client.lindex("my_list", 0)
                 'value1'  # Returns the first element in the list stored at 'my_list'.
             >>> await client.lindex("my_list", -1)
-                client.'value3'  # Returns the last element in the list stored at 'my_list'.
+                'value3'  # Returns the last element in the list stored at 'my_list'.
         """
         return cast(
             Optional[str],
