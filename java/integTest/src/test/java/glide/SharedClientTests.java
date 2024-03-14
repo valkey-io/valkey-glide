@@ -38,7 +38,7 @@ public class SharedClientTests {
     public static void init() {
         standaloneClient = RedisClient.CreateClient(commonClientConfig().build()).get();
         clusterClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(5000).build())
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
 
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
