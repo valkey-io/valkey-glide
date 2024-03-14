@@ -44,7 +44,7 @@ public interface ServerManagementClusterCommands {
      *     value is the information for the node.
      * @example
      *     <pre>{@code
-     * ClusterValue<String> payload = clusterClient.info().get(ALL_NODES);
+     * ClusterValue<String> payload = clusterClient.info(ALL_NODES).get();
      * assert payload.getMultiValue().get("node1.example.com:6379").contains("# Stats");
      * assert payload.getMultiValue().get("node2.example.com:6379").contains("# Stats");
      * }</pre>
