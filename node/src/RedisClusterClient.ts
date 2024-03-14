@@ -15,6 +15,7 @@ import {
     createCustomCommand,
     createInfo,
     createPing,
+    createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
 import { connection_request, redis_request } from "./ProtobufMessage";
@@ -385,5 +386,19 @@ export class RedisClusterClient extends BaseClient {
             createConfigSet(parameters),
             toProtobufRoute(route),
         );
+    }
+
+    /** Returns the server time.
+     * See https://redis.io/commands/time/ for details.
+     *
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     *
+     * @returns - The current server time as a two items `array`:
+     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
+     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     */
+    public time(route?: Routes): Promise<[string, string]> {
+        return this.createWritePromise(createTime(), toProtobufRoute(route));
     }
 }
