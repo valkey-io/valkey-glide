@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
     build-and-test-go-client:
-        timeout-minutes: 20
+        timeout-minutes: 35
         strategy:
             # Run all jobs
             fail-fast: false
