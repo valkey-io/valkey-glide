@@ -700,7 +700,18 @@ mod socket_listener {
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_socket_pass_manual_route_by_address() {
+    fn test_socket_cluster_route_by_address_reaches_correct_node() {
+        // returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
+        let clean_result = |value: String| {
+            value
+                .split('\n')
+                .find(|line| line.contains("myself"))
+                .and_then(|line| line.split_once("myself"))
+                .unwrap()
+                .0
+                .to_string()
+        };
+
         // We send a request to a random node, get that node's hostname & port, and then
         // route the same request to the hostname & port, and verify that we've received the same value.
         let mut test_basics = setup_cluster_test_basics(Tls::NoTls, TestServer::Shared);
@@ -726,11 +737,10 @@ mod socket_listener {
             panic!("Unexpected response {:?}", response.value);
         };
         let received_value = pointer_to_value(pointer);
-        let first_value = String::from_redis_value(&received_value).unwrap();
+        let first_value = clean_result(String::from_redis_value(&received_value).unwrap());
+
         let (host, port) = first_value
-            .split('\n')
-            .find(|line| line.contains("myself"))
-            .and_then(|line| line.split_once(' '))
+            .split_once(' ')
             .and_then(|(_, second)| second.split_once('@'))
             .and_then(|(first, _)| first.split_once(':'))
             .and_then(|(host, port)| port.parse::<i32>().map(|port| (host, port)).ok())
@@ -754,7 +764,7 @@ mod socket_listener {
             panic!("Unexpected response {:?}", response.value);
         };
         let received_value = pointer_to_value(pointer);
-        let second_value = String::from_redis_value(&received_value).unwrap();
+        let second_value = clean_result(String::from_redis_value(&received_value).unwrap());
 
         assert_eq!(first_value, second_value);
     }

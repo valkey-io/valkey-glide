@@ -138,47 +138,52 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `route by address reaches correct node_%p`,
         async (protocol) => {
+            // returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
+            const cleanResult = (value: string) => {
+                return (
+                    value
+                        .split("\n")
+                        .find((line: string) => line.includes("myself"))
+                        ?.split("myself")[0] ?? ""
+                );
+            };
+
             const client = await RedisClusterClient.createClient(
                 getOptions(cluster.ports(), protocol),
             );
-            const result = (await client.customCommand(
-                ["cluster", "nodes"],
-                "randomNode",
-            )) as string;
+            const result = cleanResult(
+                (await client.customCommand(
+                    ["cluster", "nodes"],
+                    "randomNode",
+                )) as string,
+            );
 
             // check that routing without explicit port works
-            const host =
-                result
-                    .split("\n")
-                    .find((line) => line.includes("myself"))
-                    ?.split(" ")[1]
-                    .split("@")[0] ?? "";
+            const host = result.split(" ")[1].split("@")[0] ?? "";
 
             if (!host) {
                 throw new Error("No host could be parsed");
             }
 
-            const secondResult = (await client.customCommand(
-                ["cluster", "nodes"],
-                {
+            const secondResult = cleanResult(
+                (await client.customCommand(["cluster", "nodes"], {
                     type: "routeByAddress",
                     host,
-                },
-            )) as string;
+                })) as string,
+            );
 
             expect(result).toEqual(secondResult);
 
             const [host2, port] = host.split(":");
 
             // check that routing with explicit port works
-            const thirdResult = (await client.customCommand(
-                ["cluster", "nodes"],
-                {
+            const thirdResult = cleanResult(
+                (await client.customCommand(["cluster", "nodes"], {
                     type: "routeByAddress",
                     host: host2,
                     port: Number(port),
-                },
-            )) as string;
+                })) as string,
+            );
 
             expect(result).toEqual(thirdResult);
 
