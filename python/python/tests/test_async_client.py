@@ -1671,18 +1671,21 @@ class TestClusterRoutes:
     async def test_cluster_route_by_address_reaches_correct_node(
         self, redis_client: RedisClusterClient
     ):
-        cluster_nodes = await redis_client.custom_command(
-            ["cluster", "nodes"], RandomNode()
+        # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
+        clean_result = lambda value: [
+            line for line in value.split("\n") if "myself" in line
+        ][0]
+
+        cluster_nodes = clean_result(
+            await redis_client.custom_command(["cluster", "nodes"], RandomNode())
         )
         assert isinstance(cluster_nodes, str)
-        host = (
-            [line for line in cluster_nodes.split("\n") if "myself" in line][0]
-            .split(" ")[1]
-            .split("@")[0]
-        )
+        host = cluster_nodes.split(" ")[1].split("@")[0]
 
-        second_result = await redis_client.custom_command(
-            ["cluster", "nodes"], ByAddressRoute(host)
+        second_result = clean_result(
+            await redis_client.custom_command(
+                ["cluster", "nodes"], ByAddressRoute(host)
+            )
         )
 
         assert cluster_nodes == second_result
@@ -1690,8 +1693,10 @@ class TestClusterRoutes:
         host, port = host.split(":")
         port_as_int = int(port)
 
-        third_result = await redis_client.custom_command(
-            ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
+        third_result = clean_result(
+            await redis_client.custom_command(
+                ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
+            )
         )
 
         assert cluster_nodes == third_result
