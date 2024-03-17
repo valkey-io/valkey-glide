@@ -7,6 +7,7 @@ import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
+    ConditionalChange,
     ExpireOptions,
     InfoOptions,
     ProtocolVersion,
@@ -191,23 +192,23 @@ export function runBaseTests<Context>(config: {
                 // Adding random repetition, to prevent the inputs from always having the same alignment.
                 const value = uuidv4() + "0".repeat(Math.random() * 7);
                 let result = await client.set(key, value, {
-                    conditionalSet: "onlyIfExists",
+                    conditionalSet: ConditionalChange.OnlyIfExist,
                 });
                 expect(result).toEqual(null);
 
                 result = await client.set(key, value, {
-                    conditionalSet: "onlyIfDoesNotExist",
+                    conditionalSet: ConditionalChange.OnlyIfDoesNotExist,
                 });
                 expect(result).toEqual("OK");
                 expect(await client.get(key)).toEqual(value);
 
                 result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfDoesNotExist",
+                    conditionalSet: ConditionalChange.OnlyIfDoesNotExist,
                 });
                 expect(result).toEqual(null);
 
                 result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfExists",
+                    conditionalSet: ConditionalChange.OnlyIfExist,
                 });
                 expect(result).toEqual("OK");
 
@@ -1378,25 +1379,25 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(
                     await client.zadd(key, membersScores, {
-                        conditionalChange: "onlyIfExists",
+                        conditionalChange: ConditionalChange.OnlyIfExist,
                     }),
                 ).toEqual(0);
 
                 expect(
                     await client.zadd(key, membersScores, {
-                        conditionalChange: "onlyIfDoesNotExist",
+                        conditionalChange: ConditionalChange.OnlyIfDoesNotExist,
                     }),
                 ).toEqual(3);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
-                        conditionalChange: "onlyIfDoesNotExist",
+                        conditionalChange: ConditionalChange.OnlyIfDoesNotExist,
                     }),
                 ).toEqual(null);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
-                        conditionalChange: "onlyIfExists",
+                        conditionalChange: ConditionalChange.OnlyIfExist,
                     }),
                 ).toEqual(6.0);
             }, protocol);

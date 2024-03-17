@@ -22,6 +22,7 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterClientConfiguration,
+    ConditionalChange,
     InfoOptions,
     Logger,
     RedisClient,
@@ -533,7 +534,7 @@ describe("SocketConnectionInternals", () => {
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const request1 = connection.set("foo", "bar", {
-                conditionalSet: "onlyIfExists",
+                conditionalSet: ConditionalChange.OnlyIfExist,
                 returnOldValue: true,
                 expiry: { type: "seconds", count: 10 },
             });

@@ -7,7 +7,6 @@ import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import { ClusterTransaction, Logger, ReturnType, Transaction } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
-
 beforeAll(() => {
     Logger.init("info");
 });
