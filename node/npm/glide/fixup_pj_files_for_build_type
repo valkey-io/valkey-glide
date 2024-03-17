@@ -1,0 +1,15 @@
+cat >build-ts/cjs/package.json <<!EOF
+{
+    "type": "commonjs",
+    "types": "build-ts/cjs/index.d.ts"
+
+}
+!EOF
+
+cat >build-ts/mjs/package.json <<!EOF
+{
+    "type": "module",
+    "types": "build-ts/mjs/index.d.ts"
+
+}
+!EOF

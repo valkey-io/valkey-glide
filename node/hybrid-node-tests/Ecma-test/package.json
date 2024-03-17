@@ -1,0 +1,26 @@
+{
+    "name": "ecma-test",
+    "version": "1.0.0",
+    "description": "",
+    "main": "Ecma-test.mjs",
+    "type": "module",
+    "scripts": {
+        "build-before-test": "cd ../../../node && npm run build",
+        "test-package-for-ecma": "npm run build-before-test && node Ecma-test.mjs",
+        "test-for-ci": "npm run test-package-for-ecma",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "child_process": "^1.0.2",
+        "find-free-ports": "^3.1.1",
+        "glide-for-redis": "file:../../../node/build-ts/mjs"
+    },
+    "devDependencies": {
+        "@types/node": "^18.7.9",
+        "prettier": "^2.8.8",
+        "typescript": "^4.8.4"
+    }
+}

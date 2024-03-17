@@ -1,13 +1,9 @@
 {
+    "extends": "./tsconfig-base.json",
     "compilerOptions": {
-        "target": "es2017",
-        "module": "node16",
-        "allowJs": true,
-        "esModuleInterop": true,
-        "baseUrl": "./",
-        "outDir": "./build-ts",
-        "forceConsistentCasingInFileNames": true,
-        "strict": true,
-        "skipLibCheck": true
+        /* Visit https://aka.ms/tsconfig to read more about this file */
+        "module": "ES2022" /* Specify what module code is generated. */,
+        /* Emit */
+        "outDir": "./build-ts/mjs" /* Specify an output folder for all emitted files. */
     }
 }
