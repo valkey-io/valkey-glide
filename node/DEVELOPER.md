@@ -170,3 +170,28 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 -   [Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
 -   [Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language support for VSCode.
+
+### Hybrid package publishing methode
+
+In this project we are using hybrid method for building the package for NODE.
+Hybrid method -
+In order to build the package for usage bothe in mjs and cjs we are using three different tsconfig files.
+tsconfig-base as the general tsconfig file, which the others will inherited from.
+tsconfig-cjs for commonJS build with commonjs as the target of translation and and tsconfig for ECMA build with ECMA as the target of translation.
+
+While running build we run two different builds - one will use tsconfig and will translate the package into build-ts/mjs, and the other will use tsconfig-cjs and will translate the package into build-ts/cjs.
+
+In our package.json we are adding the rule -
+
+```
+"exports": {
+        ".": {
+            "import": "./build-ts/mjs/index.js",
+            "require": "./build-ts/cjs/index.js"
+        }
+    },
+```
+
+In which depends on what type of import statement the user choose (import in ECMA, and require in commonJS), the user will get the fitting package to his standard.
+As part of the build we are running the fixup_pj_files_for_build_type script -
+This script add "type" and "types" values to the different package.json that been created for mjs and cjs with the fitting values.
