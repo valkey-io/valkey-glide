@@ -2,15 +2,15 @@ name: Semgrep
 
 on:
   # Scan changed files in PRs (diff-aware scanning):
-#   pull_request: {}
+  pull_request: {}
   # Scan on-demand through GitHub Actions interface:
   workflow_dispatch:
     inputs:
         branch:
           description: 'The branch to run against the semgrep tool'
           required: true
-#   push:
-#     branches: ["master", "main"]
+  push:
+    branches: ["main"]
   # Schedule the CI job (this method uses cron syntax):
   schedule:
     - cron: '0 8 * * *' # Sets Semgrep to scan every day at 08:00 UTC.
@@ -33,9 +33,4 @@ jobs:
       # Fetch project source with GitHub Actions Checkout.
       - uses: actions/checkout@v3
       # Run the "semgrep ci" command on the command line of the docker image.
-      - run: semgrep ci --no-suppress-errors
-        env:
-          # Connect to Semgrep Cloud Platform through your SEMGREP_APP_TOKEN.
-          # Generate a token from Semgrep Cloud Platform > Settings
-          # and add it to your GitHub secrets.
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      - run: semgrep ci --config auto --no-suppress-errors
