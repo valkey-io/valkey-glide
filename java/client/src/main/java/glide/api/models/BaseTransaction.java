@@ -6,8 +6,10 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -747,6 +749,38 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Reads the configuration parameters of a running Redis server.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @return Command response - A <code>map</code> of values corresponding to the configuration
+     *     parameters.
+     */
+    public T configGet(@NonNull String[] parameters) {
+        ArgsArray commandArgs = buildArgs(parameters);
+
+        protobufTransaction.addCommands(buildCommand(ConfigGet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets configuration parameters to the specified values.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @return Command response - <code>OK</code> if all configurations have been successfully set.
+     *     Otherwise, the transaction fails with an error.
+     */
+    public T configSet(@NonNull Map<String, String> parameters) {
+        ArgsArray commandArgs = buildArgs(convertMapToKeyValueStringArray(parameters));
+
+        protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
         return getThis();
     }
 

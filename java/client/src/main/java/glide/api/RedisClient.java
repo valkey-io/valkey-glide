@@ -1,10 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -18,6 +21,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
@@ -101,5 +105,16 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> configResetStat() {
         return commandManager.submitNewCommand(
                 ConfigResetStat, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String>> configGet(@NonNull String[] parameters) {
+        return commandManager.submitNewCommand(ConfigGet, parameters, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> configSet(@NonNull Map<String, String> parameters) {
+        return commandManager.submitNewCommand(
+                ConfigSet, convertMapToKeyValueStringArray(parameters), this::handleStringResponse);
     }
 }
