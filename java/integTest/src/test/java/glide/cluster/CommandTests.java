@@ -376,6 +376,7 @@ public class CommandTests {
         return Arrays.stream(value.split("\n"))
                 .filter(line -> line.contains("myself"))
                 .findFirst()
+                .map(line -> line.substring(0, line.indexOf("myself") + "myself".length()))
                 .orElse(null);
     }
 
