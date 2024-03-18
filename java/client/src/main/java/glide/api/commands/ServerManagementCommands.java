@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -69,4 +70,36 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> configResetStat();
+
+    /**
+     * Reads the configuration parameters of a running Redis server.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @return A <code>map</code> of values corresponding to the configuration parameters.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     * assert configParams.get("timeout").equals("1000");
+     * assert configParams.get("maxmemory").equals("1GB");
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String>> configGet(String[] parameters);
+
+    /**
+     * Sets configuration parameters to the specified values.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
+     *     error.
+     * @example
+     *     <pre>{@code
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> configSet(Map<String, String> parameters);
 }

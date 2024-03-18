@@ -19,11 +19,13 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleR
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
@@ -31,9 +33,11 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
@@ -377,6 +381,83 @@ public class CommandTests {
                 .filter(line -> line.contains("myself"))
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_no_args_returns_error() {
+        var exception =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
+        assertTrue(exception.getCause() instanceof RedisException);
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_wildcard() {
+        var data = clusterClient.configGet(new String[] {"*file"}).get();
+        assertTrue(data.size() > 5);
+        assertTrue(data.containsKey("pidfile"));
+        assertTrue(data.containsKey("logfile"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_multiple_params() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        var data = clusterClient.configGet(new String[] {"pidfile", "logfile"}).get();
+        assertAll(
+                () -> assertEquals(2, data.size()),
+                () -> assertTrue(data.containsKey("pidfile")),
+                () -> assertTrue(data.containsKey("logfile")));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configGet_with_wildcard_and_multi_node_route() {
+        var data = clusterClient.configGet(new String[] {"*file"}, ALL_PRIMARIES).get();
+        assertTrue(data.hasMultiData());
+        assertTrue(data.getMultiValue().size() > 1);
+        Map<String, String> config =
+                data.getMultiValue().get(data.getMultiValue().keySet().toArray(String[]::new)[0]);
+        assertAll(
+                () -> assertTrue(config.size() > 5),
+                () -> assertTrue(config.containsKey("pidfile")),
+                () -> assertTrue(config.containsKey("logfile")));
+    }
+
+    @Test
+    @SneakyThrows
+    public void configSet_a_parameter() {
+        var oldValue = clusterClient.configGet(new String[] {"maxclients"}).get().get("maxclients");
+
+        var response = clusterClient.configSet(Map.of("maxclients", "42")).get();
+        assertEquals(OK, response);
+        var newValue = clusterClient.configGet(new String[] {"maxclients"}).get();
+        assertEquals("42", newValue.get("maxclients"));
+
+        response = clusterClient.configSet(Map.of("maxclients", oldValue)).get();
+        assertEquals(OK, response);
+    }
+
+    @Test
+    @SneakyThrows
+    public void configSet_a_parameter_with_routing() {
+        var oldValue =
+                clusterClient
+                        .configGet(new String[] {"cluster-node-timeout"})
+                        .get()
+                        .get("cluster-node-timeout");
+
+        var response =
+                clusterClient.configSet(Map.of("cluster-node-timeout", "100500"), ALL_NODES).get();
+        assertEquals(OK, response);
+
+        var newValue = clusterClient.configGet(new String[] {"cluster-node-timeout"}).get();
+        assertEquals("100500", newValue.get("cluster-node-timeout"));
+
+        response = clusterClient.configSet(Map.of("cluster-node-timeout", oldValue), ALL_NODES).get();
+        assertEquals(OK, response);
     }
 
     @Test
