@@ -49,6 +49,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
@@ -1170,6 +1172,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zaddIncr(@NonNull String key, @NonNull String member, double increment) {
         return getThis().zaddIncr(key, member, increment, ZaddOptions.builder().build());
+    }
+
+    /**
+     * Removes the specified members from the sorted set stored at <code>key</code>.<br>
+     * Specified members that are not a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members to remove from the sorted set.
+     * @return Command Response - The number of members that were removed from the sorted set, not
+     *     including non-existing members.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     returns <code>0</code>.
+     */
+    public T zrem(@NonNull String key, @NonNull String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+        protobufTransaction.addCommands(buildCommand(Zrem, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return Command Response - The number of elements in the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     return <code>0</code>.
+     */
+    public T zcard(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(new String[] {key});
+        protobufTransaction.addCommands(buildCommand(Zcard, commandArgs));
+        return getThis();
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */

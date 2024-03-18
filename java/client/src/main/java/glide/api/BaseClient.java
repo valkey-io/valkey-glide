@@ -44,6 +44,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
@@ -572,5 +574,16 @@ public abstract class BaseClient
                         new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
 
         return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrem(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(Zrem, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zcard(@NonNull String key) {
+        return commandManager.submitNewCommand(Zcard, new String[] {key}, this::handleLongResponse);
     }
 }

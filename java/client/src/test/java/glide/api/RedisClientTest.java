@@ -61,6 +61,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
@@ -1540,5 +1542,54 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrem_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] members = new String[] {"member1", "member2"};
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Zrem), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrem(key, members);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zcard_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Zcard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zcard(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 }

@@ -142,4 +142,45 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zaddIncr(String key, String member, double increment);
+
+    /**
+     * Removes the specified members from the sorted set stored at <code>key</code>.<br>
+     * Specified members that are not a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members to remove from the sorted set.
+     * @return The number of members that were removed from the sorted set, not including non-existing
+     *     members.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrem("mySortedSet", new String[] {"member1", "member2"}).get();
+     * assert num1 == 2L; // Indicates that two members have been removed from the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zrem("nonExistingSortedSet", new String[] {"member1", "member2"}).get();
+     * assert num2 == 0L; // Indicates that no members were removed as the sorted set "nonExistingSortedSet" does not exist.
+     * }</pre>
+     */
+    CompletableFuture<Long> zrem(String key, String[] members);
+
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return The number of elements in the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     return <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zcard("mySortedSet").get();
+     * assert num1 == 3L; // Indicates that there are 3 elements in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zcard("nonExistingSortedSet").get();
+     * assert num2 == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zcard(String key);
 }
