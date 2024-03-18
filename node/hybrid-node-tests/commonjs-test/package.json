@@ -6,8 +6,8 @@
     "type": "commonjs",
     "scripts": {
         "build": "cd ../../../node && npm run build",
-        "test": "npm run node commonjs-test.cjs",
-        "build-and-test": "npm run build-before-test && npm run test",
+        "test": "node commonjs-test.cjs",
+        "build-and-test": "npm run build && npm run test",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },

@@ -8,8 +8,8 @@
     "type": "module",
     "scripts": {
         "build": "cd ../../../node && npm run build",
-        "test": "npm run node ecmascript-test.mjs",
-        "build-and-test": "npm run build-before-test && npm run test",
+        "test": "node ecmascript-test.mjs",
+        "build-and-test": "npm run build && npm run test",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },
