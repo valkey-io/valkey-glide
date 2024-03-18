@@ -196,7 +196,7 @@ do
         -lettuce)
             runAllBenchmarks=0
             runJava=1
-            chosenClients="lettuce_async"
+            chosenClients="lettuce"
             ;;
         -jedis)
             runAllBenchmarks=0
