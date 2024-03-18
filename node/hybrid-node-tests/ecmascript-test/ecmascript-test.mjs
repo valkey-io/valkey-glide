@@ -3,7 +3,7 @@ import findFreePorts from "find-free-ports";
 import { AsyncClient } from "glide-rs";
 import RedisServer from "redis-server";
 
-const PORT_NUMBER = 4000;
+const PORT_NUMBER = 4001;
 let server;
 let port;
 

@@ -2,7 +2,7 @@
 const { AsyncClient } = require("glide-rs");
 const RedisServer = require("redis-server");
 const FreePort = require("find-free-port");
-const PORT_NUMBER = 4000;
+const PORT_NUMBER = 4001;
 
 let server;
 let port;

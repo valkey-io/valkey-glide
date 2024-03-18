@@ -70,15 +70,20 @@ jobs:
               run: npm test
               working-directory: ./node
 
-            - name: test hybrid node modules
+            - name: test hybrid node modules - commonjs
               run: |
                 cd hybrid-node-tests
-                cd Common-test
+                cd commonjs-test
                 npm install 
-                npm run test-for-ci
-                cd ../Ecma-test
+                npm run build-and-test
+              working-directory: ./node
+            
+            - name: test hybrid node modules - ecma
+              run: |
+                cd hybrid-node-tests
+                cd ecmascript-test
                 npm install
-                npm run test-for-ci
+                npm run build-and-test
               working-directory: ./node
             
             - name: test redis modules

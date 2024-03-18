@@ -1,0 +1,6 @@
+{
+    "extends": "../../tsconfig-mjs.json",
+    "compilerOptions": {
+        "outDir": "./build-ts/mjs" /* Specify an output folder for all emitted files. */
+    }
+}

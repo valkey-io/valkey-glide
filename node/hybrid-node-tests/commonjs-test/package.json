@@ -5,14 +5,14 @@
     "main": "Common-test.cjs",
     "type": "commonjs",
     "scripts": {
-        "build-before-test": "cd ../../../node && npm run build",
-        "test-package-for-common": "npm run build-before-test && node Common-test.cjs",
-        "test-for-ci": "npm run test-package-for-common",
+        "build": "cd ../../../node && npm run build",
+        "test": "npm run node commonjs-test.cjs",
+        "build-and-test": "npm run build-before-test && npm run test",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },
-    "author": "",
-    "license": "ISC",
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
     "dependencies": {
         "child_process": "^1.0.2",
         "find-free-port": "^2.0.0",

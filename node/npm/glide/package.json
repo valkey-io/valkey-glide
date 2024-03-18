@@ -16,7 +16,7 @@
         "lint:fix": "eslint . --fix",
         "clean": "rm -rf build-ts/",
         "copy-declaration-files": "cp ../../build-ts/mjs/*.d.ts build-ts/mjs/ && cp ../../build-ts/cjs/*.d.ts build-ts/cjs/ && cp ../../build-ts/cjs/src/*.d.ts build-ts/cjs/src/ && cp ../../build-ts/mjs/src/*.d.ts build-ts/mjs/src/",
-        "build": "tsc -p tsconfig.json && tsc -p tsconfig-cjs.json &&  ./fixup_pj_files_for_build_type && mkdir -p build-ts/mjs/src && mkdir -p build-ts/cjs/src && npm run copy-declaration-files"
+        "build": "tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json &&  ./../../fixup_pj_files_for_build_type && mkdir -p build-ts/mjs/src && mkdir -p build-ts/cjs/src && npm run copy-declaration-files"
     },
     "files": [
         "/build-ts"
