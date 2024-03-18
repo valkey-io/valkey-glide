@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.tuple.Pair;
@@ -107,6 +112,23 @@ public class Benchmarking {
     public static void testClientSetGet(
             Supplier<Client> clientCreator, BenchmarkingApp.RunConfiguration config, boolean async) {
         for (int concurrentNum : config.concurrentTasks) {
+            // same as Executors.newCachedThreadPool() with a RejectedExecutionHandler for robustness
+            ExecutorService executor =
+                    new ThreadPoolExecutor(
+                            0,
+                            Integer.MAX_VALUE,
+                            60L,
+                            TimeUnit.SECONDS,
+                            new SynchronousQueue<Runnable>(),
+                            (r, poolExecutor) -> {
+                                if (!poolExecutor.isShutdown()) {
+                                    try {
+                                        poolExecutor.getQueue().put(r);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException("interrupted");
+                                    }
+                                }
+                            });
             int iterations =
                     config.minimal ? 1000 : Math.min(Math.max(100000, concurrentNum * 10000), 10000000);
             for (int clientCount : config.clientCount) {
@@ -143,6 +165,7 @@ public class Benchmarking {
                                         clients,
                                         taskNumDebugging,
                                         iterations,
+                                        executor,
                                         config.debugLogging));
                     }
                     if (config.debugLogging) {
@@ -201,6 +224,7 @@ public class Benchmarking {
                     printResults(calculatedResults, (after - started) / NANO_TO_SECONDS, iterations);
                 }
             }
+            executor.shutdownNow();
         }
 
         System.out.println();
@@ -215,6 +239,7 @@ public class Benchmarking {
             List<Client> clients,
             int taskNumDebugging,
             int iterations,
+            Executor executor,
             boolean debugLogging) {
         return CompletableFuture.supplyAsync(
                 () -> {
@@ -243,7 +268,8 @@ public class Benchmarking {
                         taskActionResults.get(result.getLeft()).add(result.getRight());
                     }
                     return taskActionResults;
-                });
+                },
+                executor);
     }
 
     public static Map<ChosenAction, Operation> getActionMap(int dataSize, boolean async) {
