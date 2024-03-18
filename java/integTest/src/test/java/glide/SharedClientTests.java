@@ -70,7 +70,7 @@ public class SharedClientTests {
     @MethodSource("getClients")
     public void send_and_receive_non_ascii_unicode(BaseClient client) {
         String key = "foo";
-        String value = "שלום hello 汉字";
+        String value = "\u05E9\u05DC\u05D5\u05DD hello \u6C49\u5B57";
 
         assertEquals(OK, client.set(key, value).get());
         assertEquals(value, client.get(key).get());
