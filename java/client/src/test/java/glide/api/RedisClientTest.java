@@ -17,8 +17,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -1542,6 +1544,48 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configGet_returns_success() {
+        // setup
+        CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
+        Map<String, String> testPayload = Map.of("timeout", "1000");
+        when(testResponse.get()).thenReturn(testPayload);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String>>submitNewCommand(
+                        eq(ConfigGet), eq(new String[] {"timeout"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String>> response = service.configGet(new String[] {"timeout"});
+        Map<String, String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(testPayload, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void configSet_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
+        when(testResponse.get()).thenReturn(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ConfigSet), eq(new String[] {"timeout", "1000"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.configSet(Map.of("timeout", "1000"));
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 
     @SneakyThrows
