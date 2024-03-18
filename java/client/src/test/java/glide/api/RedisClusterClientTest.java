@@ -575,7 +575,7 @@ public class RedisClusterClientTest {
     public void configGet_with_multi_node_route_returns_multi_value() {
         var commandManager = new TestCommandManager(null);
 
-        var data = Map.of("node1", Map.of("key1", "value1", "key2", "value2"));
+        var data = Map.of("node1", Map.of("timeout", "1000", "maxmemory", "1GB"));
         var client = new TestClient(commandManager, data);
 
         var value = client.configGet(TEST_ARGS, ALL_NODES).get();
