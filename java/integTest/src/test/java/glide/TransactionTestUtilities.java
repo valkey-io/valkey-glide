@@ -86,6 +86,9 @@ public class TransactionTestUtilities {
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
 
+        baseTransaction.configSet(Map.of("timeout", "1000"));
+        baseTransaction.configGet(new String[] {"timeout"});
+
         baseTransaction.configResetStat();
 
         return baseTransaction;
@@ -136,6 +139,8 @@ public class TransactionTestUtilities {
             4.0,
             1L,
             2L,
+            OK,
+            Map.of("timeout", "1000"),
             OK
         };
     }
