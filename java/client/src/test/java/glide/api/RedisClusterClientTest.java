@@ -562,7 +562,7 @@ public class RedisClusterClientTest {
     public void configGet_with_single_node_route_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
-        var data = Map.of("key1", "value1", "key2", "value2");
+        var data = Map.of("timeout", "1000", "maxmemory", "1GB");
         var client = new TestClient(commandManager, data);
 
         var value = client.configGet(TEST_ARGS, RANDOM).get();
