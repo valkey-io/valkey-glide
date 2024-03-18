@@ -44,8 +44,12 @@ FreePort(PORT_NUMBER)
                 console.log("Common Test passed");
             }
 
-            await flushallOnPort(port);
-            await server.close();
+            await flushallOnPort(port).then(() => {
+                console.log("db flushed");
+            });
+            await server.close().then(() => {
+                console.log("server closed");
+            });
         });
     })
     .catch((error) => {

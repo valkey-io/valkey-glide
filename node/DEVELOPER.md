@@ -173,15 +173,14 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 
 ### Hybrid package publishing method
 
-In this project we are using hybrid method for building the package for for NodeJS, in order to support GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules.
+In this project we are using hybrid method for building the package for NodeJS, in order to support GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules.
 Hybrid method -
 In order to build the package for usage in either module system, we use three different tsconfig files:
 
 -   `tsconfig-base` is the general tsconfig file, which the others will extend.
--   `tsconfig-cjs` for commonJS build with CommonJS as the target of translation.
--   `tsconfig` for ECMA build with ECMA as the target of translation.
+-   `tsconfig-cjs` for `commonJS` build with `CommonJS` as the target of translation.
+-   `tsconfig` for `ECMA` build with `ECMA` as the target of translation.
 
 The build is composed of 2 build steps, one will use `tsconfig` and write the results of the package's translation into the `build-ts/mjs` folder, and the other will use `tsconfig-cjs` and will write into the `build-ts/cjs` folder.
-Additionaly, we add to `package.json` the following export rule, which presents to the user the correct index file, based on the import statement used - `import` for ECMA, and `require` for `CommonJS`.
-As part of the build we are running the fixup_pj_files_for_build_type script -
-This script add "type" and "types" entries to the different `package.json` that been created for `ECMAScript` and `CommonJS` with the fitting values.
+Additionaly, we add to `package.json` the following export rule, which presents to the user the correct index file, based on the import statement used - `import` for `ECMA`, and `require` for `CommonJS`.
+As part of the build we run the `fixup_pj_files_for_build_type` script, which adds the `type` and `types` entries to the different `package.json` that been created for `ECMAScript` and `CommonJS` with the fitting values.

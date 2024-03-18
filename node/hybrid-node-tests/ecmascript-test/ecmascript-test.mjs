@@ -41,5 +41,9 @@ if (result !== "test") {
     console.log("Ecma Test passed");
 }
 
-await flushallOnPort(port);
-await server.close();
+await flushallOnPort(port).then(() => {
+    console.log("db flushed");
+});
+await server.close().then(() => {
+    console.log("server closed");
+});

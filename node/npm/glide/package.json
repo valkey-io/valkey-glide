@@ -4,13 +4,13 @@
     "version": "${package_version}",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/cjs/index.js",
+    "module": "build-ts/mjs/index.js",
     "exports": {
         ".": {
             "import": "./build-ts/mjs/index.js",
             "require": "./build-ts/cjs/index.js"
         }
     },
-    "module": "build-ts/mjs/index.js",
     "scripts": {
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",

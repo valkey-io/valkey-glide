@@ -2,13 +2,13 @@
     "name": "@aws/glide-for-redis",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/cjs/index.js",
+    "module": "build-ts/mjs/index.js",
     "exports": {
         ".": {
             "import": "./build-ts/mjs/index.js",
             "require": "./build-ts/cjs/index.js"
         }
     },
-    "module": "build-ts/mjs/index.js",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/aws/glide-for-redis.git"
