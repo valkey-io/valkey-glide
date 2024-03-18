@@ -972,4 +972,43 @@ public class SharedCommandTests {
                         .build();
         options.toArgs();
     }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zrem(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(1, client.zrem(key, new String[] {"one"}).get());
+        assertEquals(2, client.zrem(key, new String[] {"one", "two", "three"}).get());
+        assertEquals(0, client.zrem("non_existing_set", new String[] {"member"}).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zrem("foo", new String[] {"bar"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zcard(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(3, client.zcard(key).get());
+        assertEquals(1, client.zrem(key, new String[] {"one"}).get());
+        assertEquals(2, client.zcard(key).get());
+
+        assertEquals(0, client.zcard("nonExistentSet").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zcard("foo").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
 }
