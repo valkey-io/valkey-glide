@@ -69,6 +69,22 @@ jobs:
             - name: test
               run: npm test
               working-directory: ./node
+
+            - name: test hybrid node modules - commonjs
+              run: |
+                cd hybrid-node-tests
+                cd commonjs-test
+                npm install 
+                npm run build-and-test
+              working-directory: ./node
+            
+            - name: test hybrid node modules - ecma
+              run: |
+                cd hybrid-node-tests
+                cd ecmascript-test
+                npm install
+                npm run build-and-test
+              working-directory: ./node
             
             - name: test redis modules
               run: npm run test-modules -- --load-module=$GITHUB_WORKSPACE/redisearch.so --load-module=$GITHUB_WORKSPACE/redisjson.so

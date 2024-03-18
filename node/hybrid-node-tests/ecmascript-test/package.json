@@ -1,0 +1,26 @@
+{
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "name": "ecma-test",
+    "version": "1.0.0",
+    "description": "",
+    "main": "Ecma-test.mjs",
+    "type": "module",
+    "scripts": {
+        "build": "cd ../../../node && npm run build",
+        "test": "node ecmascript-test.mjs",
+        "build-and-test": "npm run build && npm run test",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "dependencies": {
+        "child_process": "^1.0.2",
+        "find-free-ports": "^3.1.1",
+        "glide-for-redis": "file:../../../node/build-ts/mjs"
+    },
+    "devDependencies": {
+        "@types/node": "^18.7.9",
+        "prettier": "^2.8.8",
+        "typescript": "^4.8.4"
+    }
+}

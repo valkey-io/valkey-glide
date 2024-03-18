@@ -1,0 +1,26 @@
+{
+    "name": "common-test",
+    "version": "1.0.0",
+    "description": "",
+    "main": "Common-test.cjs",
+    "type": "commonjs",
+    "scripts": {
+        "build": "cd ../../../node && npm run build",
+        "test": "node commonjs-test.cjs",
+        "build-and-test": "npm run build && npm run test",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "child_process": "^1.0.2",
+        "find-free-port": "^2.0.0",
+        "glide-for-redis": "file:../../../node/build-ts/cjs"
+    },
+    "devDependencies": {
+        "@types/node": "^18.7.9",
+        "prettier": "^2.8.8",
+        "typescript": "^4.8.4"
+    }
+}

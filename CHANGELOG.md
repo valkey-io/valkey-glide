@@ -25,6 +25,7 @@
 #### Features
 
 * Python: Allow chaining function calls on transaction. ([#987](https://github.com/aws/glide-for-redis/pull/987))
+* Node: Adding support for GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules. ([#1132](https://github.com/aws/glide-for-redis/pull/1132))
 
 ## 0.2.0 (2024-02-11)
 
