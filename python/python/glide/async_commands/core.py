@@ -1246,6 +1246,31 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PTTL, [key]),
         )
 
+    async def persist(
+        self,
+        key: str,
+    ) -> bool:
+        """
+        Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+        persistent (a key that will never expire as no timeout is associated).
+
+        See https://redis.io/commands/persist/ for more details.
+
+        Args:
+            key (str): TThe key to remove the existing timeout on.
+
+        Returns:
+            bool: False if `key` does not exist or does not have an associated timeout, True if the timeout has been removed.
+
+        Examples:
+            >>> await client.persist("my_key")
+                True  # Indicates that the timeout associated with the key "my_key" was successfully removed.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Persist, [key]),
+        )
+
     async def echo(self, message: str) -> str:
         """
         Echoes the provided `message` back.

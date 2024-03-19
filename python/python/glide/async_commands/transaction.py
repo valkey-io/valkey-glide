@@ -993,6 +993,24 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PTTL, [key])
 
+    def persist(
+        self: TTransaction,
+        key: str,
+    ) -> TTransaction:
+        """
+        Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+        persistent (a key that will never expire as no timeout is associated).
+
+        See https://redis.io/commands/persist/ for more details.
+
+        Args:
+            key (str): TThe key to remove the existing timeout on.
+
+        Commands response:
+            bool: False if `key` does not exist or does not have an associated timeout, True if the timeout has been removed.
+        """
+        return self.append_command(RequestType.Persist, [key])
+
     def echo(self: TTransaction, message: str) -> TTransaction:
         """
         Echoes the provided `message` back.
