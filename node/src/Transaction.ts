@@ -57,6 +57,7 @@ import {
     createPttl,
     createRPop,
     createRPush,
+    createRename,
     createSAdd,
     createSCard,
     createSMembers,
@@ -1109,6 +1110,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXread(keys_and_ids, options));
+    }
+
+    /**
+     * Renames `key` to `newkey`.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * If `newkey` already exists it is overwritten,
+     * See https://redis.io/commands/rename/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The newkey to rename to.
+     * Command Response - If the `key` is successfully set, return "OK". Returns an error when key does not exist
+     */
+    public rename(key: string, newKey: string): T {
+        return this.addAndReturn(createRename(key, newKey));
     }
 }
 
