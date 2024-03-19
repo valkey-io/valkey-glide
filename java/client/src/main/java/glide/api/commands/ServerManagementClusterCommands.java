@@ -27,9 +27,8 @@ public interface ServerManagementClusterCommands {
      * ClusterValue<String> payload = clusterClient.info().get();
      * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     String nodeName = entry.getKey();
-     *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("# Stats");
+     *     System.out.println("Node name: " + entry.getKey());
+     *     System.out.println("Node info: " + entry.getValue());
      * }
      * }</pre>
      */
@@ -51,9 +50,8 @@ public interface ServerManagementClusterCommands {
      * ClusterValue<String> payload = clusterClient.info(ALL_NODES).get();
      * // Command sent to all nodes via ALL_NODES route. Expects MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     String nodeName = entry.getKey();
-     *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("# Stats");
+     *     System.out.println("Node name: " + entry.getKey());
+     *     System.out.println("Node info: " + entry.getValue());
      * }
      * }</pre>
      */
@@ -75,9 +73,8 @@ public interface ServerManagementClusterCommands {
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
      * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     String nodeName = entry.getKey();
-     *     String nodeInfo = entry.getValue();
-     *     assert nodeInfo.contains("total_net_input_bytes");
+     *     System.out.println("Node name: " + entry.getKey());
+     *     System.out.println("Node stats: " + entry.getValue());
      * }
      * }</pre>
      */
