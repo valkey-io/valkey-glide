@@ -9,6 +9,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
@@ -47,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
+import glide.api.commands.ConnectionManagementBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
@@ -82,6 +84,7 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
+                ConnectionManagementBaseCommands,
                 GenericBaseCommands,
                 StringCommands,
                 HashBaseCommands,
@@ -238,6 +241,12 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, false, response);
+    }
+
+    @Override
+    public CompletableFuture<String> echo(@NonNull String message) {
+        return commandManager.submitNewCommand(
+                Echo, new String[] {message}, this::handleStringResponse);
     }
 
     @Override
