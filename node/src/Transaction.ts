@@ -1114,14 +1114,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Renames `key` to `newkey`.
+     * If `newkey` already exists it is overwritten.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
-     * If `newkey` already exists it is overwritten,
      * See https://redis.io/commands/rename/ for more details.
      *
      * @param key - The key to rename.
-     * @param newKey - The newkey to rename to.
-     * Command Response - If the `key` is successfully set, return "OK". Returns an error when key does not exist
+     * @param newKey - The new name of the key.
+     * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
      */
     public rename(key: string, newKey: string): T {
         return this.addAndReturn(createRename(key, newKey));
