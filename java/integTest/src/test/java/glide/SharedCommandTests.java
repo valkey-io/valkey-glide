@@ -9,6 +9,7 @@ import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_N
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1010,5 +1011,33 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zcard("foo").get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void type(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String listKey = UUID.randomUUID().toString();
+        String hashKey = UUID.randomUUID().toString();
+        String setKey = UUID.randomUUID().toString();
+        String zsetKey = UUID.randomUUID().toString();
+        // TODO: check with stream once XSET is implemented
+        String streamKey = UUID.randomUUID().toString();
+
+        client.set(stringKey, "value").get();
+        client.lpush(listKey, new String[] {"value"}).get();
+        client.hset(hashKey, Map.of("1", "2")).get();
+        client.sadd(setKey, new String[] {"value"}).get();
+        client.zadd(zsetKey, Map.of("1", 2.)).get();
+
+        assertAll(
+                () -> assertEquals("none", client.type(nonExistingKey).get()),
+                () -> assertEquals("string", client.type(stringKey).get()),
+                () -> assertEquals("list", client.type(listKey).get()),
+                () -> assertEquals("hash", client.type(hashKey).get()),
+                () -> assertEquals("set", client.type(setKey).get()),
+                () -> assertEquals("zset", client.type(zsetKey).get()));
     }
 }
