@@ -1751,4 +1751,3 @@ class CoreCommands(Protocol):
                 ["foo", "bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
-        return await self._execute_script(script.get_hash(), keys, args)
