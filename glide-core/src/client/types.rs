@@ -2,6 +2,11 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+use std::time::Duration;
+
+#[cfg(feature = "socket-layer")]
+use crate::connection_request as protobuf;
+
 #[derive(Default)]
 pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
@@ -14,11 +19,20 @@ pub struct ConnectionRequest {
     pub cluster_mode_enabled: bool,
     pub request_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
+    pub periodic_checks: Option<PeriodicCheck>,
 }
 
 pub struct AuthenticationInfo {
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+#[derive(Default, Debug)]
+pub enum PeriodicCheck {
+    #[default]
+    Enabled,
+    Disabled,
+    ManualInterval(Duration),
 }
 
 #[derive(Debug)]
@@ -73,13 +87,13 @@ fn none_if_zero(value: u32) -> Option<u32> {
 }
 
 #[cfg(feature = "socket-layer")]
-impl From<crate::connection_request::ConnectionRequest> for ConnectionRequest {
-    fn from(value: crate::connection_request::ConnectionRequest) -> Self {
+impl From<protobuf::ConnectionRequest> for ConnectionRequest {
+    fn from(value: protobuf::ConnectionRequest) -> Self {
         let read_from = value.read_from.enum_value().ok().map(|val| match val {
-            crate::connection_request::ReadFrom::Primary => ReadFrom::Primary,
-            crate::connection_request::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
-            crate::connection_request::ReadFrom::LowestLatency => todo!(),
-            crate::connection_request::ReadFrom::AZAffinity => todo!(),
+            protobuf::ReadFrom::Primary => ReadFrom::Primary,
+            protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
+            protobuf::ReadFrom::LowestLatency => todo!(),
+            protobuf::ReadFrom::AZAffinity => todo!(),
         });
 
         let client_name = chars_to_string_option(&value.client_name);
@@ -95,14 +109,14 @@ impl From<crate::connection_request::ConnectionRequest> for ConnectionRequest {
 
         let database_id = value.database_id as i64;
         let protocol = value.protocol.enum_value().ok().map(|val| match val {
-            crate::connection_request::ProtocolVersion::RESP3 => redis::ProtocolVersion::RESP3,
-            crate::connection_request::ProtocolVersion::RESP2 => redis::ProtocolVersion::RESP2,
+            protobuf::ProtocolVersion::RESP3 => redis::ProtocolVersion::RESP3,
+            protobuf::ProtocolVersion::RESP2 => redis::ProtocolVersion::RESP2,
         });
 
         let tls_mode = value.tls_mode.enum_value().ok().map(|val| match val {
-            crate::connection_request::TlsMode::NoTls => TlsMode::NoTls,
-            crate::connection_request::TlsMode::SecureTls => TlsMode::SecureTls,
-            crate::connection_request::TlsMode::InsecureTls => TlsMode::InsecureTls,
+            protobuf::TlsMode::NoTls => TlsMode::NoTls,
+            protobuf::TlsMode::SecureTls => TlsMode::SecureTls,
+            protobuf::TlsMode::InsecureTls => TlsMode::InsecureTls,
         });
 
         let addresses = value
@@ -124,6 +138,18 @@ impl From<crate::connection_request::ConnectionRequest> for ConnectionRequest {
                     factor: strategy.factor,
                     number_of_retries: strategy.number_of_retries,
                 });
+        let periodic_checks = value
+            .periodic_checks
+            .map(|periodic_check| match periodic_check {
+                protobuf::connection_request::Periodic_checks::PeriodicChecksManualInterval(
+                    interval,
+                ) => PeriodicCheck::ManualInterval(Duration::from_secs(
+                    interval.duration_in_sec.into(),
+                )),
+                protobuf::connection_request::Periodic_checks::PeriodicChecksDisabled(_) => {
+                    PeriodicCheck::Disabled
+                }
+            });
 
         ConnectionRequest {
             read_from,
@@ -136,6 +162,7 @@ impl From<crate::connection_request::ConnectionRequest> for ConnectionRequest {
             cluster_mode_enabled,
             request_timeout,
             connection_retry_strategy,
+            periodic_checks,
         }
     }
 }

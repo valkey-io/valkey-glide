@@ -3,9 +3,6 @@
  */
 mod types;
 
-use crate::connection_request::{
-    connection_request, ConnectionRequest, NodeAddress, ProtocolVersion, ReadFrom, TlsMode,
-};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::log_info;
@@ -274,12 +271,9 @@ async fn create_cluster_client(
     let read_from = request.read_from.unwrap_or_default();
     let read_from_replicas = !matches!(read_from, ReadFrom::Primary); // TODO - implement different read from replica strategies.
     let periodic_checks = match request.periodic_checks {
-        Some(periodic_checks) => match periodic_checks {
-            connection_request::Periodic_checks::PeriodicChecksManualInterval(interval) => {
-                Some(Duration::from_secs(interval.duration_in_sec.into()))
-            }
-            connection_request::Periodic_checks::PeriodicChecksDisabled(_) => None,
-        },
+        Some(PeriodicCheck::Disabled) => None,
+        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_CHECKS_INTERVAL),
+        Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_CHECKS_INTERVAL),
     };
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
@@ -397,24 +391,19 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .unwrap_or_default();
     let periodic_checks = if request.cluster_mode_enabled {
         match request.periodic_checks {
-            Some(ref periodic_checks) => match periodic_checks {
-                connection_request::Periodic_checks::PeriodicChecksManualInterval(interval) => {
-                    format!(
-                        "\nPeriodic Checks: Enabled with manual interval of {:?}s",
-                        interval.duration_in_sec
-                    )
-                }
-                connection_request::Periodic_checks::PeriodicChecksDisabled(_) => {
-                    "\nPeriodic Checks: Disabled".to_string()
-                }
-            },
-            None => format!(
+            Some(PeriodicCheck::Disabled) => "\nPeriodic Checks: Disabled".to_string(),
+            Some(PeriodicCheck::Enabled) => format!(
                 "\nPeriodic Checks: Enabled with default interval of {:?}",
                 DEFAULT_PERIODIC_CHECKS_INTERVAL
             ),
+            Some(PeriodicCheck::ManualInterval(interval)) => format!(
+                "\nPeriodic Checks: Enabled with manual interval of {:?}s",
+                interval.as_secs()
+            ),
+            None => String::new(),
         }
     } else {
-        "".to_string()
+        String::new()
     };
 
     format!(
