@@ -43,6 +43,9 @@ def transaction_test(
     transaction.echo(value)
     args.append(value)
 
+    transaction.persist(key)
+    args.append(False)
+
     transaction.exists([key])
     args.append(1)
 
