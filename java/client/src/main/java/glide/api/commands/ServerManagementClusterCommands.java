@@ -27,8 +27,7 @@ public interface ServerManagementClusterCommands {
      * ClusterValue<String> payload = clusterClient.info().get();
      * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     System.out.println("Node name: " + entry.getKey());
-     *     System.out.println("Node info: " + entry.getValue());
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
      * }
      * }</pre>
      */
@@ -48,10 +47,9 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(ALL_NODES).get();
-     * // Command sent to all nodes via ALL_NODES route. Expects MultiValue result.
+     * // Command sent to all nodes via ALL_NODES route, expecting MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     System.out.println("Node name: " + entry.getKey());
-     *     System.out.println("Node info: " + entry.getValue());
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
      * }
      * }</pre>
      */
@@ -73,8 +71,7 @@ public interface ServerManagementClusterCommands {
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
      * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
-     *     System.out.println("Node name: " + entry.getKey());
-     *     System.out.println("Node stats: " + entry.getValue());
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
      * }
      * }</pre>
      */
@@ -96,7 +93,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build(), RANDOM).get();
-     * // Command sent to a single random node via RANDOM route. Expects SingleValue result.
+     * // Command sent to a single random node via RANDOM route, expecting SingleValue result.
      * assert data.getSingleValue().contains("total_net_input_bytes");
      * }</pre>
      */
@@ -128,7 +125,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configRewrite(ALL_PRIMARIES).get();
-     * // By default, command is sent to all primary nodes.
+     * // Expecting an "OK" for all primary nodes.
      * assert response.equals("OK");
      * }</pre>
      */
@@ -162,7 +159,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat(ALL_PRIMARIES).get();
-     * // By default, command is sent to all primary nodes.
+     * // Expecting an "OK" for all primary nodes.
      * assert response.equals("OK");
      * }</pre>
      */
