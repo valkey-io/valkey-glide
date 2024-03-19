@@ -52,6 +52,8 @@ public class TransactionTestUtilities {
 
         baseTransaction.incrByFloat(key3, 0.5);
 
+        baseTransaction.strlen(key2);
+
         baseTransaction.unlink(new String[] {key3});
 
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
@@ -112,6 +114,7 @@ public class TransactionTestUtilities {
             2L,
             0L,
             0.5,
+            (long) value1.length(),
             1L,
             2L,
             value1,
