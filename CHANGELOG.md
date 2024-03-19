@@ -21,6 +21,7 @@
 * Python: Added json module and JSON.SET JSON.GET commands  ([#1056](https://github.com/aws/glide-for-redis/pull/1056))
 * Node: Added Time command. ([#1114](https://github.com/aws/glide-for-redis/pull/1114))
 * Python, Node: Added LINDEX command ([#1058](https://github.com/aws/glide-for-redis/pull/1058), [#999](https://github.com/aws/glide-for-redis/pull/999))
+* Python: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065))
 
 #### Features
 

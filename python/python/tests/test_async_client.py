@@ -1504,6 +1504,27 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrank(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1.5, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores) == 3
+        assert await redis_client.zrank(key, "one") == 0
+        if not await check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.zrank_withscore(key, "one") == [0, 1.5]
+            assert await redis_client.zrank_withscore(key, "non_existing_field") is None
+            assert (
+                await redis_client.zrank_withscore("non_existing_key", "field") is None
+            )
+
+        assert await redis_client.zrank(key, "non_existing_field") is None
+        assert await redis_client.zrank("non_existing_key", "field") is None
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrank(key, "one")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK

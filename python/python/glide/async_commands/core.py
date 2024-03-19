@@ -1634,6 +1634,65 @@ class CoreCommands(Protocol):
             Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
         )
 
+    async def zrank(
+        self,
+        key: str,
+        member: str,
+    ) -> Optional[int]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
+
+        See https://redis.io/commands/zrank for more details.
+
+        To get the rank of `member` with it's score, see `zrank_withscore`.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[int]: The rank of `member` in the sorted set.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
+
+            Examples:
+            >>> await client.zrank("my_sorted_set", "member2")
+                1  # Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
+            >>> await client.zrank("my_sorted_set", "non_existing_member")
+                None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+        """
+        return cast(
+            Optional[int], await self._execute_command(RequestType.Zrank, [key, member])
+        )
+
+    async def zrank_withscore(
+        self,
+        key: str,
+        member: str,
+    ) -> Optional[List[Union[int, float]]]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with it's score, where scores are ordered from the lowest to highest.
+
+        See https://redis.io/commands/zrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[List[Union[int, float]]]: A list containing the rank and score of `member` in the sorted set.
+            If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
+
+        Examples:
+            >>> await client.zrank_withscore("my_sorted_set", "member2")
+                [1 , 6.0]  # Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
+            >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
+                None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+        """
+        return cast(
+            Optional[List[Union[int, float]]],
+            await self._execute_command(RequestType.Zrank, [key, member, "WITHSCORE"]),
+        )
+
     async def zrem(
         self,
         key: str,

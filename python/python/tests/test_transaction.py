@@ -15,11 +15,13 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
-from tests.test_async_client import get_random_string
+from tests.test_async_client import check_if_server_version_lt, get_random_string
 
 
-def transaction_test(
-    transaction: Union[Transaction, ClusterTransaction], keyslot: str
+async def transaction_test(
+    transaction: Union[Transaction, ClusterTransaction],
+    keyslot: str,
+    redis_client: TRedisClient,
 ) -> List[TResult]:
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -147,6 +149,11 @@ def transaction_test(
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     args.append(3)
+    transaction.zrank(key8, "one")
+    args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.2.0"):
+        transaction.zrank_withscore(key8, "one")
+        args.append([0, 1])
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
     transaction.zrem(key8, ["one"])
@@ -252,7 +259,7 @@ class TestTransaction:
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
         transaction.info()
-        expected = transaction_test(transaction, keyslot)
+        expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], str)
@@ -296,7 +303,7 @@ class TestTransaction:
         transaction.get(key)
         transaction.select(0)
         transaction.get(key)
-        expected = transaction_test(transaction, keyslot)
+        expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], str)
