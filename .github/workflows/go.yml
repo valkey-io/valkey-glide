@@ -84,6 +84,15 @@ jobs:
               working-directory: ./go
               run: make test
 
+            - name: Upload cluster manager logs
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: cluster-manager-logs-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  path: |
+                      utils/clusters/**
+
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
         strategy:
@@ -149,6 +158,15 @@ jobs:
             - name: Run tests
               working-directory: ./go
               run: make test
+
+            - name: Upload cluster manager logs
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: cluster-manager-logs-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  path: |
+                      utils/clusters/**
 
     lint-rust:
         timeout-minutes: 15
