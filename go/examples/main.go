@@ -3,24 +3,24 @@
 package main
 
 import (
-	"log"
+    "log"
 
-	"github.com/aws/glide-for-redis/go/glide/api"
+    "github.com/aws/glide-for-redis/go/glide/api"
 )
 
 func main() {
-	host := "localhost"
-	port := 6379
+    host := "localhost"
+    port := 6379
 
-	config := api.NewRedisClientConfiguration().
-		WithAddress(&api.NodeAddress{Host: host, Port: port})
+    config := api.NewRedisClientConfiguration().
+        WithAddress(&api.NodeAddress{Host: host, Port: port})
 
-	client, err := api.CreateClient(config)
-	if err != nil {
-		log.Fatal("error connecting to database: ", err)
-	}
+    client, err := api.NewRedisClient(config)
+    if err != nil {
+        log.Fatal("error connecting to database: ", err)
+    }
 
-	// TODO: Add example commands as they are implemented
+    // TODO: Add example commands as they are implemented
 
-	client.Close()
+    client.Close()
 }

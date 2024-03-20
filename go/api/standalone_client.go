@@ -11,8 +11,8 @@ type RedisClient struct {
 	*baseClient
 }
 
-// CreateClient creates a Redis client in standalone mode using the given [RedisClientConfiguration].
-func CreateClient(config *RedisClientConfiguration) (*RedisClient, error) {
+// NewRedisClient creates a Redis client in standalone mode using the given [RedisClientConfiguration].
+func NewRedisClient(config *RedisClientConfiguration) (*RedisClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err

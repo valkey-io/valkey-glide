@@ -10,7 +10,7 @@ import (
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := api.NewRedisClientConfiguration().
 		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]})
-	client, err := api.CreateClient(config)
+	client, err := api.NewRedisClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -24,7 +24,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 		config.WithAddress(&api.NodeAddress{Port: port})
 	}
 
-	client, err := api.CreateClusterClient(config)
+	client, err := api.NewRedisClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -36,7 +36,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 	config := api.NewRedisClusterClientConfiguration().
 		WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]})
 
-	client, err := api.CreateClusterClient(config)
+	client, err := api.NewRedisClusterClient(config)
 
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), client)
@@ -47,7 +47,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 	config := api.NewRedisClientConfiguration().
 		WithAddress(&api.NodeAddress{Host: "invalid-host"})
-	client, err := api.CreateClient(config)
+	client, err := api.NewRedisClient(config)
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)

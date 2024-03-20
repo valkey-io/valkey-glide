@@ -7,8 +7,8 @@ type RedisClusterClient struct {
 	*baseClient
 }
 
-// CreateClusterClient creates a Redis client in cluster mode using the given [RedisClusterClientConfiguration].
-func CreateClusterClient(config *RedisClusterClientConfiguration) (*RedisClusterClient, error) {
+// NewRedisClusterClient creates a Redis client in cluster mode using the given [RedisClusterClientConfiguration].
+func NewRedisClusterClient(config *RedisClusterClientConfiguration) (*RedisClusterClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
