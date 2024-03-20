@@ -5,8 +5,8 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 //
-// void successCallback(uintptr_t channelPtr, char *message);
-// void failureCallback(uintptr_t channelPtr, char *errMessage, RequestErrorType errType);
+// void successCallback(void *channelPtr, char *message);
+// void failureCallback(void *channelPtr, char *errMessage, RequestErrorType errType);
 import "C"
 
 import (
@@ -16,14 +16,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// BaseClient defines an interface for methods common to both [RedisClient] and [RedisClusterClient].
+type BaseClient interface {
+	// Close terminates the client by closing all associated resources.
+	Close()
+}
+
+type payload struct {
+	value string
+	error error
+}
+
 //export successCallback
-func successCallback(channelPtr C.uintptr_t, cResponse *C.char) {
-	// TODO: Implement when we implement the command logic
+func successCallback(channelPtr unsafe.Pointer, cResponse *C.char) {
+	// TODO: call lib.rs function to free response
+	response := C.GoString(cResponse)
+	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel <- payload{value: response, error: nil}
 }
 
 //export failureCallback
-func failureCallback(channelPtr C.uintptr_t, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-	// TODO: Implement when we implement the command logic
+func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
+	// TODO: call lib.rs function to free response
+	resultChannel := *(*chan payload)(channelPtr)
+	resultChannel <- payload{value: "", error: goError(cErrorType, cErrorMessage)}
 }
 
 type clientConfiguration interface {
@@ -70,4 +86,40 @@ func (client *baseClient) Close() {
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+}
+
+func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (interface{}, error) {
+	if client.coreClient == nil {
+		return nil, &ClosingError{"The client is closed."}
+	}
+
+	cArgs := toCStrings(args)
+	defer freeCStrings(cArgs)
+
+	resultChannel := make(chan payload)
+	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
+
+	C.command(client.coreClient, C.uintptr_t(resultChannelPtr), requestType, C.uintptr_t(len(args)), &cArgs[0])
+
+	payload := <-resultChannel
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+func toCStrings(args []string) []*C.char {
+	cArgs := make([]*C.char, len(args))
+	for i, arg := range args {
+		cString := C.CString(arg)
+		cArgs[i] = cString
+	}
+	return cArgs
+}
+
+func freeCStrings(cArgs []*C.char) {
+	for _, arg := range cArgs {
+		C.free(unsafe.Pointer(arg))
+	}
 }
