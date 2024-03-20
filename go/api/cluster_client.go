@@ -4,15 +4,15 @@ package api
 
 // RedisClusterClient is a client used for connection to cluster Redis servers.
 type RedisClusterClient struct {
-	*baseClient
+    *baseClient
 }
 
-// NewRedisClusterClient creates a Redis client in cluster mode using the given [RedisClusterClientConfiguration].
+// NewRedisClusterClient creates a [RedisClusterClient] in cluster mode using the given [RedisClusterClientConfiguration].
 func NewRedisClusterClient(config *RedisClusterClientConfiguration) (*RedisClusterClient, error) {
-	client, err := createClient(config)
-	if err != nil {
-		return nil, err
-	}
+    client, err := createClient(config)
+    if err != nil {
+        return nil, err
+    }
 
-	return &RedisClusterClient{client}, nil
+    return &RedisClusterClient{client}, nil
 }
