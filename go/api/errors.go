@@ -6,6 +6,12 @@ package api
 // #include "../lib.h"
 import "C"
 
+type ConnectionError struct {
+	msg string
+}
+
+func (e *ConnectionError) Error() string { return e.msg }
+
 // RequestError is a Redis client error that occurs when an error is reported during a request.
 type RequestError struct {
 	msg string

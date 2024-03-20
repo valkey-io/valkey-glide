@@ -53,9 +53,10 @@ func createClient(converter connectionRequestConverter) (*baseClient, error) {
 	)
 	defer C.free_connection_response(cResponse)
 
-	cErr := cResponse.error_message
+	cErr := cResponse.connection_error_message
 	if cErr != nil {
-		return nil, goError(cResponse.error_type, cResponse.error_message)
+		message := C.GoString(cErr)
+		return nil, &ConnectionError{message}
 	}
 
 	return &baseClient{cResponse.conn_ptr}, nil

@@ -51,5 +51,5 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 
 	assert.Nil(suite.T(), client)
 	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &api.DisconnectError{}, err)
+	assert.IsType(suite.T(), &api.ConnectionError{}, err)
 }
