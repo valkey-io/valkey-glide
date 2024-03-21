@@ -9,10 +9,10 @@ import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_N
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1023,21 +1023,28 @@ public class SharedCommandTests {
         String hashKey = UUID.randomUUID().toString();
         String setKey = UUID.randomUUID().toString();
         String zsetKey = UUID.randomUUID().toString();
-        // TODO: check with stream once XSET is implemented
         String streamKey = UUID.randomUUID().toString();
 
-        client.set(stringKey, "value").get();
-        client.lpush(listKey, new String[] {"value"}).get();
-        client.hset(hashKey, Map.of("1", "2")).get();
-        client.sadd(setKey, new String[] {"value"}).get();
-        client.zadd(zsetKey, Map.of("1", 2.)).get();
+        assertEquals(OK, client.set(stringKey, "value").get());
+        assertEquals(1, client.lpush(listKey, new String[] {"value"}).get());
+        assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
+        assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
 
-        assertAll(
-                () -> assertEquals("none", client.type(nonExistingKey).get()),
-                () -> assertEquals("string", client.type(stringKey).get()),
-                () -> assertEquals("list", client.type(listKey).get()),
-                () -> assertEquals("hash", client.type(hashKey).get()),
-                () -> assertEquals("set", client.type(setKey).get()),
-                () -> assertEquals("zset", client.type(zsetKey).get()));
+        // use custom command until XADD is implemented
+        String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
+        if (client instanceof RedisClient) {
+            assertNotNull(((RedisClient) client).customCommand(args).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertNotNull(((RedisClusterClient) client).customCommand(args).get());
+        }
+
+        assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
+        assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
+        assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
     }
 }
