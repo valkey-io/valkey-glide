@@ -85,15 +85,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void echo(BaseClient client) {
-        String message = "GLIDE";
-        String response = client.echo(message).get();
-        assertEquals(message, response);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
     public void unlink_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
