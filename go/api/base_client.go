@@ -18,9 +18,13 @@ import (
 
 // BaseClient defines an interface for methods common to both [RedisClient] and [RedisClusterClient].
 type BaseClient interface {
+	StringCommands
+
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
+
+const OK = "OK"
 
 type payload struct {
 	value string
@@ -122,4 +126,67 @@ func freeCStrings(cArgs []*C.char) {
 	for _, arg := range cArgs {
 		C.free(unsafe.Pointer(arg))
 	}
+}
+
+// Set the given key with the given value. The return value is a response from Redis containing the string "OK".
+//
+// See [redis.io] for details.
+//
+// For example:
+//
+//	result := client.Set("key", "value")
+//
+// [redis.io]: https://redis.io/commands/set/
+func (client *baseClient) Set(key string, value string) (string, error) {
+	result, err := client.executeCommand(C.SetString, []string{key, value})
+	if err != nil {
+		return "", err
+	}
+
+	return handleStringResponse(result)
+}
+
+// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the passed
+// options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
+// [OnlyIfDoesNotExist] conditions, an zero-value string is returned (""). If [api.SetOptions.ReturnOldValue] is set, the old
+// value is returned.
+//
+// See [redis.io] for details.
+//
+// For example:
+//
+//	result, err := client.SetWithOptions("key", "value", &api.SetOptions{
+//	    ConditionalSet: api.OnlyIfExists,
+//	    Expiry: &api.Expiry{
+//	        Type: api.Seconds,
+//	        Count: uint64(5),
+//	    },
+//	})
+//
+// [redis.io]: https://redis.io/commands/set/
+func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (string, error) {
+	result, err := client.executeCommand(C.SetString, append([]string{key, value}, options.toArgs()...))
+	if err != nil {
+		return "", nil
+	}
+
+	return handleStringResponse(result)
+}
+
+// Get a pointer to the value associated with the given key, or nil if no such value exists.
+//
+// See [redis.io] for details.
+//
+// For example:
+//
+//	result := client.Set("key", "value")
+//
+// [redis.io]: https://redis.io/commands/set/
+func (client *baseClient) Get(key string) (string, error) {
+	result, err := client.executeCommand(C.GetString, []string{key})
+	if err != nil {
+		return "", err
+	}
+
+	return handleStringResponse(result)
 }
