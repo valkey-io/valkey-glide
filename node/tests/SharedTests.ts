@@ -1895,7 +1895,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 // Take the time now, convert to 10 digits and subtract 1 second
                 const now = Math.floor(new Date().getTime() / 1000 - 1);
-                const result = await client.time();
+                const result = (await client.time()) as [string, string];
                 expect(result?.length).toEqual(2);
                 expect(Number(result?.at(0))).toBeGreaterThan(now);
                 // Test its not more than 1 second
@@ -1960,6 +1960,25 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(result).toEqual(expected);
             }, ProtocolVersion.RESP2);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "rename test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Making sure both keys will be oart of the same slot
+                const key = uuidv4() + "{123}";
+                const newKey = uuidv4() + "{123}";
+                await client.set(key, "value");
+                await client.rename(key, newKey);
+                const result = await client.get(newKey);
+                expect(result).toEqual("value");
+                // If key doesn't exist it should throw, it also test that key has succfully been renamed
+                await expect(client.rename(key, newKey)).rejects.toThrow();
+                client.close();
+            }, protocol);
         },
         config.timeout,
     );

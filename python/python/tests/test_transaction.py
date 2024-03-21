@@ -15,11 +15,13 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
-from tests.test_async_client import get_random_string
+from tests.test_async_client import check_if_server_version_lt, get_random_string
 
 
-def transaction_test(
-    transaction: Union[Transaction, ClusterTransaction], keyslot: str
+async def transaction_test(
+    transaction: Union[Transaction, ClusterTransaction],
+    keyslot: str,
+    redis_client: TRedisClient,
 ) -> List[TResult]:
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -34,6 +36,9 @@ def transaction_test(
     value2 = get_random_string(5)
     args: List[TResult] = []
 
+    transaction.dbsize()
+    args.append(0)
+
     transaction.set(key, value)
     args.append(OK)
     transaction.get(key)
@@ -42,6 +47,9 @@ def transaction_test(
     args.append("string")
     transaction.echo(value)
     args.append(value)
+
+    transaction.persist(key)
+    args.append(False)
 
     transaction.exists([key])
     args.append(1)
@@ -86,6 +94,8 @@ def transaction_test(
     args.append(value2)
     transaction.hlen(key4)
     args.append(2)
+    transaction.hvals(key4)
+    args.append([value, value2])
     transaction.hsetnx(key4, key, value)
     args.append(False)
     transaction.hincrby(key4, key3, 5)
@@ -142,6 +152,11 @@ def transaction_test(
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
     args.append(3)
+    transaction.zrank(key8, "one")
+    args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.2.0"):
+        transaction.zrank_withscore(key8, "one")
+        args.append([0, 1])
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
     transaction.zrem(key8, ["one"])
@@ -244,10 +259,11 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_transaction(self, redis_client: RedisClusterClient):
+        assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
         transaction.info()
-        expected = transaction_test(transaction, keyslot)
+        expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], str)
@@ -281,6 +297,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_transaction(self, redis_client: RedisClient):
+        assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         value = get_random_string(5)
@@ -291,7 +308,7 @@ class TestTransaction:
         transaction.get(key)
         transaction.select(0)
         transaction.get(key)
-        expected = transaction_test(transaction, keyslot)
+        expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], str)

@@ -359,10 +359,11 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::PTTL => Some(cmd("PTTL")),
         RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
         RequestType::Persist => Some(cmd("PERSIST")),
-        RequestType::JsonSet => Some(cmd("JSON.SET")),
-        RequestType::JsonGet => Some(cmd("JSON.GET")),
         RequestType::ZRemRangeByScore => Some(cmd("ZREMRANGEBYSCORE")),
         RequestType::Time => Some(cmd("TIME")),
+        RequestType::Zrank => Some(cmd("ZRANK")),
+        RequestType::Rename => Some(cmd("RENAME")),
+        RequestType::DBSize => Some(cmd("DBSIZE")),
     }
 }
 
@@ -578,7 +579,7 @@ async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request).await {
+    let client = match Client::new(request.into()).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };

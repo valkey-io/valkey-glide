@@ -759,6 +759,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hvals(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hvals(key) == ["value", "value2"]
+        assert await redis_client.hdel(key, [field]) == 1
+        assert await redis_client.hvals(key) == ["value2"]
+        assert await redis_client.hvals("non_existing_key") == []
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hvals(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1076,6 +1095,16 @@ class TestCommands:
 
         assert await redis_client.pexpireat(key, current_time * 1000 + 30000)
         assert 0 < await redis_client.pttl(key) <= 30000
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_persist(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.set(key, "value") == OK
+        assert not await redis_client.persist(key)
+
+        assert await redis_client.expire(key, 10)
+        assert await redis_client.persist(key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1475,6 +1504,27 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrank(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1.5, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores) == 3
+        assert await redis_client.zrank(key, "one") == 0
+        if not await check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.zrank_withscore(key, "one") == [0, 1.5]
+            assert await redis_client.zrank_withscore(key, "non_existing_field") is None
+            assert (
+                await redis_client.zrank_withscore("non_existing_key", "field") is None
+            )
+
+        assert await redis_client.zrank(key, "non_existing_field") is None
+        assert await redis_client.zrank("non_existing_key", "field") is None
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrank(key, "one")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
@@ -1508,6 +1558,39 @@ class TestCommands:
     async def test_echo(self, redis_client: TRedisClient):
         message = get_random_string(5)
         assert await redis_client.echo(message) == message
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_dbsize(self, redis_client: TRedisClient):
+        assert await redis_client.custom_command(["FLUSHALL"]) == OK
+
+        assert await redis_client.dbsize() == 0
+        key_value_pairs = [(get_random_string(10), "foo") for _ in range(10)]
+
+        for key, value in key_value_pairs:
+            assert await redis_client.set(key, value) == OK
+        assert await redis_client.dbsize() == 10
+
+        if isinstance(redis_client, RedisClusterClient):
+            assert await redis_client.custom_command(["FLUSHALL"]) == OK
+            key = get_random_string(5)
+            assert await redis_client.set(key, value) == OK
+            assert await redis_client.dbsize(SlotKeyRoute(SlotType.PRIMARY, key)) == 1
+        else:
+            assert await redis_client.select(1) == OK
+            assert await redis_client.dbsize() == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_time(self, redis_client: TRedisClient):
+        current_time = int(time.time()) - 1
+        result = await redis_client.time()
+        assert len(result) == 2
+        assert isinstance(result, list)
+        assert isinstance(result[0], str)
+        assert isinstance(result[1], str)
+        assert int(result[0]) > current_time
+        assert 0 < int(result[1]) < 1000000
 
 
 class TestCommandsUnitTests:
@@ -1671,18 +1754,21 @@ class TestClusterRoutes:
     async def test_cluster_route_by_address_reaches_correct_node(
         self, redis_client: RedisClusterClient
     ):
-        cluster_nodes = await redis_client.custom_command(
-            ["cluster", "nodes"], RandomNode()
+        # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
+        clean_result = lambda value: [
+            line for line in value.split("\n") if "myself" in line
+        ][0]
+
+        cluster_nodes = clean_result(
+            await redis_client.custom_command(["cluster", "nodes"], RandomNode())
         )
         assert isinstance(cluster_nodes, str)
-        host = (
-            [line for line in cluster_nodes.split("\n") if "myself" in line][0]
-            .split(" ")[1]
-            .split("@")[0]
-        )
+        host = cluster_nodes.split(" ")[1].split("@")[0]
 
-        second_result = await redis_client.custom_command(
-            ["cluster", "nodes"], ByAddressRoute(host)
+        second_result = clean_result(
+            await redis_client.custom_command(
+                ["cluster", "nodes"], ByAddressRoute(host)
+            )
         )
 
         assert cluster_nodes == second_result
@@ -1690,8 +1776,10 @@ class TestClusterRoutes:
         host, port = host.split(":")
         port_as_int = int(port)
 
-        third_result = await redis_client.custom_command(
-            ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
+        third_result = clean_result(
+            await redis_client.custom_command(
+                ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
+            )
         )
 
         assert cluster_nodes == third_result

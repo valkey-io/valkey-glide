@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig-base.json",
+    "compilerOptions": {
+        /* Visit https://aka.ms/tsconfig to read more about this file */
+        "module": "ES2022" /* Specify what module code is generated. */,
+        /* Emit */
+        "outDir": "./build-ts/mjs" /* Specify an output folder for all emitted files. */
+    }
+}

@@ -5,8 +5,10 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
+import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -47,6 +49,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
@@ -294,6 +298,30 @@ public class TransactionTests {
         transaction.configResetStat();
         results.add(Pair.of(ConfigResetStat, ArgsArray.newBuilder().build()));
 
+        transaction.configGet(new String[] {"maxmemory", "hash-max-listpack-entries"});
+        results.add(
+                Pair.of(
+                        ConfigGet,
+                        ArgsArray.newBuilder()
+                                .addArgs("maxmemory")
+                                .addArgs("hash-max-listpack-entries")
+                                .build()));
+
+        var configSetMap = new LinkedHashMap<String, String>();
+        configSetMap.put("maxmemory", "100mb");
+        configSetMap.put("save", "60");
+
+        transaction.configSet(configSetMap);
+        results.add(
+                Pair.of(
+                        ConfigSet,
+                        ArgsArray.newBuilder()
+                                .addArgs("maxmemory")
+                                .addArgs("100mb")
+                                .addArgs("save")
+                                .addArgs("60")
+                                .build()));
+
         Map<String, Double> membersScores = new LinkedHashMap<>();
         membersScores.put("member1", 1.0);
         membersScores.put("member2", 2.0);
@@ -334,6 +362,15 @@ public class TransactionTests {
                                 .addArgs("3.0")
                                 .addArgs("member1")
                                 .build()));
+
+        transaction.zrem("key", new String[] {"member1", "member2"});
+        results.add(
+                Pair.of(
+                        Zrem,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
+
+        transaction.zcard("key");
+        results.add(Pair.of(Zcard, ArgsArray.newBuilder().addArgs("key").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

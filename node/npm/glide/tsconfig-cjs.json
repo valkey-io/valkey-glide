@@ -1,0 +1,6 @@
+{
+    "extends": "../../tsconfig-cjs.json",
+    "compilerOptions": {
+        "outDir": "./build-ts/cjs" /* Specify an output folder for all emitted files. */
+    }
+}

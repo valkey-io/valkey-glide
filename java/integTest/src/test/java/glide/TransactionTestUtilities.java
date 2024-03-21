@@ -83,6 +83,11 @@ public class TransactionTestUtilities {
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zaddIncr(key8, "one", 3);
+        baseTransaction.zrem(key8, new String[] {"one"});
+        baseTransaction.zcard(key8);
+
+        baseTransaction.configSet(Map.of("timeout", "1000"));
+        baseTransaction.configGet(new String[] {"timeout"});
 
         baseTransaction.configResetStat();
 
@@ -132,6 +137,10 @@ public class TransactionTestUtilities {
             Set.of("baz"),
             3L,
             4.0,
+            1L,
+            2L,
+            OK,
+            Map.of("timeout", "1000"),
             OK
         };
     }

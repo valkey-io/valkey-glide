@@ -1,0 +1,17 @@
+#!/bin/bash
+# This script add "type" and "types" entries to the different `package.json` that been created for `ECMAScript` and `CommonJS` with the fitting values.
+cat >build-ts/cjs/package.json <<!EOF
+{
+    "type": "commonjs",
+    "types": "build-ts/cjs/index.d.ts"
+
+}
+!EOF
+
+cat >build-ts/mjs/package.json <<!EOF
+{
+    "type": "module",
+    "types": "build-ts/mjs/index.d.ts"
+
+}
+!EOF

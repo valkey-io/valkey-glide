@@ -5,6 +5,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -23,9 +24,13 @@ public interface ServerManagementClusterCommands {
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
      *     each address as the key and its corresponding value is the information for the node.
      * @example
-     *     <p><code>
-     *     {@literal Map<String, String>} routedInfoResult = clusterClient.info().get().getMultiValue();
-     *     </code>
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info().get();
+     * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info();
 
@@ -40,6 +45,14 @@ public interface ServerManagementClusterCommands {
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info(ALL_NODES).get();
+     * // Command sent to all nodes via ALL_NODES route, expecting MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(Route route);
 
@@ -54,6 +67,14 @@ public interface ServerManagementClusterCommands {
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
      *     each address as the key and its corresponding value is the information of the sections
      *     requested for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+     * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
+     * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
 
@@ -70,6 +91,12 @@ public interface ServerManagementClusterCommands {
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information of the sections requested for the node.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build(), RANDOM).get();
+     * // Command sent to a single random node via RANDOM route, expecting SingleValue result.
+     * assert data.getSingleValue().contains("total_net_input_bytes");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route);
 
@@ -83,7 +110,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configRewrite();
@@ -99,7 +126,8 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configRewrite(ALL_PRIMARIES).get();
-     * assert response.equals("OK")
+     * // Expecting an "OK" for all primary nodes.
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configRewrite(Route route);
@@ -115,7 +143,7 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat().get();
-     * assert response.equals("OK")
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configResetStat();
@@ -132,8 +160,84 @@ public interface ServerManagementClusterCommands {
      * @example
      *     <pre>{@code
      * String response = client.configResetStat(ALL_PRIMARIES).get();
-     * assert response.equals("OK")
+     * // Expecting an "OK" for all primary nodes.
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> configResetStat(Route route);
+
+    /**
+     * Reads the configuration parameters of a running Redis server.<br>
+     * The command will be sent to a random node.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @return A <code>map</code> of values corresponding to the configuration parameters.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet(new String[] {"timeout" , "maxmemory"}).get();
+     * assert configParams.get("timeout").equals("1000");
+     * assert configParams.get("maxmemory").equals("1GB");
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String>> configGet(String[] parameters);
+
+    /**
+     * Reads the configuration parameters of a running Redis server.
+     *
+     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @param parameters An <code>array</code> of configuration parameter names to retrieve values
+     *     for.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>map</code> of values corresponding to the configuration parameters.<br>
+     *     When specifying a route other than a single node, it returns a dictionary where each
+     *     address is the key and its corresponding node response is the value.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> configParams = client.configGet("timeout", RANDOM).get().getSingleValue();
+     * assert configParams.get("timeout").equals("1000");
+     *
+     * Map<String, Map<String, String>> configParamsPerNode = client.configGet("maxmemory", ALL_NODES).get().getMultiValue();
+     * assert configParamsPerNode.get("node1.example.com:6379").get("maxmemory").equals("1GB");
+     * assert configParamsPerNode.get("node2.example.com:6379").get("maxmemory").equals("2GB");
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route);
+
+    /**
+     * Sets configuration parameters to the specified values.<br>
+     * The command will be sent to all nodes.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
+     *     error.
+     * @example
+     *     <pre>{@code
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> configSet(Map<String, String> parameters);
+
+    /**
+     * Sets configuration parameters to the specified values.
+     *
+     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @param parameters A <code>map</code> consisting of configuration parameters and their
+     *     respective values to set.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
+     *     error.
+     * @example
+     *     <pre>{@code
+     * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB"), ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> configSet(Map<String, String> parameters, Route route);
 }

@@ -1,10 +1,17 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.CLUSTER_PORTS;
+import static glide.TestConfiguration.STANDALONE_PORTS;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.models.ClusterValue;
-import java.util.Arrays;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.RedisClusterClientConfiguration;
+import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.experimental.UtilityClass;
 
@@ -26,23 +33,47 @@ public class TestUtilities {
         return data.getMultiValue().get(data.getMultiValue().keySet().toArray(String[]::new)[0]);
     }
 
+    /** Generates a random string of a specified length using ASCII letters. */
+    public static String getRandomString(int length) {
+        String asciiLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+
+        for (int i = 0; i < length; i++) {
+            int index = random.nextInt(asciiLetters.length());
+            char randomChar = asciiLetters.charAt(index);
+            sb.append(randomChar);
+        }
+
+        return sb.toString();
+    }
+
     /**
-     * Replaces 'ping-sent' and 'pong-recv' timestamps in Redis Cluster Nodes output with
-     * placeholders.
+     * Transforms server info string into a Map, using lines with ":" to create key-value pairs,
+     * replacing duplicates with the last encountered value.
      */
-    public static String removeTimeStampsFromClusterNodesOutput(String rawOutput) {
-        return Arrays.stream(rawOutput.split("\n"))
-                .map(
-                        line -> {
-                            String[] parts = line.split(" ");
-                            // Format for CLUSTER NODES COMMAND: <id> <ip:port@cport[,hostname]> <flags> <master>
-                            // <ping-sent> <pong-recv> <config-epoch> <link-state> <slot> <slot> ... <slot>
-                            if (parts.length > 6) {
-                                parts[4] = "ping-sent";
-                                parts[5] = "pong-recv";
-                            }
-                            return String.join(" ", parts);
-                        })
-                .collect(Collectors.joining("\n"));
+    public static Map<String, String> parseInfoResponseToMap(String serverInfo) {
+        return serverInfo
+                .lines()
+                .filter(line -> line.contains(":"))
+                .map(line -> line.split(":", 2))
+                .collect(
+                        Collectors.toMap(
+                                parts -> parts[0],
+                                parts -> parts[1],
+                                (existingValue, newValue) -> newValue,
+                                HashMap::new));
+    }
+
+    public static RedisClientConfiguration.RedisClientConfigurationBuilder<?, ?>
+            commonClientConfig() {
+        return RedisClientConfiguration.builder()
+                .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build());
+    }
+
+    public static RedisClusterClientConfiguration.RedisClusterClientConfigurationBuilder<?, ?>
+            commonClusterClientConfig() {
+        return RedisClusterClientConfiguration.builder()
+                .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
     }
 }
