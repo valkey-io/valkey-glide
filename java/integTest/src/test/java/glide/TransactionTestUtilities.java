@@ -31,6 +31,7 @@ public class TransactionTestUtilities {
         baseTransaction.get(key1);
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
+        baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
 
         baseTransaction.exists(new String[] {key1});
@@ -51,8 +52,6 @@ public class TransactionTestUtilities {
         baseTransaction.decrBy(key3, 2);
 
         baseTransaction.incrByFloat(key3, 0.5);
-
-        baseTransaction.strlen(key2);
 
         baseTransaction.unlink(new String[] {key3});
 
@@ -98,9 +97,10 @@ public class TransactionTestUtilities {
 
     public static Object[] transactionTestResult() {
         return new Object[] {
-            OK,
-            value1,
-            null,
+            OK, // set(key1, value1)
+            value1, // get(key1)
+            null, // set(key2, value2, returnOldValue(true))
+            (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
             1L,
@@ -114,7 +114,6 @@ public class TransactionTestUtilities {
             2L,
             0L,
             0.5,
-            (long) value1.length(),
             1L,
             2L,
             value1,

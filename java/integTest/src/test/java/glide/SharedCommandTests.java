@@ -416,12 +416,12 @@ public class SharedCommandTests {
         String nonStringKey = UUID.randomUUID().toString();
         String nonExistingKey = UUID.randomUUID().toString();
 
-        client.set(stringKey, "GLIDE").get();
+        assertEquals(OK, client.set(stringKey, "GLIDE").get());
         assertEquals(5L, client.strlen(stringKey).get());
 
         assertEquals(0L, client.strlen(nonExistingKey).get());
 
-        client.lpush(nonStringKey, new String[] {"_"});
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.strlen(nonStringKey).get());
         assertTrue(exception.getCause() instanceof RequestException);
