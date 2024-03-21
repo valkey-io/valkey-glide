@@ -5,6 +5,7 @@
 
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
+use glide_core::ConnectionRequest;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use protobuf::Message;
@@ -73,7 +74,7 @@ fn create_client_internal(
         })?;
     let _runtime_handle = runtime.enter();
     let client = runtime
-        .block_on(GlideClient::new(request))
+        .block_on(GlideClient::new(ConnectionRequest::from(request)))
         .map_err(|err| err.to_string())?;
     Ok(Client {
         client,
