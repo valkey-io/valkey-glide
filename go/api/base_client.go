@@ -10,64 +10,64 @@ package api
 import "C"
 
 import (
-    "unsafe"
+	"unsafe"
 
-    "github.com/aws/glide-for-redis/go/glide/protobuf"
-    "google.golang.org/protobuf/proto"
+	"github.com/aws/glide-for-redis/go/glide/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 //export successCallback
 func successCallback(channelPtr C.uintptr_t, cResponse *C.char) {
-    // TODO: Implement when we implement the command logic
+	// TODO: Implement when we implement the command logic
 }
 
 //export failureCallback
 func failureCallback(channelPtr C.uintptr_t, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
-    // TODO: Implement when we implement the command logic
+	// TODO: Implement when we implement the command logic
 }
 
 type clientConfiguration interface {
-    toProtobuf() *protobuf.ConnectionRequest
+	toProtobuf() *protobuf.ConnectionRequest
 }
 
 type baseClient struct {
-    coreClient unsafe.Pointer
+	coreClient unsafe.Pointer
 }
 
 func createClient(config clientConfiguration) (*baseClient, error) {
-    request := config.toProtobuf()
-    msg, err := proto.Marshal(request)
-    if err != nil {
-        return nil, err
-    }
+	request := config.toProtobuf()
+	msg, err := proto.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
 
-    byteCount := len(msg)
-    requestBytes := C.CBytes(msg)
-    cResponse := (*C.struct_ConnectionResponse)(
-        C.create_client(
-            (*C.uchar)(requestBytes),
-            C.uintptr_t(byteCount),
-            (C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-            (C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
-        ),
-    )
-    defer C.free_connection_response(cResponse)
+	byteCount := len(msg)
+	requestBytes := C.CBytes(msg)
+	cResponse := (*C.struct_ConnectionResponse)(
+		C.create_client(
+			(*C.uchar)(requestBytes),
+			C.uintptr_t(byteCount),
+			(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
+			(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+		),
+	)
+	defer C.free_connection_response(cResponse)
 
-    cErr := cResponse.connection_error_message
-    if cErr != nil {
-        message := C.GoString(cErr)
-        return nil, &ConnectionError{message}
-    }
+	cErr := cResponse.connection_error_message
+	if cErr != nil {
+		message := C.GoString(cErr)
+		return nil, &ConnectionError{message}
+	}
 
-    return &baseClient{cResponse.conn_ptr}, nil
+	return &baseClient{cResponse.conn_ptr}, nil
 }
 
 // Close terminates the client by closing all associated resources.
 func (client *baseClient) Close() {
-    if client.coreClient == nil {
-        return
-    }
+	if client.coreClient == nil {
+		return
+	}
 
-    C.close_client(client.coreClient)
-    client.coreClient = nil
+	C.close_client(client.coreClient)
+	client.coreClient = nil
 }
