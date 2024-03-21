@@ -9,18 +9,17 @@ import {
     RedisClusterClient,
     parseInfoResponse,
 } from "../../";
+import { TRedisClient } from "../../src/Constants";
 import * as json from "../../src/redis-modules/Json";
 import { RedisCluster, getFirstResult } from "../TestUtilities";
 
 type Context = {
-    client: RedisClusterClient | RedisClient;
+    client: TRedisClient;
 };
-
-type BaseClient = RedisClusterClient | RedisClient;
 
 const TIMEOUT = 20000;
 
-describe("RedisModules", () => {
+describe("JsonModule", () => {
     let testsFailed = 0;
     let cluster: RedisCluster;
     let loadModuleList: string[];
@@ -30,6 +29,11 @@ describe("RedisModules", () => {
         const loadModuleArgs = args.filter((arg) =>
             arg.startsWith("--load-module="),
         );
+        if (loadModuleArgs.length === 0) {
+            throw new Error(
+                "No --load-module argument provided. Redis modules tests require --load-module argument to be specified.",
+            );
+        }
         loadModuleList = loadModuleArgs.map((arg) => arg.split("=")[1]);
     }, 20000);
 
@@ -59,13 +63,13 @@ describe("RedisModules", () => {
             clientName?: string,
         ) => Promise<{
             context: Context;
-            client: RedisClusterClient | RedisClient;
+            client: TRedisClient;
         }>;
         close: (context: Context, testSucceeded: boolean) => void;
         timeout?: number;
     }) => {
         const runTest = async (
-            test: (client: RedisClusterClient | RedisClient) => Promise<void>,
+            test: (client: TRedisClient) => Promise<void>,
             cluster_mode: boolean,
             protocol: ProtocolVersion,
             clientName?: string,
@@ -94,7 +98,7 @@ describe("RedisModules", () => {
             `test ReJSON module is loaded_%p%p`,
             async (clusterMode, protocol) => {
                 await runTest(
-                    async (client: BaseClient) => {
+                    async (client: TRedisClient) => {
                         const info = parseInfoResponse(
                             getFirstResult(
                                 await client.info([InfoOptions.Modules]),
@@ -118,7 +122,7 @@ describe("RedisModules", () => {
             `test json set get_%p%p`,
             async (clusterMode, protocol) => {
                 await runTest(
-                    async (client: BaseClient) => {
+                    async (client: TRedisClient) => {
                         const key = uuidv4();
                         const json_value = { a: 1.0, b: 2 };
                         expect(
@@ -159,10 +163,60 @@ describe("RedisModules", () => {
             [false, ProtocolVersion.RESP2],
             [false, ProtocolVersion.RESP3],
         ])(
+            `test json set get all data types_%p%p`,
+            async (clusterMode, protocol) => {
+                await runTest(
+                    async (client: TRedisClient) => {
+                        const key = uuidv4();
+                        const json_value = {
+                            integer: 42,
+                            float: 3.14,
+                            boolean: true,
+                            string: "Hello, world!",
+                            array: [1, 2, 3],
+                            object: { nested: "data" },
+                            nullValue: null,
+                        };
+                        expect(
+                            await json.set(
+                                client,
+                                key,
+                                "$",
+                                JSON.stringify(json_value),
+                            ),
+                        ).toBe("OK");
+
+                        let result = await json.get(client, key, ".");
+                        expect(typeof result).toBe("string");
+                        expect(JSON.parse(result!)).toEqual(json_value);
+
+                        result = await json.get(client, key, [
+                            "$.integer",
+                            "$.string",
+                        ]);
+                        expect(typeof result).toBe("string");
+                        expect(JSON.parse(result!)).toEqual({
+                            "$.integer": [json_value.integer],
+                            "$.string": [json_value.string],
+                        });
+                    },
+                    clusterMode,
+                    protocol,
+                );
+            },
+            config.timeout,
+        );
+
+        it.each([
+            [true, ProtocolVersion.RESP2],
+            [true, ProtocolVersion.RESP3],
+            [false, ProtocolVersion.RESP2],
+            [false, ProtocolVersion.RESP3],
+        ])(
             `Test JSON set and get multiple values with cluster mode: %s, and protocol: %s`,
             async (clusterMode, protocol) => {
                 await runTest(
-                    async (client: BaseClient) => {
+                    async (client: TRedisClient) => {
                         const key = uuidv4();
                         expect(
                             await json.set(
@@ -213,7 +267,7 @@ describe("RedisModules", () => {
             `test json set conditional set_%p%p`,
             async (clusterMode, protocol) => {
                 await runTest(
-                    async (client: BaseClient) => {
+                    async (client: TRedisClient) => {
                         const key = uuidv4();
                         const json_value = { a: 1.0, b: 2 };
                         expect(
@@ -277,7 +331,7 @@ describe("RedisModules", () => {
             `Test JSON get formatting, cluster mode: %s, and protocol: %s`,
             async (clusterMode, protocol) => {
                 await runTest(
-                    async (client: BaseClient) => {
+                    async (client: TRedisClient) => {
                         const key = uuidv4();
                         const json_value = { a: 1.5, b: 2, c: { d: 3, e: 4 } };
                         expect(

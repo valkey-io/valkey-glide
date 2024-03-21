@@ -25,11 +25,6 @@ function isLargeCommand(args: string[]) {
  * Represents a condition to the `SET`, `ZADD` and `JSON.SET` commands.
  */
 export enum ConditionalChange {
-    /**
-     * Specifies the conditional change behavior:
-     * - "onlyIfExists": Set the value only if the key o path already exists. Equivalent to `XX` in the Redis API.
-     * - "onlyIfDoesNotExist": Set the value only if the key or path does not exist. Equivalent to `NX` in the Redis API.
-     */
     OnlyIfExist = "XX",
     /*
      * OnlyIfExist: Only update key / elements that already exist. Equivalent to `XX` in the Redis API.
@@ -761,18 +756,18 @@ export function createZadd(
     let args = [key];
 
     if (options) {
-        if (options.conditionalChange === ConditionalChange.OnlyIfExist) {
-            args.push("XX");
-        } else if (
-            options.conditionalChange === ConditionalChange.OnlyIfDoesNotExist
-        ) {
-            if (options.updateOptions) {
-                throw new Error(
-                    `The GT, LT, and NX options are mutually exclusive. Cannot choose both ${options.updateOptions} and NX.`,
-                );
+        if (options.conditionalChange) {
+            if (
+                options.conditionalChange ===
+                ConditionalChange.OnlyIfDoesNotExist
+            ) {
+                if (options.updateOptions) {
+                    throw new Error(
+                        `The GT, LT, and NX options are mutually exclusive. Cannot choose both ${options.updateOptions} and NX.`,
+                    );
+                }
             }
-
-            args.push("NX");
+            args.push(options.conditionalChange.valueOf());
         }
 
         if (options.updateOptions === "scoreLessThanCurrent") {
@@ -1147,77 +1142,4 @@ export function createRename(
     newKey: string,
 ): redis_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
-}
-
-/**
- * @internal
- */
-export function createJsonSet(
-    key: string,
-    path: string,
-    value: string,
-    setCondition?: ConditionalChange,
-): string[] {
-    const args = ["JSON.SET", key, path, value];
-
-    if (setCondition) {
-        args.push(setCondition.valueOf());
-    }
-
-    return args;
-}
-
-/**
- * Represents options for formatting JSON data in the [JSON.GET](https://redis.io/commands/json.get/) command.
- */
-export type JsonGetOptions = {
-    /**
-     * Sets an indentation string for nested levels.
-     */
-    indent?: string;
-
-    /**
-     * Sets a string that's printed at the end of each line.
-     */
-    newline?: string;
-
-    /**
-     * Sets a string that's put between a key and a value.
-     */
-    space?: string;
-};
-
-/**
- * @internal
- */
-export function createJsonGet(
-    key: string,
-    paths?: string | string[],
-    options?: JsonGetOptions,
-): string[] {
-    const args = ["JSON.GET", key];
-
-    if (options) {
-        if (options.indent) {
-            args.push("INDENT", options.indent);
-        }
-
-        if (options.newline) {
-            args.push("NEWLINE", options.newline);
-        }
-
-        if (options.space) {
-            args.push("SPACE", options.space);
-        }
-    }
-
-    if (paths) {
-        if (typeof paths === "string") {
-            paths = [paths];
-        }
-
-        args.push(...paths);
-    }
-
-    return args;
 }

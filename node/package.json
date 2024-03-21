@@ -39,7 +39,7 @@
         "test": "jest --verbose --runInBand --testPathIgnorePatterns='redis-modules'",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
         "prepack": "npmignore --auto",
-        "test-modules": "jest --verbose --runInBand 'tests/redis-modules/RedisModules.test.ts'",
+        "test-modules": "jest --verbose --runInBand 'redis-modules'",
         "prettier:check:ci": "./node_modules/.bin/prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "./node_modules/.bin/prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },

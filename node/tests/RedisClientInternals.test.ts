@@ -29,10 +29,10 @@ import {
     RedisClientConfiguration,
     RedisClusterClient,
     RequestError,
-    ReturnType,
     SlotKeyTypes,
     Transaction,
 } from "..";
+import { ReturnType } from "../src/Constants";
 import {
     connection_request,
     redis_request,
