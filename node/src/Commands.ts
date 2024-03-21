@@ -767,6 +767,7 @@ export function createZadd(
                     );
                 }
             }
+
             args.push(options.conditionalChange.valueOf());
         }
 

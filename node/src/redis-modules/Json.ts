@@ -39,9 +39,9 @@ export type JsonGetOptions = {
  * @example
  *
  *      import * as json from "glide/redis-modules/Json";
- *      const json_value = { a: 1.0, b: 2 };
+ *      const json_value = \{ a: 1.0, b: 2 \};
  *      await json.set(client, "doc", "$", JSON.stringify(json_value));
- *       "OK" # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+ *       `OK` # Indicates successful setting of the value at path '$' in the key stored at `doc`.
  */
 export async function set(
     client: TRedisClient,
@@ -74,18 +74,18 @@ export async function set(
  * @example
  *
  *      import * as json from "glide/redis-modules/Json";
- *      const json_value = { a: 1.0, b: 2 };
+ *      const json_value = \{ a: 1.0, b: 2 \};
  *      await json.set(client, "doc", "$", JSON.stringify(json_value));
  *       "OK"
  *      const result = await json.get(client, "doc", "$");
  *      JSON.parse(result!);
- *       [{ a: 1.0, b: 2 }] # JSON object retrieved from the key `doc` using JSON.parse()
+ *       [\{ a: 1.0, b: 2 \}] # JSON object retrieved from the key `doc` using JSON.parse()
  *      await json.get(client, "doc", "$");
- *       "[{\"a\":1.0,\"b\":2}]" # Returns the value at path '$' in the JSON document stored at `doc`.
- *      await redisJson.get(client, "doc", ["$.a", "$.b"], { indent: " ", newline: "\n", space: " "});
- *       "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  // Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
+ *       `[\{\"a\":1.0,\"b\":2\}]` # Returns the value at path '$' in the JSON document stored at `doc`.
+ *      await redisJson.get(client, "doc", ["$.a", "$.b"], \{ indent: " ", newline: "\\n", space: " "\});
+ *       `\{\n "$.a": [\n  1.0\n ],\n "$.b": [\n  2\n ]\n\}`  // Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
  *      await redisJson.get(client, "doc", "$.non_existing_path")
- *       "[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
+ *       `[]`  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
  */
 export async function get(
     client: TRedisClient,

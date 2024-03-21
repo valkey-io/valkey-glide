@@ -29,11 +29,13 @@ describe("JsonModule", () => {
         const loadModuleArgs = args.filter((arg) =>
             arg.startsWith("--load-module="),
         );
+
         if (loadModuleArgs.length === 0) {
             throw new Error(
                 "No --load-module argument provided. Redis modules tests require --load-module argument to be specified.",
             );
         }
+
         loadModuleList = loadModuleArgs.map((arg) => arg.split("=")[1]);
     }, 20000);
 
