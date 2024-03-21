@@ -47,7 +47,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
-import glide.api.commands.ConnectionManagementBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
@@ -83,7 +82,6 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
-                ConnectionManagementBaseCommands,
                 GenericBaseCommands,
                 StringCommands,
                 HashBaseCommands,
