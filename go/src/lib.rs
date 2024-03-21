@@ -8,7 +8,6 @@
 
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
-use glide_core::ConnectionRequest;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::ConnectionRequest;
