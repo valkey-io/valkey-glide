@@ -96,4 +96,3 @@ void close_client(const void *client_ptr);
  * * The contained `connection_error_message` must not be null.
  */
 void free_connection_response(struct ConnectionResponse *connection_response_ptr);
-

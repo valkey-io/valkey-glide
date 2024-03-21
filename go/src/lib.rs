@@ -7,6 +7,7 @@ use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
+use glide_core::ConnectionRequest;
 use protobuf::Message;
 use std::{
     ffi::{c_void, CString},
@@ -74,7 +75,7 @@ fn create_client_internal(
         })?;
     let _runtime_handle = runtime.enter();
     let client = runtime
-        .block_on(GlideClient::new(request))
+        .block_on(GlideClient::new(ConnectionRequest::from(request)))
         .map_err(|err| err.to_string())?;
     Ok(Client {
         client,
@@ -161,4 +162,3 @@ pub unsafe extern "C" fn free_connection_response(
         drop(unsafe { CString::from_raw(connection_error_message as *mut c_char) });
     }
 }
-
