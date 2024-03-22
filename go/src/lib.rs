@@ -18,19 +18,19 @@ use tokio::runtime::Runtime;
 
 /// Success callback that is called when a Redis command succeeds.
 ///
-/// `index` is the index of the operation which is completed.
+/// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `message` is the value returned by the Redis command.
 // TODO: Change message type when implementing command logic
 // TODO: Consider using a single response callback instead of success and failure callbacks
-pub type SuccessCallback = unsafe extern "C" fn(index: usize, message: *const c_char) -> ();
+pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *const c_char) -> ();
 
 /// Failure callback that is called when a Redis command fails.
 ///
-/// `index` is the index of the operation which is completed.
+/// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
 /// `error_message` is the error message returned by Redis for the failed command. It must be manually freed by the caller after this callback is invoked, otherwise a memory leak will occur.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
 pub type FailureCallback = unsafe extern "C" fn(
-    index: usize,
+    index_ptr: usize,
     error_message: *const c_char,
     error_type: RequestErrorType,
 ) -> ();
@@ -131,9 +131,11 @@ pub unsafe extern "C" fn create_client(
 ///
 /// * `client_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * `client_ptr` must be valid until `close_client` is called.
-/// * `client_ptr` must not be null.
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
+    if client_ptr.is_null() {
+        return;
+    }
     let client_ptr = unsafe { Box::from_raw(client_ptr as *mut Client) };
     let _runtime_handle = client_ptr.runtime.enter();
 }
@@ -146,13 +148,15 @@ pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
 ///
 /// * `connection_response_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * `connection_response_ptr` must be valid until `free_connection_response` is called.
-/// * `connection_response_ptr` must not be null.
 /// * The contained `connection_error_message` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * The contained `connection_error_message` must be valid until `free_connection_response` is called and it must outlive the `ConnectionResponse` that contains it.
 #[no_mangle]
 pub unsafe extern "C" fn free_connection_response(
     connection_response_ptr: *mut ConnectionResponse,
 ) {
+    if connection_response_ptr.is_null() {
+        return;
+    }
     let connection_response = unsafe { Box::from_raw(connection_response_ptr) };
     let connection_error_message = connection_response.connection_error_message;
     drop(connection_response);
