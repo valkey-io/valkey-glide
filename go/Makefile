@@ -14,6 +14,7 @@ install-dev-tools-go1.22.0:
 	go install honnef.co/go/tools/cmd/staticcheck@v0.4.6
 
 install-dev-tools: install-dev-tools-go1.22.0
+	cargo install --force cbindgen
 
 install-tools-go1.18.10: install-build-tools install-dev-tools-go1.18.10
 
@@ -26,6 +27,7 @@ build: build-glide-client generate-protobuf
 
 build-glide-client:
 	cargo build --release
+	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
 generate-protobuf:
 	mkdir -p protobuf

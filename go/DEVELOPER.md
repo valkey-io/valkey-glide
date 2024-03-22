@@ -26,6 +26,7 @@ Software Dependencies
 -   openssl-dev
 -   rustup
 -   redis
+-   cbindgen
 
 **Redis installation**
 

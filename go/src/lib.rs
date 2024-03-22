@@ -18,20 +18,19 @@ use tokio::runtime::Runtime;
 
 /// Success callback that is called when a Redis command succeeds.
 ///
-/// `channel_address` is the address of the Go channel used by the callback to send the error message back to the caller of the command.
+/// `index` is the index of the operation which is completed.
 /// `message` is the value returned by the Redis command.
 // TODO: Change message type when implementing command logic
 // TODO: Consider using a single response callback instead of success and failure callbacks
-pub type SuccessCallback =
-    unsafe extern "C" fn(channel_address: usize, message: *const c_char) -> ();
+pub type SuccessCallback = unsafe extern "C" fn(index: usize, message: *const c_char) -> ();
 
 /// Failure callback that is called when a Redis command fails.
 ///
-/// `channel_address` is the address of the Go channel used by the callback to send the error message back to the caller of the command.
-/// `error_message` is the error message returned by Redis for the failed command. It should be manually freed after this callback is invoked, otherwise a memory leak will occur.
+/// `index` is the index of the operation which is completed.
+/// `error_message` is the error message returned by Redis for the failed command. It must be manually freed by the caller after this callback is invoked, otherwise a memory leak will occur.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
 pub type FailureCallback = unsafe extern "C" fn(
-    channel_address: usize,
+    index: usize,
     error_message: *const c_char,
     error_type: RequestErrorType,
 ) -> ();
@@ -40,7 +39,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
 ///
-/// This struct should be freed using `free_connection_response` to avoid memory leaks.
+/// The struct is freed using `free_connection_response` to avoid memory leaks. This is achieved by having the external caller invoke this function.
 #[repr(C)]
 pub struct ConnectionResponse {
     conn_ptr: *const c_void,
@@ -96,7 +95,7 @@ fn create_client_internal(
 ///
 /// # Safety
 ///
-/// * `connection_request_bytes` must point to `connection_request_len` consecutive properly initialized bytes. It should be a well-formed Protobuf `ConnectionRequest` object. The array must be allocated on the Golang side and subsequently freed there too after this function returns.
+/// * `connection_request_bytes` must point to `connection_request_len` consecutive properly initialized bytes. It must be a well-formed Protobuf `ConnectionRequest` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `connection_request_len` must not be greater than the length of the connection request bytes array. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live until it is passed into `close_client`.
 /// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to `free_connection_response`.
@@ -150,7 +149,6 @@ pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
 /// * `connection_response_ptr` must not be null.
 /// * The contained `connection_error_message` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * The contained `connection_error_message` must be valid until `free_connection_response` is called and it must outlive the `ConnectionResponse` that contains it.
-/// * The contained `connection_error_message` must not be null.
 #[no_mangle]
 pub unsafe extern "C" fn free_connection_response(
     connection_response_ptr: *mut ConnectionResponse,
