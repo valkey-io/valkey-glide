@@ -17,7 +17,7 @@ typedef enum RequestErrorType {
 /**
  * The connection response.
  *
- * It contains either a connection or an error. It is represented as a struct instead of an enum for ease of use in the wrapper language.
+ * It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
  *
  * This struct should be freed using `free_connection_response` to avoid memory leaks.
  */
@@ -52,8 +52,8 @@ typedef void (*FailureCallback)(uintptr_t channel_address,
  *
  * `connection_request_bytes` is an array of bytes that will be parsed into a Protobuf `ConnectionRequest` object.
  * `connection_request_len` is the number of bytes in `connection_request_bytes`.
- * `success_callback` is the callback that will be called in the case that the Redis command succeeds.
- * `failure_callback` is the callback that will be called in the case that the Redis command fails.
+ * `success_callback` is the callback that will be called when Redis commands executed by the client succeed.
+ * `failure_callback` is the callback that will be called when Redis commands executed by the client fail.
  *
  * # Safety
  *

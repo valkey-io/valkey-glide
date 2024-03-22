@@ -38,7 +38,7 @@ pub type FailureCallback = unsafe extern "C" fn(
 
 /// The connection response.
 ///
-/// It contains either a connection or an error. It is represented as a struct instead of an enum for ease of use in the wrapper language.
+/// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
 ///
 /// This struct should be freed using `free_connection_response` to avoid memory leaks.
 #[repr(C)]
