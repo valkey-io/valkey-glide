@@ -14,23 +14,15 @@ runs:
           with:
               submodules: recursive
 
-        - uses: dtolnay/rust-toolchain@master
+        - uses: dtolnay/rust-toolchain@1.76.0
           with:
-              toolchain: "1.76.0"
+              components: "rustfmt, clippy"
         - uses: Swatinem/rust-cache@v2
 
         - name: Install protoc (protobuf)
           uses: arduino/setup-protoc@v3
           with:
             version: "25.1"
-
-        - run: rustup component add rustfmt
-          working-directory: ${{ inputs.cargo-toml-folder }}
-          shell: bash
-
-        - run: rustup component add clippy
-          working-directory: ${{ inputs.cargo-toml-folder }}
-          shell: bash
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
