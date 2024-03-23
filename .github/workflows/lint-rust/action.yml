@@ -28,6 +28,10 @@ runs:
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
+        - run: rustup component add clippy
+          working-directory: ${{ inputs.cargo-toml-folder }}
+          shell: bash
+
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
