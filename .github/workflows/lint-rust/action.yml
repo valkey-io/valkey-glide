@@ -37,7 +37,7 @@ runs:
 
         - run: |
               cargo update
-              cargo install --version 0.14.14 cargo-deny
+              cargo install --version 0.14.3 cargo-deny
               cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
