@@ -25,6 +25,8 @@ runs:
             version: "25.1"
 
         - run: rustup component add rustfmt
+          working-directory: ${{ inputs.cargo-toml-folder }}
+          shell: bash
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
