@@ -35,13 +35,13 @@ export function flushallOnPort(port: number): Promise<void> {
             } else {
                 resolve();
             }
-        })
+        }),
     );
 }
 
 /// This function takes the first result of the response if it got more than one response (like cluster responses).
 export function getFirstResult(
-    res: string | number | Record<string, string> | Record<string, number>
+    res: string | number | Record<string, string> | Record<string, number>,
 ): string | number {
     if (typeof res == "string" || typeof res == "number") {
         return res;
@@ -51,7 +51,7 @@ export function getFirstResult(
 }
 
 export function transactionTest(
-    baseTransaction: Transaction | ClusterTransaction
+    baseTransaction: Transaction | ClusterTransaction,
 ): ReturnType[] {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -61,73 +61,142 @@ export function transactionTest(
     const key6 = "{key}" + uuidv4();
     const key7 = "{key}" + uuidv4();
     const key8 = "{key}" + uuidv4();
+    const key9 = "{key}" + uuidv4();
+    const key10 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
-    baseTransaction
-        .set(key1, "bar")
-        .set(key2, "baz", {
-            returnOldValue: true,
-        })
-        .customCommand(["MGET", key1, key2])
-        .mset({ [key3]: value })
-        .mget([key1, key2])
-        .del([key1])
-        .hset(key4, { [field]: value })
-        .hget(key4, field)
-        .hgetall(key4)
-        .hdel(key4, [field])
-        .hmget(key4, [field])
-        .hexists(key4, field)
-        .lpush(key5, [field + "1", field + "2", field + "3", field + "4"])
-        .lpop(key5)
-        .llen(key5)
-        .lrem(key5, 1, field + "1")
-        .ltrim(key5, 0, 1)
-        .lrange(key5, 0, -1)
-        .lpopCount(key5, 2)
-        .rpush(key6, [field + "1", field + "2", field + "3"])
-        .rpop(key6)
-        .rpopCount(key6, 2)
-        .sadd(key7, ["bar", "foo"])
-        .srem(key7, ["foo"])
-        .scard(key7)
-        .smembers(key7)
-        .zadd(key8, { member1: 1, member2: 2 })
-        .zaddIncr(key8, "member2", 1)
-        .zrem(key8, ["member1"])
-        .zcard(key8);
-    return [
-        "OK",
-        null,
-        ["bar", "baz"],
-        "OK",
-        ["bar", "baz"],
-        1,
-        1,
-        value,
-        { [field]: value },
-        1,
-        [null],
-        false,
-        4,
-        field + "4",
-        3,
-        1,
-        "OK",
-        [field + "3", field + "2"],
-        [field + "3", field + "2"],
-        3,
+    const args: ReturnType[] = [];
+    baseTransaction.set(key1, "bar");
+    args.push("OK");
+    baseTransaction.type(key1);
+    args.push("string");
+    baseTransaction.echo(value);
+    args.push(value);
+    baseTransaction.persist(key1);
+    args.push(false);
+    baseTransaction.set(key2, "baz", {
+        returnOldValue: true,
+    });
+    args.push(null);
+    baseTransaction.customCommand(["MGET", key1, key2]);
+    args.push(["bar", "baz"]);
+    baseTransaction.mset({ [key3]: value });
+    args.push("OK");
+    baseTransaction.mget([key1, key2]);
+    args.push(["bar", "baz"]);
+    baseTransaction.strlen(key1);
+    args.push(3);
+    baseTransaction.del([key1]);
+    args.push(1);
+    baseTransaction.hset(key4, { [field]: value });
+    args.push(1);
+    baseTransaction.hlen(key4);
+    args.push(1);
+    baseTransaction.hsetnx(key4, field, value);
+    args.push(false);
+    baseTransaction.hvals(key4);
+    args.push([value]);
+    baseTransaction.hget(key4, field);
+    args.push(value);
+    baseTransaction.hgetall(key4);
+    args.push({ [field]: value });
+    baseTransaction.hdel(key4, [field]);
+    args.push(1);
+    baseTransaction.hmget(key4, [field]);
+    args.push([null]);
+    baseTransaction.hexists(key4, field);
+    args.push(false);
+    baseTransaction.lpush(key5, [
+        field + "1",
+        field + "2",
         field + "3",
-        [field + "2", field + "1"],
-        2,
-        1,
-        1,
-        ["bar"],
-        2,
-        3,
-        1,
-        1,
-    ];
+        field + "4",
+    ]);
+    args.push(4);
+    baseTransaction.lpop(key5);
+    args.push(field + "4");
+    baseTransaction.llen(key5);
+    args.push(3);
+    baseTransaction.lrem(key5, 1, field + "1");
+    args.push(1);
+    baseTransaction.ltrim(key5, 0, 1);
+    args.push("OK");
+    baseTransaction.lrange(key5, 0, -1);
+    args.push([field + "3", field + "2"]);
+    baseTransaction.lpopCount(key5, 2);
+    args.push([field + "3", field + "2"]);
+    baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
+    args.push(3);
+    baseTransaction.lindex(key6, 0);
+    args.push(field + "1");
+    baseTransaction.rpop(key6);
+    args.push(field + "3");
+    baseTransaction.rpopCount(key6, 2);
+    args.push([field + "2", field + "1"]);
+    baseTransaction.sadd(key7, ["bar", "foo"]);
+    args.push(2);
+    baseTransaction.srem(key7, ["foo"]);
+    args.push(1);
+    baseTransaction.scard(key7);
+    args.push(1);
+    baseTransaction.sismember(key7, "bar");
+    args.push(true);
+    baseTransaction.smembers(key7);
+    args.push(["bar"]);
+    baseTransaction.zadd(key8, {
+        member1: 1,
+        member2: 2,
+        member3: 3.5,
+        member4: 4,
+        member5: 5,
+    });
+    args.push(5);
+    baseTransaction.zaddIncr(key8, "member2", 1);
+    args.push(3);
+    baseTransaction.zrem(key8, ["member1"]);
+    args.push(1);
+    baseTransaction.zcard(key8);
+    args.push(4);
+    baseTransaction.zscore(key8, "member2");
+    args.push(3.0);
+    baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
+    args.push(4);
+    baseTransaction.zpopmin(key8);
+    args.push({ member2: 3.0 });
+    baseTransaction.zpopmax(key8);
+    args.push({ member5: 5 });
+    baseTransaction.zremRangeByRank(key8, 1, 1);
+    args.push(1);
+    baseTransaction.zremRangeByScore(
+        key8,
+        "negativeInfinity",
+        "positiveInfinity",
+    );
+    args.push(1);
+    baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
+    args.push("0-1");
+    baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
+    args.push("0-2");
+    baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
+    args.push("0-3");
+    baseTransaction.xread({ [key9]: "0-1" });
+    args.push({
+        [key9]: [
+            ["0-2", ["field", "value2"]],
+            ["0-3", ["field", "value3"]],
+        ],
+    });
+    baseTransaction.xtrim(key9, {
+        method: "minid",
+        threshold: "0-2",
+        exact: true,
+    });
+    args.push(1);
+    baseTransaction.rename(key9, key10);
+    args.push("OK");
+    baseTransaction.exists([key10]);
+    args.push(1);
+    return args;
 }
 
 export class RedisCluster {
@@ -165,17 +234,22 @@ export class RedisCluster {
     }
 
     public static createCluster(
+        cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
-        loadModule?: string[]
+        loadModule?: string[],
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
-            let command = `python3 ../utils/cluster_manager.py start --cluster-mode -r  ${replicaCount} -n ${shardCount}`;
+            let command = `python3 ../utils/cluster_manager.py start -r ${replicaCount} -n ${shardCount}`;
+
+            if (cluster_mode) {
+                command += " --cluster-mode";
+            }
 
             if (loadModule) {
                 if (loadModule.length === 0) {
                     throw new Error(
-                        "Please provide the path(s) to the module(s) you want to load."
+                        "Please provide the path(s) to the module(s) you want to load.",
                     );
                 }
 
@@ -212,8 +286,8 @@ export class RedisCluster {
                     } else {
                         resolve();
                     }
-                }
-            )
+                },
+            ),
         );
     }
 }

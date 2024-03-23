@@ -12,11 +12,16 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     ExpireOptions,
+    ScoreLimit,
     SetOptions,
+    StreamAddOptions,
+    StreamReadOptions,
+    StreamTrimOptions,
     ZaddOptions,
     createDecr,
     createDecrBy,
     createDel,
+    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -27,8 +32,11 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHLen,
     createHMGet,
     createHSet,
+    createHSetNX,
+    createHvals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
@@ -38,22 +46,38 @@ import {
     createLRange,
     createLRem,
     createLTrim,
+    createLindex,
     createMGet,
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPersist,
+    createPttl,
     createRPop,
     createRPush,
+    createRename,
     createSAdd,
     createSCard,
     createSMembers,
     createSRem,
     createSet,
+    createSismember,
+    createStrlen,
     createTTL,
+    createType,
     createUnlink,
+    createXadd,
+    createXread,
+    createXtrim,
     createZadd,
     createZcard,
+    createZcount,
+    createZpopmax,
+    createZpopmin,
     createZrem,
+    createZremRangeByRank,
+    createZremRangeByScore,
+    createZscore,
 } from "./Commands";
 import {
     ClosingError,
@@ -160,7 +184,7 @@ export type BaseClientConfiguration = {
      * Choose the Redis protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
-    serverProtocol?: ProtocolVersion;
+    protocol?: ProtocolVersion;
     /**
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
@@ -179,7 +203,7 @@ export type ScriptOptions = {
 };
 
 function getRequestErrorClass(
-    type: response.RequestErrorType | null | undefined
+    type: response.RequestErrorType | null | undefined,
 ): typeof RequestError {
     if (type === response.RequestErrorType.Disconnect) {
         return ConnectionError;
@@ -204,7 +228,7 @@ export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
         PromiseFunction,
-        ErrorFunction
+        ErrorFunction,
     ][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private requestWriter = new BufferWriter();
@@ -251,10 +275,10 @@ export class BaseClient {
 
             if (message.requestError != null) {
                 const errorType = getRequestErrorClass(
-                    message.requestError.type
+                    message.requestError.type,
                 );
                 reject(
-                    new errorType(message.requestError.message ?? undefined)
+                    new errorType(message.requestError.message ?? undefined),
                 );
             } else if (message.respPointer != null) {
                 const pointer = message.respPointer;
@@ -281,7 +305,7 @@ export class BaseClient {
      */
     protected constructor(
         socket: net.Socket,
-        options?: BaseClientConfiguration
+        options?: BaseClientConfiguration,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -325,11 +349,11 @@ export class BaseClient {
             | redis_request.Command
             | redis_request.Command[]
             | redis_request.ScriptInvocation,
-        route?: redis_request.Routes
+        route?: redis_request.Routes,
     ): Promise<T> {
         if (this.isClosed) {
             throw new ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
+                "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
 
@@ -346,7 +370,7 @@ export class BaseClient {
             | redis_request.Command
             | redis_request.Command[]
             | redis_request.ScriptInvocation,
-        route?: redis_request.Routes
+        route?: redis_request.Routes,
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
@@ -356,27 +380,27 @@ export class BaseClient {
                   }),
               })
             : command instanceof redis_request.Command
-            ? redis_request.RedisRequest.create({
-                  callbackIdx,
-                  singleCommand: command,
-              })
-            : redis_request.RedisRequest.create({
-                  callbackIdx,
-                  scriptInvocation: command,
-              });
+              ? redis_request.RedisRequest.create({
+                    callbackIdx,
+                    singleCommand: command,
+                })
+              : redis_request.RedisRequest.create({
+                    callbackIdx,
+                    scriptInvocation: command,
+                });
         message.route = route;
 
         this.writeOrBufferRequest(
             message,
             (message: redis_request.RedisRequest, writer: Writer) => {
                 redis_request.RedisRequest.encodeDelimited(message, writer);
-            }
+            },
         );
     }
 
     private writeOrBufferRequest<TRequest>(
         message: TRequest,
-        encodeDelimited: (message: TRequest, writer: Writer) => void
+        encodeDelimited: (message: TRequest, writer: Writer) => void,
     ) {
         encodeDelimited(message, this.requestWriter);
 
@@ -410,7 +434,7 @@ export class BaseClient {
     public set(
         key: string,
         value: string,
-        options?: SetOptions
+        options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
     }
@@ -450,8 +474,7 @@ export class BaseClient {
      * See https://redis.io/commands/incr/ for details.
      *
      * @param key - The key to increment its value.
-     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the increment.
      */
     public incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
@@ -462,8 +485,7 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
-     * @returns the value of `key` after the increment, An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the increment.
      */
     public incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
@@ -477,8 +499,6 @@ export class BaseClient {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment.
-     * An error is raised if `key` contains a value of the wrong type,
-     * or the current key content is not parsable as a double precision floating point number.
      *
      */
     public incrByFloat(key: string, amount: number): Promise<number> {
@@ -489,8 +509,7 @@ export class BaseClient {
      * See https://redis.io/commands/decr/ for details.
      *
      * @param key - The key to decrement its value.
-     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the decrement.
      */
     public decr(key: string): Promise<number> {
         return this.createWritePromise(createDecr(key));
@@ -501,8 +520,7 @@ export class BaseClient {
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
-     * @returns the value of `key` after the decrement. An error is raised if `key` contains a value
-     * of the wrong type or contains a string that can not be represented as integer.
+     * @returns the value of `key` after the decrement.
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
@@ -529,9 +547,23 @@ export class BaseClient {
      */
     public hset(
         key: string,
-        fieldValueMap: Record<string, string>
+        fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
+    }
+
+    /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
+     * If `key` does not exist, a new key holding a hash is created.
+     * If `field` already exists, this operation has no effect.
+     * See https://redis.io/commands/hsetnx/ for more details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field to set the value for.
+     * @param value - The value to set.
+     * @returns `true` if the field was set, `false` if the field already existed and was not set.
+     */
+    public hsetnx(key: string, field: string, value: string): Promise<boolean> {
+        return this.createWritePromise(createHSetNX(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
@@ -542,7 +574,6 @@ export class BaseClient {
      * @param fields - The fields to remove from the hash stored at `key`.
      * @returns the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
-     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
@@ -578,7 +609,6 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
      * If `key` does not exist, it returns an empty list.
-     * If `key` holds a value that is not a hash, an error is raised.
      */
     public hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
@@ -593,13 +623,11 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
-     *  An error will be raised if `key` holds a value of an incorrect type (not a string)
-     *  or if it contains a string that cannot be represented as an integer.
      */
     public hincrBy(
         key: string,
         field: string,
-        amount: number
+        amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrBy(key, field, amount));
     }
@@ -613,16 +641,33 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
-     *  An error is raised if `key` contains a value of the wrong type
-     *  or the current field content is not parsable as a double precision floating point number.
-     *
      */
     public hincrByFloat(
         key: string,
         field: string,
-        amount: number
+        amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
+    }
+
+    /** Returns the number of fields contained in the hash stored at `key`.
+     * See https://redis.io/commands/hlen/ for more details.
+     *
+     * @param key - The key of the hash.
+     * @returns The number of fields in the hash, or 0 when the key does not exist.
+     */
+    public hlen(key: string): Promise<number> {
+        return this.createWritePromise(createHLen(key));
+    }
+
+    /** Returns all values in the hash stored at key.
+     * See https://redis.io/commands/hvals/ for more details.
+     *
+     * @param key - The key of the hash.
+     * @returns a list of values in the hash, or an empty list when the key does not exist.
+     */
+    public hvals(key: string): Promise<string[]> {
+        return this.createWritePromise(createHvals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -633,7 +678,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
      * @returns the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
@@ -646,7 +690,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
@@ -659,7 +702,6 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
@@ -678,7 +720,6 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
      * If `key` does not exist an empty list will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
@@ -690,7 +731,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns the length of the list at `key`.
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
@@ -709,7 +749,6 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
@@ -725,7 +764,6 @@ export class BaseClient {
      * @param element - The element to remove from the list.
      * @returns the number of the removed elements.
      * If `key` does not exist, 0 is returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public lrem(key: string, count: number, element: string): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
@@ -739,7 +777,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
      * @returns the length of the list after the push operations.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
@@ -752,7 +789,6 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
@@ -765,7 +801,6 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
-     * If `key` holds a value that is not a list, an error is raised.
      */
     public rpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
@@ -778,7 +813,6 @@ export class BaseClient {
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
      * @returns the number of members that were added to the set, not including all the members already present in the set.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public sadd(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
@@ -791,7 +825,6 @@ export class BaseClient {
      * @param members - A list of members to remove from the set stored at `key`.
      * @returns the number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
@@ -803,7 +836,6 @@ export class BaseClient {
      * @param key - The key to return its members.
      * @returns all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public smembers(key: string): Promise<string[]> {
         return this.createWritePromise(createSMembers(key));
@@ -814,10 +846,21 @@ export class BaseClient {
      *
      * @param key - The key to return the number of its members.
      * @returns the cardinality (number of elements) of the set, or 0 if key does not exist.
-     * If `key` holds a value that is not a set, an error is raised.
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
+    }
+
+    /** Returns if `member` is a member of the set stored at `key`.
+     * See https://redis.io/commands/sismember/ for more details.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns `true` if the member exists in the set, `false` otherwise.
+     * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
+     */
+    public sismember(key: string, member: string): Promise<boolean> {
+        return this.createWritePromise(createSismember(key, member));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -858,7 +901,7 @@ export class BaseClient {
     public expire(
         key: string,
         seconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(createExpire(key, seconds, option));
     }
@@ -878,10 +921,10 @@ export class BaseClient {
     public expireAt(
         key: string,
         unixSeconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(
-            createExpireAt(key, unixSeconds, option)
+            createExpireAt(key, unixSeconds, option),
         );
     }
 
@@ -900,10 +943,10 @@ export class BaseClient {
     public pexpire(
         key: string,
         milliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(
-            createPExpire(key, milliseconds, option)
+            createPExpire(key, milliseconds, option),
         );
     }
 
@@ -922,10 +965,10 @@ export class BaseClient {
     public pexpireAt(
         key: string,
         unixMilliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createPExpireAt(key, unixMilliseconds, option)
+            createPExpireAt(key, unixMilliseconds, option),
         );
     }
 
@@ -959,7 +1002,7 @@ export class BaseClient {
      */
     public invokeScript(
         script: Script,
-        option?: ScriptOptions
+        option?: ScriptOptions,
     ): Promise<ReturnType> {
         const scriptInvocation = redis_request.ScriptInvocation.create({
             hash: script.getHash(),
@@ -979,13 +1022,12 @@ export class BaseClient {
      * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      *
      * @example
-     *      await zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
-     *      2 (Indicates that two elements have been added or updated in the sorted set "mySortedSet".)
+     *      await client.zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
+     *      2 (Indicates that two elements have been added to the sorted set "mySortedSet".)
      *
-     *      await zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \});
+     *      await client.zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \} , true);
      *      2 (Updates the scores of two existing members in the sorted set "existingSortedSet".)
      *
      */
@@ -993,15 +1035,15 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZaddOptions,
-        changed?: boolean
+        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
             createZadd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined
-            )
+                changed ? "CH" : undefined,
+            ),
         );
     }
 
@@ -1016,23 +1058,22 @@ export class BaseClient {
      * @param options - The Zadd options.
      * @returns The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      *
      * @example
-     *      await zaddIncr("mySortedSet", member , 5.0)
+     *      await client.zaddIncr("mySortedSet", member , 5.0)
      *      5.0
      *
-     *      await zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
+     *      await client.zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
      *      null
      */
     public zaddIncr(
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions
+        options?: ZaddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZadd(key, { [member]: increment }, options, "INCR")
+            createZadd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
@@ -1044,7 +1085,6 @@ export class BaseClient {
      * @param members - A list of members to remove from the sorted set.
      * @returns The number of members that were removed from the sorted set, not including non-existing members.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZrem(key, members));
@@ -1056,10 +1096,201 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
-     * If `key` holds a value that is not a sorted set, an error is returned.
      */
     public zcard(key: string): Promise<number> {
         return this.createWritePromise(createZcard(key));
+    }
+
+    /** Returns the score of `member` in the sorted set stored at `key`.
+     * See https://redis.io/commands/zscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose score is to be retrieved.
+     * @returns The score of the member.
+     * If `member` does not exist in the sorted set, null is returned.
+     * If `key` does not exist, null is returned.
+     */
+    public zscore(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZscore(key, member));
+    }
+
+    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+     * See https://redis.io/commands/zcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+     * @returns The number of members in the specified score range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minScore` is greater than `maxScore`, 0 is returned.
+     */
+    public zcount(
+        key: string,
+        minScore: ScoreLimit,
+        maxScore: ScoreLimit,
+    ): Promise<number> {
+        return this.createWritePromise(createZcount(key, minScore, maxScore));
+    }
+
+    /** Returns the length of the string value stored at `key`.
+     * See https://redis.io/commands/strlen/ for more details.
+     *
+     * @param key - The key to check its length.
+     * @returns - The length of the string value stored at key
+     * If `key` does not exist, it is treated as an empty string, and the command returns 0.
+     */
+    public strlen(key: string): Promise<number> {
+        return this.createWritePromise(createStrlen(key));
+    }
+
+    /** Returns the string representation of the type of the value stored at `key`.
+     * See https://redis.io/commands/type/ for more details.
+     *
+     * @param key - The `key` to check its data type.
+     * @returns If the `key` exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+     */
+    public type(key: string): Promise<string> {
+        return this.createWritePromise(createType(key));
+    }
+
+    /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
+     * Otherwise, only one member with the lowest score is removed and returned.
+     * See https://redis.io/commands/zpopmin for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * @returns A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     */
+    public zpopmin(
+        key: string,
+        count?: number,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createZpopmin(key, count));
+    }
+
+    /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
+     * If `count` is provided, up to `count` members with the highest scores are removed and returned.
+     * Otherwise, only one member with the highest score is removed and returned.
+     * See https://redis.io/commands/zpopmax for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
+     * @returns A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+     */
+    public zpopmax(
+        key: string,
+        count?: number,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createZpopmax(key, count));
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     *
+     * @param message - The message to be echoed back.
+     * @returns The provided `message`.
+     */
+    public echo(message: string): Promise<string> {
+        return this.createWritePromise(createEcho(message));
+    }
+
+    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     * See https://redis.io/commands/pttl for more details.
+     *
+     * @param key - The key to return its timeout.
+     * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     */
+    public pttl(key: string): Promise<number> {
+        return this.createWritePromise(createPttl(key));
+    }
+
+    /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+     * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
+     * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+     * See https://redis.io/commands/zremrangebyrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param start - The starting point of the range.
+     * @param end - The end of the range.
+     * @returns The number of members removed.
+     * If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, 0 returned.
+     * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
+     * If `key` does not exist 0 will be returned.
+     */
+    public zremRangeByRank(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<number> {
+        return this.createWritePromise(createZremRangeByRank(key, start, end));
+    }
+
+    /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
+     * See https://redis.io/commands/zremrangebyscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to remove to. Can be positive/negative infinity, or specific score and inclusivity.
+     * @returns the number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minScore` is greater than `maxScore`, 0 is returned.
+     */
+    public zremRangeByScore(
+        key: string,
+        minScore: ScoreLimit,
+        maxScore: ScoreLimit,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZremRangeByScore(key, minScore, maxScore),
+        );
+    }
+
+    /**
+     * Adds an entry to the specified stream.
+     * See https://redis.io/commands/xadd/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param values - field-value pairs to be added to the entry.
+     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     */
+    public xadd(
+        key: string,
+        values: [string, string][],
+        options?: StreamAddOptions,
+    ): Promise<string | null> {
+        return this.createWritePromise(createXadd(key, values, options));
+    }
+
+    /**
+     * Trims the stream by evicting older entries.
+     * See https://redis.io/commands/xtrim/ for more details.
+     *
+     * @param key - the key of the stream
+     * @param options - options detailing how to trim the stream.
+     * @returns The number of entries deleted from the stream.
+     */
+    public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
+        return this.createWritePromise(createXtrim(key, options));
+    }
+
+    /**
+     * Reads entries from the given streams.
+     * See https://redis.io/commands/xread/ for more details.
+     *
+     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     * @param options - options detailing how to read the stream.
+     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     */
+    public xread(
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadOptions,
+    ): Promise<Record<string, [string, string[]][]>> {
+        return this.createWritePromise(createXread(keys_and_ids, options));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
@@ -1070,11 +1301,52 @@ export class BaseClient {
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
 
+    /** Returns the element at index `index` in the list stored at `key`.
+     * The index is zero-based, so 0 means the first element, 1 the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of the list.
+     * Here, -1 means the last element, -2 means the penultimate and so forth.
+     * See https://redis.io/commands/lindex/ for more details.
+     *
+     * @param key - The `key` of the list.
+     * @param index - The `index` of the element in the list to retrieve.
+     * @returns - The element at `index` in the list stored at `key`.
+     * If `index` is out of range or if `key` does not exist, null is returned.
+     */
+    public lindex(key: string, index: number): Promise<string | null> {
+        return this.createWritePromise(createLindex(key, index));
+    }
+
+    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+     * persistent (a key that will never expire as no timeout is associated).
+     * See https://redis.io/commands/persist/ for more details.
+     *
+     * @param key - The key to remove the existing timeout on.
+     * @returns `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
+     */
+    public persist(key: string): Promise<boolean> {
+        return this.createWritePromise(createPersist(key));
+    }
+
+    /**
+     * Renames `key` to `newkey`.
+     * If `newkey` already exists it is overwritten.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * See https://redis.io/commands/rename/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+     */
+    public rename(key: string, newKey: string): Promise<"OK"> {
+        return this.createWritePromise(createRename(key, newKey));
+    }
+
     /**
      * @internal
      */
     protected createClientRequest(
-        options: BaseClientConfiguration
+        options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
@@ -1087,7 +1359,7 @@ export class BaseClient {
                       username: options.credentials.username,
                   }
                 : undefined;
-        const protocol = options.serverProtocol as
+        const protocol = options.protocol as
             | connection_request.ProtocolVersion
             | undefined;
         return {
@@ -1112,20 +1384,20 @@ export class BaseClient {
             this.promiseCallbackFunctions[0] = [resolve, reject];
 
             const message = connection_request.ConnectionRequest.create(
-                this.createClientRequest(options)
+                this.createClientRequest(options),
             );
 
             this.writeOrBufferRequest(
                 message,
                 (
                     message: connection_request.ConnectionRequest,
-                    writer: Writer
+                    writer: Writer,
                 ) => {
                     connection_request.ConnectionRequest.encodeDelimited(
                         message,
-                        writer
+                        writer,
                     );
-                }
+                },
             );
         });
     }
@@ -1148,14 +1420,14 @@ export class BaseClient {
      * @internal
      */
     protected static async __createClientInternal<
-        TConnection extends BaseClient
+        TConnection extends BaseClient,
     >(
         options: BaseClientConfiguration,
         connectedSocket: net.Socket,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration
-        ) => TConnection
+            options?: BaseClientConfiguration,
+        ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
@@ -1183,15 +1455,15 @@ export class BaseClient {
         options: BaseClientConfiguration,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration
-        ) => TConnection
+            options?: BaseClientConfiguration,
+        ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
         return await this.__createClientInternal<TConnection>(
             options,
             socket,
-            constructor
+            constructor,
         );
     }
 }

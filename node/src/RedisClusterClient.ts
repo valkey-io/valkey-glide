@@ -15,7 +15,9 @@ import {
     createCustomCommand,
     createInfo,
     createPing,
+    createTime,
 } from "./Commands";
+import { RequestError } from "./Errors";
 import { connection_request, redis_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
@@ -52,6 +54,19 @@ export type SlotKeyTypes = {
     key: string;
 };
 
+/// Route command to specific node.
+export type RouteByAddress = {
+    type: "routeByAddress";
+    /**
+     *The endpoint of the node. If `port` is not provided, should be in the `${address}:${port}` format, where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
+     */
+    host: string;
+    /**
+     * The port to access on the node. If port is not provided, `host` is assumed to be in the format `${address}:${port}`.
+     */
+    port?: number;
+};
+
 export type Routes =
     | SingleNodeRoute
     /**
@@ -75,10 +90,11 @@ export type SingleNodeRoute =
     /**
      * Route request to the node that contains the slot that the given key matches.
      */
-    | SlotKeyTypes;
+    | SlotKeyTypes
+    | RouteByAddress;
 
 function toProtobufRoute(
-    route: Routes | undefined
+    route: Routes | undefined,
 ): redis_request.Routes | undefined {
     if (route === undefined) {
         return undefined;
@@ -124,6 +140,27 @@ function toProtobufRoute(
                 slotId: route.id,
             }),
         });
+    } else if (route.type === "routeByAddress") {
+        let port = route.port;
+        let host = route.host;
+
+        if (port === undefined) {
+            const split = host.split(":");
+
+            if (split.length !== 2) {
+                throw new RequestError(
+                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
+                        host,
+                );
+            }
+
+            host = split[0];
+            port = Number(split[1]);
+        }
+
+        return redis_request.Routes.create({
+            byAddressRoute: { host, port },
+        });
     }
 }
 
@@ -137,7 +174,7 @@ export class RedisClusterClient extends BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: ClusterClientConfiguration
+        options: ClusterClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
@@ -145,23 +182,23 @@ export class RedisClusterClient extends BaseClient {
     }
 
     public static async createClient(
-        options: ClusterClientConfiguration
+        options: ClusterClientConfiguration,
     ): Promise<RedisClusterClient> {
         return await super.createClientInternal(
             options,
             (socket: net.Socket, options?: ClusterClientConfiguration) =>
-                new RedisClusterClient(socket, options)
+                new RedisClusterClient(socket, options),
         );
     }
 
     static async __createClient(
         options: BaseClientConfiguration,
-        connectedSocket: net.Socket
+        connectedSocket: net.Socket,
     ): Promise<RedisClusterClient> {
         return super.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new RedisClusterClient(socket, options)
+            (socket, options) => new RedisClusterClient(socket, options),
         );
     }
 
@@ -197,24 +234,29 @@ export class RedisClusterClient extends BaseClient {
      */
     public exec(
         transaction: ClusterTransaction,
-        route?: SingleNodeRoute
+        route?: SingleNodeRoute,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise(
             transaction.commands,
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
     /** Ping the Redis server.
      * See https://redis.io/commands/ping/ for details.
      *
-     * @param str - the ping argument that will be returned.
+     * @param message - An optional message to include in the PING command.
+     * If not provided, the server will respond with "PONG".
+     * If provided, the server will respond with a copy of the message.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
-     * @returns PONG if no argument is provided, otherwise return a copy of the argument.
+     * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
-    public ping(str?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(createPing(str), toProtobufRoute(route));
+    public ping(message?: string, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createPing(message),
+            toProtobufRoute(route),
+        );
     }
 
     /** Get information and statistics about the Redis server.
@@ -222,22 +264,22 @@ export class RedisClusterClient extends BaseClient {
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
-     * @param route - The command will be routed to all primeries, unless `route` is provided, in which
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns a string containing the information for the sections requested. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public info(
         options?: InfoOptions[],
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
-    /** Get the name of the current connection.
+    /** Get the name of the connection to which the request is routed.
      *  See https://redis.io/commands/client-getname/ for more details.
      *
      * @param route - The command will be routed a random node, unless `route` is provided, in which
@@ -248,11 +290,11 @@ export class RedisClusterClient extends BaseClient {
      * its corresponding node response is the value.
      */
     public clientGetName(
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<string | null>> {
         return this.createWritePromise<ClusterResponse<string | null>>(
             createClientGetName(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -262,12 +304,12 @@ export class RedisClusterClient extends BaseClient {
      * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      *
-     * @returns "OK" when the configuration was rewritten properly, Otherwise an error is raised.
+     * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
      */
     public configRewrite(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
             createConfigRewrite(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -277,12 +319,12 @@ export class RedisClusterClient extends BaseClient {
      * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      *
-     * @returns always "OK"
+     * @returns always "OK".
      */
     public configResetStat(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
             createConfigResetStat(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -297,7 +339,7 @@ export class RedisClusterClient extends BaseClient {
     public clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -305,20 +347,20 @@ export class RedisClusterClient extends BaseClient {
      *  See https://redis.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param route - The command will be routed to all nodes, unless `route` is provided, in which
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
-     *  If `route` is not provided, the command will be sent to the all nodes.
+     *  If `route` is not provided, the command will be sent to a random node.
      *
      * @returns A map of values corresponding to the configuration parameters. When specifying a route other than a single node,
      *  it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public configGet(
         parameters: string[],
-        route?: Routes
+        route?: Routes,
     ): Promise<ClusterResponse<Record<string, string>>> {
         return this.createWritePromise<ClusterResponse<Record<string, string>>>(
             createConfigGet(parameters),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
     }
 
@@ -330,7 +372,7 @@ export class RedisClusterClient extends BaseClient {
      *   case the client will route the command to the nodes defined by `route`.
      *   If `route` is not provided, the command will be sent to the all nodes.
      *
-     * @returns "OK" when the configuration was set properly. Otherwise an error is raised.
+     * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
      *   config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
@@ -338,11 +380,27 @@ export class RedisClusterClient extends BaseClient {
      */
     public configSet(
         parameters: Record<string, string>,
-        route?: Routes
+        route?: Routes,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createConfigSet(parameters),
-            toProtobufRoute(route)
+            toProtobufRoute(route),
         );
+    }
+
+    /** Returns the server time.
+     * See https://redis.io/commands/time/ for details.
+     *
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     *
+     * @returns - The current server time as a two items `array`:
+     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
+     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     * When specifying a route other than a single node, it returns a dictionary where each address is the key and
+     * its corresponding node response is the value.
+     */
+    public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
+        return this.createWritePromise(createTime(), toProtobufRoute(route));
     }
 }

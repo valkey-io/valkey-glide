@@ -22,11 +22,17 @@ message SlotKeyRoute {
     string slot_key = 2;
 }
 
+message ByAddressRoute {
+    string host = 1;
+    int32 port = 2;
+}
+
 message Routes {
     oneof value {
         SimpleRoutes simple_routes = 1;
         SlotKeyRoute slot_key_route = 2;
         SlotIdRoute slot_id_route = 3;
+        ByAddressRoute by_address_route = 4;
     }
 }
 
@@ -103,6 +109,31 @@ enum RequestType {
     Zcount = 65;
     ZIncrBy = 66;
     ZScore = 67;
+    Type = 68;
+    HLen = 69;
+    Echo = 70;
+    ZPopMin = 71;
+    Strlen = 72;
+    Lindex = 73;
+    ZPopMax = 74;
+    XRead = 75;
+    XAdd = 76;
+    XReadGroup = 77;
+    XAck = 78;
+    XTrim = 79;
+    XGroupCreate = 80;
+    XGroupDestroy = 81;
+    HSetNX = 82;
+    SIsMember = 83;
+    Hvals = 84;
+    PTTL = 85;
+    ZRemRangeByRank = 86;
+    Persist = 87;
+    ZRemRangeByScore = 88;
+    Time = 89;
+    Zrank = 90;
+    Rename = 91;
+    DBSize = 92;
 }
 
 message Command {

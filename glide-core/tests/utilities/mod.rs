@@ -260,7 +260,7 @@ impl Drop for RedisServer {
     }
 }
 
-fn encode_iter<W>(values: &Vec<Value>, writer: &mut W, prefix: &str) -> io::Result<()>
+fn encode_iter<W>(values: &[Value], writer: &mut W, prefix: &str) -> io::Result<()>
 where
     W: io::Write,
 {
@@ -271,7 +271,7 @@ where
     Ok(())
 }
 
-fn encode_map<W>(values: &Vec<(Value, Value)>, writer: &mut W, prefix: &str) -> io::Result<()>
+fn encode_map<W>(values: &[(Value, Value)], writer: &mut W, prefix: &str) -> io::Result<()>
 where
     W: io::Write,
 {
@@ -689,7 +689,7 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
-    let client = StandaloneClient::create_client(connection_request)
+    let client = StandaloneClient::create_client(connection_request.into())
         .await
         .unwrap();
 

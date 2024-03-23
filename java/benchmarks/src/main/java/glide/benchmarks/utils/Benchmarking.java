@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.tuple.Pair;
@@ -84,29 +89,46 @@ public class Benchmarking {
 
     public static void printResults(
             Map<ChosenAction, LatencyResults> resultsMap, double duration, int iterations) {
-        System.out.printf("Runtime s: %f%n", duration);
+        System.out.printf("Runtime (sec): %.3f%n", duration);
         System.out.printf("Iterations: %d%n", iterations);
-        System.out.printf("TPS: %f%n", iterations / duration);
-        int totalHits = 0;
+        System.out.printf("TPS: %d%n", (int) (iterations / duration));
+        int totalRequests = 0;
         for (Map.Entry<ChosenAction, LatencyResults> entry : resultsMap.entrySet()) {
             ChosenAction action = entry.getKey();
             LatencyResults results = entry.getValue();
 
             System.out.printf("===> %s <===%n", action);
-            System.out.printf("avg. time ms: %f%n", results.avgLatency);
-            System.out.printf("std dev ms: %f%n", results.stdDeviation);
-            System.out.printf("p50 latency ms: %f%n", results.p50Latency);
-            System.out.printf("p90 latency ms: %f%n", results.p90Latency);
-            System.out.printf("p99 latency ms: %f%n", results.p99Latency);
-            System.out.printf("Total hits: %d%n", results.totalHits);
-            totalHits += results.totalHits;
+            System.out.printf("avg. latency (ms): %.3f%n", results.avgLatency);
+            System.out.printf("std dev (ms): %.3f%n", results.stdDeviation);
+            System.out.printf("p50 latency (ms): %.3f%n", results.p50Latency);
+            System.out.printf("p90 latency (ms): %.3f%n", results.p90Latency);
+            System.out.printf("p99 latency (ms): %.3f%n", results.p99Latency);
+            System.out.printf("Total requests: %d%n", results.totalRequests);
+            totalRequests += results.totalRequests;
         }
-        System.out.println("Total hits: " + totalHits);
+        System.out.println("Total requests: " + totalRequests);
     }
 
     public static void testClientSetGet(
             Supplier<Client> clientCreator, BenchmarkingApp.RunConfiguration config, boolean async) {
         for (int concurrentNum : config.concurrentTasks) {
+            // same as Executors.newCachedThreadPool() with a RejectedExecutionHandler for robustness
+            ExecutorService executor =
+                    new ThreadPoolExecutor(
+                            0,
+                            Integer.MAX_VALUE,
+                            60L,
+                            TimeUnit.SECONDS,
+                            new SynchronousQueue<Runnable>(),
+                            (r, poolExecutor) -> {
+                                if (!poolExecutor.isShutdown()) {
+                                    try {
+                                        poolExecutor.getQueue().put(r);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException("interrupted");
+                                    }
+                                }
+                            });
             int iterations =
                     config.minimal ? 1000 : Math.min(Math.max(100000, concurrentNum * 10000), 10000000);
             for (int clientCount : config.clientCount) {
@@ -143,6 +165,7 @@ public class Benchmarking {
                                         clients,
                                         taskNumDebugging,
                                         iterations,
+                                        executor,
                                         config.debugLogging));
                     }
                     if (config.debugLogging) {
@@ -187,7 +210,7 @@ public class Benchmarking {
                     clients.forEach(Client::closeConnection);
 
                     if (config.resultsFile.isPresent()) {
-                        double tps = iterationCounter.get() * NANO_TO_SECONDS / (after - started);
+                        int tps = (int) (iterationCounter.get() * NANO_TO_SECONDS / (after - started));
                         JsonWriter.Write(
                                 calculatedResults,
                                 config.resultsFile.get(),
@@ -201,6 +224,7 @@ public class Benchmarking {
                     printResults(calculatedResults, (after - started) / NANO_TO_SECONDS, iterations);
                 }
             }
+            executor.shutdownNow();
         }
 
         System.out.println();
@@ -215,6 +239,7 @@ public class Benchmarking {
             List<Client> clients,
             int taskNumDebugging,
             int iterations,
+            Executor executor,
             boolean debugLogging) {
         return CompletableFuture.supplyAsync(
                 () -> {
@@ -243,7 +268,8 @@ public class Benchmarking {
                         taskActionResults.get(result.getLeft()).add(result.getRight());
                     }
                     return taskActionResults;
-                });
+                },
+                executor);
     }
 
     public static Map<ChosenAction, Operation> getActionMap(int dataSize, boolean async) {

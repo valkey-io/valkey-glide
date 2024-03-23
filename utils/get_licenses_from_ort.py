@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import List, Set
 
 """
 This script should be used after all specific langauge folders were scanned by the analyzer of the OSS review tool (ORT).
@@ -22,6 +23,7 @@ APPROVED_LICENSES = [
     "Apache-2.0 OR ISC OR MIT",
     "Apache-2.0 OR MIT",
     "Apache-2.0 OR MIT OR Zlib",
+    "Apache-2.0 WITH LLVM-exception",
     "BSD License",
     "BSD-2-Clause",
     "BSD-2-Clause OR Apache-2.0",
@@ -49,13 +51,24 @@ class OrtResults:
         self.name = name
 
 
+class PackageLicense:
+    def __init__(self, package_name: str, language: str, license: str) -> None:
+        self.package_name = package_name
+        self.language = language
+        self.license = license
+
+    def __str__(self):
+        return f"Package_name: {self.package_name}, Language: {self.language}, License: {self.license}"
+
+
 ort_results_per_lang = [
     OrtResults("Python", "python/ort_results"),
     OrtResults("Node", "node/ort_results"),
     OrtResults("Rust", "glide-core/ort_results"),
 ]
 
-licenses_set = set()
+all_licenses_set: Set = set()
+unknown_licenses: List[PackageLicense] = []
 
 for ort_result in ort_results_per_lang:
     with open(ort_result.analyzer_result_file, "r") as ort_results, open(
@@ -72,13 +85,19 @@ for ort_result in ort_results_per_lang:
             try:
                 for license in package["declared_licenses_processed"].values():
                     if isinstance(license, list) or isinstance(license, dict):
-                        license = (
-                            license.values() if isinstance(license, dict) else license
+                        final_licenses = (
+                            list(license.values())
+                            if isinstance(license, dict)
+                            else license
                         )
-                        for inner_license in license:
-                            licenses_set.add(inner_license)
                     else:
-                        licenses_set.add(license)
+                        final_licenses = [license]
+                    for license in final_licenses:
+                        if license not in APPROVED_LICENSES:
+                            unknown_licenses.append(
+                                PackageLicense(package["id"], ort_result.name, license)
+                            )
+                        all_licenses_set.add(license)
             except Exception:
                 print(
                     f"Received error for package {package} used by {ort_result.name}\n Found license={license}"
@@ -86,11 +105,10 @@ for ort_result in ort_results_per_lang:
                 raise
 
 print("\n\n#### Found Licenses #####\n")
-licenses_set = set(sorted(licenses_set))
-for license in licenses_set:
+all_licenses_set = set(sorted(all_licenses_set))
+for license in all_licenses_set:
     print(f"{license}")
 
-print("\n\n#### New / Not Approved Licenses #####\n")
-for license in licenses_set:
-    if license not in APPROVED_LICENSES:
-        print(f"{license}")
+print("\n\n#### unknown / Not Pre-Approved Licenses #####\n")
+for package in unknown_licenses:
+    print(str(package))

@@ -1,13 +1,16 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Generic Commands interface to handle generic command and transaction requests with routing
- * options.
+ * Supports commands for the "Generic Commands" group for cluster clients.
+ *
+ * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericClusterCommands {
 
@@ -22,12 +25,13 @@ public interface GenericClusterCommands {
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
-     * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
-     *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
-     * </code>
      * @param args Arguments for the custom command including the command name.
      * @return Response from Redis containing an <code>Object</code>.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> data = client.customCommand(new String[] {"ping"}).get();
+     * assert ((String) data.getSingleValue()).equals("PONG");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> customCommand(String[] args);
 
@@ -42,13 +46,71 @@ public interface GenericClusterCommands {
      *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
      *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
      *     this function.
-     * @example Returns a list of all <em>pub</em>/<em>sub</em> clients:
-     *     <p><code>
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }, RANDOM).get();
-     * </code>
      * @param args Arguments for the custom command including the command name
-     * @param route Routing configuration for the command
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return Response from Redis containing an <code>Object</code>.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> result = clusterClient.customCommand(new String[]{ "CONFIG", "GET", "maxmemory"}, ALL_NODES).get();
+     * Map<String, Object> payload = result.getMultiValue();
+     * assert ((String) payload.get("node1")).equals("1GB");
+     * assert ((String) payload.get("node2")).equals("100MB");
+     * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route);
+
+    /**
+     * Execute a transaction by processing the queued commands.
+     *
+     * <p>The transaction will be routed to the slot owner of the first key found in the transaction.
+     * If no key is found, the command will be sent to a random node.
+     *
+     * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
+     *     Transactions.
+     * @param transaction A {@link Transaction} object containing a list of commands to be executed.
+     * @return A list of results corresponding to the execution of each command in the transaction.
+     * @remarks
+     *     <ul>
+     *       <li>If a command returns a value, it will be included in the list.
+     *       <li>If a command doesn't return a value, the list entry will be empty.
+     *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
+     *           return <code>null</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
+     * Object[] result = clusterClient.exec(transaction).get();
+     * assert ((String) result[0]).contains("# Stats");
+     * }</pre>
+     */
+    CompletableFuture<Object[]> exec(ClusterTransaction transaction);
+
+    /**
+     * Execute a transaction by processing the queued commands.
+     *
+     * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
+     *     Transactions.
+     * @param transaction A {@link Transaction} object containing a list of commands to be executed.
+     * @param route Specifies the routing configuration for the transaction. The client will route the
+     *     transaction to the nodes defined by <code>route</code>.
+     * @return A list of results corresponding to the execution of each command in the transaction.
+     * @remarks
+     *     <ul>
+     *       <li>If a command returns a value, it will be included in the list.
+     *       <li>If a command doesn't return a value, the list entry will be empty.
+     *       <li>If the transaction failed due to a <code>WATCH</code> command, <code>exec</code> will
+     *           return <code>null</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * ClusterTransaction transaction = new ClusterTransaction().ping().info();
+     * ClusterValue<Object>[] result = clusterClient.exec(transaction, RANDOM).get();
+     * assert ((String) result[0].getSingleValue()).equals("PONG");
+     * assert ((String) result[1].getSingleValue()).contains("# Stats");
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>[]> exec(ClusterTransaction transaction, Route route);
 }

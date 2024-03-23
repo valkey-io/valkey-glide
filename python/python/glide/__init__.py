@@ -5,10 +5,18 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
-    InfBound,
     InfoSection,
-    ScoreLimit,
     UpdateOptions,
+)
+from glide.async_commands.redis_modules import json
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    Limit,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
@@ -33,6 +41,7 @@ from glide.redis_client import RedisClient, RedisClusterClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
+    ByAddressRoute,
     RandomNode,
     SlotIdRoute,
     SlotKeyRoute,
@@ -45,13 +54,19 @@ __all__ = [
     "BaseClientConfiguration",
     "ClusterClientConfiguration",
     "RedisClientConfiguration",
-    "ScoreLimit",
+    "ScoreBoundary",
     "ConditionalChange",
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
     "InfBound",
     "InfoSection",
+    "json",
+    "LexBoundary",
+    "Limit",
+    "RangeByIndex",
+    "RangeByLex",
+    "RangeByScore",
     "UpdateOptions",
     "Logger",
     "LogLevel",
@@ -68,6 +83,7 @@ __all__ = [
     "SlotType",
     "AllNodes",
     "AllPrimaries",
+    "ByAddressRoute",
     "RandomNode",
     "SlotKeyRoute",
     "SlotIdRoute",

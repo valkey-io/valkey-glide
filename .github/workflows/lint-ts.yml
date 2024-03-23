@@ -1,4 +1,5 @@
 name: lint-ts
+
 on:
     push:
         branches: ["main"]
@@ -14,32 +15,29 @@ on:
             - benchmarks/utilities/*
             - .github/workflows/lint-ts.yml
 
+concurrency:
+    group: node-lint-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 env:
     CARGO_TERM_COLOR: always
+
 jobs:
-    job:
+    lint:
         runs-on: ubuntu-latest
         timeout-minutes: 10
+
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-            - uses: ./.github/workflows/lint-ts
-              with:
-                  package-folder: ./node
-              name: lint node
-
-            - uses: ./.github/workflows/lint-ts
-              with:
-                  package-folder: ./benchmarks/node
-              name: lint benchmark
-
-            - uses: ./.github/workflows/lint-ts
-              with:
-                  package-folder: ./benchmarks/utilities
-              name: lint benchmark utilities
-
-            - name: lint ts
+            - name: Install dependencies
               run: |
-                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier
-                  npm i
-                  npx eslint .
+                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
+
+            - name: Run linting and prettier
+              run: |
+                  for folder in node benchmarks/node benchmarks/utilities; do
+                    npx eslint ${{ github.workspace }}/$folder
+                    npx prettier --check ${{ github.workspace }}/$folder
+                  done

@@ -40,7 +40,7 @@ export class Logger {
     public static log(
         logLevel: LevelOptions,
         logIdentifier: string,
-        message: string
+        message: string,
     ) {
         if (!Logger._instance) {
             new Logger();

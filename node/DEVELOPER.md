@@ -12,9 +12,9 @@ The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings 
 
 Software Dependencies
 
-> Note: Currently, we only support npm major version 8. f you have a later version installed, you can downgrade it with `npm i -g npm@8`.
+> If your NodeJS version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
--   npm v8
+-   npm
 -   git
 -   GCC
 -   pkg-config
@@ -28,7 +28,6 @@ Software Dependencies
 ```bash
 sudo apt update -y
 sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -38,7 +37,6 @@ source "$HOME/.cargo/env"
 ```bash
 sudo yum update -y
 sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -48,7 +46,6 @@ source "$HOME/.cargo/env"
 ```bash
 brew update
 brew install nodejs git gcc pkgconfig protobuf openssl
-npm i -g npm@8
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -112,6 +109,10 @@ Before starting this step, make sure you've installed all software requirments.
 
 > Note: Once building completed, you'll find the compiled JavaScript code in the `node/build-ts` folder.
 
+### Troubleshooting
+
+-   If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
+
 ### Test
 
 To run tests, use the following command:
@@ -149,9 +150,10 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 1. TypeScript
     ```bash
     # Run from the `node` folder
-    npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier
+    npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
     npm i
     npx eslint . --max-warnings=0
+    npx prettier --check .
     ```
 2. Rust
     ```bash
@@ -168,3 +170,17 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 -   [Jest Runner](https://marketplace.visualstudio.com/items?itemName=firsttris.vscode-jest-runner) - in-editor test runner.
 -   [Jest Test Explorer](https://marketplace.visualstudio.com/items?itemName=kavod-io.vscode-jest-test-adapter) - adapter to the VSCode testing UI.
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language support for VSCode.
+
+### Hybrid package publishing method
+
+In this project we are using hybrid method for building the package for NodeJS, in order to support GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules.
+Hybrid method -
+In order to build the package for usage in either module system, we use three different tsconfig files:
+
+-   `tsconfig-base` is the general tsconfig file, which the others will extend.
+-   `tsconfig-cjs` for `commonJS` build with `CommonJS` as the target of translation.
+-   `tsconfig` for `ECMA` build with `ECMA` as the target of translation.
+
+The build is composed of 2 build steps, one will use `tsconfig` and write the results of the package's translation into the `build-ts/mjs` folder, and the other will use `tsconfig-cjs` and will write into the `build-ts/cjs` folder.
+Additionaly, we add to `package.json` the following export rule, which presents to the user the correct index file, based on the import statement used - `import` for `ECMA`, and `require` for `CommonJS`.
+As part of the build we run the `fixup_pj_files_for_build_type` script, which adds the `type` and `types` entries to the different `package.json` that been created for `ECMAScript` and `CommonJS` with the fitting values.

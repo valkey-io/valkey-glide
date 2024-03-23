@@ -4,25 +4,32 @@ on:
     push:
         branches: ["main"]
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
-            - "java/**"
-            - ".github/workflows/java.yml"
+            - java/**
+            - .github/workflows/java.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
-            - glide-core/**
+            - glide-core/src/**
             - submodules/**
-            - "java/**"
-            - ".github/workflows/java.yml"
+            - java/**
+            - .github/workflows/java.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
 
-# Run only most latest job on a branch and cancel previous ones
 concurrency:
-    group: ${{ github.head_ref || github.ref }}
+    group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 jobs:
     build-and-test-java-client:
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             # Run all jobs
             fail-fast: false
@@ -68,6 +75,14 @@ jobs:
               working-directory: java
               run: ./gradlew --continue build
 
+            - name: Ensure no skipped files by linter
+              working-directory: java
+              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
+
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -java
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -78,6 +93,7 @@ jobs:
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
+                      benchmarks/results/**
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'

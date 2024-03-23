@@ -33,7 +33,6 @@ chosenClients="all"
 host="localhost"
 port=6379
 tlsFlag="--tls"
-javaTlsFlag="-tls"
 
 function runPythonBenchmark(){
   # generate protobuf files
@@ -69,11 +68,12 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release /warnaserror
   dotnet run --framework net6.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework net8.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 
 function runJavaBenchmark(){
   cd ${BENCH_FOLDER}/../java
-  ./gradlew run --args="-resultsFile \"${BENCH_FOLDER}/$1\" -dataSize \"$2\" -concurrentTasks \"$concurrentTasks\" -clients \"$chosenClients\" -host $host $javaPortFlag -clientCount \"$clientCount\" $javaTlsFlag $javaClusterFlag"
+  ./gradlew :benchmarks:run --args="-resultsFile \"${BENCH_FOLDER}/$1\" --dataSize \"$2\" --concurrentTasks \"$concurrentTasks\" --clients \"$chosenClients\" --host $host $portFlag --clientCount \"$clientCount\" $tlsFlag $clusterFlag $minimalFlag"
 }
 
 function runRustBenchmark(){
@@ -196,7 +196,7 @@ do
         -lettuce)
             runAllBenchmarks=0
             runJava=1
-            chosenClients="lettuce_async"
+            chosenClients="lettuce"
             ;;
         -jedis)
             runAllBenchmarks=0
@@ -217,20 +217,17 @@ do
         -no-csv) writeResultsCSV=0 ;;
         -no-tls)
             tlsFlag=
-            javaTlsFlag=
             ;;
         -is-cluster)
             clusterFlag="--clusterModeEnabled"
-            javaClusterFlag="-clusterModeEnabled"
             ;;
         -port)
             portFlag="--port "$2
-            javaPortFlag="-port "$2
             shift
             ;;
         -minimal)
             minimalFlag="--minimal"
-            ;;            
+            ;;
     esac
     shift
 done
@@ -241,7 +238,7 @@ do
     then
         echo "Minimal run, not filling database"
         flushDB
-    else 
+    else
         fillDB $currentDataSize
     fi
 

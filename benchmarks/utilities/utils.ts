@@ -24,7 +24,7 @@ export function createRedisClient(
     host: string,
     isCluster: boolean,
     tls: boolean,
-    port: number
+    port: number,
 ): RedisClusterType | RedisClientType {
     return isCluster
         ? createCluster({
@@ -65,15 +65,15 @@ const optionDefinitions = [
 
 export const receivedOptions = commandLineArgs(optionDefinitions);
 
-export function generate_value(size: number): string {
+export function generateValue(size: number): string {
     return "0".repeat(size);
 }
 
-export function generate_key_set(): string {
+export function generateKeySet(): string {
     return (Math.floor(Math.random() * SIZE_SET_KEYSPACE) + 1).toString();
 }
 
-export function generate_key_get(): string {
+export function generateKeyGet(): string {
     const range = SIZE_GET_KEYSPACE - SIZE_SET_KEYSPACE;
     return Math.floor(Math.random() * range + SIZE_SET_KEYSPACE + 1).toString();
 }

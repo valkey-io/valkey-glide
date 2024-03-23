@@ -17,6 +17,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
 
+concurrency:
+    group: rust-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
 env:
     CARGO_TERM_COLOR: always
 
@@ -52,11 +56,11 @@ jobs:
 
             - name: Run tests
               working-directory: ./glide-core
-              run: cargo test -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
+              run: cargo test --all-features -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
 
             - name: Run logger tests
               working-directory: ./logger_core
-              run: cargo test -- --nocapture --test-threads=1
+              run: cargo test --all-features -- --nocapture --test-threads=1
 
             - name: Check features
               working-directory: ./glide-core

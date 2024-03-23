@@ -15,7 +15,8 @@ class ClusterCommands(CoreCommands):
     async def custom_command(
         self, command_args: List[str], route: Optional[Route] = None
     ) -> TResult:
-        """Executes a single command, without checking inputs.
+        """
+        Executes a single command, without checking inputs.
             @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
             @example - Return a list of all pub/sub clients from all nodes:
 
@@ -38,13 +39,14 @@ class ClusterCommands(CoreCommands):
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
     ) -> TClusterResponse[str]:
-        """Get information and statistics about the Redis server.
+        """
+        Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
             information to retrieve. When no parameter is provided, the default option is assumed.
-            route (Optional[Route]): The command will be routed to all primeries, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -64,7 +66,8 @@ class ClusterCommands(CoreCommands):
         transaction: BaseTransaction | ClusterTransaction,
         route: Optional[TSingleNodeRoute] = None,
     ) -> Optional[List[TResult]]:
-        """Execute a transaction by processing the queued commands.
+        """
+        Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
         Args:
@@ -86,11 +89,14 @@ class ClusterCommands(CoreCommands):
         self,
         route: Optional[Route] = None,
     ) -> TOK:
-        """Reset the statistics reported by Redis.
+        """
+        Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
         See https://redis.io/commands/config-resetstat/ for details.
+
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
+
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
         """
@@ -102,13 +108,16 @@ class ClusterCommands(CoreCommands):
         self,
         route: Optional[Route] = None,
     ) -> TOK:
-        """Rewrite the configuration file with the current configuration.
+        """
+        Rewrite the configuration file with the current configuration.
         See https://redis.io/commands/config-rewrite/ for details.
+
         Args:
             route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
+
         Returns:
-            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is returned.
+            OK: OK is returned when the configuration was rewritten properly. Otherwise an error is raised.
         """
         return cast(
             TOK, await self._execute_command(RequestType.ConfigRewrite, [], route)
@@ -118,8 +127,10 @@ class ClusterCommands(CoreCommands):
         self,
         route: Optional[Route] = None,
     ) -> TClusterResponse[int]:
-        """Returns the current connection id.
+        """
+        Returns the current connection id.
         See https://redis.io/commands/client-id/ for more information.
+
         Args:
             route (Optional[Route]): The command will be sent to a random node, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`.
@@ -138,17 +149,19 @@ class ClusterCommands(CoreCommands):
     async def ping(
         self, message: Optional[str] = None, route: Optional[Route] = None
     ) -> str:
-        """Ping the Redis server.
+        """
+        Ping the Redis server.
         See https://redis.io/commands/ping/ for more details.
+
         Args:
-           message (Optional[str]): An optional message to include in the PING command. If not provided,
-            the server will respond with "PONG". If provided, the server will respond with a copy of the message.
+            message (Optional[str]): An optional message to include in the PING command. If not provided,
+            the server will respond with "PONG". If provided, the server will respond with a copy of the message
 
             route (Optional[Route]): The command will be sent to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`
 
         Returns:
-           str: "PONG" if 'message' is not provided, otherwise return a copy of 'message'.
+           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
             >>> await client.ping()
@@ -162,13 +175,14 @@ class ClusterCommands(CoreCommands):
     async def config_get(
         self, parameters: List[str], route: Optional[Route] = None
     ) -> TClusterResponse[Dict[str, str]]:
-        """Get the values of configuration parameters.
+        """
+        Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
 
         Args:
             parameters (List[str]): A list of configuration parameter names to retrieve values for.
 
-            route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
@@ -191,7 +205,8 @@ class ClusterCommands(CoreCommands):
     async def config_set(
         self, parameters_map: Mapping[str, str], route: Optional[Route] = None
     ) -> TOK:
-        """Set configuration parameters to the specified values.
+        """
+        Set configuration parameters to the specified values.
         See https://redis.io/commands/config-set/ for details.
 
         Args:
@@ -222,6 +237,7 @@ class ClusterCommands(CoreCommands):
         """
         Get the name of the connection to which the request is routed.
         See https://redis.io/commands/client-getname/ for more details.
+
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
@@ -236,10 +252,56 @@ class ClusterCommands(CoreCommands):
             >>> await client.client_getname()
             'Connection Name'
             >>> await client.client_getname(AllNodes())
-            {'addr': 'Connection Name'', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
+            {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
         """
-
         return cast(
             TClusterResponse[Optional[str]],
             await self._execute_command(RequestType.ClientGetName, [], route),
+        )
+
+    async def dbsize(self, route: Optional[Route] = None) -> int:
+        """
+        Returns the number of keys in the database.
+        See https://redis.io/commands/dbsize for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            int: The number of keys in the database.
+            In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
+
+        Examples:
+            >>> await client.dbsize()
+                10  # Indicates there are 10 keys in the cluster.
+        """
+        return cast(int, await self._execute_command(RequestType.DBSize, [], route))
+
+    async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
+        """
+        Returns the server time.
+
+        See https://redis.io/commands/time/ for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[Optional[str]]:  The current server time as a two items `array`:
+            A Unix timestamp and the amount of microseconds already elapsed in the current second.
+            The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+            When specifying a route other than a single node, response will be:
+            {Address (str) : response (List[str]) , ... } with type of Dict[str, List[str]].
+
+        Examples:
+            >>> await client.time()
+            ['1710925775', '913580']
+            >>> await client.client_getname(AllNodes())
+            {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
+        """
+        return cast(
+            TClusterResponse[List[str]],
+            await self._execute_command(RequestType.Time, [], route),
         )

@@ -10,6 +10,8 @@ dependencies {
     // client
     implementation project(':client')
 
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
     implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
@@ -23,21 +25,32 @@ dependencies {
     // junit
     testImplementation 'org.junit.jupiter:junit-jupiter:5.6.2'
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
+
+    // semver4j for semantic versioning
+    implementation 'com.vdurmont:semver4j:3.1.0'
 }
 
 def standaloneRedisPorts = []
 def clusterRedisPorts = []
+def redisVersion = ""
 
 ext {
-    extractPortsFromClusterManagerOutput = { String output, ArrayList dest ->
+    extractPortsFromClusterManagerOutput = { String output ->
+        var res = []
         for (def line : output.split("\n")) {
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
             def addresses = line.split("=")[1].split(",")
             for (def address : addresses)
-                dest << address.split(":")[1]
+                res << address.split(":")[1]
         }
+        return res
+    }
+    extractRedisVersion = { String output ->
+        // Line in format like
+        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
+        return output.split(" ")[2].split("=")[1]
     }
 }
 
@@ -68,7 +81,7 @@ tasks.register('startCluster') {
                 commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
                 standardOutput = os
             }
-            extractPortsFromClusterManagerOutput(os.toString(), clusterRedisPorts)
+            clusterRedisPorts = extractPortsFromClusterManagerOutput(os.toString())
         }
     }
 }
@@ -81,12 +94,25 @@ tasks.register('startStandalone') {
                 commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
                 standardOutput = os
             }
-            extractPortsFromClusterManagerOutput(os.toString(), standaloneRedisPorts)
+            standaloneRedisPorts = extractPortsFromClusterManagerOutput(os.toString())
+        }
+    }
+}
+
+tasks.register('getRedisVersion') {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                commandLine 'redis-server', '-v'
+                standardOutput = os
+            }
+            redisVersion = extractRedisVersion(os.toString())
         }
     }
 }
 
 test.dependsOn 'stopAllBeforeTests'
+test.dependsOn 'getRedisVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
@@ -97,8 +123,10 @@ tasks.withType(Test) {
     doFirst {
         println "Cluster ports = ${clusterRedisPorts}"
         println "Standalone ports = ${standaloneRedisPorts}"
+        println "Redis version = ${redisVersion}"
         systemProperty 'test.redis.standalone.ports', standaloneRedisPorts.join(',')
         systemProperty 'test.redis.cluster.ports', clusterRedisPorts.join(',')
+        systemProperty 'test.redis.version', redisVersion
     }
 
     testLogging {

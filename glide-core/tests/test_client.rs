@@ -7,8 +7,10 @@ mod utilities;
 pub(crate) mod shared_client_tests {
     use super::*;
     use glide_core::client::Client;
-    use redis::RedisConnectionInfo;
-    use redis::Value;
+    use redis::{
+        cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
+        FromRedisValue, InfoDict, RedisConnectionInfo, Value,
+    };
     use rstest::rstest;
     use utilities::cluster::*;
     use utilities::BackingServer;
@@ -38,10 +40,9 @@ pub(crate) mod shared_client_tests {
             // TODO - this is a patch, handling the situation where the new server
             // still isn't available to connection. This should be fixed in [RedisServer].
             let client = repeat_try_create(|| async {
-                Client::new(create_connection_request(
-                    &[connection_addr.clone()],
-                    &configuration,
-                ))
+                Client::new(
+                    create_connection_request(&[connection_addr.clone()], &configuration).into(),
+                )
                 .await
                 .ok()
             })
@@ -72,6 +73,88 @@ pub(crate) mod shared_client_tests {
             .await;
             let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_is_not_routed() {
+        // This test checks that a transaction without user routing isn't routed to a random node before reaching its target.
+        // This is tested by checking how many requests each node has received - one of the 6 nodes should have more requests than the others.
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    use_tls: false,
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // reset stats on all connections
+            let mut cmd = redis::cmd("CONFIG");
+            cmd.arg("RESETSTAT");
+            let _ = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            // Send a keyed transaction
+            let key = generate_random_string(6);
+            let mut pipe = redis::pipe();
+            pipe.cmd("GET").arg(key);
+            pipe.atomic();
+
+            for _ in 0..4 {
+                let _ = test_basics
+                    .client
+                    .send_transaction(&pipe, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Gather info from each server
+            let mut cmd = redis::cmd("INFO");
+            cmd.arg("commandstats");
+            let values = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            let values: Vec<_> = match values {
+                Value::Map(map) => map.into_iter().filter_map(|(_, value)| {
+                    let map = InfoDict::from_owned_redis_value(value).unwrap();
+                    map.get::<String>("cmdstat_get")?
+                        .split_once(',')?
+                        .0
+                        .split_at(6) // split after `calls=``
+                        .1
+                        .parse::<u32>()
+                        .ok()
+                }),
+
+                _ => panic!("Expected map, got `{values:?}`"),
+            }
+            .collect();
+
+            // Check that only one node received all of the GET calls.
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0], 4);
         });
     }
 
@@ -267,10 +350,25 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
+            // BLPOP doesn't block in transactions, so we'll pause the client instead.
+            let mut cmd = redis::cmd("CLIENT");
+            cmd.arg("PAUSE").arg(100);
+            let _ = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await;
+
             let mut pipeline = redis::pipe();
-            pipeline.blpop("foo", 0.0); // 0 timeout blocks indefinitely
+            pipeline.atomic();
+            pipeline.cmd("GET").arg("foo");
             let result = test_basics.client.send_transaction(&pipeline, None).await;
-            assert!(result.is_err());
+            assert!(result.is_err(), "Received {:?}", result);
             let err = result.unwrap_err();
             assert!(err.is_timeout(), "{err}");
         });
@@ -362,7 +460,7 @@ pub(crate) mod shared_client_tests {
                     Value::Boolean(true),
                     Value::Int(1),
                     Value::Okay,
-                    Value::Double(0.5.into()),
+                    Value::Double(0.5),
                     Value::Int(1),
                 ]),)
             );
