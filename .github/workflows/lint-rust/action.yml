@@ -14,7 +14,7 @@ runs:
           with:
               submodules: recursive
 
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@1.76.0
         - uses: Swatinem/rust-cache@v2
 
         - name: Install protoc (protobuf)
@@ -37,7 +37,7 @@ runs:
 
         - run: |
               cargo update
-              cargo install --version 0.14.0 cargo-deny
+              cargo install --version 0.14.3 cargo-deny
               cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
