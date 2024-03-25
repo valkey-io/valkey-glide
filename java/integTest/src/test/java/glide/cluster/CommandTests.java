@@ -520,6 +520,6 @@ public class CommandTests {
         assertEquals(message, singlePayload);
 
         Map<String, String> multiPayload = clusterClient.echo(message, ALL_NODES).get().getMultiValue();
-        multiPayload.entrySet().forEach(payload -> assertEquals(message, payload));
+        multiPayload.forEach((key, value) -> assertEquals(message, value));
     }
 }
