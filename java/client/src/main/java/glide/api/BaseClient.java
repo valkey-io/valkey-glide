@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
@@ -221,6 +222,10 @@ public abstract class BaseClient
 
     protected Long handleLongResponse(Response response) throws RedisException {
         return handleRedisResponse(Long.class, false, response);
+    }
+
+    protected Long handleLongOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(Long.class, true, response);
     }
 
     protected Double handleDoubleResponse(Response response) throws RedisException {
@@ -691,5 +696,17 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
         return this.zrangeWithScores(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrank(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                Zrank, new String[] {key, member}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                Zrank, new String[] {key, member, "WITHSCORE"}, this::handleArrayOrNullResponse);
     }
 }

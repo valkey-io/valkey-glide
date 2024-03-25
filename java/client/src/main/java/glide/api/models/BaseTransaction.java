@@ -62,6 +62,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
@@ -1285,6 +1286,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
+     * score, where scores are ordered from the lowest to highest.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
+     *     of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     */
+    public T zrankWithScore(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(new String[] {key, member, "WITHSCORE"});
+        protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
      * stored at the specified <code>key</code>.
      *
@@ -1369,6 +1388,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zscore(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(new String[] {key, member});
         protobufTransaction.addCommands(buildCommand(ZScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
+     * scores ordered from low to high.<br>
+     * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     */
+    public T zrank(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(new String[] {key, member});
+        protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
         return getThis();
     }
 
