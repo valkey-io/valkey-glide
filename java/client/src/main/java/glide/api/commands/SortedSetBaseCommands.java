@@ -1,7 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.RangeOptions;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.RangeOptions.RangeByLex;
+import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ZaddOptions;
@@ -297,9 +299,9 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
-     *     - For range queries by index (rank), use {@link RangeOptions.RangeByIndex}.<br>
-     *     - For range queries by lexicographical order, use {@link RangeOptions.RangeByLex}.<br>
-     *     - For range queries by score, use {@link RangeOptions.RangeByScore}.
+     *     - For range queries by index (rank), use {@link RangeByIndex}.<br>
+     *     - For range queries by lexicographical order, use {@link RangeByLex}.<br>
+     *     - For range queries by score, use {@link RangeByScore}.
      * @param reverse If true, reverses the sorted set, with index 0 as the element with the highest
      *     score.
      * @return An array of elements within the specified range. If <code>key</code> does not exist, it
@@ -324,9 +326,9 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
-     *     - For range queries by index (rank), use {@link RangeOptions.RangeByIndex}.<br>
-     *     - For range queries by lexicographical order, use {@link RangeOptions.RangeByLex}.<br>
-     *     - For range queries by score, use {@link RangeOptions.RangeByScore}.
+     *     - For range queries by index (rank), use {@link RangeByIndex}.<br>
+     *     - For range queries by lexicographical order, use {@link RangeByLex}.<br>
+     *     - For range queries by score, use {@link RangeByScore}.
      * @return An of array elements within the specified range. If <code>key</code> does not exist, it
      *     is treated as an empty sorted set, and the command returns an empty array.
      * @example
@@ -347,8 +349,8 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
-     *     - For range queries by index (rank), use {@link RangeOptions.RangeByIndex}.<br>
-     *     - For range queries by score, use {@link RangeOptions.RangeByScore}.
+     *     - For range queries by index (rank), use {@link RangeByIndex}.<br>
+     *     - For range queries by score, use {@link RangeByScore}.
      * @param reverse If true, reverses the sorted set, with index 0 as the element with the highest
      *     score.
      * @return A <code>Map</code> of elements and their scores within the specified range. If <code>
@@ -373,8 +375,8 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
-     *     - For range queries by index (rank), use {@link RangeOptions.RangeByIndex}.<br>
-     *     - For range queries by score, use {@link RangeOptions.RangeByScore}.
+     *     - For range queries by index (rank), use {@link RangeByIndex}.<br>
+     *     - For range queries by score, use {@link RangeByScore}.
      * @return A <code><ap</code> of elements and their scores within the specified range. If <code>
      *     key</code> does not exist, it is treated as an empty sorted set, and the command returns an
      *     empty <code>Map</code>.
