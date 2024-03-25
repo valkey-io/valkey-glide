@@ -2,4 +2,4 @@ hiredis
 numpy
 
 # redis-py
-redis>=5.0.1
+redis==5.0.3
