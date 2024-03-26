@@ -157,7 +157,7 @@ pub(crate) fn convert_to_expected_type(
             },
             _ => Err((
                 ErrorKind::TypeError,
-                "Response couldn't be converted to Array of bool or null",
+                "Response couldn't be converted to Json Toggle return type",
                 format!("(response was {:?})", value),
             )
                 .into()),
