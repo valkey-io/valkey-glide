@@ -744,7 +744,7 @@ public class RedisClientTest {
         String key = "testKey";
         Long value = 10L;
 
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        CompletableFuture testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
 
         // match on protobuf request
@@ -768,7 +768,7 @@ public class RedisClientTest {
         long amount = 1L;
         Long value = 10L;
 
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
+        CompletableFuture testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
 
         // match on protobuf request
