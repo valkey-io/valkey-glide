@@ -207,6 +207,24 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.DBSize, []))
 
+    async def echo(self, message: str) -> str:
+        """
+        Echoes the provided `message` back.
+
+        See https://redis.io/commands/echo for more details.
+
+        Args:
+            message (str): The message to be echoed back.
+
+        Returns:
+            str: The provided `message`.
+
+        Examples:
+            >>> await client.echo("Glide-for-Redis")
+                'Glide-for-Redis'
+        """
+        return cast(str, await self._execute_command(RequestType.Echo, [message]))
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
