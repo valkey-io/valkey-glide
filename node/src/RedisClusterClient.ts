@@ -13,6 +13,7 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createEcho,
     createInfo,
     createPing,
     createTime,
@@ -435,6 +436,38 @@ export class RedisClusterClient extends BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createConfigSet(parameters),
+            toProtobufRoute(route),
+        );
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     *
+     * @param message - The message to be echoed back.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     * @returns The provided `message`. When specifying a route other than a single node,
+     *  it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the echo command
+     * const echoedMessage = await client.echo("Glide-for-Redis");
+     * console.log(echoedMessage); // Output: "Glide-for-Redis"
+     * ```
+     * @example
+     * ```typescript
+     * // Example usage of the echo command with routing to all nodes
+     * const echoedMessage = await client.echo("Glide-for-Redis", "allNodes");
+     * console.log(echoedMessage); // Output: \{'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'\}
+     * ```
+     */
+    public echo(
+        message: string,
+        route?: Routes,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise(
+            createEcho(message),
             toProtobufRoute(route),
         );
     }
