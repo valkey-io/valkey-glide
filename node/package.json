@@ -73,7 +73,8 @@
             "rust-client/**",
             "!build-ts/**",
             "babel.config.js",
-            "jest.config.js"
+            "jest.config.js",
+            "hybrid-node-tests/**"
         ]
     },
     "//": [
