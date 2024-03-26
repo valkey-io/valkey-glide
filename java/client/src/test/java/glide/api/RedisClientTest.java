@@ -596,7 +596,7 @@ public class RedisClientTest {
         when(testResponse.get()).thenReturn(payload);
 
         // match on protobuf request
-        when(commandManager.<Object>submitNewCommand(eq(script), eq(List.of()), eq(List.of()), any()))
+        when(commandManager.<Object>submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -623,7 +623,7 @@ public class RedisClientTest {
         when(testResponse.get()).thenReturn(payload);
 
         // match on protobuf request
-        when(commandManager.<Object>submitNewCommand(
+        when(commandManager.<Object>submitScript(
                         eq(script), eq(List.of("key1", "key2")), eq(List.of("arg1", "arg2")), any()))
                 .thenReturn(testResponse);
 
