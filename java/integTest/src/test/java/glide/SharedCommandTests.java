@@ -1031,12 +1031,13 @@ public class SharedCommandTests {
         assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
         assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
 
+        // TODO: update after adding XADD
         // use custom command until XADD is implemented
         String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
         if (client instanceof RedisClient) {
             assertNotNull(((RedisClient) client).customCommand(args).get());
         } else if (client instanceof RedisClusterClient) {
-            assertNotNull(((RedisClusterClient) client).customCommand(args).get());
+            assertNotNull(((RedisClusterClient) client).customCommand(args).get().getSingleValue());
         }
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
