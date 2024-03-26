@@ -19,7 +19,7 @@ use tokio::runtime::Runtime;
 /// Success callback that is called when a Redis command succeeds.
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
-/// `message` is the value returned by the Redis command.
+/// `message` is the value returned by the Redis command. The lifetime of `message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns. 
 // TODO: Change message type when implementing command logic
 // TODO: Consider using a single response callback instead of success and failure callbacks
 pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *const c_char) -> ();
@@ -27,7 +27,7 @@ pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *cons
 /// Failure callback that is called when a Redis command fails.
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
-/// `error_message` is the error message returned by Redis for the failed command. It must be manually freed by the caller after this callback is invoked, otherwise a memory leak will occur.
+/// `error_message` is the error message returned by Redis for the failed command. The lifetime of `error_message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
 pub type FailureCallback = unsafe extern "C" fn(
     index_ptr: usize,
@@ -64,8 +64,9 @@ fn create_client_internal(
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this (e.g. by pinning each go thread to a rust thread)
-    let runtime = Builder::new_current_thread()
+    let runtime = Builder::new_multi_thread()
         .enable_all()
+        .worker_threads(1)
         .thread_name("GLIDE for Redis Go thread")
         .build()
         .map_err(|err| {
@@ -127,22 +128,26 @@ pub unsafe extern "C" fn create_client(
 ///
 /// `client_ptr` is a pointer to the client returned in the `ConnectionResponse` from `create_client`.
 ///
+/// This function will do nothing when closing an already closed client (a null client pointer).
+///
 /// # Safety
 ///
 /// * `client_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * `client_ptr` must be valid until `close_client` is called.
+// TODO: Ensure safety when command has not completed yet
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
     if client_ptr.is_null() {
         return;
     }
-    let client_ptr = unsafe { Box::from_raw(client_ptr as *mut Client) };
-    let _runtime_handle = client_ptr.runtime.enter();
+    drop(unsafe { Box::from_raw(client_ptr as *mut Client) });
 }
 
 /// Deallocates a `ConnectionResponse`.
 ///
-/// This function also frees the contained error.
+/// This function also frees the contained error. If the contained error is a null pointer, the function returns and nothing happens, so a double free cannot happen.
+///
+/// This function will do nothing when freeing a null `ConnectionResponse` pointer.
 ///
 /// # Safety
 ///
