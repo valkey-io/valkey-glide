@@ -141,7 +141,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> clientGetName(Route route);
 
     /**
-     * Echoes the provided <code>message</code> back. <br>
+     * Echoes the provided <code>message</code> back.<br>
      * The command will be routed a random node.
      *
      * @see <a href="https://redis.io/commands/echo/">redis.io</a> for details.
