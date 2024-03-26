@@ -1271,24 +1271,6 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Persist, [key]),
         )
 
-    async def echo(self, message: str) -> str:
-        """
-        Echoes the provided `message` back.
-
-        See https://redis.io/commands/echo for more details.
-
-        Args:
-            message (str): The message to be echoed back.
-
-        Returns:
-            str: The provided `message`.
-
-        Examples:
-            >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
-        """
-        return cast(str, await self._execute_command(RequestType.Echo, [message]))
-
     async def type(self, key: str) -> str:
         """
         Returns the string representation of the type of the value stored at `key`.

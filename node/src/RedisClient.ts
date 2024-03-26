@@ -13,6 +13,7 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createEcho,
     createInfo,
     createPing,
     createSelect,
@@ -213,6 +214,23 @@ export class RedisClient extends BaseClient {
      */
     public configSet(parameters: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters));
+    }
+
+    /** Echoes the provided `message` back.
+     * See https://redis.io/commands/echo for more details.
+     *
+     * @param message - The message to be echoed back.
+     * @returns The provided `message`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the echo command
+     * const echoedMessage = await client.echo("Glide-for-Redis");
+     * console.log(echoedMessage); // Output: "Glide-for-Redis"
+     * ```
+     */
+    public echo(message: string): Promise<string> {
+        return this.createWritePromise(createEcho(message));
     }
 
     /** Returns the server time
