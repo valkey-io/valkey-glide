@@ -15,6 +15,7 @@ pub(crate) enum ExpectedReturnType {
     Set,
     DoubleOrNull,
     ZrankReturnType,
+    JsonToggleReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -121,6 +122,46 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
         )),
+        ExpectedReturnType::JsonToggleReturnType => match value {
+            Value::Array(array) => {
+                let new_array: Result<Vec<_>, _> = array
+                    .into_iter()
+                    .map(|arr| match arr {
+                        Value::Nil => Ok(Value::Nil),
+                        _ => match from_owned_redis_value::<bool>(arr.clone()) {
+                            Ok(boolean_value) => Ok(Value::Boolean(boolean_value)),
+                            _ => Err((
+                                ErrorKind::TypeError,
+                                "Could not convert value to boolean",
+                                format!("(value was {:?})", arr),
+                            )
+                                .into()),
+                        },
+                    })
+                    .collect();
+
+                match new_array {
+                    Ok(values) => Ok(Value::Array(values)),
+                    Err(err) => Err(err),
+                }
+            }
+            Value::BulkString(s) => match std::str::from_utf8(&s) {
+                Ok("true") => Ok(Value::Boolean(true)),
+                Ok("false") => Ok(Value::Boolean(false)),
+                _ => Err((
+                    ErrorKind::TypeError,
+                    "Response couldn't be converted to boolean",
+                    format!("(response was {:?})", s),
+                )
+                    .into()),
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to Array of bool or null",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -204,6 +245,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMEMBERS" => Some(ExpectedReturnType::Set),
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
+        b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         _ => None,
     }
 }
@@ -422,5 +464,32 @@ mod tests {
         );
 
         assert!(convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::Double)).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_list_of_bool_or_null() {
+        let array = vec![Value::Nil, Value::Int(0), Value::Int(1)];
+        let array_result = convert_to_expected_type(
+            Value::Array(array),
+            Some(ExpectedReturnType::JsonToggleReturnType),
+        )
+        .unwrap();
+
+        let array_result = if let Value::Array(array) = array_result {
+            array
+        } else {
+            panic!("Expected an Array, but got {:?}", array_result);
+        };
+        assert_eq!(array_result.len(), 3);
+
+        assert_eq!(array_result[0], Value::Nil);
+        assert_eq!(array_result[1], Value::Boolean(false));
+        assert_eq!(array_result[2], Value::Boolean(true));
+
+        assert!(convert_to_expected_type(
+            Value::Nil,
+            Some(ExpectedReturnType::JsonToggleReturnType)
+        )
+        .is_err());
     }
 }

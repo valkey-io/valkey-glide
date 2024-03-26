@@ -18,7 +18,7 @@
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.constants import TOK
+from glide.constants import TOK, TJsonResponse
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.redis_client import TRedisClient
 
@@ -137,3 +137,39 @@ async def get(
         args.extend(paths)
 
     return cast(str, await client.custom_command(args))
+
+
+async def toggle(
+    client: TRedisClient,
+    key: str,
+    path: str,
+) -> TJsonResponse[bool]:
+    """
+    Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
+
+    See https://redis.io/commands/json.toggle/ for more details.
+
+    Args:
+        client (TRedisClient): The Redis client to execute the command.
+        key (str): The key of the JSON document.
+        path (str): The JSONPath to specify.
+
+    Returns:
+        TJsonResponse[bool]: Returns an array of boolean replies for each path, with the new value (false or true), or None for JSON values matching the path that are not Boolean.
+        If `path` doesn't start with `$` (legacy path syntax), returns the new value of the toggled value in `path`. Note that when sending legacy path syntax, the value at `path` must be a boolean value.
+
+    Examples:
+        >>> from glide import json as redisJson
+        >>> await json.set(client, "doc", "$", json.dumps({"bool": true , "nested": {"bool": false , "nested": {"bool": 10}}}))
+        >>> await redisJson.toggle(client, "doc", "$.bool")
+            [False, True, None]  # Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
+        >>> await redisJson.toggle(client, "doc", "bool")
+            True  # Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
+        >>> await redisJson.get(client, "doc", "$")
+            "[{\"bool\":true,\"nested\":{\"bool\":true,\"nested\":{\"bool\":10}}}]" # The updated JSON value in the key stored at `doc`.
+    """
+
+    return cast(
+        TJsonResponse[bool],
+        await client.custom_command(["JSON.TOGGLE", key, path]),
+    )
