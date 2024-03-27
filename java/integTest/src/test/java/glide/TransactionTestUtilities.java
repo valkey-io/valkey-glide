@@ -150,7 +150,7 @@ public class TransactionTestUtilities {
             1L,
             2L,
             2.0, // zscore(key8, "two")
-            Map.of("three", 3.0),
+            Map.of("three", 3.0), // zpopmax(key8)
             OK,
             Map.of("timeout", "1000"),
             OK,
