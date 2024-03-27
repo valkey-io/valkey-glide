@@ -41,19 +41,26 @@ public class RangeOptions {
         }
     }
 
-    /** Represents a specific numeric score boundary in a sorted set. */
     public static class ScoreBoundary implements ScoreRange {
-        /** The score value. */
         private final double bound;
-
-        /** Whether the score value is inclusive. Defaults to true if not set. */
         private final boolean isInclusive;
 
+        /**
+         * Creates a specific numeric score boundary in a sorted set.
+         *
+         * @param bound The score value.
+         * @param isInclusive Whether the score value is inclusive. Defaults to true if not set.
+         */
         public ScoreBoundary(double bound, boolean isInclusive) {
             this.bound = bound;
             this.isInclusive = isInclusive;
         }
 
+        /**
+         * Creates a specific numeric score boundary in a sorted set.
+         *
+         * @param bound The score value.
+         */
         public ScoreBoundary(double bound) {
             this(bound, true);
         }
@@ -92,19 +99,26 @@ public class RangeOptions {
         }
     }
 
-    /** Represents a specific lexicographic boundary in a sorted set. */
     public static class LexBoundary implements LexRange {
-        /** The lex value. */
         private final String value;
-
-        /** Whether the lex value is inclusive. Defaults to true if not set. */
         private final boolean isInclusive;
 
+        /**
+         * Creates a specific lexicographic boundary in a sorted set.
+         *
+         * @param value The lex value.
+         * @param isInclusive Whether the lex value is inclusive. Defaults to true if not set.
+         */
         public LexBoundary(@NonNull String value, boolean isInclusive) {
             this.value = value;
             this.isInclusive = isInclusive;
         }
 
+        /**
+         * Creates a specific lexicographic boundary in a sorted set.
+         *
+         * @param value The lex value.
+         */
         public LexBoundary(@NonNull String value) {
             this(value, true);
         }
@@ -151,24 +165,21 @@ public class RangeOptions {
         Limit getLimit();
     }
 
-    /**
-     * Represents a range by lexicographical order in a sorted set.<br>
-     * The <code>start</code> and <code>stop</code> arguments represent lexicographical boundaries.
-     */
     @Getter
     public static class RangeByLex implements RangeQuery {
-        /** The start lexicographic boundary. */
         private final String start;
-
-        /** The stop lexicographic boundary. */
         private final String end;
-
-        /**
-         * The limit argument for a range query. Defaults to null. See <code>Limit</code> class for more
-         * information.
-         */
         private final Limit limit;
 
+        /**
+         * Creates a range by lexicographical order in a sorted set.<br>
+         * The <code>start</code> and <code>stop</code> arguments represent lexicographical boundaries.
+         *
+         * @param start The start lexicographic boundary.
+         * @param end The stop lexicographic boundary.
+         * @param limit The limit argument for a range query. Defaults to null. See <code>Limit</code>
+         *     class for more information.
+         */
         public RangeByLex(
                 @NonNull RangeOptions.LexRange start,
                 @NonNull RangeOptions.LexRange end,
@@ -178,6 +189,13 @@ public class RangeOptions {
             this.limit = limit;
         }
 
+        /**
+         * Creates a range by lexicographical order in a sorted set.<br>
+         * The <code>start</code> and <code>stop</code> arguments represent lexicographical boundaries.
+         *
+         * @param start The start lexicographic boundary.
+         * @param end The stop lexicographic boundary.
+         */
         public RangeByLex(@NonNull RangeOptions.LexRange start, @NonNull RangeOptions.LexRange end) {
             this.start = start.toArgs();
             this.end = end.toArgs();
@@ -195,19 +213,19 @@ public class RangeOptions {
      */
     public interface ScoredRangeQuery extends RangeQuery {}
 
-    /**
-     * Represents a range by index (rank) in a sorted set.<br>
-     * The <code>start</code> and <code>stop</code> arguments represent zero-based indexes.
-     */
     @RequiredArgsConstructor
     @Getter
     public static class RangeByIndex implements ScoredRangeQuery {
-        /** The start index of the range. */
         private final String start;
-
-        /** The stop index of the range. */
         private final String end;
 
+        /**
+         * Creates a range by index (rank) in a sorted set.<br>
+         * The <code>start</code> and <code>stop</code> arguments represent zero-based indexes.
+         *
+         * @param start The start index of the range.
+         * @param end The stop index of the range.
+         */
         public RangeByIndex(long start, long end) {
             this.start = Long.toString(start);
             this.end = Long.toString(end);
@@ -225,18 +243,19 @@ public class RangeOptions {
      */
     @Getter
     public static class RangeByScore implements ScoredRangeQuery {
-        /** The start score boundary. */
         private final String start;
-
-        /** The stop score boundary. */
         private final String end;
-
-        /**
-         * The limit argument for a range query. Defaults to null. See <code>Limit</code> class for more
-         * information.
-         */
         private final Limit limit;
 
+        /**
+         * Creates a range by score in a sorted set.<br>
+         * The <code>start</code> and <code>stop</code> arguments represent score boundaries.
+         *
+         * @param start The start score boundary.
+         * @param end The stop score boundary.
+         * @param limit The limit argument for a range query. Defaults to null. See <code>Limit</code>
+         *     class for more information.
+         */
         public RangeByScore(
                 @NonNull RangeOptions.ScoreRange start,
                 @NonNull RangeOptions.ScoreRange end,
@@ -246,6 +265,13 @@ public class RangeOptions {
             this.limit = limit;
         }
 
+        /**
+         * Creates a range by score in a sorted set.<br>
+         * The <code>start</code> and <code>stop</code> arguments represent score boundaries.
+         *
+         * @param start The start score boundary.
+         * @param end The stop score boundary.
+         */
         public RangeByScore(
                 @NonNull RangeOptions.ScoreRange start, @NonNull RangeOptions.ScoreRange end) {
             this.start = start.toArgs();
