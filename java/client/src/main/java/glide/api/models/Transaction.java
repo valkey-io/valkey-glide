@@ -16,13 +16,15 @@ import redis_request.RedisRequestOuterClass;
  * command. Specific response types are documented alongside each method.
  *
  * @example
- *     <pre>
- *  Transaction transaction = new Transaction()
- *    .transaction.set("key", "value");
- *    .transaction.get("key");
- *  Object[] result = client.exec(transaction).get();
- *  // result contains: OK and "value"
- *  </pre>
+ *     <pre>{@code
+ * Transaction transaction = new Transaction()
+ *     .set("key", "value")
+ *     .get("key");
+ * Object[] result = client.exec(transaction).get();
+ * // result contains: OK and "value"
+ * assert result[0].equals("OK");
+ * assert result[1].equals("value");
+ * }</pre>
  */
 @AllArgsConstructor
 public class Transaction extends BaseTransaction<Transaction> {
