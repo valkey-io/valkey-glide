@@ -41,6 +41,7 @@ public class RangeOptions {
         }
     }
 
+    /** Represents a specific numeric score boundary in a sorted set. */
     public static class ScoreBoundary implements ScoreRange {
         private final double bound;
         private final boolean isInclusive;
@@ -99,6 +100,7 @@ public class RangeOptions {
         }
     }
 
+    /** Represents a specific lexicographic boundary in a sorted set. */
     public static class LexBoundary implements LexRange {
         private final String value;
         private final boolean isInclusive;
@@ -165,6 +167,10 @@ public class RangeOptions {
         Limit getLimit();
     }
 
+    /**
+     * Represents a range by lexicographical order in a sorted set.<br>
+     * The <code>start</code> and <code>stop</code> arguments represent lexicographical boundaries.
+     */
     @Getter
     public static class RangeByLex implements RangeQuery {
         private final String start;
@@ -213,7 +219,10 @@ public class RangeOptions {
      */
     public interface ScoredRangeQuery extends RangeQuery {}
 
-    @RequiredArgsConstructor
+    /**
+     * Represents a range by index (rank) in a sorted set.<br>
+     * The <code>start</code> and <code>stop</code> arguments represent zero-based indexes.
+     */
     @Getter
     public static class RangeByIndex implements ScoredRangeQuery {
         private final String start;
