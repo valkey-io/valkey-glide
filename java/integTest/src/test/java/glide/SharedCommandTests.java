@@ -910,11 +910,14 @@ public class SharedCommandTests {
     public void persist_on_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
-        assertEquals(OK, client.set(key, "foo").get());
+        assertEquals(OK, client.set(key, "persist_value").get());
         assertFalse(client.persist(key).get());
 
-        assertTrue(client.expire(key, 10).get());
+        assertTrue(client.expire(key, 10L).get());
+        assertEquals(10L, client.ttl(key).get());
         assertTrue(client.persist(key).get());
+
+        assertEquals(-1L, client.ttl(key).get());
     }
 
     @SneakyThrows

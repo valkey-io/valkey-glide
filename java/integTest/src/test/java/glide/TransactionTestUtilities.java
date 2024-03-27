@@ -108,7 +108,7 @@ public class TransactionTestUtilities {
             (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
-            Boolean.FALSE,
+            Boolean.FALSE, // persist(key1)
             1L,
             null,
             1L,

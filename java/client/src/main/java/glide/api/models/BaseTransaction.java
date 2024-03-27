@@ -1291,7 +1291,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Remove the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
+     * Removes the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
      * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
      * as no timeout is associated).
      *
