@@ -35,4 +35,20 @@ public interface HyperLogLogBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> pfadd(String key, String[] elements);
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * @see <a href="https://redis.io/commands/pfcount/">redis.io</a> for details.
+     * @param keys The keys of the HyperLogLog data structures to be analyzed.
+     * @return The approximated cardinality of given HyperLogLog data structures.<br>
+     *     The cardinality of a key that does not exist is <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long result = client.pfcount("hll_1", "hll_2").get();
+     * assert result == 42L; // Count of unique elements in multiple data structures
+     * }</pre>
+     */
+    CompletableFuture<Long> pfcount(String[] keys);
 }
