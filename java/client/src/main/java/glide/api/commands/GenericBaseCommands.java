@@ -273,7 +273,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> ttl(String key);
 
     /**
-     * Invokes a Lua script with its keys and arguments.<br>
+     * Invokes a Lua script.<br>
      * This method simplifies the process of invoking scripts on a Redis server by using an object
      * that represents a Lua script. The script loading and execution will all be handled internally.
      * If the script has not already been loaded, it will be loaded automatically using the Redis
@@ -288,7 +288,7 @@ public interface GenericBaseCommands {
      *     <pre>{@code
      * try(Script luaScript = new Script("return 'Hello'")) {
      *     String result = (String) client.invokeScript(luaScript).get();
-     *     assert result == "Hello";
+     *     assert result.equals("Hello");
      * }
      * }</pre>
      */
@@ -312,8 +312,8 @@ public interface GenericBaseCommands {
      * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }")) {
      *     ScriptOptions scriptOptions = ScriptOptions.builder().key("foo").arg("bar").build();
      *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
-     *     assert result[0] == "foo";
-     *     assert result[1] == "bar";
+     *     assert result[0].equals("foo");
+     *     assert result[1].equals("bar");
      * }
      * }</pre>
      */
