@@ -97,9 +97,9 @@ public class TransactionTestUtilities {
 
     public static Object[] transactionTestResult() {
         return new Object[] {
-            OK, // set(key1, value1)
-            value1, // get(key1)
-            null, // set(key2, value2, returnOldValue(true))
+            OK,
+            value1,
+            null,
             (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
