@@ -99,7 +99,7 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK,
             value1,
-            "string",
+            "string", // type(key1)
             null,
             new String[] {value1, value2},
             1L,

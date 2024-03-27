@@ -281,6 +281,7 @@ public interface GenericBaseCommands {
      *     <pre>{@code
      * String type = client.type("StringKey").get();
      * assert type.equals("string");
+     *
      * type = client.type("ListKey").get();
      * assert type.equals("list");
      * }</pre>
