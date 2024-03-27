@@ -2079,8 +2079,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key, member};
         Long value = 3L;
 
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(Zrank), eq(arguments), any()))
@@ -2104,8 +2104,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key, member, "WITHSCORE"};
         Object[] value = new Object[] {1, 6.0};
 
-        CompletableFuture<Object[]> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(Zrank), eq(arguments), any()))

@@ -150,8 +150,8 @@ public class TransactionTestUtilities {
             1L,
             1L,
             Set.of("baz"),
-            3L, // Zadd
-            0L, // Zrank
+            3L,
+            0L, // zrank(key8, "one")
             4.0,
             1L,
             2L,
