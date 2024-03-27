@@ -19,7 +19,7 @@ use tokio::runtime::Runtime;
 /// Success callback that is called when a Redis command succeeds.
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
-/// `message` is the value returned by the Redis command. The lifetime of `message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns. 
+/// `message` is the value returned by the Redis command. The lifetime of `message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns.
 // TODO: Change message type when implementing command logic
 // TODO: Consider using a single response callback instead of success and failure callbacks
 pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *const c_char) -> ();
