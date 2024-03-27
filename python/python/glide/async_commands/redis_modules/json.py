@@ -155,18 +155,23 @@ async def toggle(
         path (str): The JSONPath to specify.
 
     Returns:
-        TJsonResponse[bool]: Returns an array of boolean replies for each path, with the new value (false or true), or None for JSON values matching the path that are not Boolean.
-        If `path` doesn't start with `$` (legacy path syntax), returns the new value of the toggled value in `path`. Note that when sending legacy path syntax, the value at `path` must be a boolean value.
+        TJsonResponse[bool]: For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
+        or None for JSON values matching the path that are not boolean.
+        For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
+        Note that when sending legacy path syntax, If `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import json as redisJson
-        >>> await json.set(client, "doc", "$", json.dumps({"bool": true , "nested": {"bool": false , "nested": {"bool": 10}}}))
+        >>> import json
+        >>> await redisJson.set(client, "doc", "$", json.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}))
+            'OK'
         >>> await redisJson.toggle(client, "doc", "$.bool")
             [False, True, None]  # Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
         >>> await redisJson.toggle(client, "doc", "bool")
             True  # Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
-        >>> await redisJson.get(client, "doc", "$")
-            "[{\"bool\":true,\"nested\":{\"bool\":true,\"nested\":{\"bool\":10}}}]" # The updated JSON value in the key stored at `doc`.
+        >>> json.loads(await redisJson.get(client, "doc", "$"))
+            [{"bool": True, "nested": {"bool": True, "nested": {"bool": 10}}}] # The updated JSON value in the key stored at `doc`.
     """
 
     return cast(

@@ -158,7 +158,7 @@ class TestJson:
         assert await json.set(redis_client, key, "$", OuterJson.dumps(json_value)) == OK
 
         assert await json.toggle(redis_client, key, "$..bool") == [False, True, None]
-        assert await json.toggle(redis_client, key, "bool")
+        assert await json.toggle(redis_client, key, "bool") is True
 
         assert await json.toggle(redis_client, key, "$.nested") == [None]
         with pytest.raises(RequestError):

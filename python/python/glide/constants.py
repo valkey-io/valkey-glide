@@ -28,6 +28,6 @@ TRequest = Union[RedisRequest, ConnectionRequest]
 TClusterResponse = Union[T, Dict[str, T]]
 TSingleNodeRoute = Union[RandomNode, SlotKeyRoute, SlotIdRoute, ByAddressRoute]
 # When specifying legacy path (path doesn't start with `$`), response will be T
-# Otherwise, (when specifying JSONPath) , response will be List[Optional[T]].
+# Otherwise, (when specifying JSONPath), response will be List[Optional[T]].
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonResponse = Union[T, List[Optional[T]]]

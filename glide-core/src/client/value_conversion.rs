@@ -124,34 +124,31 @@ pub(crate) fn convert_to_expected_type(
         )),
         ExpectedReturnType::JsonToggleReturnType => match value {
             Value::Array(array) => {
-                let new_array: Result<Vec<_>, _> = array
+                let converted_array: RedisResult<Vec<_>> = array
                     .into_iter()
-                    .map(|arr| match arr {
+                    .map(|item| match item {
                         Value::Nil => Ok(Value::Nil),
-                        _ => match from_owned_redis_value::<bool>(arr.clone()) {
+                        _ => match from_owned_redis_value::<bool>(item.clone()) {
                             Ok(boolean_value) => Ok(Value::Boolean(boolean_value)),
                             _ => Err((
                                 ErrorKind::TypeError,
                                 "Could not convert value to boolean",
-                                format!("(value was {:?})", arr),
+                                format!("(value was {:?})", item),
                             )
                                 .into()),
                         },
                     })
                     .collect();
 
-                match new_array {
-                    Ok(values) => Ok(Value::Array(values)),
-                    Err(err) => Err(err),
-                }
+                converted_array.map(Value::Array)
             }
-            Value::BulkString(s) => match std::str::from_utf8(&s) {
+            Value::BulkString(bytes) => match std::str::from_utf8(&bytes) {
                 Ok("true") => Ok(Value::Boolean(true)),
                 Ok("false") => Ok(Value::Boolean(false)),
                 _ => Err((
                     ErrorKind::TypeError,
                     "Response couldn't be converted to boolean",
-                    format!("(response was {:?})", s),
+                    format!("(response was {:?})", bytes),
                 )
                     .into()),
             },
