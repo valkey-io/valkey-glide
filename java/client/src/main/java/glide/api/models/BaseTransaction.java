@@ -352,7 +352,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, it is treated as an empty string, and the command
      *     returns <code>0</code>.
      */
-    public T strlen(String key) {
+    public T strlen(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Strlen, commandArgs));
         return getThis();

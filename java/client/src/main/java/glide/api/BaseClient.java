@@ -306,7 +306,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> strlen(String key) {
+    public CompletableFuture<Long> strlen(@NonNull String key) {
         return commandManager.submitNewCommand(Strlen, new String[] {key}, this::handleLongResponse);
     }
 
