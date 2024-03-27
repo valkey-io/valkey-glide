@@ -1809,8 +1809,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd()};
         String[] value = new String[] {"one", "two"};
 
-        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Zrange), eq(arguments), any()))
@@ -1837,8 +1837,8 @@ public class RedisClientTest {
                 new String[] {key, rangeByScore.getStart(), rangeByScore.getEnd(), "BYSCORE", "REV"};
         String[] value = new String[] {"two", "one"};
 
-        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Zrange), eq(arguments), any()))
@@ -1863,8 +1863,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key, rangeByLex.getStart(), rangeByLex.getEnd(), "BYLEX"};
         String[] value = new String[] {"a", "b"};
 
-        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Zrange), eq(arguments), any()))
@@ -1889,8 +1889,8 @@ public class RedisClientTest {
                 new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), "WITHSCORES"};
         Map<String, Double> value = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
 
-        CompletableFuture<Map<String, Double>> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Map<String, Double>>submitNewCommand(eq(Zrange), eq(arguments), any()))
@@ -1928,8 +1928,8 @@ public class RedisClientTest {
                 };
         Map<String, Double> value = Map.of("two", 2.0, "three", 3.0);
 
-        CompletableFuture<Map<String, Double>> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Map<String, Double>>submitNewCommand(eq(Zrange), eq(arguments), any()))
