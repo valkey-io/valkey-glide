@@ -120,7 +120,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param message The message to be echoed back.
      * @return Command Response - The provided <code>message</code>.
      */
-    public T echo(String message) {
+    public T echo(@NonNull String message) {
         ArgsArray commandArgs = buildArgs(message);
         protobufTransaction.addCommands(buildCommand(Echo, commandArgs));
         return getThis();
