@@ -1742,8 +1742,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key, member};
         Double value = 3.5;
 
-        CompletableFuture<Double> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Double>submitNewCommand(eq(ZScore), eq(arguments), any()))

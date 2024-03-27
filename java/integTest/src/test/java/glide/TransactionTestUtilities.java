@@ -148,7 +148,7 @@ public class TransactionTestUtilities {
             4.0,
             1L,
             2L,
-            2.0,
+            2.0, // zscore(key8, "two")
             OK,
             Map.of("timeout", "1000"),
             OK,
