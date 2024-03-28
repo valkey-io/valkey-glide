@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
@@ -1285,6 +1286,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the server time.
+     *
+     * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
+     * @return Command Response - The current server time as a <code>String</code> array with two
+     *     elements: A Unix timestamp and the amount of microseconds already elapsed in the current
+     *     second. The returned array is in a <code>[Unix timestamp, Microseconds already elapsed]
+     *     </code> format.
+     */
+    public T time() {
+        protobufTransaction.addCommands(buildCommand(Time));
         return getThis();
     }
 
