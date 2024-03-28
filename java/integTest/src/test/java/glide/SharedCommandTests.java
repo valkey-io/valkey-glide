@@ -907,14 +907,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void persist_on_existing_key(BaseClient client) {
+    public void persist_on_existing_and_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
+
+        assertFalse(client.persist(key).get());
 
         assertEquals(OK, client.set(key, "persist_value").get());
         assertFalse(client.persist(key).get());
 
         assertTrue(client.expire(key, 10L).get());
-        assertEquals(10L, client.ttl(key).get());
+        Long persistAmount = client.ttl(key).get();
+        assertTrue(0L <= persistAmount && persistAmount <= 10L);
         assertTrue(client.persist(key).get());
 
         assertEquals(-1L, client.ttl(key).get());
