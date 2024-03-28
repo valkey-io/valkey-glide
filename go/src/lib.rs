@@ -24,7 +24,7 @@ use tokio::runtime::Runtime;
 /// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
-/// `message` is the value returned by the Redis command. The lifetime of `message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns.
+/// `message` is the value returned by the Redis command. The 'message' is managed by Rust and is destroyed when the callback returns control back to the caller.
 // TODO: Change message type when implementing command logic
 // TODO: Consider using a single response callback instead of success and failure callbacks
 pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *const c_char) -> ();
@@ -34,7 +34,7 @@ pub type SuccessCallback = unsafe extern "C" fn(index_ptr: usize, message: *cons
 /// The failure callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
 ///
 /// `index_ptr` is a baton-pass back to the caller language to uniquely identify the promise.
-/// `error_message` is the error message returned by Redis for the failed command. The lifetime of `error_message` is until the callback returns control back to the caller. The callee cannot use the data after the callback returns.
+/// `error_message` is the error message returned by Redis for the failed command. The 'error_message' is managed by Rust and is destroyed when the callback returns control back to the caller.
 /// `error_type` is the type of error returned by glide-core, depending on the `RedisError` returned.
 pub type FailureCallback = unsafe extern "C" fn(
     index_ptr: usize,
@@ -46,17 +46,17 @@ pub type FailureCallback = unsafe extern "C" fn(
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
 ///
-/// The struct is freed using `free_connection_response` to avoid memory leaks. This is achieved by having the external caller invoke this function.
+/// The struct is freed by the external caller by using `free_connection_response` to avoid memory leaks.
 #[repr(C)]
 pub struct ConnectionResponse {
     conn_ptr: *const c_void,
     connection_error_message: *const c_char,
 }
 
-/// The glide client.
+/// A `GlideClient` container.
 // TODO: Remove allow(dead_code) once connection logic is implemented
 #[allow(dead_code)]
-pub struct Client {
+pub struct ClientContainer {
     client: GlideClient,
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
@@ -67,7 +67,7 @@ fn create_client_internal(
     connection_request_bytes: &[u8],
     success_callback: SuccessCallback,
     failure_callback: FailureCallback,
-) -> Result<Client, String> {
+) -> Result<ClientContainer, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
@@ -83,7 +83,7 @@ fn create_client_internal(
     let client = runtime
         .block_on(GlideClient::new(ConnectionRequest::from(request)))
         .map_err(|err| err.to_string())?;
-    Ok(Client {
+    Ok(ClientContainer {
         client,
         success_callback,
         failure_callback,
@@ -91,22 +91,22 @@ fn create_client_internal(
     })
 }
 
-/// Creates a new client with the given configuration.
+/// Creates a new `ClientContainer` with a new `GlideClient` configured using a Protobuf `ConnectionRequest`.
 ///
-/// The returned `ConnectionResponse` should be manually freed by calling `free_connection_response`, otherwise a memory leak will occur. It should be freed whether or not an error occurs.
+/// The returned `ConnectionResponse` will only be freed by calling `free_connection_response`.
 ///
 /// `connection_request_bytes` is an array of bytes that will be parsed into a Protobuf `ConnectionRequest` object.
 /// `connection_request_len` is the number of bytes in `connection_request_bytes`.
-/// `success_callback` is the callback that will be called in the case that the Redis command succeeds.
-/// `failure_callback` is the callback that will be called in the case that the Redis command fails.
+/// `success_callback` is the callback that will be called when a Redis command succeeds.
+/// `failure_callback` is the callback that will be called when a Redis command fails.
 ///
 /// # Safety
 ///
 /// * `connection_request_bytes` must point to `connection_request_len` consecutive properly initialized bytes. It must be a well-formed Protobuf `ConnectionRequest` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `connection_request_len` must not be greater than the length of the connection request bytes array. It must also not be greater than the max value of a signed pointer-sized integer.
-/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live until it is passed into `close_client`.
+/// * The `conn_ptr` pointer in the returned `ConnectionResponse` must live while the client is open/active and must be explicitly freed by calling `close_client`.
 /// * The `connection_error_message` pointer in the returned `ConnectionResponse` must live until the returned `ConnectionResponse` pointer is passed to `free_connection_response`.
-/// * Both the `success_callback` and `failure_callback` function pointers need to live until the client is closed via `close_client` since they are used when issuing Redis commands. In the case of an error, the function pointers live until the client is explicitly closed.
+/// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for deallocating both callbacks.
 // TODO: Consider making this async
 #[no_mangle]
 pub unsafe extern "C" fn create_client(
@@ -130,24 +130,25 @@ pub unsafe extern "C" fn create_client(
     Box::into_raw(Box::new(response))
 }
 
-/// Closes the given client, deallocating it from the heap.
+/// Closes the given `GlideClient`, deallocating it from the heap.
 ///
-/// `client_ptr` is a pointer to the client returned in the `ConnectionResponse` from `create_client`.
+/// `client_container_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from `create_client`.
 ///
 /// # Panics
 ///
-/// This function panics when called with a null `client_ptr`.
+/// This function panics when called with a null `client_container_ptr`.
 ///
 /// # Safety
 ///
 /// * `close_client` can only be called once per client. Calling it twice is undefined behavior, since the address will be freed twice.
-/// * `client_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
-/// * `client_ptr` must be valid until `close_client` is called.
+/// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
+/// * `client_container_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
+/// * `client_container_ptr` must be valid until `close_client` is called.
 // TODO: Ensure safety when command has not completed yet
 #[no_mangle]
-pub unsafe extern "C" fn close_client(client_ptr: *const c_void) {
-    assert!(client_ptr.is_null());
-    drop(unsafe { Box::from_raw(client_ptr as *mut Client) });
+pub unsafe extern "C" fn close_client(client_container_ptr: *const c_void) {
+    assert!(client_container_ptr.is_null());
+    drop(unsafe { Box::from_raw(client_container_ptr as *mut ClientContainer) });
 }
 
 /// Deallocates a `ConnectionResponse`.
