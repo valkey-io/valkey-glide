@@ -3,10 +3,12 @@
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/cjs/index.js",
     "module": "build-ts/mjs/index.js",
+    "types": "./build-ts/mjs/index.d.ts",
     "exports": {
         ".": {
             "import": "./build-ts/mjs/index.js",
-            "require": "./build-ts/cjs/index.js"
+            "require": "./build-ts/cjs/index.js",
+            "types": "./build-ts/mjs/index.d.ts"
         }
     },
     "repository": {
