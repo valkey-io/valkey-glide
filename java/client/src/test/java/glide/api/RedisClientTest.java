@@ -1799,8 +1799,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key};
         Map<String, Double> value = Map.of("member1", 2.5);
 
-        CompletableFuture<Map<String, Double>> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
