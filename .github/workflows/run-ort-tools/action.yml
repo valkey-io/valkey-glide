@@ -21,3 +21,4 @@ runs:
             
             # NOTICE DEFAULT
             ./gradlew cli:run --args="report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate"
+            cat $FOLDER/ort_results/analyzer-result.json
