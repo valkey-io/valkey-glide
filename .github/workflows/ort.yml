@@ -58,18 +58,7 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
-            - name: Cache ORT and Gradle packages
-              uses: actions/cache@v4
-              id: cache-ort
-              with:
-                path: |
-                  ./ort
-                  ~/.gradle/caches
-                  ~/.gradle/wrapper
-                key: ${{ runner.os }}-ort
-
             - name: Checkout ORT Repository
-              if: steps.cache-ort.outputs.cache-hit != 'true'
               uses: actions/checkout@v4
               with: 
                   repository: "oss-review-toolkit/ort"
@@ -78,7 +67,6 @@ jobs:
                   submodules: recursive
 
             - name: Checkout ORT latest release tag
-              if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 # Get new tags from remote
@@ -88,7 +76,6 @@ jobs:
                 # Checkout latest tag
                 git checkout $LATEST_TAG
             - name: Install ORT
-              if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
