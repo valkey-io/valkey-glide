@@ -674,9 +674,10 @@ public class RedisClusterClientTest {
     @Test
     public void time_returns_success() {
         // setup
-        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
+
         String[] payload = new String[] {"UnixTime", "ms"};
-        when(testResponse.get()).thenReturn(payload);
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Time), eq(new String[0]), any()))
@@ -694,9 +695,9 @@ public class RedisClusterClientTest {
     @Test
     public void time_returns_with_route_success() {
         // setup
-        CompletableFuture<ClusterValue<String[]>> testResponse = mock(CompletableFuture.class);
         String[] payload = new String[] {"UnixTime", "ms"};
-        when(testResponse.get()).thenReturn(ClusterValue.ofSingleValue(payload));
+        CompletableFuture<ClusterValue<String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(payload));
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String[]>>submitNewCommand(
