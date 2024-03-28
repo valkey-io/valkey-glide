@@ -608,8 +608,8 @@ public class RedisClientTest {
         String key = "testKey";
         Boolean isTimeoutRemoved = true;
 
-        CompletableFuture<Boolean> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(isTimeoutRemoved);
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(isTimeoutRemoved);
 
         // match on protobuf request
         when(commandManager.<Boolean>submitNewCommand(eq(Persist), eq(new String[] {key}), any()))
