@@ -87,14 +87,12 @@ jobs:
                 LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
                 # Checkout latest tag
                 git checkout $LATEST_TAG
-
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
                 ./gradlew installDist
-
             - name: Create ORT config file
               run: |
                 mkdir -p ~/.ort/config
@@ -105,7 +103,6 @@ jobs:
                     enabledPackageManagers: [Cargo, NPM, PIP]
                 EOF
                 cat ~/.ort/config/config.yml
-
           ### NodeJS ###
 
             - name: Set up Node.js 16.x
@@ -148,7 +145,6 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install git+https://github.com/nexB/python-inspector
-
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
               with:
@@ -174,7 +170,6 @@ jobs:
                 else
                 echo "FOUND_DIFF=false" >> $GITHUB_ENV
                 fi
-
             - name: Retrieve licenses list
               working-directory: ./utils
               run: |
@@ -183,7 +178,6 @@ jobs:
                   python3 get_licenses_from_ort.py
                   echo EOF
                 } >> "$GITHUB_ENV"
-
             ### Create PR ###
 
             - name: Create pull request
@@ -203,4 +197,3 @@ jobs:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
-  
