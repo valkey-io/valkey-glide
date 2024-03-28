@@ -1,4 +1,4 @@
-# TODO: Investigate using uniffi bindings for Go instead of cbindgen
+# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 language = "C"
 
 header = "/* Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */"
