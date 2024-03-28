@@ -248,7 +248,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
      * @return The current server time as a <code>String</code> array with two elements: A Unix
      *     timestamp and the amount of microseconds already elapsed in the current second. The
-     *     returned array is in a [Unix timestamp, Microseconds already elapsed] format.
+     *     returned array is in a <code>[Unix timestamp, Microseconds already elapsed]</code> format.
      * @example
      *     <pre>{@code
      * String[] serverTime = client.time().get();
@@ -265,7 +265,7 @@ public interface ServerManagementClusterCommands {
      *     command to the nodes defined by <code>route</code>.
      * @return The current server time as a <code>String</code> array with two elements: A Unix
      *     timestamp and the amount of microseconds already elapsed in the current second. The
-     *     returned array is in a [Unix timestamp, Microseconds already elapsed] format.
+     *     returned array is in a <code>[Unix timestamp, Microseconds already elapsed]</code> format.
      * @example
      *     <pre>{@code
      * // Command sent to a single random node via RANDOM route, expecting a SingleValue result.
