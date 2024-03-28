@@ -15,7 +15,6 @@
         >>> json.loads(json_get)
             [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
         """
-import json
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
@@ -229,14 +228,15 @@ async def strappend(
     Args:
         client (TRedisClient): The Redis client to execute the command.
         key (str): The key of the JSON document.
-        value (str): The value to append to the string. Must be wrapped with single quotes.
+        value (str): The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
         path (Optional[str]): The JSONPath to specify. Default is root `$`.
 
     Returns:
-        TJsonResponse[int]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
-        or None for JSON values matching the path that are not string.
-        For legacy path (`path` doesn't starts with `$`), returns the length of the resulting string after appending `value` to the string at `path`.
+        TJsonResponse[int]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path, indicating the length
+        of the resulting string after appending `value`, or None for JSON values matching the path that are not string.
+        For legacy path (`path` doesn't start with `$`), returns the length of the resulting string after appending `value` to the string at `path`.
         Note that when sending legacy path syntax, if the JSON value at `path` is not a string or the path doesn't exist, an error is raised.
+        If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
@@ -247,7 +247,7 @@ async def strappend(
         >>> await redisJson.strappend(client, "doc", json.dumps("baz"), "$..a")
             [6, 8, None]  # The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
         >>> await redisJson.strappend(client, "doc", '"foo"', "nested.a")
-            11  # The length of the resulting string after appending " new value" to the string at path 'nested.array' in the key stored at `doc` after the append operation.
+            11  # The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored at `doc`.
         >>> json.loads(await redisJson.get(client, json.dumps("doc"), "$"))
             [{"a":"foobaz", "nested": {"a": "hellobazfoo"}, "nested2": {"a": 31}}] # The updated JSON value in the key stored at `doc`.
     """
@@ -276,10 +276,10 @@ async def strlen(
         path (Optional[str]): The JSONPath to specify. Default is root `$`. // TODO check (since when sending strlen "non_exiting" and strlen "non_exiting" . -> behaves the same)
 
     Returns:
-        TJsonResponse[Optional[int]]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path, indicating the length of the JSON string value,
-        or None for JSON values matching the path that are not string.
-        If key doesn't exist, and the path that was provided is a JSONPath, an error is raised.
-        For legacy path (`path` doesn't starts with `$`), returns the length of the JSON value at `path` or None if `key` doesn't exist.
+        TJsonResponse[Optional[int]]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path,
+        indicating the length of the JSON string value, or None for JSON values matching the path that are not string.
+        If `key` doesn't exist, and the path that was provided is a JSONPath, an error is raised.
+        For legacy path (`path` doesn't start with `$`), returns the length of the JSON value at `path` or None if `key` doesn't exist.
         Note that when sending legacy path syntax, if the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised, If `key` doesn't exist, None is returned.
         For more information about the returned type, see `TJsonResponse`.
 
@@ -324,8 +324,9 @@ async def toggle(
     Returns:
         TJsonResponse[bool]: For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
         or None for JSON values matching the path that are not boolean.
-        For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
+        For legacy path (`path` doesn't start with `$`), returns the value of the toggled boolean in `path`.
         Note that when sending legacy path syntax, if `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
+        If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:

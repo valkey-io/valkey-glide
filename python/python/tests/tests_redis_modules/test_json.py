@@ -197,10 +197,14 @@ class TestJson:
 
         assert await json.toggle(redis_client, key, "$..bool") == [False, True, None]
         assert await json.toggle(redis_client, key, "bool") is True
+        assert await json.toggle(redis_client, key, "$.not_existing") == []
 
         assert await json.toggle(redis_client, key, "$.nested") == [None]
         with pytest.raises(RequestError):
             assert await json.toggle(redis_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.toggle(redis_client, key, ".not_existing")
 
         with pytest.raises(RequestError):
             assert await json.toggle(redis_client, "non_exiting_key", "$")
@@ -219,6 +223,11 @@ class TestJson:
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, key, "nested")
 
+        assert await json.strlen(redis_client, key, "$.non_existing_path") == []
+        with pytest.raises(RequestError):
+            assert await json.strlen(redis_client, key, ".non_existing_path")
+
+        assert await json.strlen(redis_client, "non_exiting_key", ".") is None
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, "non_exiting_key", "$")
 
@@ -245,10 +254,21 @@ class TestJson:
         ) == [None]
         with pytest.raises(RequestError):
             assert await json.strappend(
-                redis_client, key, OuterJson.dumps("try"), "nested"
+                redis_client, key, OuterJson.dumps("bar"), ".nested"
+            )
+
+        assert (
+            await json.strappend(
+                redis_client, key, OuterJson.dumps("try"), "$.non_existing_path"
+            )
+            == []
+        )
+        with pytest.raises(RequestError):
+            assert await json.strappend(
+                redis_client, key, OuterJson.dumps("try"), "non_existing_path"
             )
 
         with pytest.raises(RequestError):
             assert await json.strappend(
-                redis_client, "non_exiting_key", OuterJson.dumps("try"), "$"
+                redis_client, "non_exiting_key", OuterJson.dumps("try")
             )
