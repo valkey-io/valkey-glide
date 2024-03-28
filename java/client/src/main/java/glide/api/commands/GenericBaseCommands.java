@@ -253,7 +253,7 @@ public interface GenericBaseCommands {
             String key, long unixMilliseconds, ExpireOptions expireOptions);
 
     /**
-     * Returns the remaining time to live of <code>key</code> that has a timeout.
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in seconds.
      *
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
