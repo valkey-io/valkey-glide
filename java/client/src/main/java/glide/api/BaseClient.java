@@ -600,7 +600,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Double> zscore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
-            ZScore, new String[] {key, member}, this::handleDoubleOrNullResponse);
+                ZScore, new String[] {key, member}, this::handleDoubleOrNullResponse);
     }
 
     @Override
