@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -12,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
@@ -261,5 +264,24 @@ public class RedisClusterClient extends BaseClient
                         route.isSingleNodeRoute()
                                 ? ClusterValue.ofSingleValue(handleStringResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String[]> time() {
+        return commandManager.submitNewCommand(
+                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> time(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Time,
+                new String[0],
+                route,
+                response ->
+                        route.isSingleNodeRoute()
+                                ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
+                                : ClusterValue.ofMultiValue(
+                                        castMapOfArrays(handleMapResponse(response), String.class)));
     }
 }
