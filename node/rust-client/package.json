@@ -1,5 +1,5 @@
 {
-    "name": "glide-rs",
+    "name": "glide-rs-internal",
     "version": "0.1.0",
     "description": "Redis client",
     "main": "index.js",
