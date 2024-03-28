@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -13,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
@@ -123,5 +125,11 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> echo(@NonNull String message) {
         return commandManager.submitNewCommand(
                 Echo, new String[] {message}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> time() {
+        return commandManager.submitNewCommand(
+                Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
     }
 }

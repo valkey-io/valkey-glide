@@ -64,6 +64,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
@@ -1730,5 +1731,25 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void time_returns_success() {
+        // setup
+        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
+        String[] payload = new String[] {"UnixTime", "ms"};
+        when(testResponse.get()).thenReturn(payload);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(Time), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.time();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
     }
 }
