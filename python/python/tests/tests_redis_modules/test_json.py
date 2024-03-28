@@ -221,3 +221,34 @@ class TestJson:
 
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, "non_exiting_key", "$")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_strappend(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        json_value = {"a": "foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}
+        assert await json.set(redis_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.strappend(redis_client, key, '"bar"', "$..a") == [6, 8, None]
+        assert await json.strappend(redis_client, key, OuterJson.dumps("foo"), "a") == 9
+
+        json_str = await json.get(redis_client, key, ".")
+        assert isinstance(json_str, str)
+        assert OuterJson.loads(json_str) == {
+            "a": "foobarfoo",
+            "nested": {"a": "hellobar"},
+            "nested2": {"a": 31},
+        }
+
+        assert await json.strappend(
+            redis_client, key, OuterJson.dumps("bar"), "$.nested"
+        ) == [None]
+        with pytest.raises(RequestError):
+            assert await json.strappend(
+                redis_client, key, OuterJson.dumps("try"), "nested"
+            )
+
+        with pytest.raises(RequestError):
+            assert await json.strappend(
+                redis_client, "non_exiting_key", OuterJson.dumps("try"), "$"
+            )
