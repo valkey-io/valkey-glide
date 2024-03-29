@@ -58,7 +58,18 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
+            - name: Cache ORT and Gradle packages
+              uses: actions/cache@v4
+              id: cache-ort
+              with:
+                path: |
+                  ./ort
+                  ~/.gradle/caches
+                  ~/.gradle/wrapper
+                key: ${{ runner.os }}-ort
+
             - name: Checkout ORT Repository
+              if: steps.cache-ort.outputs.cache-hit != 'true'
               uses: actions/checkout@v4
               with: 
                   repository: "oss-review-toolkit/ort"
@@ -67,6 +78,7 @@ jobs:
                   submodules: recursive
 
             - name: Checkout ORT latest release tag
+              if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 # Get new tags from remote
@@ -75,11 +87,14 @@ jobs:
                 LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
                 # Checkout latest tag
                 git checkout $LATEST_TAG
+
             - name: Install ORT
+              if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
                 ./gradlew installDist
+
             - name: Create ORT config file
               run: |
                 mkdir -p ~/.ort/config
@@ -90,6 +105,7 @@ jobs:
                     enabledPackageManagers: [Cargo, NPM, PIP]
                 EOF
                 cat ~/.ort/config/config.yml
+
           ### NodeJS ###
 
             - name: Set up Node.js 16.x
@@ -132,6 +148,7 @@ jobs:
               run: |
                   python -m pip install --upgrade pip
                   pip install git+https://github.com/nexB/python-inspector
+
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
               with:
@@ -157,6 +174,7 @@ jobs:
                 else
                 echo "FOUND_DIFF=false" >> $GITHUB_ENV
                 fi
+
             - name: Retrieve licenses list
               working-directory: ./utils
               run: |
@@ -165,12 +183,13 @@ jobs:
                   python3 get_licenses_from_ort.py
                   echo EOF
                 } >> "$GITHUB_ENV"
+
             ### Create PR ###
 
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
               run: |
-                export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' || "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo 'ort-v"$INPUT_VERSION"'; fi`
+                export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo "ort-v$INPUT_VERSION"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
                 git config --global user.email "glide-for-redis@amazon.com"
                 git config --global user.name "ort-bot"
@@ -184,3 +203,4 @@ jobs:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
+  
