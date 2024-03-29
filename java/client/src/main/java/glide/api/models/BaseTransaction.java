@@ -14,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
@@ -40,6 +41,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -48,7 +50,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -108,6 +113,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         ArgsArray commandArgs = buildArgs(args);
         protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Echoes the provided <code>message</code> back.
+     *
+     * @see <a href="https://redis.io/commands/echo>redis.io</a> for details.
+     * @param message The message to be echoed back.
+     * @return Command Response - The provided <code>message</code>.
+     */
+    public T echo(@NonNull String message) {
+        ArgsArray commandArgs = buildArgs(message);
+        protobufTransaction.addCommands(buildCommand(Echo, commandArgs));
         return getThis();
     }
 
@@ -338,6 +356,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
 
         protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the length of the string value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/strlen/">redis.io</a> for details.
+     * @param key The key to check its length.
+     * @return Command Response - The length of the string value stored at key.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty string, and the command
+     *     returns <code>0</code>.
+     */
+    public T strlen(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(Strlen, commandArgs));
         return getThis();
     }
 
@@ -1237,6 +1270,49 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zcard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(new String[] {key});
         protobufTransaction.addCommands(buildCommand(Zcard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
+     *
+     * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
+     * @param key The key to return its timeout.
+     * @return Command Response - TTL in milliseconds. <code>-2</code> if <code>key</code> does not
+     *     exist, <code>-1</code> if <code>key</code> exists but has no associated expire.
+     */
+    public T pttl(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the server time.
+     *
+     * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
+     * @return Command Response - The current server time as a <code>String</code> array with two
+     *     elements: A Unix timestamp and the amount of microseconds already elapsed in the current
+     *     second. The returned array is in a <code>[Unix timestamp, Microseconds already elapsed]
+     *     </code> format.
+     */
+    public T time() {
+        protobufTransaction.addCommands(buildCommand(Time));
+        return getThis();
+    }
+
+    /**
+     * Returns the string representation of the type of the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @param key The <code>key</code> to check its data type.
+     * @return Command Response - If the <code>key</code> exists, the type of the stored value is
+     *     returned. Otherwise, a "none" string is returned.
+     */
+    public T type(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(Type, commandArgs));
         return getThis();
     }
 

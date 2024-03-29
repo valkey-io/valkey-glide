@@ -1,3 +1,10 @@
+## 0.3.1 (2024-03-28)
+
+#### Fixes
+
+* Node: Ignore hybrid-tests folder for npm publish. ([#1178](https://github.com/aws/glide-for-redis/pull/1178))
+* Node: Fixed broken path of tsconfig translation. ([#1183](https://github.com/aws/glide-for-redis/pull/1183))
+
 ## 0.3.0 (2024-03-25)
 
 #### Changes
@@ -26,6 +33,7 @@
 * Python, Node: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065), [#1149](https://github.com/aws/glide-for-redis/pull/1149))
 * Core: Enabled Cluster Mode periodic checks by default ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
 * Node: Added Rename command. ([#1124](https://github.com/aws/glide-for-redis/pull/1124))
+* Python: Added JSON.TOGGLE command ([#1184](https://github.com/aws/glide-for-redis/pull/1184))
 
 #### Features
 

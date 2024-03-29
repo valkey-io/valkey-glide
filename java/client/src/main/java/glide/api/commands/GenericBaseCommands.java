@@ -253,7 +253,7 @@ public interface GenericBaseCommands {
             String key, long unixMilliseconds, ExpireOptions expireOptions);
 
     /**
-     * Returns the remaining time to live of <code>key</code> that has a timeout.
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in seconds.
      *
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
@@ -269,4 +269,40 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> ttl(String key);
+
+    /**
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
+     *
+     * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
+     * @param key The key to return its timeout.
+     * @return TTL in milliseconds. <code>-2</code> if <code>key</code> does not exist, <code>-1
+     *     </code> if <code>key</code> exists but has no associated expire.
+     * @example
+     *     <pre>{@code
+     * Long timeRemainingMS = client.pttl("my_key").get()
+     * assert timeRemainingMS == 5000L // Indicates that "my_key" has a remaining time to live of 5000 milliseconds.
+     *
+     * Long timeRemainingMS = client.pttl("nonexistent_key").get();
+     * assert timeRemainingMS == -2L; // Returns -2 for a non-existing key.
+     * }</pre>
+     */
+    CompletableFuture<Long> pttl(String key);
+
+    /**
+     * Returns the string representation of the type of the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @param key The <code>key</code> to check its data type.
+     * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
+     *     "none" string is returned.
+     * @example
+     *     <pre>{@code
+     * String type = client.type("StringKey").get();
+     * assert type.equals("string");
+     *
+     * type = client.type("ListKey").get();
+     * assert type.equals("list");
+     * }</pre>
+     */
+    CompletableFuture<String> type(String key);
 }

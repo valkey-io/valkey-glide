@@ -29,8 +29,10 @@ public class TransactionTestUtilities {
 
         baseTransaction.set(key1, value1);
         baseTransaction.get(key1);
+        baseTransaction.type(key1);
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
+        baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
 
         baseTransaction.exists(new String[] {key1});
@@ -91,6 +93,8 @@ public class TransactionTestUtilities {
 
         baseTransaction.configResetStat();
 
+        baseTransaction.echo("GLIDE");
+
         return baseTransaction;
     }
 
@@ -98,7 +102,9 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK,
             value1,
+            "string", // type(key1)
             null,
+            (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
             1L,
@@ -141,7 +147,8 @@ public class TransactionTestUtilities {
             2L,
             OK,
             Map.of("timeout", "1000"),
-            OK
+            OK,
+            "GLIDE", // echo
         };
     }
 }

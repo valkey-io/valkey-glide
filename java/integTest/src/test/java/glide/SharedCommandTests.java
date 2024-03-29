@@ -8,10 +8,10 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -404,9 +404,28 @@ public class SharedCommandTests {
         assertEquals(-1, client.decr(key1).get());
         assertEquals("-1", client.get(key1).get());
 
-        assertNull(client.get(key2).get(10, SECONDS));
+        assertNull(client.get(key2).get());
         assertEquals(-3, client.decrBy(key2, 3).get());
         assertEquals("-3", client.get(key2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void strlen(BaseClient client) {
+        String stringKey = UUID.randomUUID().toString();
+        String nonStringKey = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "GLIDE").get());
+        assertEquals(5L, client.strlen(stringKey).get());
+
+        assertEquals(0L, client.strlen(nonExistingKey).get());
+
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.strlen(nonStringKey).get());
+        assertTrue(exception.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -807,7 +826,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void expire_pexpire_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
@@ -823,7 +842,8 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void expireAt_pexpireAt_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expireAt_pexpireAt_ttl_with_timestamp_in_the_past_or_negative_timeout(
+            BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expireAt_with_past_timestamp").get());
@@ -859,6 +879,29 @@ public class SharedCommandTests {
         assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_pttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(-2L, client.pttl(key).get());
+
+        assertEquals(OK, client.set(key, "expire_timeout").get());
+        assertTrue(client.expire(key, 10L).get());
+        Long pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
+
+        assertEquals(OK, client.set(key, "pexpire_timeout").get());
+        assertEquals(-1L, client.pttl(key).get());
+
+        assertTrue(client.pexpire(key, 10000L).get());
+        pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
     }
 
     @SneakyThrows
@@ -1010,5 +1053,41 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zcard("foo").get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void type(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String listKey = UUID.randomUUID().toString();
+        String hashKey = UUID.randomUUID().toString();
+        String setKey = UUID.randomUUID().toString();
+        String zsetKey = UUID.randomUUID().toString();
+        String streamKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "value").get());
+        assertEquals(1, client.lpush(listKey, new String[] {"value"}).get());
+        assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
+        assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
+
+        // TODO: update after adding XADD
+        // use custom command until XADD is implemented
+        String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
+        if (client instanceof RedisClient) {
+            assertNotNull(((RedisClient) client).customCommand(args).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertNotNull(((RedisClusterClient) client).customCommand(args).get().getSingleValue());
+        }
+
+        assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
+        assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
+        assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
     }
 }

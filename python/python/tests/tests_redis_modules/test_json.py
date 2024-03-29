@@ -8,6 +8,7 @@ from glide.async_commands.redis_modules import json
 from glide.async_commands.redis_modules.json import JsonGetOptions
 from glide.config import ProtocolVersion
 from glide.constants import OK
+from glide.exceptions import RequestError
 from glide.redis_client import TRedisClient
 from tests.test_async_client import get_random_string, parse_info_response
 
@@ -148,3 +149,20 @@ class TestJson:
             '[\n~{\n~~"a":*1.0,\n~~"b":*2,\n~~"c":*{\n~~~"d":*3,\n~~~"e":*4\n~~}\n~}\n]'
         )
         assert result == expected_result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_toggle(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        json_value = {"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}
+        assert await json.set(redis_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.toggle(redis_client, key, "$..bool") == [False, True, None]
+        assert await json.toggle(redis_client, key, "bool") is True
+
+        assert await json.toggle(redis_client, key, "$.nested") == [None]
+        with pytest.raises(RequestError):
+            assert await json.toggle(redis_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.toggle(redis_client, "non_exiting_key", "$")
