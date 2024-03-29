@@ -9,6 +9,6 @@ excludes:
           comment: "Template file for CD"
 resolutions:
     issues:
-        - message: "Cargo failed to resolve dependencies for path 'rust-client/Cargo.toml': NoSuchElementException: Collection contains no element matching the predicate."
+        - message: ".*Collection contains no element matching the predicate.*"
           reason: "BUILD_TOOL_ISSUE"
           comment: "Error caused by a known problem in the build tool."
