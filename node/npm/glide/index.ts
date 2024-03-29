@@ -14,12 +14,12 @@ async function loadNativeBinding() {
         case "linux":
             switch (arch) {
                 case "x64":
-                    nativeBinding = await import(
+                    nativeBinding = await require(
                         "@scope/glide-for-redis-linux-x64"
                     );
                     break;
                 case "arm64":
-                    nativeBinding = await import(
+                    nativeBinding = await require(
                         "@scope/glide-for-redis-linux-arm64"
                     );
                     break;
@@ -32,12 +32,12 @@ async function loadNativeBinding() {
         case "darwin":
             switch (arch) {
                 case "x64":
-                    nativeBinding = await import(
+                    nativeBinding = await require(
                         "@scope/glide-for-redis-darwin-x64"
                     );
                     break;
                 case "arm64":
-                    nativeBinding = await import(
+                    nativeBinding = await require(
                         "@scope/glide-for-redis-darwin-arm64"
                     );
                     break;
