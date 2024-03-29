@@ -1,11 +1,16 @@
 excludes:
-    scopes:
-        - pattern: "devDependencies"
-          reason: "DEV_DEPENDENCY_OF"
-          comment: "Packages for development only."
-        - pattern: "build-dependencies"
-          reason: "BUILD_DEPENDENCY_OF"
-          comment: "Packages for building the code only."
-        - pattern: "dev-dependencies"
-          reason: "DEV_DEPENDENCY_OF"
-          comment: "Packages for development only."
+  scopes:
+    - pattern: "devDependencies"
+      reason: "DEV_DEPENDENCY_OF"
+      comment: "Packages for development only."
+    - pattern: "build-dependencies"
+      reason: "BUILD_DEPENDENCY_OF"
+      comment: "Packages for building the code only."
+    - pattern: "dev-dependencies"
+      reason: "DEV_DEPENDENCY_OF"
+      comment: "Packages for development only."
+resolutions:
+  issues:
+    - message: ".*Collection contains no element matching the predicate.*"
+      reason: "BUILD_TOOL_ISSUE"
+      comment: "Error caused by a known problem in the build tool."
