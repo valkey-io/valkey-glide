@@ -248,7 +248,7 @@ mod tests {
                 redis::cmd("zadd")
                     .arg("XT")
                     .arg("CH")
-                    .arg("INCR")
+                    .arg("incr")
                     .arg("0.6")
                     .arg("foo")
             ),
@@ -256,7 +256,7 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(
-            redis::cmd("ZADD").arg("XT").arg("CH").arg("0.6").arg("foo")
+            redis::cmd("zadd").arg("XT").arg("CH").arg("0.6").arg("foo")
         )
         .is_none());
     }
@@ -264,14 +264,14 @@ mod tests {
     #[test]
     fn convert_zrange_zdiff_only_if_withsocres_is_included() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1")).is_none());
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
@@ -298,19 +298,19 @@ mod tests {
                 redis::cmd("zrank")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));
 
-        assert!(expected_type_for_cmd(redis::cmd("ZRANK").arg("key").arg("member")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("zrank").arg("key").arg("member")).is_none());
 
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("ZREVRANK")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));
