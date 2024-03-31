@@ -21,17 +21,6 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Cache RediSearch Dependencies
-          if: inputs.modules == 'all' || inputs.modules == 'search'
-          id: cache-dependencies-redisearch
-          uses: actions/cache@v3
-          with:
-            path: |
-              ./redisearch/.conan
-              ./cmake
-              ./redisearch/bin 
-            key: ${{ runner.os }}-${{ inputs.redis-version }}-redisearch
-
         - name: Cache RedisJSON Dependencies
           if: inputs.modules == 'all' || inputs.modules == 'json'
           id: cache-dependencies-redisjson
@@ -42,14 +31,6 @@ runs:
               ./redisjson/bin 
             key: ${{ runner.os }}-${{ inputs.redis-version }}-redisjson
 
-        - name: Checkout RediSearch Repository
-          if: steps.cache-dependencies-redisearch.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'search')
-          uses: actions/checkout@v4
-          with: 
-              repository: "RediSearch/RediSearch"
-              path: "./redisearch" 
-              ref: ${{ startsWith(inputs.redis-version, '6') && '2.6' || '' }}
-              submodules: recursive
         
         - name: Install CMake
           if: steps.cache-dependencies-redisearch.outputs.cache-hit != 'true' || steps.cache-dependencies-redisjson.outputs.cache-hit != 'true'
@@ -60,23 +41,6 @@ runs:
             sudo apt-get install -y cmake
             cp /usr/bin/cmake ./cmake
           
-        - name: Build RediSearch
-          if: steps.cache-dependencies-redisearch.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'search')
-          shell: bash  
-          working-directory: ./redisearch
-          run: |
-            set -x
-            echo "Building RediSearch..."
-            sudo pip install --upgrade conan
-            make
-
-        - name: Copy redisearch.so
-          if: inputs.modules == 'all' || inputs.modules == 'search'
-          shell: bash  
-          run: |
-            set -x
-            echo "Copying RediSearch..."
-            cp $GITHUB_WORKSPACE/redisearch/bin/linux-x64-release/search/redisearch.so $GITHUB_WORKSPACE/redisearch.so
 
         - name: Checkout RedisJSON Repository
           if: steps.cache-dependencies-redisjson.outputs.cache-hit != 'true' && (inputs.modules == 'all' || inputs.modules == 'json')
