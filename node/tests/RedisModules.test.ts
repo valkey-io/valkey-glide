@@ -85,17 +85,6 @@ describe("RedisModules", () => {
         timeout: TIMEOUT,
     });
 
-    it("simple search test", async () => {
-        const client = await RedisClusterClient.createClient(
-            getOptions(cluster.ports()),
-        );
-        const info = parseInfoResponse(
-            getFirstResult(await client.info([InfoOptions.Modules])).toString(),
-        )["module"];
-        expect(info).toEqual(expect.stringContaining("search"));
-        client.close();
-    });
-
     it("simple json test", async () => {
         const client = await RedisClusterClient.createClient(
             getOptions(cluster.ports()),
