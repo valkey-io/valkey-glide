@@ -85,7 +85,7 @@ jobs:
               working-directory: ./node/hybrid-node-tests/ecmascript-test
             
             - name: test redis modules
-              run: npm run test-modules -- --load-module=$GITHUB_WORKSPACE/redisearch.so --load-module=$GITHUB_WORKSPACE/redisjson.so
+              run: npm run test-modules -- --load-module=$GITHUB_WORKSPACE/redisjson.so
               working-directory: ./node
 
             - uses: ./.github/workflows/test-benchmark
