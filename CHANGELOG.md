@@ -1,3 +1,6 @@
+#### Changes
+* Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
+
 ## 0.3.1 (2024-03-28)
 
 #### Fixes
