@@ -592,8 +592,8 @@ public class RedisClientTest {
         when(script.getHash()).thenReturn(hash);
         String payload = "hello";
 
-        CompletableFuture<Object> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(payload);
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
 
         // match on protobuf request
         when(commandManager.<Object>submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
@@ -619,8 +619,8 @@ public class RedisClientTest {
         ScriptOptions options =
                 ScriptOptions.builder().key("key1").key("key2").arg("arg1").arg("arg2").build();
 
-        CompletableFuture<Object> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(payload);
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
 
         // match on protobuf request
         when(commandManager.<Object>submitScript(
