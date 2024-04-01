@@ -65,7 +65,7 @@ public class FfiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(longs = {0L, 100L, 774L, Integer.MAX_VALUE + 1, Integer.MIN_VALUE - 1})
+    @ValueSource(longs = {0L, 100L, 774L, Integer.MAX_VALUE + 1L, Integer.MIN_VALUE - 1L})
     public void redisValueToJavaValue_Int(Long input) {
         long ptr = FfiTest.createLeakedInt(input);
         Object longValue = RedisValueResolver.valueFromPointer(ptr);

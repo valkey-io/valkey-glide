@@ -175,7 +175,7 @@ public class RedisClusterClientTest {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};
-        CompletableFuture<String> testResponse = new CompletableFuture();
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
 
         // match on protobuf request
@@ -287,7 +287,7 @@ public class RedisClusterClientTest {
     public void info_returns_string() {
         // setup
         CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
-        Map<String, String> testPayload = new HashMap<String, String>();
+        Map<String, String> testPayload = new HashMap<>();
         testPayload.put("addr1", "value1");
         testPayload.put("addr2", "value2");
         testPayload.put("addr3", "value3");

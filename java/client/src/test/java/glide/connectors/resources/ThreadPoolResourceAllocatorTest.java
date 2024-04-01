@@ -15,8 +15,6 @@ import org.junit.jupiter.api.Test;
 
 public class ThreadPoolResourceAllocatorTest {
 
-    ThreadPoolResourceAllocator service;
-
     @BeforeEach
     public void init() {
         var threadPoolResource = ThreadPoolResourceAllocator.getOrCreate(() -> null);
@@ -30,17 +28,19 @@ public class ThreadPoolResourceAllocatorTest {
     public void getOrCreate_returns_default_after_repeated_calls() {
         ThreadPoolResource mockedThreadPoolResource = mock(ThreadPoolResource.class);
         EventLoopGroup mockedEventLoopGroup = mock(EventLoop.class);
+        @SuppressWarnings("unchecked")
         Supplier<ThreadPoolResource> threadPoolSupplier = mock(Supplier.class);
 
         when(mockedThreadPoolResource.getEventLoopGroup()).thenReturn(mockedEventLoopGroup);
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(false);
         when(threadPoolSupplier.get()).thenReturn(mockedThreadPoolResource);
 
-        ThreadPoolResource theResource = service.getOrCreate(threadPoolSupplier);
+        ThreadPoolResource theResource = ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theResource);
 
         // Ensure that supplier only is invoked once to set up the shared resource
-        ThreadPoolResource theSameResource = service.getOrCreate(threadPoolSupplier);
+        ThreadPoolResource theSameResource =
+                ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theSameResource);
         verify(threadPoolSupplier, times(1)).get();
 
@@ -52,17 +52,20 @@ public class ThreadPoolResourceAllocatorTest {
     public void getOrCreate_returns_new_thread_pool_after_shutdown() {
         ThreadPoolResource mockedThreadPoolResource = mock(ThreadPoolResource.class);
         EventLoopGroup mockedEventLoopGroup = mock(EventLoop.class);
+
+        @SuppressWarnings("unchecked")
         Supplier<ThreadPoolResource> threadPoolSupplier = mock(Supplier.class);
 
         when(mockedThreadPoolResource.getEventLoopGroup()).thenReturn(mockedEventLoopGroup);
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(true);
         when(threadPoolSupplier.get()).thenReturn(mockedThreadPoolResource);
 
-        ThreadPoolResource theResource = service.getOrCreate(threadPoolSupplier);
+        ThreadPoolResource theResource = ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theResource);
 
         // Ensure that supplier only is invoked once to set up the shared resource
-        ThreadPoolResource theSameResource = service.getOrCreate(threadPoolSupplier);
+        ThreadPoolResource theSameResource =
+                ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theSameResource);
         verify(threadPoolSupplier, times(2)).get();
 
