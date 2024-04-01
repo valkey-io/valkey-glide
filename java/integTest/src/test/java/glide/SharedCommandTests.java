@@ -907,6 +907,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void persist_on_existing_and_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.persist(key).get());
+
+        assertEquals(OK, client.set(key, "persist_value").get());
+        assertFalse(client.persist(key).get());
+
+        assertTrue(client.expire(key, 10L).get());
+        Long persistAmount = client.ttl(key).get();
+        assertTrue(0L <= persistAmount && persistAmount <= 10L);
+        assertTrue(client.persist(key).get());
+
+        assertEquals(-1L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
