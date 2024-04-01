@@ -166,7 +166,7 @@ public abstract class BaseClient
      * value as an object of type {@link T}. If <code>isNullable</code>, than also returns <code>null
      * </code>.
      *
-     * @param response Redis protobuf message,
+     * @param response Redis protobuf message.
      * @param classType Parameter {@link T} class type.
      * @param isNullable Accepts null values in the protobuf message.
      * @return Response as an object of type {@link T} or <code>null</code>.

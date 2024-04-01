@@ -116,7 +116,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * ZaddOptions options = ZaddOptions.builder().build();
-     * Double num = client.zaddIncr("mySortedSet", member, 5.0, ).get();
+     * Double num = client.zaddIncr("mySortedSet", member, 5.0, options).get();
      * assert num == 5.0;
      *
      * options = ZaddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
