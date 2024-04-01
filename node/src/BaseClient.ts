@@ -22,7 +22,6 @@ import {
     createDecr,
     createDecrBy,
     createDel,
-    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -988,6 +987,7 @@ export class BaseClient {
      * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
      * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
+     * See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for details.
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
@@ -1189,16 +1189,6 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZpopmax(key, count));
-    }
-
-    /** Echoes the provided `message` back.
-     * See https://redis.io/commands/echo for more details.
-     *
-     * @param message - The message to be echoed back.
-     * @returns The provided `message`.
-     */
-    public echo(message: string): Promise<string> {
-        return this.createWritePromise(createEcho(message));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.

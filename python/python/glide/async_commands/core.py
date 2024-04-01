@@ -1271,24 +1271,6 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Persist, [key]),
         )
 
-    async def echo(self, message: str) -> str:
-        """
-        Echoes the provided `message` back.
-
-        See https://redis.io/commands/echo for more details.
-
-        Args:
-            message (str): The message to be echoed back.
-
-        Returns:
-            str: The provided `message`.
-
-        Examples:
-            >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
-        """
-        return cast(str, await self._execute_command(RequestType.Echo, [message]))
-
     async def type(self, key: str) -> str:
         """
         Returns the string representation of the type of the value stored at `key`.
@@ -1763,6 +1745,8 @@ class CoreCommands(Protocol):
         The script loading, argument preparation, and execution will all be handled internally.
         If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
         After that, it will be invoked using the Redis `EVALSHA` command.
+
+        See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for more details.
 
         Args:
             script (Script): The Lua script to execute.

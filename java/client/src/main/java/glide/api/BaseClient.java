@@ -34,6 +34,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -41,8 +43,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
+import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
@@ -53,7 +60,9 @@ import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -67,6 +76,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -305,6 +315,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> strlen(@NonNull String key) {
+        return commandManager.submitNewCommand(Strlen, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> hget(@NonNull String key, @NonNull String field) {
         return commandManager.submitNewCommand(
                 HashGet, new String[] {key, field}, this::handleStringOrNullResponse);
@@ -520,6 +535,19 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> invokeScript(@NonNull Script script) {
+        return commandManager.submitScript(
+                script, List.of(), List.of(), this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptOptions options) {
+        return commandManager.submitScript(
+                script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
@@ -585,5 +613,49 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zcard(@NonNull String key) {
         return commandManager.submitNewCommand(Zcard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                ZPopMin, new String[] {key, Long.toString(count)}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(@NonNull String key) {
+        return commandManager.submitNewCommand(ZPopMin, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmax(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                ZPopMax, new String[] {key, Long.toString(count)}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmax(@NonNull String key) {
+        return commandManager.submitNewCommand(ZPopMax, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> zscore(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                ZScore, new String[] {key, member}, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pttl(@NonNull String key) {
+        return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> persist(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                Persist, new String[] {key}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> type(@NonNull String key) {
+        return commandManager.submitNewCommand(Type, new String[] {key}, this::handleStringResponse);
     }
 }
