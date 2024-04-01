@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -612,6 +613,17 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zcard(@NonNull String key) {
         return commandManager.submitNewCommand(Zcard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                ZPopMin, new String[] {key, Long.toString(count)}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(@NonNull String key) {
+        return commandManager.submitNewCommand(ZPopMin, new String[] {key}, this::handleMapResponse);
     }
 
     @Override

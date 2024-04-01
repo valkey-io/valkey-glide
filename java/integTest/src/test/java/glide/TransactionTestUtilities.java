@@ -89,6 +89,7 @@ public class TransactionTestUtilities {
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
         baseTransaction.zscore(key8, "two");
+        baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
@@ -150,6 +151,7 @@ public class TransactionTestUtilities {
             1L,
             2L,
             2.0, // zscore(key8, "two")
+            Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
             OK,
             Map.of("timeout", "1000"),
