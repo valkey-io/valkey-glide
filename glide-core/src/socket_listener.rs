@@ -14,7 +14,6 @@ use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
-use futures::stream::StreamExt;
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
 use protobuf::Message;
 use redis::cluster_routing::{
@@ -23,8 +22,6 @@ use redis::cluster_routing::{
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::RedisError;
 use redis::{cmd, Cmd, Value};
-use signal_hook::consts::signal::*;
-use signal_hook_tokio::Signals;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::{env, str};
@@ -781,19 +778,17 @@ impl SocketListener {
         init_callback(Ok(self.socket_path.clone()));
         let local_set_pool = LocalPoolHandle::new(num_cpus::get());
         loop {
-            tokio::select! {
-                listen_v = listener.accept() => {
-                    if let Ok((stream, _addr)) = listen_v {
-                        // New client
-                        local_set_pool.spawn_pinned(move || {
-                            listen_on_client_stream(stream)
-                        });
-                    } else if listen_v.is_err() {
-                        return
-                    }
-                },
-                // Interrupt was received, close the socket
-                _ = handle_signals() => return
+            match listener.accept().await {
+                Ok((stream, _addr)) => {
+                    local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
+                }
+                Err(err) => {
+                    log_debug(
+                        "listen_on_socket",
+                        format!("Socket closed with error: `{err}`"),
+                    );
+                    return;
+                }
             }
         }
     }
@@ -877,23 +872,6 @@ pub fn get_socket_path_from_name(socket_name: String) -> String {
 pub fn get_socket_path() -> String {
     let socket_name = format!("{}-{}", SOCKET_FILE_NAME, std::process::id());
     get_socket_path_from_name(socket_name)
-}
-
-async fn handle_signals() {
-    // Handle Unix signals
-    let mut signals =
-        Signals::new([SIGTERM, SIGQUIT, SIGINT, SIGHUP]).expect("Failed creating signals");
-    loop {
-        if let Some(signal) = signals.next().await {
-            match signal {
-                SIGTERM | SIGQUIT | SIGINT | SIGHUP => {
-                    log_info("connection", format!("Signal {signal:?} received"));
-                    return;
-                }
-                _ => continue,
-            }
-        }
-    }
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
