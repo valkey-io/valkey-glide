@@ -617,7 +617,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zpopmax(@NonNull String key, long count) {
         return commandManager.submitNewCommand(
-            ZPopMax, new String[] {key, Long.toString(count)}, this::handleMapResponse);
+                ZPopMax, new String[] {key, Long.toString(count)}, this::handleMapResponse);
     }
 
     @Override

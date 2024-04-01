@@ -1128,7 +1128,7 @@ public class SharedCommandTests {
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
+                assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
