@@ -395,7 +395,7 @@ public interface SortedSetBaseCommands {
      *       <li>For range queries by score, use {@link RangeByScore}.
      *     </ul>
      *
-     * @return A <code><ap</code> of elements and their scores within the specified range. If <code>
+     * @return A <code>Map</code> of elements and their scores within the specified range. If <code>
      *     key</code> does not exist, it is treated as an empty sorted set, and the command returns an
      *     empty <code>Map</code>.
      * @example
