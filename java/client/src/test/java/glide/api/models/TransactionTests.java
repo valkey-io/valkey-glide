@@ -55,6 +55,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -388,6 +389,12 @@ public class TransactionTests {
 
         transaction.zcard("key");
         results.add(Pair.of(Zcard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zpopmin("key");
+        results.add(Pair.of(ZPopMin, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zpopmin("key", 2);
+        results.add(Pair.of(ZPopMin, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
 
         transaction.zpopmax("key");
         results.add(Pair.of(ZPopMax, ArgsArray.newBuilder().addArgs("key").build()));
