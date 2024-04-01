@@ -8,12 +8,12 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "String Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "String Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=string">String Commands</a>
  */
-public interface StringCommands {
+public interface StringBaseCommands {
 
     /**
      * Get the value associated with the given <code>key</code>, or <code>null</code> if no such value

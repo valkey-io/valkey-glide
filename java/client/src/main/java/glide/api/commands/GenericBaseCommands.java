@@ -5,8 +5,8 @@ import glide.api.models.commands.ExpireOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Generic Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Generic Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
