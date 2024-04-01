@@ -31,6 +31,7 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -1271,6 +1272,94 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrank(key, "one").get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void xadd(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+
+        assertNull(
+            client
+                .xadd(
+                    key,
+                    Map.of(field1, "foo0", field2, "bar0"),
+                    StreamAddOptions.builder().makeStream(Boolean.FALSE).build())
+                .get());
+
+        String timestamp1 = "0-1";
+        assertEquals(
+            timestamp1,
+            client
+                .xadd(
+                    key,
+                    Map.of(field1, "foo1", field2, "bar1"),
+                    StreamAddOptions.builder().id(timestamp1).build())
+                .get());
+
+        assertNotNull(client.xadd(key, Map.of(field1, "foo2", field2, "bar2")).get());
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                2L,
+                ((RedisClusterClient) client)
+                    .customCommand(new String[] {"XLEN", key})
+                    .get()
+                    .getSingleValue());
+        }
+
+        // this will trim the first entry.
+        String id =
+            client
+                .xadd(
+                    key,
+                    Map.of(field1, "foo3", field2, "bar3"),
+                    StreamAddOptions.builder()
+                        .trim(new StreamAddOptions.MaxLen(Boolean.TRUE, 2L))
+                        .build())
+                .get();
+        assertNotNull(id);
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                2L,
+                ((RedisClusterClient) client)
+                    .customCommand(new String[] {"XLEN", key})
+                    .get()
+                    .getSingleValue());
+        }
+
+        // this will trim the second entry.
+        assertNotNull(
+            client
+                .xadd(
+                    key,
+                    Map.of(field1, "foo4", field2, "bar4"),
+                    StreamAddOptions.builder()
+                        .trim(new StreamAddOptions.MinId(Boolean.TRUE, id))
+                        .build())
+                .get());
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                2L,
+                ((RedisClusterClient) client)
+                    .customCommand(new String[] {"XLEN", key})
+                    .get()
+                    .getSingleValue());
+        }
+
+        /**
+         * TODO add test to XTRIM on maxlen expect( await client.xtrim(key, { method: "maxlen",
+         * threshold: 1, exact: true, }), ).toEqual(1); expect(await client.customCommand(["XLEN",
+         * key])).toEqual(1);
+         */
     }
 
     @SneakyThrows
