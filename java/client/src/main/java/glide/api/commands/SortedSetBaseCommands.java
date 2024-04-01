@@ -193,8 +193,8 @@ public interface SortedSetBaseCommands {
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
      *     their scores, ordered from lowest to highest.
-     * @return A map of the removed members and their scores, ordered from the one with the highest
-     *     score to the one with the lowest.<br>
+     * @return A map of the removed members and their scores, ordered from the one with the lowest
+     *     score to the one with the highest.<br>
      *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
      *     command returns an empty <code>Map</code>.
      * @example
