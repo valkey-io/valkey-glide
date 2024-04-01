@@ -428,6 +428,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void hsetnx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+
+        assertTrue(client.hsetnx(key1, field, "value").get());
+        assertFalse(client.hsetnx(key1, field, "newValue").get());
+        assertEquals("value", client.hget(key1, field).get());
+
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, "value").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void hdel_multiple_existing_fields_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();

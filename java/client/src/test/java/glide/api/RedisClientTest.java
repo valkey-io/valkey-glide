@@ -29,6 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -834,6 +835,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void hsetnx_success() {
+        // setup
+        String key = "testKey";
+        String field = "testField";
+        String value = "testValue";
+        String[] args = new String[] {key, field, value};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(HSetNX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.hsetnx(key, field, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hdel_success() {
         // setup
         String key = "testKey";
@@ -843,6 +869,8 @@ public class RedisClientTest {
 
         CompletableFuture testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(HashDel), eq(args), any()))
                 .thenReturn(testResponse);
 

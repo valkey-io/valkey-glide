@@ -16,6 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -138,6 +139,12 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         HashSet,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
+
+        transaction.hsetnx("key", "field", "value");
+        results.add(
+                Pair.of(
+                        HSetNX,
                         ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
 
         transaction.hget("key", "field");

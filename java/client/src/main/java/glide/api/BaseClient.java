@@ -13,6 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -315,6 +316,13 @@ public abstract class BaseClient
             @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         String[] args = ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key);
         return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> hsetnx(
+            @NonNull String key, @NonNull String field, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                HSetNX, new String[] {key, field, value}, this::handleBooleanResponse);
     }
 
     @Override
