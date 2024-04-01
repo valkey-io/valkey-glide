@@ -1077,6 +1077,26 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zscore(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+        assertEquals(1.0, client.zscore(key1, "one").get());
+        assertNull(client.zscore(key1, "non_existing_member").get());
+        assertNull(client.zscore("non_existing_key", "non_existing_member").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zscore(key2, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void type(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
