@@ -3,7 +3,8 @@
  */
 use glide_core::client;
 use glide_core::client::Client as GlideClient;
-use redis::{Cmd, FromRedisValue, RedisResult};
+use glide_core::request_type::RequestType;
+use redis::{FromRedisValue, RedisResult};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
@@ -91,61 +92,43 @@ pub extern "C" fn close_client(client_ptr: *const c_void) {
 
 /// Expects that key and value will be kept valid until the callback is called.
 #[no_mangle]
-pub extern "C" fn set(
+pub extern "C" fn command(
     client_ptr: *const c_void,
     callback_index: usize,
-    key: *const c_char,
-    value: *const c_char,
+    request_type: RequestType,
+    args: *const *mut c_char,
+    arg_count: u32,
 ) {
     let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = client_ptr as usize;
 
-    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    let value_cstring = unsafe { CStr::from_ptr(value as *mut c_char) };
+    // The safety of these needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
+    let ptr_address = client_ptr as usize;
+    let args_address = args as usize;
+
     let mut client_clone = client.client.clone();
     client.runtime.spawn(async move {
-        let key_bytes = key_cstring.to_bytes();
-        let value_bytes = value_cstring.to_bytes();
-        let mut cmd = Cmd::new();
-        cmd.arg("SET").arg(key_bytes).arg(value_bytes);
-        let result = client_clone.send_command(&cmd, None).await;
-        unsafe {
-            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
-            match result {
-                Ok(_) => (client.success_callback)(callback_index, std::ptr::null()), // TODO - should return "OK" string.
-                Err(_) => (client.failure_callback)(callback_index), // TODO - report errors
-            };
-        }
-    });
-}
-
-/// Expects that key will be kept valid until the callback is called. If the callback is called with a string pointer, the pointer must
-/// be used synchronously, because the string will be dropped after the callback.
-#[no_mangle]
-pub extern "C" fn get(client_ptr: *const c_void, callback_index: usize, key: *const c_char) {
-    let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = client_ptr as usize;
-
-    let key_cstring = unsafe { CStr::from_ptr(key as *mut c_char) };
-    let mut client_clone = client.client.clone();
-    client.runtime.spawn(async move {
-        let key_bytes = key_cstring.to_bytes();
-        let mut cmd = Cmd::new();
-        cmd.arg("GET").arg(key_bytes);
-        let result = client_clone.send_command(&cmd, None).await;
-        let client = unsafe { Box::leak(Box::from_raw(ptr_address as *mut Client)) };
-        let value = match result {
-            Ok(value) => value,
-            Err(_) => {
-                unsafe { (client.failure_callback)(callback_index) }; // TODO - report errors,
+        let Some(mut cmd) = request_type.get_command() else {
+            unsafe {
+                let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
+                (client.failure_callback)(callback_index); // TODO - report errors
                 return;
             }
         };
-        let result = Option::<CString>::from_owned_redis_value(value);
 
+        let args_slice = unsafe {
+            std::slice::from_raw_parts(args_address as *const *mut c_char, arg_count as usize)
+        };
+        for arg in args_slice {
+            let c_str = unsafe { CStr::from_ptr(*arg as *mut c_char) };
+            cmd.arg(c_str.to_bytes());
+        }
+
+        let result = client_clone
+            .send_command(&cmd, None)
+            .await
+            .and_then(Option::<CString>::from_owned_redis_value);
         unsafe {
+            let client = Box::leak(Box::from_raw(ptr_address as *mut Client));
             match result {
                 Ok(None) => (client.success_callback)(callback_index, std::ptr::null()),
                 Ok(Some(c_str)) => (client.success_callback)(callback_index, c_str.as_ptr()),
