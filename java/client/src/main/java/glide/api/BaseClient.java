@@ -119,9 +119,7 @@ public abstract class BaseClient
                 HashBaseCommands,
                 ListBaseCommands,
                 SetBaseCommands,
-                SortedSetBaseCommands,
-                StreamBaseCommands,
-                HyperLogLogBaseCommands {
+                SortedSetBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();

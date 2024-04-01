@@ -1480,6 +1480,40 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Adds an entry to the specified stream.
+     *
+     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return Command Response - The id of the added entry.
+     */
+    public T xadd(@NonNull String key, @NonNull Map<String, String> values) {
+        this.xadd(key, values, StreamAddOptions.builder().build());
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream.
+     *
+     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options.
+     * @return Command Response - The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptions#makeStream} is set to <code>false</code> and no stream with the matching
+     *     <code>key</code> exists.
+     */
+    public T xadd(
+            @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
+        String[] arguments =
+                ArrayUtils.addAll(
+                        ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
+        ArgsArray commandArgs = buildArgs(arguments);
+        protobufTransaction.addCommands(buildCommand(XAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
      * scores ordered from low to high.<br>
      * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
