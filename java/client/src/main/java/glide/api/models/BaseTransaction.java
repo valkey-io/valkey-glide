@@ -26,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -391,6 +392,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
 
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - An <code>array</code> of values in the hash, or an <code>empty array
+     *     </code> when the key does not exist.
+     */
+    public T hvals(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(Hvals, commandArgs));
         return getThis();
     }
 

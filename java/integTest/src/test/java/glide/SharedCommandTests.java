@@ -27,6 +27,7 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -440,6 +441,32 @@ public class SharedCommandTests {
         assertEquals(2, client.hdel(key, new String[] {field1, field2}).get());
         assertEquals(0, client.hdel(key, new String[] {"non_existing_field"}).get());
         assertEquals(0, client.hdel("non_existing_key", new String[] {field3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hvals(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value2");
+
+        assertEquals(2, client.hset(key1, fieldValueMap).get());
+
+        String[] hvalsPayload = client.hvals(key1).get();
+        Arrays.sort(hvalsPayload); // ordering for values by hvals is not guaranteed
+        assertArrayEquals(new String[] {"value1", "value2"}, hvalsPayload);
+
+        assertEquals(1, client.hdel(key1, new String[] {field1}).get());
+        assertArrayEquals(new String[] {"value2"}, client.hvals(key1).get());
+        assertArrayEquals(new String[] {}, client.hvals("nonExistingKey").get());
+
+        assertEquals(OK, client.set(key2, "value2").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hvals(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows

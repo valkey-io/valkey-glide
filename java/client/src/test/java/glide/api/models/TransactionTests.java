@@ -24,6 +24,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -145,6 +146,9 @@ public class TransactionTests {
 
         transaction.hdel("key", new String[] {"field"});
         results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hvals("key");
+        results.add(Pair.of(Hvals, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.hmget("key", new String[] {"field"});
         results.add(Pair.of(HashMGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
