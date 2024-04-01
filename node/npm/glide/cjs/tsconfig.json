@@ -1,0 +1,12 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "module": "CommonJS",
+        "outDir": "../build-ts/cjs",
+    },
+    "include": ["./*.ts"],
+    "baseUrl": "./cjs/",
+    "references": [
+        { "path": "../common"}
+    ]
+}

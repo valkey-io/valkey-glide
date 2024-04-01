@@ -1,0 +1,12 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "outDir": "../build-ts/common",
+        "resolveJsonModule": true,
+        "composite": true,
+        "module": "CommonJS"
+    },
+    "include": ["./*.cts"]
+}
+
