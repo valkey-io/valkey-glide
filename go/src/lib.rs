@@ -162,7 +162,7 @@ pub unsafe extern "C" fn close_client(client_container_ptr: *const c_void) {
 /// # Safety
 ///
 /// * `free_connection_response` can only be called once per `ConnectionResponse`. Calling it twice is undefined behavior, since the address will be freed twice.
-/// * `connection_response_ptr` must be obtained from the `ConnectionResponse` returned from `create_client`.
+/// * `connection_response_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`](create_client).
 /// * `connection_response_ptr` must be valid until `free_connection_response` is called.
 /// * The contained `connection_error_message` must be obtained from the `ConnectionResponse` returned from `create_client`.
 /// * The contained `connection_error_message` must be valid until `free_connection_response` is called and it must outlive the `ConnectionResponse` that contains it.
