@@ -54,6 +54,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
@@ -386,6 +387,9 @@ public class TransactionTests {
 
         transaction.zcard("key");
         results.add(Pair.of(Zcard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zscore("key", "member");
+        results.add(Pair.of(ZScore, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
 
         transaction.time();
         results.add(Pair.of(Time, ArgsArray.newBuilder().build()));
