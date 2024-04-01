@@ -17,11 +17,10 @@ internal class Message<T> : INotifyCompletion
     /// know how to find the message and set its result.
     public int Index { get; }
 
-    /// The pointer to the unmanaged memory that contains the operation's key.
-    public IntPtr KeyPtr { get; private set; }
-
-    /// The pointer to the unmanaged memory that contains the operation's key.
-    public IntPtr ValuePtr { get; private set; }
+    /// The array holding the pointers  to the unmanaged memory that contains the operation's arguments.
+    public IntPtr[]? args { get; private set; }
+    // We need to save the args count, because sometimes we get arrays that are larger than they need to be. We can't rely on `this.args.Length`, due to it coming from an array pool.
+    private int argsCount;
     private readonly MessageContainer<T> container;
 
     public Message(int index, MessageContainer<T> container)
@@ -84,30 +83,29 @@ internal class Message<T> : INotifyCompletion
     /// This returns a task that will complete once SetException / SetResult are called,
     /// and ensures that the internal state of the message is set-up before the task is created,
     /// and cleaned once it is complete.
-    public void StartTask(string? key, string? value, object client)
+    public void SetupTask(IntPtr[] args, int argsCount, object client)
     {
         continuation = null;
         this.completionState = COMPLETION_STAGE_STARTED;
         this.result = default(T);
         this.exception = null;
         this.client = client;
-        this.KeyPtr = key is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(key);
-        this.ValuePtr = value is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(value);
+        this.args = args;
+        this.argsCount = argsCount;
     }
 
     // This function isn't thread-safe. Access to it should be from a single thread, and only once per operation.
     // For the sake of performance, this responsibility is on the caller, and the function doesn't contain any safety measures.
     private void FreePointers()
     {
-        if (KeyPtr != IntPtr.Zero)
+        if (this.args is not null)
         {
-            Marshal.FreeHGlobal(KeyPtr);
-            KeyPtr = IntPtr.Zero;
-        }
-        if (ValuePtr != IntPtr.Zero)
-        {
-            Marshal.FreeHGlobal(ValuePtr);
-            ValuePtr = IntPtr.Zero;
+            for (var i = 0; i < this.argsCount; i++)
+            {
+                Marshal.FreeHGlobal(this.args[i]);
+            }
+            this.args = null;
+            this.argsCount = 0;
         }
         client = null;
     }
