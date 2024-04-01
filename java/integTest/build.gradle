@@ -111,21 +111,21 @@ tasks.register('getRedisVersion') {
     }
 }
 
-//test.dependsOn 'stopAllBeforeTests'
+test.dependsOn 'stopAllBeforeTests'
 test.dependsOn 'getRedisVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
-//clearDirs.finalizedBy 'startStandalone'
-//clearDirs.finalizedBy 'startCluster'
-//test.finalizedBy 'stopAllAfterTests'
-//test.dependsOn ':client:buildRustRelease'
+clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startCluster'
+test.finalizedBy 'stopAllAfterTests'
+test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
         println "Cluster ports = ${clusterRedisPorts}"
         println "Standalone ports = ${standaloneRedisPorts}"
         println "Redis version = ${redisVersion}"
-        systemProperty 'test.redis.standalone.ports', '6379' //standaloneRedisPorts.join(',')
-        systemProperty 'test.redis.cluster.ports', '7000' //clusterRedisPorts.join(',')
+        systemProperty 'test.redis.standalone.ports', standaloneRedisPorts.join(',')
+        systemProperty 'test.redis.cluster.ports', clusterRedisPorts.join(',')
         systemProperty 'test.redis.version', redisVersion
     }
 
