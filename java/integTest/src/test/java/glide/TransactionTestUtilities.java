@@ -92,7 +92,6 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
-
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
 
