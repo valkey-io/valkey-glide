@@ -200,7 +200,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
-     * assert payload.equals(Map.of('member2', 8.0, 'member3', 7.5)); // Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+     * assert payload.equals(Map.of('member2', 8.0, 'member3', 7.5)); // Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmax(String key, long count);
