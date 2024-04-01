@@ -42,6 +42,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -1286,6 +1287,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
+     * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
+     * as no timeout is associated).
+     *
+     * @see <a href="https://redis.io/commands/persist/">redis.io</a> for details.
+     * @param key The <code>key</code> to remove the existing timeout on.
+     * @return Command Response - <code>false</code> if <code>key</code> does not exist or does not
+     *     have an associated timeout, <code>true</code> if the timeout has been removed.
+     */
+    public T persist(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(new String[] {key});
+        protobufTransaction.addCommands(buildCommand(Persist, commandArgs));
         return getThis();
     }
 
