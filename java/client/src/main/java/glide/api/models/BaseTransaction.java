@@ -62,6 +62,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
