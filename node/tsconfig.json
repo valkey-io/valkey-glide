@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES6" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
+        "module": "CommonJS" /* Specify what module code is generated. */,
         "sourceMap": true /* Create source map files for emitted JavaScript files. */,
         "declaration": true /* Generate .d.ts files from TypeScript and JavaScript files in your project. */,
         "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
@@ -22,7 +23,7 @@
         "lib": [
             "esnext"
         ] /* Specify a set of bundled library declaration files that describe the target runtime environment. */,
-        "outDir": "./build-ts/mjs" /* Specify an output folder for all emitted files. Ovrride in tsconfig-cjs */
+        "outDir": "./build-ts" /* Specify an output folder for all emitted files.*/
     },
     "compileOnSave": false,
     "include": ["./*.ts", "src/*.ts", "src/*.js"],

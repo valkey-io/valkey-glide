@@ -1,23 +1,17 @@
 {
     "name": "${scope}${pkg_name}",
-    "types": "build-ts/mjs/index.d.ts",
+    "types": "build-ts/index.d.ts",
     "version": "${package_version}",
     "description": "An AWS-sponsored, open-source Redis client.",
-    "main": "build-ts/cjs/index.js",
-    "module": "build-ts/mjs/index.js",
-    "exports": {
-        ".": {
-            "import": "./build-ts/mjs/index.js",
-            "require": "./build-ts/cjs/index.js",
-            "types": "./build-ts/mjs/index.d.ts"
-        }
-    },
+    "main": "build-ts/index.js",
+    "module": "build-ts/index.js",
+    "type": "commonjs",
     "scripts": {
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "clean": "rm -rf build-ts/",
-        "copy-declaration-files": "cp ../../build-ts/mjs/*.d.ts build-ts/mjs/ && cp ../../build-ts/cjs/*.d.ts build-ts/cjs/ && cp ../../build-ts/cjs/src/*.d.ts build-ts/cjs/src/ && cp ../../build-ts/mjs/src/*.d.ts build-ts/mjs/src/",
-        "build": "tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json &&  ./../../fixup_pj_files_for_build_type && mkdir -p build-ts/mjs/src && mkdir -p build-ts/cjs/src && npm run copy-declaration-files"
+        "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/",
+        "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files"
     },
     "files": [
         "/build-ts"

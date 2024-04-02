@@ -1,16 +1,10 @@
 {
     "name": "@aws/glide-for-redis",
     "description": "An AWS-sponsored, open-source Redis client.",
-    "main": "build-ts/cjs/index.js",
-    "module": "build-ts/mjs/index.js",
-    "types": "./build-ts/mjs/index.d.ts",
-    "exports": {
-        ".": {
-            "import": "./build-ts/mjs/index.js",
-            "require": "./build-ts/cjs/index.js",
-            "types": "./build-ts/mjs/index.d.ts"
-        }
-    },
+    "main": "build-ts/index.js",
+    "module": "build-ts/index.js",
+    "types": "./build-ts/index.d.ts",
+    "type": "commonjs",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/aws/glide-for-redis.git"
@@ -33,8 +27,8 @@
         "build-internal": "cd rust-client && npm run build",
         "build-internal:release": "cd rust-client && npm run build:release",
         "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
-        "build-external": "rm -rf build-ts && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json &&  ./fixup_pj_files_for_build_type",
-        "build-external:release": "rm -rf build-ts && tsc -p tsconfig-mjs.json && tsc -p tsconfig-cjs.json &&  ./fixup_pj_files_for_build_type --stripInternal",
+        "build-external": "rm -rf build-ts && tsc",
+        "build-external:release": "rm -rf build-ts && tsc --stripInternal",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",

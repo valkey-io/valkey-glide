@@ -1,15 +1,14 @@
 #### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
-
+* 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
 
-## 0.3.1 (2024-03-28)
+## 0.3.3 (2024-03-28)
 
 #### Fixes
 
-* Node: Ignore hybrid-tests folder for npm publish. ([#1178](https://github.com/aws/glide-for-redis/pull/1178))
-* Node: Fixed broken path of tsconfig translation. ([#1183](https://github.com/aws/glide-for-redis/pull/1183))
+* Node: Fix issue with dual usage, `CommonJS` and `ECMAScript` modules. ([#1199](https://github.com/aws/glide-for-redis/pull/1199))
 
 ## 0.3.0 (2024-03-25)
 
