@@ -2,23 +2,24 @@
 package glide.managers;
 
 import glide.api.models.exceptions.RedisException;
+import response.ResponseOuterClass.Response;
 
 /**
- * Functional Interface to convert values and throw RedisException when encountering an error state.
+ * Functional Interface to extracts data from <code>GLIDE core</code> response.
  *
- * @param <R> type to evaluate
- * @param <T> payload type
+ * @param <R> Received value type.
+ * @param <T> Returning payload type.
  */
 @FunctionalInterface
 public interface RedisExceptionCheckedFunction<R, T> {
 
     /**
-     * Functional response handler that takes a value of type R and returns a payload of type T.
-     * Throws RedisException when encountering an invalid or error state.
+     * Functional response handler that takes a response of type <code>R</code> and returns a payload
+     * of type <code>T</code> from that response.
      *
-     * @param value - received value type
-     * @return T - returning payload type
-     * @throws RedisException
+     * @param response Received {@link Response} from <code>GLIDE core</code>.
+     * @return Extracted data.
+     * @throws RedisException When encountering an invalid or error state.
      */
-    T apply(R value) throws RedisException;
+    T apply(R response) throws RedisException;
 }

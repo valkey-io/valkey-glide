@@ -162,16 +162,16 @@ public abstract class BaseClient
     }
 
     /**
-     * Extracts the value from a Redis response message and either throws an exception or returns the
-     * value as an object of type {@link T}. If <code>isNullable</code>, than also returns <code>null
-     * </code>.
+     * Extracts the value from a <code>GLIDE core</code> response message and either throws an
+     * exception or returns the value as an object of type <code>T</code>. If <code>isNullable</code>,
+     * than also returns <code>null</code>.
      *
      * @param response Redis protobuf message.
-     * @param classType Parameter {@link T} class type.
+     * @param classType Parameter <code>T</code> class type.
      * @param isNullable Accepts null values in the protobuf message.
-     * @return Response as an object of type {@link T} or <code>null</code>.
-     * @param <T> return type.
-     * @throws RedisException on a type mismatch.
+     * @return Response as an object of type <code>T</code> or <code>null</code>.
+     * @param <T> The return value type.
+     * @throws RedisException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
