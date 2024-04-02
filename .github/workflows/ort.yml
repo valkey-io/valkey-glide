@@ -41,23 +41,6 @@ jobs:
 
             - name: Checkout
               uses: actions/checkout@v4
-
-    
-          
-            
-    
-
-          
-          Expand Down
-          
-            
-    
-
-          
-          Expand Up
-    
-    @@ -184,16 +190,18 @@ jobs:
-  
               with:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
@@ -191,4 +174,3 @@ jobs:
                 gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
