@@ -111,6 +111,11 @@ jobs:
               with:
                 toolchain: stable
 
+            - name: Gnerate Cargo.lock for glide-core
+              working-directory: ./glide-core
+              run: |
+                   cargo generate-lockfile
+
             - name: Gnerate Cargo.lock for node client
               working-directory: ./node/rust-client
               run: |
@@ -118,11 +123,6 @@ jobs:
                    
             - name: Gnerate Cargo.lock for python client
               working-directory: ./python
-              run: |
-                   cargo generate-lockfile
-                   
-            - name: Gnerate Cargo.lock for glide-core client
-              working-directory: ./glide-core
               run: |
                    cargo generate-lockfile
 
