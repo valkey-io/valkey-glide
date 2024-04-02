@@ -5,20 +5,20 @@ edition = "2021"
 license = "Apache-2.0"
 authors = ["Amazon Web Services"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
+# [lib]
 # crate-type = ["cdylib"]
-[dependencies]
-redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
-glide-core = { path = "../../glide-core"}
-tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+# [dependencies]
+# redis = { path = "../../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+# glide-core = { path = "../../glide-core"}
+# tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 # napi = {version = "2.14", features = ["napi4", "napi6"] }
 # napi-derive = "2.14"
-logger_core = {path = "../../logger_core"}
+# logger_core = {path = "../../logger_core"}
 # byteorder = "1.4.3"
 # num-traits = "0.2.17"
 # num-bigint = { version = "0.4.4", optional = true }
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = {version = "0.5.4", features = ["disable_initial_exec_tls"] }
+# [target.'cfg(not(target_env = "msvc"))'.dependencies]
+# tikv-jemallocator = {version = "0.5.4", features = ["disable_initial_exec_tls"] }
 
 # [build-dependencies]
 # napi-build = "2.0.1"
