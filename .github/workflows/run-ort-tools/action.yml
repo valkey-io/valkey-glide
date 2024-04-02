@@ -9,16 +9,25 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Run ORT tools
-          uses: oss-review-toolkit/ort-ci-github-action@v1
+        - name: Make folders
           shell: bash
           run: |
             echo "Running ORT tools for ${{ inputs.folder_path }}"
             FOLDER=${{ inputs.folder_path }}
             mkdir $FOLDER/ort_results
-            # Analyzer (analyzer-result.json)
-            ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
             
-            # NOTICE DEFAULT
-            ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
+        - name: Run ORT tools
+          uses: oss-review-toolkit/ort-ci-github-action@v1
+          with:
+          ort-cli-analyze-args: >
+            -l -i $FOLDER 
+            -l -o $FOLDER/ort_results 
+            -l -f JSON
+          ort-cli-report-args: >
+            -l -i $FOLDER/ort_results/analyzer-result.json
+            -l -o $FOLDER/ort_results/ 
+            -l -f PlainTextTemplate
+            run: >
+               analyzer,
+               reporter
 
