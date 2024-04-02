@@ -19,14 +19,14 @@ runs:
         - name: Run ORT tools
           uses: oss-review-toolkit/ort-ci-github-action@v1
           with:
-          ort-cli-analyze-args: >
-            -l -i $FOLDER 
-            -l -o $FOLDER/ort_results 
-            -l -f JSON
-          ort-cli-report-args: >
-            -l -i $FOLDER/ort_results/analyzer-result.json
-            -l -o $FOLDER/ort_results/ 
-            -l -f PlainTextTemplate
+            ort-cli-analyze-args: >
+              -l -i $FOLDER 
+              -l -o $FOLDER/ort_results 
+              -l -f JSON
+            ort-cli-report-args: >
+              -l -i $FOLDER/ort_results/analyzer-result.json
+              -l -o $FOLDER/ort_results/ 
+              -l -f PlainTextTemplate
             run: >
                analyzer,
                reporter
