@@ -12,10 +12,11 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.net.ServerSocket;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10) // seconds
 public class ErrorHandlingTests {
 
     @Test
@@ -29,7 +30,7 @@ public class ErrorHandlingTests {
                                                 RedisClientConfiguration.builder()
                                                         .address(NodeAddress.builder().port(getFreePort()).build())
                                                         .build())
-                                        .get(10, TimeUnit.SECONDS));
+                                        .get());
         assertAll(
                 () -> assertTrue(exception.getCause() instanceof ClosingException),
                 () -> assertTrue(exception.getCause().getMessage().contains("Connection refused")));
@@ -44,11 +45,11 @@ public class ErrorHandlingTests {
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, TimeUnit.SECONDS)) {
+                        .get()) {
             var exception =
                     assertThrows(
                             ExecutionException.class,
-                            () -> regularClient.customCommand(new String[] {"pewpew"}).get(10, TimeUnit.SECONDS));
+                            () -> regularClient.customCommand(new String[] {"pewpew"}).get());
             assertAll(
                     () -> assertTrue(exception.getCause() instanceof RequestException),
                     () -> assertTrue(exception.getCause().getMessage().contains("unknown command")));
@@ -64,14 +65,11 @@ public class ErrorHandlingTests {
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, TimeUnit.SECONDS)) {
+                        .get()) {
             var exception =
                     assertThrows(
                             ExecutionException.class,
-                            () ->
-                                    regularClient
-                                            .customCommand(new String[] {"ping", "pang", "pong"})
-                                            .get(10, TimeUnit.SECONDS));
+                            () -> regularClient.customCommand(new String[] {"ping", "pang", "pong"}).get());
             assertAll(
                     () -> assertTrue(exception.getCause() instanceof RequestException),
                     () ->
