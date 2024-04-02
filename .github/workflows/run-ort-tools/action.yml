@@ -19,6 +19,6 @@ runs:
         - name: Run ORT tools
           shell: bash
           run: |
-            /cli/build/install/ort/bin/ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
-            /cli/build/install/ort/bin/ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
+            ./ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
+            ./ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
 
