@@ -40,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -53,6 +54,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
@@ -386,8 +390,26 @@ public class TransactionTests {
         transaction.zcard("key");
         results.add(Pair.of(Zcard, ArgsArray.newBuilder().addArgs("key").build()));
 
+        transaction.zpopmin("key");
+        results.add(Pair.of(ZPopMin, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zpopmin("key", 2);
+        results.add(Pair.of(ZPopMin, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.zpopmax("key");
+        results.add(Pair.of(ZPopMax, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zpopmax("key", 2);
+        results.add(Pair.of(ZPopMax, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
+
+        transaction.zscore("key", "member");
+        results.add(Pair.of(ZScore, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
+
         transaction.time();
         results.add(Pair.of(Time, ArgsArray.newBuilder().build()));
+
+        transaction.persist("key");
+        results.add(Pair.of(Persist, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));

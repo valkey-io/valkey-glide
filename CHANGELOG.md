@@ -1,5 +1,8 @@
 #### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
+* 
+#### Fixes
+* Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
 
 ## 0.3.3 (2024-03-28)
 
