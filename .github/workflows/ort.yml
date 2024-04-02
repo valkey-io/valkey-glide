@@ -52,6 +52,9 @@ jobs:
               with:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
+                  
+            - name: Get submudole
+              run: git submodules update --init --recursive
 
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v4
