@@ -1,5 +1,4 @@
 name: The OSS Review Toolkit (ORT)
-
 on:
     schedule:
       - cron: "0 0 * * *"
@@ -31,33 +30,42 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo '255.255.255'; else echo "$INPUT_VERSION"; fi`
+                  export version=`if ${{ github.event_name == 'schedule' || github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${{ github.event.inputs.version }}; fi`
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
-              env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
-              
+
             - name: Set the base branch
               run: |
-                export BASE_BRANCH=`if [ "$EVENT_NAME" == 'schedule' ]; then echo 'main'; elif [ "$EVENT_NAME" == 'workflow_dispatch' ]; then echo "$INPUT_BRANCH"; else echo ""; fi`
+                export BASE_BRANCH=`if ${{ github.event_name == 'schedule'}}; then echo 'main'; elif ${{ github.event_name == 'workflow_dispatch'}}; then echo ${{ github.event.inputs.branch }}; else echo "";fi`
                 echo "Base branch is: ${BASE_BRANCH}"
                 echo "BASE_BRANCH=${BASE_BRANCH}" >> $GITHUB_ENV
-              env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_BRANCH: ${{ github.event.inputs.branch }}
 
             - name: Checkout
               uses: actions/checkout@v4
+
+    
+          
+            
+    
+
+          
+          Expand Down
+          
+            
+    
+
+          
+          Expand Up
+    
+    @@ -184,16 +190,18 @@ jobs:
+  
               with:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
-
-            - name: Set up JDK 21 for the ORT package
+            - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: 21
-
+                  java-version: 11
             - name: Cache ORT and Gradle packages
               uses: actions/cache@v4
               id: cache-ort
@@ -67,7 +75,6 @@ jobs:
                   ~/.gradle/caches
                   ~/.gradle/wrapper
                 key: ${{ runner.os }}-ort
-
             - name: Checkout ORT Repository
               if: steps.cache-ort.outputs.cache-hit != 'true'
               uses: actions/checkout@v4
@@ -76,7 +83,6 @@ jobs:
                   path: "./ort"
                   ref: main
                   submodules: recursive
-
             - name: Checkout ORT latest release tag
               if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
@@ -87,14 +93,12 @@ jobs:
                 LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
                 # Checkout latest tag
                 git checkout $LATEST_TAG
-
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
                 export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
                 ./gradlew installDist
-
             - name: Create ORT config file
               run: |
                 mkdir -p ~/.ort/config
@@ -105,20 +109,16 @@ jobs:
                     enabledPackageManagers: [Cargo, NPM, PIP]
                 EOF
                 cat ~/.ort/config/config.yml
-
           ### NodeJS ###
-
             - name: Set up Node.js 16.x
               uses: actions/setup-node@v4
               with:
                   node-version: 16.x
-
             - name: Create package.json file for the Node wrapper 
               uses: ./.github/workflows/node-create-package-file
               with:
                 release_version: ${{ env.RELEASE_VERSION }}
                 os: "ubuntu-latest"
-
             - name: Fix Node base NPM package.json file for ORT
               working-directory: ./node/npm/glide
               run: |
@@ -137,32 +137,25 @@ jobs:
                 folder_path: "${{ github.workspace }}/node"
             
           ### Python ###
-
             - name: Set up Python 3.10
               uses: actions/setup-python@v5
               with:
                   python-version: "3.10"
-
             - name: Install python-inspector
               working-directory: ./python
               run: |
                   python -m pip install --upgrade pip
                   pip install git+https://github.com/nexB/python-inspector
-
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
               with:
                 folder_path: "${{ github.workspace }}/python"
-
             ### Rust ###
-
             - name: Run ORT tools for Rust
               uses: ./.github/workflows/run-ort-tools
               with:
                 folder_path: "${{ github.workspace }}/glide-core"
-
             ### Process results ###
-
             - name: Check for diff
               run: |
                 cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
@@ -174,7 +167,6 @@ jobs:
                 else
                 echo "FOUND_DIFF=false" >> $GITHUB_ENV
                 fi
-
             - name: Retrieve licenses list
               working-directory: ./utils
               run: |
@@ -183,13 +175,11 @@ jobs:
                   python3 get_licenses_from_ort.py
                   echo EOF
                 } >> "$GITHUB_ENV"
-
             ### Create PR ###
-
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
               run: |
-                export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo "ort-v$INPUT_VERSION"; fi`
+                export BRANCH_NAME=`if ${{ github.event_name == 'schedule' || github.event_name == 'pull_request' }}; then echo "scheduled-ort"; else echo "ort-v${{ github.event.inputs.version }}"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
                 git config --global user.email "glide-for-redis@amazon.com"
                 git config --global user.name "ort-bot"
@@ -200,7 +190,5 @@ jobs:
                 title="Updated attribution files for ${BRANCH_NAME}"
                 gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
               env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
