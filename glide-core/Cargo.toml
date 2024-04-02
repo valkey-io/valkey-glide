@@ -30,7 +30,7 @@ arcstr = "1.1.5"
 sha1_smol = "1.0.0"
 
 [features]
-socket-layer = ["directories", "integer-encoding", "num_cpus", "signal-hook", "signal-hook-tokio", "protobuf", "tokio-util", "bytes", "rand"]
+# socket-layer = ["directories", "integer-encoding", "num_cpus", "signal-hook", "signal-hook-tokio", "protobuf", "tokio-util", "bytes", "rand"]
 
 [dev-dependencies]
 rsevents = "0.3.1"
