@@ -508,6 +508,7 @@ public class SharedCommandTests {
         assertEquals(1, client.hlen(key1).get());
         assertEquals(0, client.hlen("nonExistingHash").get());
 
+        // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
             assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
