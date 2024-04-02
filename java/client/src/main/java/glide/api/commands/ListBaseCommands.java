@@ -214,6 +214,7 @@ public interface ListBaseCommands {
      * depending on the list's length.
      *
      * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of popped elements will be returned depending on the list's length.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
