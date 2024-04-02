@@ -53,9 +53,6 @@ jobs:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
 
-            - name: Install ORT
-              uses: oss-review-toolkit/ort-ci-github-action@v1
-
             - name: install toolchain
               uses: actions-rs/toolchain@v1
               with:
