@@ -7,8 +7,3 @@ excludes:
         - pattern: "npm/glide/**"
           reason: "BUILD_TOOL_OF"
           comment: "Template file for CD"
-resolutions:
-    issues:
-        - message: ".*Collection contains no element matching the predicate.*"
-          reason: "BUILD_TOOL_ISSUE"
-          comment: "Error caused by a known problem in the build tool."
