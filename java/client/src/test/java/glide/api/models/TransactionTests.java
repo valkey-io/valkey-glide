@@ -43,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -231,6 +232,9 @@ public class TransactionTests {
         transaction.lrange("key", 1, 2);
         results.add(
                 Pair.of(LRange, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+
+        transaction.lindex("key", 1);
+        results.add(Pair.of(Lindex, ArgsArray.newBuilder().addArgs("key").addArgs("1").build()));
 
         transaction.ltrim("key", 1, 2);
         results.add(
