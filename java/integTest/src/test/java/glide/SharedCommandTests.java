@@ -63,6 +63,7 @@ public class SharedCommandTests {
                 RedisClient.CreateClient(
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
+                                        .requestTimeout(5000)
                                         .build())
                         .get();
 
@@ -1167,5 +1168,59 @@ public class SharedCommandTests {
         assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
         assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
         assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void blpop(BaseClient client) {
+        String listKey1 = "{listKey}-1-" + UUID.randomUUID();
+        String listKey2 = "{listKey}-2-" + UUID.randomUUID();
+        String value1 = "value1-" + UUID.randomUUID();
+        String value2 = "value2-" + UUID.randomUUID();
+        assertEquals(2, client.lpush(listKey1, new String[] {value1, value2}).get());
+
+        var response = client.blpop(new String[] {listKey1, listKey2}, 0.5).get();
+        assertArrayEquals(new String[] {listKey1, value2}, response);
+
+        // nothing popped out
+        assertNull(
+                client
+                        .blpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.blpop(new String[] {"foo"}, .0001).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void brpop(BaseClient client) {
+        String listKey1 = "{listKey}-1-" + UUID.randomUUID();
+        String listKey2 = "{listKey}-2-" + UUID.randomUUID();
+        String value1 = "value1-" + UUID.randomUUID();
+        String value2 = "value2-" + UUID.randomUUID();
+        assertEquals(2, client.lpush(listKey1, new String[] {value1, value2}).get());
+
+        var response = client.brpop(new String[] {listKey1, listKey2}, 0.5).get();
+        assertArrayEquals(new String[] {listKey1, value1}, response);
+
+        // nothing popped out
+        assertNull(
+                client
+                        .brpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.brpop(new String[] {"foo"}, .0001).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

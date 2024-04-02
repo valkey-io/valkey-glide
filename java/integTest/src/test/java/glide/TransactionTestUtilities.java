@@ -16,6 +16,8 @@ public class TransactionTestUtilities {
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String key6 = "{key}" + UUID.randomUUID();
+    // TODO rename after #160 merge & rebase
+    private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
@@ -97,6 +99,11 @@ public class TransactionTestUtilities {
 
         baseTransaction.echo("GLIDE");
 
+        baseTransaction
+                .lpush(listKey3, new String[] {value1, value2, value3})
+                .blpop(new String[] {listKey3}, 0.01)
+                .brpop(new String[] {listKey3}, 0.01);
+
         return baseTransaction;
     }
 
@@ -153,6 +160,9 @@ public class TransactionTestUtilities {
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
+            new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
         };
     }
 }

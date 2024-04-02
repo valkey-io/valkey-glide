@@ -47,6 +47,9 @@ public class ArrayTransformUtils {
      */
     @SuppressWarnings("unchecked")
     public static <T, U extends T> U[] castArray(T[] objectArr, Class<U> clazz) {
+        if (objectArr == null) {
+            return null;
+        }
         return Arrays.stream(objectArr)
                 .map(clazz::cast)
                 .toArray(size -> (U[]) Array.newInstance(clazz, size));

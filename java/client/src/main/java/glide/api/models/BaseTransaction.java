@@ -4,6 +4,8 @@ package glide.api.models;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
+import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -1348,6 +1350,52 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Pops an element from the head of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @apiNote <code>BLPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
+     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
+     */
+    public T blpop(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(Blpop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Pops an element from the tail of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @apiNote <code>BRPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
+     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
+     */
+    public T brpop(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(Brpop, commandArgs));
         return getThis();
     }
 
