@@ -662,11 +662,11 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
 
         Returns:
-            List[str]: A list of fields in the hash, or an empty list when the key does not exist.
+            List[str]: A list of field names in the hash, or an empty list when the key does not exist.
 
         Examples:
             >>> await client.hkeys("my_hash")
-                ["field1", "field2", "field3"]  # Returns all the fields stored in the hash "my_hash".
+                ["field1", "field2", "field3"]  # Returns all the field names stored in the hash "my_hash".
         """
         return cast(List[str], await self._execute_command(RequestType.Hkeys, [key]))
 

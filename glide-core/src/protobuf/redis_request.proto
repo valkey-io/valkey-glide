@@ -135,7 +135,7 @@ enum RequestType {
     Rename = 91;
     DBSize = 92;
     Brpop = 93;
-    Hvals = 94;
+    Hkeys = 94;
 }
 
 message Command {
