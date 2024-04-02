@@ -27,7 +27,7 @@ jobs:
           PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
           NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
           RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
-        steps:
+        steps:     
             - name: Set the release version
               shell: bash
               run: |
@@ -106,12 +106,10 @@ jobs:
                 EOF
                 cat ~/.ort/config/config.yml
 
-            - name: Add Rust
-              uses: |
-                    actions/checkout@v2
-                    actions-rs/toolchain@v1
+            - name: install toolchain
+              uses: actions-rs/toolchain@v1
               with:
-                 toolchain: stable
+                toolchain: stable
 
             - name: Gnerate Cargo.lock for node client
               working-directory: ./node/rust-client
