@@ -8,10 +8,10 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
+import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
@@ -404,9 +406,28 @@ public class SharedCommandTests {
         assertEquals(-1, client.decr(key1).get());
         assertEquals("-1", client.get(key1).get());
 
-        assertNull(client.get(key2).get(10, SECONDS));
+        assertNull(client.get(key2).get());
         assertEquals(-3, client.decrBy(key2, 3).get());
         assertEquals("-3", client.get(key2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void strlen(BaseClient client) {
+        String stringKey = UUID.randomUUID().toString();
+        String nonStringKey = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "GLIDE").get());
+        assertEquals(5L, client.strlen(stringKey).get());
+
+        assertEquals(0L, client.strlen(nonExistingKey).get());
+
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.strlen(nonStringKey).get());
+        assertTrue(exception.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -807,7 +828,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void expire_pexpire_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
@@ -823,7 +844,8 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
-    public void expireAt_pexpireAt_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expireAt_pexpireAt_ttl_with_timestamp_in_the_past_or_negative_timeout(
+            BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expireAt_with_past_timestamp").get());
@@ -859,6 +881,85 @@ public class SharedCommandTests {
         assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void expire_pexpire_and_pttl_with_positive_timeout(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertEquals(-2L, client.pttl(key).get());
+
+        assertEquals(OK, client.set(key, "expire_timeout").get());
+        assertTrue(client.expire(key, 10L).get());
+        Long pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
+
+        assertEquals(OK, client.set(key, "pexpire_timeout").get());
+        assertEquals(-1L, client.pttl(key).get());
+
+        assertTrue(client.pexpire(key, 10000L).get());
+        pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void persist_on_existing_and_non_existing_key(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        assertFalse(client.persist(key).get());
+
+        assertEquals(OK, client.set(key, "persist_value").get());
+        assertFalse(client.persist(key).get());
+
+        assertTrue(client.expire(key, 10L).get());
+        Long persistAmount = client.ttl(key).get();
+        assertTrue(0L <= persistAmount && persistAmount <= 10L);
+        assertTrue(client.persist(key).get());
+
+        assertEquals(-1L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void invokeScript_test(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        try (Script script = new Script("return 'Hello'")) {
+            Object response = client.invokeScript(script).get();
+            assertEquals("Hello", response);
+        }
+
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])")) {
+            Object setResponse1 =
+                    client
+                            .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    client
+                            .invokeScript(script, ScriptOptions.builder().key(key2).arg("value2").build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script("return redis.call('GET', KEYS[1])")) {
+            Object getResponse1 =
+                    client.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
+            assertEquals("value1", getResponse1);
+
+            Object getResponse2 =
+                    client.invokeScript(script, ScriptOptions.builder().key(key2).build()).get();
+            assertEquals("value2", getResponse2);
+        }
     }
 
     @SneakyThrows
@@ -1010,6 +1111,100 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zcard("foo").get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zpopmin(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(Map.of("a", 1.0), client.zpopmin(key).get());
+        assertEquals(Map.of("b", 2.0, "c", 3.0), client.zpopmin(key, 3).get());
+        assertTrue(client.zpopmin(key).get().isEmpty());
+        assertTrue(client.zpopmin("non_existing_key").get().isEmpty());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zpopmax(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(Map.of("c", 3.0), client.zpopmax(key).get());
+        assertEquals(Map.of("b", 2.0, "a", 1.0), client.zpopmax(key, 3).get());
+        assertTrue(client.zpopmax(key).get().isEmpty());
+        assertTrue(client.zpopmax("non_existing_key").get().isEmpty());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zscore(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+        assertEquals(1.0, client.zscore(key1, "one").get());
+        assertNull(client.zscore(key1, "non_existing_member").get());
+        assertNull(client.zscore("non_existing_key", "non_existing_member").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zscore(key2, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void type(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String listKey = UUID.randomUUID().toString();
+        String hashKey = UUID.randomUUID().toString();
+        String setKey = UUID.randomUUID().toString();
+        String zsetKey = UUID.randomUUID().toString();
+        String streamKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "value").get());
+        assertEquals(1, client.lpush(listKey, new String[] {"value"}).get());
+        assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
+        assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
+
+        // TODO: update after adding XADD
+        // use custom command until XADD is implemented
+        String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
+        if (client instanceof RedisClient) {
+            assertNotNull(((RedisClient) client).customCommand(args).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertNotNull(((RedisClusterClient) client).customCommand(args).get().getSingleValue());
+        }
+
+        assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
+        assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
+        assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
     }
 
     @SneakyThrows

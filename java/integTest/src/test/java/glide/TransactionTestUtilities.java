@@ -20,7 +20,6 @@ public class TransactionTestUtilities {
     private static final String key8 = "{key}" + UUID.randomUUID();
     // TODO rename after #160
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
-    private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -32,11 +31,14 @@ public class TransactionTestUtilities {
 
         baseTransaction.set(key1, value1);
         baseTransaction.get(key1);
+        baseTransaction.type(key1);
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
+        baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
 
         baseTransaction.exists(new String[] {key1});
+        baseTransaction.persist(key1);
 
         baseTransaction.del(new String[] {key1});
         baseTransaction.get(key1);
@@ -88,11 +90,16 @@ public class TransactionTestUtilities {
         baseTransaction.zaddIncr(key8, "one", 3);
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
+        baseTransaction.zscore(key8, "two");
+        baseTransaction.zpopmin(key8);
+        baseTransaction.zpopmax(key8);
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
 
         baseTransaction.configResetStat();
+
+        baseTransaction.echo("GLIDE");
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
 
@@ -103,9 +110,12 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK,
             value1,
+            "string", // type(key1)
             null,
+            (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
+            Boolean.FALSE, // persist(key1)
             1L,
             null,
             1L,
@@ -144,9 +154,13 @@ public class TransactionTestUtilities {
             4.0,
             1L,
             2L,
+            2.0, // zscore(key8, "two")
+            Map.of("two", 2.0), // zpopmin(key8)
+            Map.of("three", 3.0), // zpopmax(key8)
             OK,
             Map.of("timeout", "1000"),
             OK,
+            "GLIDE", // echo
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
         };
     }

@@ -15,6 +15,7 @@ pub(crate) enum ExpectedReturnType {
     Set,
     DoubleOrNull,
     ZrankReturnType,
+    JsonToggleReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -121,6 +122,43 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
         )),
+        ExpectedReturnType::JsonToggleReturnType => match value {
+            Value::Array(array) => {
+                let converted_array: RedisResult<Vec<_>> = array
+                    .into_iter()
+                    .map(|item| match item {
+                        Value::Nil => Ok(Value::Nil),
+                        _ => match from_owned_redis_value::<bool>(item.clone()) {
+                            Ok(boolean_value) => Ok(Value::Boolean(boolean_value)),
+                            _ => Err((
+                                ErrorKind::TypeError,
+                                "Could not convert value to boolean",
+                                format!("(value was {:?})", item),
+                            )
+                                .into()),
+                        },
+                    })
+                    .collect();
+
+                converted_array.map(Value::Array)
+            }
+            Value::BulkString(bytes) => match std::str::from_utf8(&bytes) {
+                Ok("true") => Ok(Value::Boolean(true)),
+                Ok("false") => Ok(Value::Boolean(false)),
+                _ => Err((
+                    ErrorKind::TypeError,
+                    "Response couldn't be converted to boolean",
+                    format!("(response was {:?})", bytes),
+                )
+                    .into()),
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to Json Toggle return type",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -171,27 +209,8 @@ fn convert_array_to_map(
     }
     Ok(Value::Map(map))
 }
-pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
-    let first_arg = cmd.arg_idx(0);
-    match first_arg {
-        Some(b"ZADD") => {
-            return cmd
-                .position(b"INCR")
-                .map(|_| ExpectedReturnType::DoubleOrNull);
-        }
-        Some(b"ZRANGE") | Some(b"ZDIFF") => {
-            return cmd
-                .position(b"WITHSCORES")
-                .map(|_| ExpectedReturnType::MapOfStringToDouble);
-        }
-        Some(b"ZRANK") | Some(b"ZREVRANK") => {
-            return cmd
-                .position(b"WITHSCORE")
-                .map(|_| ExpectedReturnType::ZrankReturnType);
-        }
-        _ => {}
-    }
 
+pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
     match command.as_slice() {
@@ -204,6 +223,16 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMEMBERS" => Some(ExpectedReturnType::Set),
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
+        b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
+        b"ZADD" => cmd
+            .position(b"INCR")
+            .map(|_| ExpectedReturnType::DoubleOrNull),
+        b"ZRANGE" | b"ZDIFF" => cmd
+            .position(b"WITHSCORES")
+            .map(|_| ExpectedReturnType::MapOfStringToDouble),
+        b"ZRANK" | b"ZREVRANK" => cmd
+            .position(b"WITHSCORE")
+            .map(|_| ExpectedReturnType::ZrankReturnType),
         _ => None,
     }
 }
@@ -216,10 +245,10 @@ mod tests {
     fn convert_zadd_only_if_incr_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
-                redis::cmd("ZADD")
+                redis::cmd("zadd")
                     .arg("XT")
                     .arg("CH")
-                    .arg("INCR")
+                    .arg("incr")
                     .arg("0.6")
                     .arg("foo")
             ),
@@ -227,7 +256,7 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(
-            redis::cmd("ZADD").arg("XT").arg("CH").arg("0.6").arg("foo")
+            redis::cmd("zadd").arg("XT").arg("CH").arg("0.6").arg("foo")
         )
         .is_none());
     }
@@ -235,14 +264,14 @@ mod tests {
     #[test]
     fn convert_zrange_zdiff_only_if_withsocres_is_included() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1")).is_none());
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
@@ -266,22 +295,22 @@ mod tests {
     fn convert_zank_zrevrank_only_if_withsocres_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
-                redis::cmd("ZRANK")
+                redis::cmd("zrank")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));
 
-        assert!(expected_type_for_cmd(redis::cmd("ZRANK").arg("key").arg("member")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("zrank").arg("key").arg("member")).is_none());
 
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("ZREVRANK")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));
@@ -422,5 +451,32 @@ mod tests {
         );
 
         assert!(convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::Double)).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_list_of_bool_or_null() {
+        let array = vec![Value::Nil, Value::Int(0), Value::Int(1)];
+        let array_result = convert_to_expected_type(
+            Value::Array(array),
+            Some(ExpectedReturnType::JsonToggleReturnType),
+        )
+        .unwrap();
+
+        let array_result = if let Value::Array(array) = array_result {
+            array
+        } else {
+            panic!("Expected an Array, but got {:?}", array_result);
+        };
+        assert_eq!(array_result.len(), 3);
+
+        assert_eq!(array_result[0], Value::Nil);
+        assert_eq!(array_result[1], Value::Boolean(false));
+        assert_eq!(array_result[2], Value::Boolean(true));
+
+        assert!(convert_to_expected_type(
+            Value::Nil,
+            Some(ExpectedReturnType::JsonToggleReturnType)
+        )
+        .is_err());
     }
 }

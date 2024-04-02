@@ -1,3 +1,16 @@
+#### Changes
+* Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
+* Core: Added `PFADD` command. ([#1221](https://github.com/aws/glide-for-redis/pull/1221))
+
+#### Fixes
+* Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
+
+## 0.3.3 (2024-03-28)
+
+#### Fixes
+
+* Node: Fix issue with dual usage, `CommonJS` and `ECMAScript` modules. ([#1199](https://github.com/aws/glide-for-redis/pull/1199))
+
 ## 0.3.0 (2024-03-25)
 
 #### Changes
@@ -26,7 +39,7 @@
 * Python, Node: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065), [#1149](https://github.com/aws/glide-for-redis/pull/1149))
 * Core: Enabled Cluster Mode periodic checks by default ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
 * Node: Added Rename command. ([#1124](https://github.com/aws/glide-for-redis/pull/1124))
-* Core: Added `PFADD` command. (TODO ADD HERE PR #)
+* Python: Added JSON.TOGGLE command ([#1184](https://github.com/aws/glide-for-redis/pull/1184))
 
 #### Features
 

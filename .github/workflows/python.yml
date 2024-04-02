@@ -109,7 +109,7 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto --override-ini=addopts= --load-module=$GITHUB_WORKSPACE/redisearch.so --load-module=$GITHUB_WORKSPACE/redisjson.so
+                  pytest --asyncio-mode=auto --override-ini=addopts= --load-module=$GITHUB_WORKSPACE/redisjson.so
 
             - uses: ./.github/workflows/test-benchmark
               with:
