@@ -15,12 +15,12 @@ public interface ListBaseCommands {
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
      * elements</code> are inserted one after the other to the head of the list, from the leftmost
      * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
-     * list before performing the push operations.
+     * list before performing the push operation.
      *
      * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the head of the list stored at <code>key</code>.
-     * @return The length of the list after the push operations.
+     * @return The length of the list after the push operation.
      * @example
      *     <pre>{@code
      * Long pushCount1 = client.lpush("my_list", new String[] {"value1", "value2"}).get();
@@ -173,12 +173,12 @@ public interface ListBaseCommands {
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
-     * an empty list before performing the push operations.
+     * an empty list before performing the push operation.
      *
      * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
-     * @return The length of the list after the push operations.
+     * @return The length of the list after the push operation.
      * @example
      *     <pre>{@code
      * Long pushCount1 = client.rpush("my_list", new String[] {"value1", "value2"}).get();
