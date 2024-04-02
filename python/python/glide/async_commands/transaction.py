@@ -543,6 +543,20 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Hvals, [key])
 
+    def hkeys(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns all field names in the hash stored at `key`.
+
+        See https://redis.io/commands/hkeys/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            List[str]: A list of fields in the hash, or an empty list when the key does not exist.
+        """
+        return self.append_command(RequestType.Hkeys, [key])
+
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
         Insert all the specified values at the head of the list stored at `key`.
