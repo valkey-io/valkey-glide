@@ -17,17 +17,11 @@ runs:
             mkdir $FOLDER/ort_results
             
         - name: Run ORT tools
-          uses: oss-review-toolkit/ort-ci-github-action@v1
-          with:
-            ort-cli-analyze-args: >
-              -l -i $FOLDER 
-              -l -o $FOLDER/ort_results 
-              -l -f JSON
-            ort-cli-report-args: >
-              -l -i $FOLDER/ort_results/analyzer-result.json
-              -l -o $FOLDER/ort_results/ 
-              -l -f PlainTextTemplate
-            run: >
-               analyzer,
-               reporter
+          shell: bash
+          run: |
+            git clone https://github.com/oss-review-toolkit/ort
+            cd ort
+            git submodule update --init --recursive
+            ./cli/build/install/ort/bin/ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
+            ./cli/build/install/ort/bin/ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
 
