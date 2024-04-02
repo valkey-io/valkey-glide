@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -454,7 +455,7 @@ public class TransactionTests {
                                 .addArgs("LIMIT")
                                 .addArgs("1")
                                 .addArgs("2")
-                                .addArgs("WITHSCORES")
+                                .addArgs(WITH_SCORES_REDIS_API)
                                 .build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();

@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
+    public static final String WITH_SCORES_REDIS_API = "WITHSCORES";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
