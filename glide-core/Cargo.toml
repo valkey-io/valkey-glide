@@ -29,21 +29,21 @@ authors = ["Amazon Web Services"]
 # arcstr = "1.1.5"
 # sha1_smol = "1.0.0"
 
-# [features]
-# socket-layer = ["directories", "integer-encoding", "num_cpus", "signal-hook", "signal-hook-tokio", "protobuf", "tokio-util", "bytes", "rand"]
+[features]
+socket-layer = ["directories", "integer-encoding", "num_cpus", "signal-hook", "signal-hook-tokio", "protobuf", "tokio-util", "bytes", "rand"]
 
-# [dev-dependencies]
-# rsevents = "0.3.1"
-# socket2 = "^0.5"
-# tempfile = "3.3.0"
-# rstest = "^0.18"
-# criterion = { version = "^0.5", features = ["html_reports", "async_tokio"] }
-# which = "5"
-# ctor = "0.2.2"
-# redis = { path = "../submodules/redis-rs/redis", features = ["tls-rustls-insecure"] }
-# iai-callgrind = "0.9"
-# tokio = { version = "1", features = ["rt-multi-thread"] }
-# glide-core = { path = ".", features = ["socket-layer"] } # always enable this feature in tests.
+[dev-dependencies]
+rsevents = "0.3.1"
+socket2 = "^0.5"
+tempfile = "3.3.0"
+rstest = "^0.18"
+criterion = { version = "^0.5", features = ["html_reports", "async_tokio"] }
+which = "5"
+ctor = "0.2.2"
+redis = { path = "../submodules/redis-rs/redis", features = ["tls-rustls-insecure"] }
+iai-callgrind = "0.9"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+glide-core = { path = ".", features = ["socket-layer"] } # always enable this feature in tests.
 
 
 # [build-dependencies]
