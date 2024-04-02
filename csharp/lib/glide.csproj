@@ -9,19 +9,20 @@
   </PropertyGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="cargo build --release" />
+    <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" />
+    <Exec Condition="'$(Configuration)' == 'Release'" Command="cargo build --release" />
   </Target>
 
   <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)target/release/libglide_rs.dylib" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Include="$(MSBuildThisFileDirectory)target/$(Configuration.ToLower())/libglide_rs.dylib" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
