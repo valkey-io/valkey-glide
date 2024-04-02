@@ -88,25 +88,25 @@ export type SetOptions = {
      * Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
-        | {
-              type: /**
+    | {
+        type: /**
                * Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
                */
-              | "seconds"
-                  /**
-                   * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-                   */
-                  | "milliseconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
-                   */
-                  | "unixSeconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
-                   */
-                  | "unixMilliseconds";
-              count: number;
-          };
+        | "seconds"
+        /**
+         * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+         */
+        | "milliseconds"
+        /**
+         * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+         */
+        | "unixSeconds"
+        /**
+         * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+         */
+        | "unixMilliseconds";
+        count: number;
+    };
 };
 
 /**
@@ -824,15 +824,9 @@ export type ScoreBoundary<T> =
      *  Represents a specific numeric score boundary in a sorted set.
      */
     | {
-          /**
-           * The score value.
-           */
-          value: T;
-          /**
-           * Whether the score value is inclusive. Defaults to True.
-           */
-          isInclusive?: boolean;
-      };
+        bound: number;
+        isInclusive?: boolean;
+    };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -1095,21 +1089,21 @@ export function createZrank(
 
 export type StreamTrimOptions = (
     | {
-          /**
-           * Trim the stream according to entry ID.
-           * Equivalent to `MINID` in the Redis API.
-           */
-          method: "minid";
-          threshold: string;
-      }
+        /**
+         * Trim the stream according to entry ID.
+         * Equivalent to `MINID` in the Redis API.
+         */
+        method: "minid";
+        threshold: string;
+    }
     | {
-          /**
-           * Trim the stream according to length.
-           * Equivalent to `MAXLEN` in the Redis API.
-           */
-          method: "maxlen";
-          threshold: number;
-      }
+        /**
+         * Trim the stream according to length.
+         * Equivalent to `MAXLEN` in the Redis API.
+         */
+        method: "maxlen";
+        threshold: number;
+    }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the Redis API. Otherwise the stream will be trimmed in a near-exact manner, which is more efficient, equivalent to `~` in the Redis API.
@@ -1219,6 +1213,17 @@ export function createBrpop(
 ): redis_request.Command {
     const args = [...keys, timeout.toString()];
     return createCommand(RequestType.Brpop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBlpop(
+    keys: string[],
+    timeout: number,
+): redis_request.Command {
+    const args = [...keys, timeout.toString()];
+    return createCommand(RequestType.Blpop, args);
 }
 
 export type StreamReadOptions = {

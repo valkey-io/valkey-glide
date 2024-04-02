@@ -2055,6 +2055,27 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `test blpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                expect(
+                    await client.rpush("blpop-test", ["foo", "bar", "baz"]),
+                ).toEqual(3);
+                // Test basic usage
+                expect(await client.blpop(["blpop-test"], 0.1)).toEqual([
+                    "blpop-test",
+                    "foo",
+                ]);
+                // Delete all values from list
+                expect(await client.del(["blpop-test"])).toEqual(1);
+                // Test null return when key doesn't exist
+                expect(await client.blpop(["blpop-test"], 0.1)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `persist test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

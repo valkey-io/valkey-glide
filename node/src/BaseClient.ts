@@ -21,6 +21,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
+    createBlpop,
     createBrpop,
     createDecr,
     createDecrBy,
@@ -85,7 +86,7 @@ import {
     createZrem,
     createZremRangeByRank,
     createZremRangeByScore,
-    createZscore,
+    createZscore
 } from "./Commands";
 import {
     ClosingError,
@@ -382,17 +383,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
-                  callbackIdx,
-                  transaction: redis_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: redis_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof redis_request.Command
-              ? redis_request.RedisRequest.create({
+                ? redis_request.RedisRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : redis_request.RedisRequest.create({
+                : redis_request.RedisRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -2103,9 +2104,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -2204,6 +2205,7 @@ export class BaseClient {
         return this.createWritePromise(createBrpop(keys, timeout));
     }
 
+
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
      * Creates a new structure if the `key` does not exist.
      * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
@@ -2225,6 +2227,29 @@ export class BaseClient {
     public pfadd(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
+    /** Blocking list pop primitive.
+    * Pop an element from the head of the first list that is non-empty,
+    * with the given keys being checked in the order that they are given.
+    * Blocks the connection when there are no elements to pop from any of the given lists.
+    * See https://redis.io/commands/blpop/ for more details.
+    * Note: BRPOP is a blocking command,
+    * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+    *
+    * @param keys - The `keys` of the lists to pop from.
+    * @param timeout - The `timeout` in seconds.
+    * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
+    * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+    *
+    * @example
+    *     await client.blpop(["list1", "list2"], 5);
+    *    ["list1", "element"]
+    */
+    public blpop(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string] | null> {
+        return this.createWritePromise(createBlpop(keys, timeout));
+    }
 
     /**
      * @internal
@@ -2237,11 +2262,11 @@ export class BaseClient {
             : undefined;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

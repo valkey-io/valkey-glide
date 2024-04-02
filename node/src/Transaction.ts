@@ -14,6 +14,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
+    createBlpop,
     createBrpop,
     createClientGetName,
     createClientId,
@@ -90,7 +91,7 @@ import {
     createZrem,
     createZremRangeByRank,
     createZremRangeByScore,
-    createZscore,
+    createZscore
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -1260,6 +1261,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBrpop(keys, timeout));
     }
 
+
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
      * Creates a new structure if the `key` does not exist.
      * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
@@ -1273,6 +1275,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given keys being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://redis.io/commands/blpop/ for more details.
+     * Note: BLPOP is a blocking command,
+     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     */
+    public blpop(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBlpop(keys, timeout));
     }
 }
 
