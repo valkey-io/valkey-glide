@@ -15,7 +15,7 @@
     },
     "dependencies": {
         "child_process": "^1.0.2",
-        "find-free-ports": "^3.1.1",
+        "find-free-ports": "^3.1.1"
     },
     "devDependencies": {
         "@types/node": "^18.7.9",
