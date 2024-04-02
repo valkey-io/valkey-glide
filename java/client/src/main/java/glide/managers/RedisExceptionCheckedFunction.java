@@ -8,7 +8,7 @@ import response.ResponseOuterClass.Response;
  * Functional Interface to extracts data from <code>GLIDE core</code> response.
  *
  * @param <R> Received value type.
- * @param <T> Returning payload type.
+ * @param <T> Returned payload type.
  */
 @FunctionalInterface
 public interface RedisExceptionCheckedFunction<R, T> {
