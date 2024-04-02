@@ -30,7 +30,7 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
 )
 from glide.config import ProtocolVersion, RedisCredentials
-from glide.constants import OK
+from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
     AllNodes,
@@ -1779,9 +1779,14 @@ class TestClusterRoutes:
         self, redis_client: RedisClusterClient
     ):
         # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
-        clean_result = lambda value: [
-            line for line in value.split("\n") if "myself" in line
-        ][0]
+        def clean_result(value: TResult):
+            assert type(value) is str
+            for line in value.splitlines():
+                if "myself" in line:
+                    return line.split("myself")[0]
+            raise Exception(
+                f"Couldn't find 'myself' in the cluster nodes output: {value}"
+            )
 
         cluster_nodes = clean_result(
             await redis_client.custom_command(["cluster", "nodes"], RandomNode())
