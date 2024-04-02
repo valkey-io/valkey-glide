@@ -10,13 +10,15 @@ runs:
     using: "composite"
     steps:
         - name: Run ORT tools
-          working-directory: ./ort/
+          uses: oss-review-toolkit/ort-ci-github-action@v1
           shell: bash
           run: |
             echo "Running ORT tools for ${{ inputs.folder_path }}"
             FOLDER=${{ inputs.folder_path }}
             mkdir $FOLDER/ort_results
             # Analyzer (analyzer-result.json)
-            ./gradlew cli:run --args="analyze -i $FOLDER -o $FOLDER/ort_results -f JSON"
+            ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
+            
             # NOTICE DEFAULT
-            ./gradlew cli:run --args="report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate"
+            ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
+
