@@ -19,9 +19,6 @@ runs:
         - name: Run ORT tools
           shell: bash
           run: |
-            git clone https://github.com/oss-review-toolkit/ort
-            cd ort
-            git submodule update --init --recursive
-            ./cli/build/install/ort/bin/ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
-            ./cli/build/install/ort/bin/ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
+            /cli/build/install/ort/bin/ort --info analyze -f JSON -i $FOLDER -o $FOLDER/ort_results
+            /cli/build/install/ort/bin/ort --info report -i $FOLDER/ort_results/analyzer-result.json -o $FOLDER/ort_results/ -f PlainTextTemplate
 
