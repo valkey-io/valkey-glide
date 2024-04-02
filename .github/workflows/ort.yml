@@ -1,3 +1,4 @@
+
 name: The OSS Review Toolkit (ORT)
 
 on:
@@ -52,59 +53,8 @@ jobs:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
 
-            - name: Set up JDK 11 for the ORT package
-              uses: actions/setup-java@v4
-              with:
-                  distribution: "temurin"
-                  java-version: 11
-
-            - name: Cache ORT and Gradle packages
-              uses: actions/cache@v4
-              id: cache-ort
-              with:
-                path: |
-                  ./ort
-                  ~/.gradle/caches
-                  ~/.gradle/wrapper
-                key: ${{ runner.os }}-ort
-
-            - name: Checkout ORT Repository
-              if: steps.cache-ort.outputs.cache-hit != 'true'
-              uses: actions/checkout@v4
-              with: 
-                  repository: "oss-review-toolkit/ort"
-                  path: "./ort"
-                  ref: main
-                  submodules: recursive
-
-            - name: Checkout ORT latest release tag
-              if: steps.cache-ort.outputs.cache-hit != 'true'
-              working-directory: ./ort/
-              run: |
-                # Get new tags from remote
-                git fetch --tags
-                # Get latest tag name
-                LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
-                # Checkout latest tag
-                git checkout $LATEST_TAG
-
             - name: Install ORT
-              if: steps.cache-ort.outputs.cache-hit != 'true'
-              working-directory: ./ort/
-              run: |
-                export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
-                ./gradlew installDist
-
-            - name: Create ORT config file
-              run: |
-                mkdir -p ~/.ort/config
-                cat << EOF > ~/.ort/config/config.yml
-                ort:
-                  analyzer:
-                    allowDynamicVersions: true
-                    enabledPackageManagers: [Cargo, NPM, PIP]
-                EOF
-                cat ~/.ort/config/config.yml
+              uses: oss-review-toolkit/ort-ci-github-action@v1
 
             - name: install toolchain
               uses: actions-rs/toolchain@v1
