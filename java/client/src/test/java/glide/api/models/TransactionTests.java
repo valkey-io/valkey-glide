@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -371,6 +372,12 @@ public class TransactionTests {
 
         transaction.zcard("key");
         results.add(Pair.of(Zcard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.pfadd("hll", new String[] {"a", "b", "c"});
+        results.add(
+                Pair.of(
+                        PfAdd,
+                        ArgsArray.newBuilder().addArgs("hll").addArgs("a").addArgs("b").addArgs("c").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -26,6 +26,7 @@
 * Python, Node: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065), [#1149](https://github.com/aws/glide-for-redis/pull/1149))
 * Core: Enabled Cluster Mode periodic checks by default ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
 * Node: Added Rename command. ([#1124](https://github.com/aws/glide-for-redis/pull/1124))
+* Core: Added `PFADD` command. (TODO ADD HERE PR #)
 
 #### Features
 
