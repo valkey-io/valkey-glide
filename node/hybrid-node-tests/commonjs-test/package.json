@@ -16,7 +16,6 @@
     "dependencies": {
         "child_process": "^1.0.2",
         "find-free-port": "^2.0.0",
-        "glide-for-redis": "file:../../../node/build-ts/cjs"
     },
     "devDependencies": {
         "@types/node": "^18.7.9",
