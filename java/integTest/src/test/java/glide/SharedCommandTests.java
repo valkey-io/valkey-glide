@@ -1223,19 +1223,19 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key, membersScores).get());
 
-        assertArrayEquals(
-                new String[] {"one", "two"}, client.zrange(key, new RangeByIndex(0, 1)).get());
+        RangeByIndex query = new RangeByIndex(0, 1);
+        assertArrayEquals(new String[] {"one", "two"}, client.zrange(key, query).get());
 
+        query = new RangeByIndex(0, -1);
         assertEquals(
-                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
-                client.zrangeWithScores(key, new RangeByIndex(0, -1)).get());
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key, query).get());
 
-        assertArrayEquals(
-                new String[] {"three", "two"}, client.zrange(key, new RangeByIndex(0, 1), true).get());
+        query = new RangeByIndex(0, 1);
+        assertArrayEquals(new String[] {"three", "two"}, client.zrange(key, query, true).get());
 
-        assertArrayEquals(new String[] {}, client.zrange(key, new RangeByIndex(3, 1), true).get());
-
-        assertTrue(client.zrangeWithScores(key, new RangeByIndex(3, 1)).get().isEmpty());
+        query = new RangeByIndex(3, 1);
+        assertArrayEquals(new String[] {}, client.zrange(key, query, true).get());
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty());
     }
 
     @SneakyThrows
@@ -1246,72 +1246,40 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key, membersScores).get());
 
-        assertArrayEquals(
-                new String[] {"one", "two"},
-                client
-                        .zrange(
-                                key, new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false)))
-                        .get());
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(new String[] {"one", "two"}, client.zrange(key, query).get());
 
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY);
         assertEquals(
-                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
-                client
-                        .zrangeWithScores(
-                                key,
-                                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY))
-                        .get());
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key, query).get());
 
-        assertArrayEquals(
-                new String[] {"two", "one"},
-                client
-                        .zrange(
-                                key,
-                                new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY),
-                                true)
-                        .get());
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertArrayEquals(new String[] {"two", "one"}, client.zrange(key, query, true).get());
 
-        assertArrayEquals(
-                new String[] {"two", "three"},
-                client
-                        .zrange(
-                                key,
-                                new RangeByScore(
-                                        InfScoreBound.NEGATIVE_INFINITY,
-                                        InfScoreBound.POSITIVE_INFINITY,
-                                        new Limit(1, 2)))
-                        .get());
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new String[] {"two", "three"}, client.zrange(key, query).get());
 
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
         assertArrayEquals(
                 new String[] {},
                 client
-                        .zrange(
-                                key,
-                                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false)),
-                                true)
+                        .zrange(key, query, true)
                         .get()); // stop is greater than start with reverse set to True
 
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
         assertArrayEquals(
-                new String[] {},
-                client
-                        .zrange(
-                                key,
-                                new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false)),
-                                true)
-                        .get()); // start is greater than stop
+                new String[] {}, client.zrange(key, query, true).get()); // start is greater than stop
 
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty()); // start is greater than stop
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
         assertTrue(
                 client
-                        .zrangeWithScores(
-                                key, new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false)))
-                        .get()
-                        .isEmpty()); // start is greater than stop
-
-        assertTrue(
-                client
-                        .zrangeWithScores(
-                                key,
-                                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false)),
-                                true)
+                        .zrangeWithScores(key, query, true)
                         .get()
                         .isEmpty()); // stop is greater than start with reverse set to True
     }
@@ -1324,44 +1292,27 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
         assertEquals(3, client.zadd(key, membersScores).get());
 
-        assertArrayEquals(
-                new String[] {"a", "b"},
-                client
-                        .zrange(key, new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false)))
-                        .get());
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(new String[] {"a", "b"}, client.zrange(key, query).get());
 
-        assertArrayEquals(
-                new String[] {"b", "c"},
-                client
-                        .zrange(
-                                key,
-                                new RangeByLex(
-                                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2)))
-                        .get());
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new String[] {"b", "c"}, client.zrange(key, query).get());
 
-        assertArrayEquals(
-                new String[] {"b", "a"},
-                client
-                        .zrange(
-                                key,
-                                new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY),
-                                true)
-                        .get());
+        query = new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY);
+        assertArrayEquals(new String[] {"b", "a"}, client.zrange(key, query, true).get());
 
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
         assertArrayEquals(
                 new String[] {},
                 client
-                        .zrange(
-                                key,
-                                new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false)),
-                                true)
+                        .zrange(key, query, true)
                         .get()); // stop is greater than start with reverse set to True
 
+        query = new RangeByLex(InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", false));
         assertArrayEquals(
-                new String[] {},
-                client
-                        .zrange(key, new RangeByLex(InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", false)))
-                        .get()); // start is greater than stop
+                new String[] {}, client.zrange(key, query).get()); // start is greater than stop
     }
 
     @SneakyThrows
@@ -1369,27 +1320,24 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void zrange_with_different_types_of_keys(BaseClient client) {
         String key = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, 1);
 
-        assertArrayEquals(
-                new String[] {}, client.zrange("non_existing_key", new RangeByIndex(0, 1)).get());
+        assertArrayEquals(new String[] {}, client.zrange("non_existing_key", query).get());
 
         assertTrue(
                 client
-                        .zrangeWithScores("non_existing_key", new RangeByIndex(0, 1))
+                        .zrangeWithScores("non_existing_key", query)
                         .get()
                         .isEmpty()); // start is greater than stop
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.zrange(key, new RangeByIndex(0, 1)).get());
+                assertThrows(ExecutionException.class, () -> client.zrange(key, query).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
         executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.zrangeWithScores(key, new RangeByIndex(0, 1)).get());
+                assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
