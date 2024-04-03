@@ -16,7 +16,6 @@ public class TransactionTestUtilities {
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String key6 = "{key}" + UUID.randomUUID();
-    // TODO rename after #160 merge & rebase
     private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
