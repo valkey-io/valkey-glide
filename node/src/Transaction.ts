@@ -769,7 +769,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public expireAt(
         key: string,
         unixSeconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
@@ -790,7 +790,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public pexpire(
         key: string,
         milliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createPExpire(key, milliseconds, option));
     }
@@ -811,10 +811,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public pexpireAt(
         key: string,
         unixMilliseconds: number,
-        option?: ExpireOptions
+        option?: ExpireOptions,
     ): T {
         return this.addAndReturn(
-            createPExpireAt(key, unixMilliseconds, option)
+            createPExpireAt(key, unixMilliseconds, option),
         );
     }
 
@@ -845,15 +845,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZaddOptions,
-        changed?: boolean
+        changed?: boolean,
     ): T {
         return this.addAndReturn(
             createZadd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined
-            )
+                changed ? "CH" : undefined,
+            ),
         );
     }
 
@@ -874,10 +874,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions
+        options?: ZaddOptions,
     ): T {
         return this.addAndReturn(
-            createZadd(key, { [member]: increment }, options, "INCR")
+            createZadd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
@@ -1100,7 +1100,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         maxScore: ScoreBoundary<number>,
     ): T {
         return this.addAndReturn(
-            createZremRangeByScore(key, minScore, maxScore)
+            createZremRangeByScore(key, minScore, maxScore),
         );
     }
 
@@ -1186,7 +1186,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public xadd(
         key: string,
         values: [string, string][],
-        options?: StreamAddOptions
+        options?: StreamAddOptions,
     ): T {
         return this.addAndReturn(createXadd(key, values, options));
     }
@@ -1224,7 +1224,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xread(
         keys_and_ids: Record<string, string>,
-        options?: StreamReadOptions
+        options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXread(keys_and_ids, options));
     }

@@ -12,6 +12,7 @@ import {
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
+    RequestError,
     Script,
     parseInfoResponse,
 } from "../";
@@ -2070,6 +2071,13 @@ export function runBaseTests<Context>(config: {
                 expect(await client.del(["blpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
                 expect(await client.blpop(["blpop-test"], 0.1)).toEqual(null);
+
+                try {
+                    await client.set("foo", "bar"),
+                        expect(await client.blpop(["foo"], 0.1)).toThrow();
+                } catch (e) {
+                    expect(e as RequestError);
+                }
             }, protocol);
         },
         config.timeout,
