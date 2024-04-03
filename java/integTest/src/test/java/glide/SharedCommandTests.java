@@ -21,6 +21,14 @@ import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.Limit;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.RangeOptions.RangeByLex;
+import glide.api.models.commands.RangeOptions.RangeByScore;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
@@ -29,6 +37,7 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -461,6 +470,32 @@ public class SharedCommandTests {
         assertEquals(2, client.hdel(key, new String[] {field1, field2}).get());
         assertEquals(0, client.hdel(key, new String[] {"non_existing_field"}).get());
         assertEquals(0, client.hdel("non_existing_key", new String[] {field3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hvals(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value2");
+
+        assertEquals(2, client.hset(key1, fieldValueMap).get());
+
+        String[] hvalsPayload = client.hvals(key1).get();
+        Arrays.sort(hvalsPayload); // ordering for values by hvals is not guaranteed
+        assertArrayEquals(new String[] {"value1", "value2"}, hvalsPayload);
+
+        assertEquals(1, client.hdel(key1, new String[] {field1}).get());
+        assertArrayEquals(new String[] {"value2"}, client.hvals(key1).get());
+        assertArrayEquals(new String[] {}, client.hvals("nonExistingKey").get());
+
+        assertEquals(OK, client.set(key2, "value2").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hvals(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -1174,6 +1209,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zrank(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.5, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(0, client.zrank(key, "one").get());
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertArrayEquals(new Object[] {0L, 1.5}, client.zrankWithScore(key, "one").get());
+            assertNull(client.zrankWithScore(key, "nonExistingMember").get());
+            assertNull(client.zrankWithScore("nonExistingKey", "nonExistingMember").get());
+        }
+        assertNull(client.zrank(key, "nonExistingMember").get());
+        assertNull(client.zrank("nonExistingKey", "nonExistingMember").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrank(key, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void type(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
@@ -1205,6 +1264,132 @@ public class SharedCommandTests {
         assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
         assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
         assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zrange_by_index(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByIndex query = new RangeByIndex(0, 1);
+        assertArrayEquals(new String[] {"one", "two"}, client.zrange(key, query).get());
+
+        query = new RangeByIndex(0, -1);
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key, query).get());
+
+        query = new RangeByIndex(0, 1);
+        assertArrayEquals(new String[] {"three", "two"}, client.zrange(key, query, true).get());
+
+        query = new RangeByIndex(3, 1);
+        assertArrayEquals(new String[] {}, client.zrange(key, query, true).get());
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zrange_by_score(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(new String[] {"one", "two"}, client.zrange(key, query).get());
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY);
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key, query).get());
+
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertArrayEquals(new String[] {"two", "one"}, client.zrange(key, query, true).get());
+
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new String[] {"two", "three"}, client.zrange(key, query).get());
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(
+                new String[] {},
+                client
+                        .zrange(key, query, true)
+                        .get()); // stop is greater than start with reverse set to True
+
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(
+                new String[] {}, client.zrange(key, query, true).get()); // start is greater than stop
+
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty()); // start is greater than stop
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertTrue(
+                client
+                        .zrangeWithScores(key, query, true)
+                        .get()
+                        .isEmpty()); // stop is greater than start with reverse set to True
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zrange_by_lex(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(new String[] {"a", "b"}, client.zrange(key, query).get());
+
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new String[] {"b", "c"}, client.zrange(key, query).get());
+
+        query = new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY);
+        assertArrayEquals(new String[] {"b", "a"}, client.zrange(key, query, true).get());
+
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(
+                new String[] {},
+                client
+                        .zrange(key, query, true)
+                        .get()); // stop is greater than start with reverse set to True
+
+        query = new RangeByLex(InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(
+                new String[] {}, client.zrange(key, query).get()); // start is greater than stop
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zrange_with_different_types_of_keys(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, 1);
+
+        assertArrayEquals(new String[] {}, client.zrange("non_existing_key", query).get());
+
+        assertTrue(
+                client
+                        .zrangeWithScores("non_existing_key", query)
+                        .get()
+                        .isEmpty()); // start is greater than stop
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrange(key, query).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows

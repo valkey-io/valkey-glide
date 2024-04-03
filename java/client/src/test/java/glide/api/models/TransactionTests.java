@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -25,6 +27,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
@@ -60,10 +63,16 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.Limit;
+import glide.api.models.commands.RangeOptions.RangeByScore;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.LinkedHashMap;
@@ -161,6 +170,9 @@ public class TransactionTests {
 
         transaction.hdel("key", new String[] {"field"});
         results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hvals("key");
+        results.add(Pair.of(Hvals, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.hmget("key", new String[] {"field"});
         results.add(Pair.of(HashMGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
@@ -406,6 +418,19 @@ public class TransactionTests {
         transaction.zscore("key", "member");
         results.add(Pair.of(ZScore, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
 
+        transaction.zrank("key", "member");
+        results.add(Pair.of(Zrank, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
+
+        transaction.zrankWithScore("key", "member");
+        results.add(
+                Pair.of(
+                        Zrank,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("member")
+                                .addArgs(WITH_SCORE_REDIS_API)
+                                .build()));
+
         transaction.time();
         results.add(Pair.of(Time, ArgsArray.newBuilder().build()));
 
@@ -414,6 +439,44 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zrange(
+                "key",
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
+                true);
+        results.add(
+                Pair.of(
+                        Zrange,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("-inf")
+                                .addArgs("(3.0")
+                                .addArgs("BYSCORE")
+                                .addArgs("REV")
+                                .addArgs("LIMIT")
+                                .addArgs("1")
+                                .addArgs("2")
+                                .build()));
+
+        transaction.zrangeWithScores(
+                "key",
+                new RangeByScore(
+                        new ScoreBoundary(5, true), InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2)),
+                false);
+        results.add(
+                Pair.of(
+                        Zrange,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("5.0")
+                                .addArgs("+inf")
+                                .addArgs("BYSCORE")
+                                .addArgs("LIMIT")
+                                .addArgs("1")
+                                .addArgs("2")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
 
         transaction.pfadd("hll", new String[] {"a", "b", "c"});
         results.add(
