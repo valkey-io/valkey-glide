@@ -362,6 +362,8 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Rename => Some(cmd("RENAME")),
         RequestType::DBSize => Some(cmd("DBSIZE")),
         RequestType::Brpop => Some(cmd("BRPOP")),
+        RequestType::RPushX => Some(cmd("RPUSHX")),
+        RequestType::LPushX => Some(cmd("LPUSHX")),
     }
 }
 

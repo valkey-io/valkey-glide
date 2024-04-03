@@ -1,5 +1,6 @@
 #### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
+* Core: Added `RPUSHX` and `LPUSHX` commands (TODO add PR # here)
 
 ## 0.3.1 (2024-03-28)
 
