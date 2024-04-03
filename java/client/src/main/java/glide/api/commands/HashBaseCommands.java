@@ -61,10 +61,10 @@ public interface HashBaseCommands {
      *     and was not set.
      * @example
      *     <pre>{@code
-     * Bool payload1 = client.hsetnx("myHash", "field", "value").get();
+     * Boolean payload1 = client.hsetnx("myHash", "field", "value").get();
      * assert payload1; // Indicates that the field "field" was set successfully in the hash "myHash".
      *
-     * Bool payload2 = client.hsetnx("myHash", "field", "newValue").get();
+     * Boolean payload2 = client.hsetnx("myHash", "field", "newValue").get();
      * assert !payload2; // Indicates that the field "field" already existed in the hash "myHash" and was not set again.
      * }</pre>
      */

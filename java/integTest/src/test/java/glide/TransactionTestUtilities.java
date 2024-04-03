@@ -117,7 +117,7 @@ public class TransactionTestUtilities {
             2L,
             value1,
             true,
-            false, // hsetnx(key4, field1, value1)
+            Boolean.FALSE, // hsetnx(key4, field1, value1)
             new String[] {value1, null, value2},
             Map.of(field1, value1, field2, value2),
             1L,
