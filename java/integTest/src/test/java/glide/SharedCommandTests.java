@@ -1381,16 +1381,8 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(listKey, new String[] {"value"}).get());
         assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
         assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
-        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
-
-        // TODO: update after adding XADD
-        // use custom command until XADD is implemented
-        String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
-        if (client instanceof RedisClient) {
-            assertNotNull(((RedisClient) client).customCommand(args).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertNotNull(((RedisClusterClient) client).customCommand(args).get().getSingleValue());
-        }
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2d)).get());
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
         assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
