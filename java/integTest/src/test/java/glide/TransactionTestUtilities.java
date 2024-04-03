@@ -18,7 +18,6 @@ public class TransactionTestUtilities {
     private static final String key6 = "{key}" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
-    // TODO rename after #160
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
