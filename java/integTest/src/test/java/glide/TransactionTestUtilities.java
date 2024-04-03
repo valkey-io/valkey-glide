@@ -64,6 +64,7 @@ public class TransactionTestUtilities {
         baseTransaction.hmget(key4, new String[] {field1, "non_existing_field", field2});
         baseTransaction.hgetall(key4);
         baseTransaction.hdel(key4, new String[] {field1});
+        baseTransaction.hvals(key4);
 
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
@@ -134,6 +135,7 @@ public class TransactionTestUtilities {
             new String[] {value1, null, value2},
             Map.of(field1, value1, field2, value2),
             1L,
+            new String[] {value2}, // hvals(key4)
             5L,
             10.5,
             5L,

@@ -66,6 +66,21 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hdel(String key, String[] fields);
 
     /**
+     * Returns all values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return An <code>array</code> of values in the hash, or an <code>empty array</code> when the
+     *     key does not exist.
+     * @example
+     *     <pre>{@code
+     * String[] values = client.hvals("myHash").get();
+     * assert values.equals(new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
+     * }</pre>
+     */
+    CompletableFuture<String[]> hvals(String key);
+
+    /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
