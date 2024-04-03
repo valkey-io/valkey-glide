@@ -237,7 +237,7 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * Long listLength = client.rpushx("my_list", new String[] {"value1", "value2"}).get();
-     * assert listLength > 2L;
+     * assert listLength >= 2L;
      * }</pre>
      */
     CompletableFuture<Long> rpushx(String key, String[] elements);
@@ -253,7 +253,7 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * Long listLength = client.lpushx("my_list", new String[] {"value1", "value2"}).get();
-     * assert listLength > 2L;
+     * assert listLength >= 2L;
      * }</pre>
      */
     CompletableFuture<Long> lpushx(String key, String[] elements);
