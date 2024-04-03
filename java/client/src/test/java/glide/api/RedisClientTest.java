@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -75,6 +76,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.Script;
@@ -2063,6 +2065,56 @@ public class RedisClientTest {
         CompletableFuture<Map<String, Double>> response =
                 service.zrangeWithScores(key, rangeByScore, false);
         Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrank_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Zrank), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrank(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrankWithScore_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
+        Object[] value = new Object[] {1, 6.0};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(Zrank), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zrankWithScore(key, member);
+        Object[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
