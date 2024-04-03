@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -60,8 +61,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
@@ -412,6 +413,19 @@ public class TransactionTests {
         transaction.zscore("key", "member");
         results.add(Pair.of(ZScore, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
 
+        transaction.zrank("key", "member");
+        results.add(Pair.of(Zrank, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
+
+        transaction.zrankWithScore("key", "member");
+        results.add(
+                Pair.of(
+                        Zrank,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("member")
+                                .addArgs(WITH_SCORE_REDIS_API)
+                                .build()));
+
         transaction.time();
         results.add(Pair.of(Time, ArgsArray.newBuilder().build()));
 
@@ -458,15 +472,6 @@ public class TransactionTests {
                                 .addArgs("2")
                                 .addArgs(WITH_SCORES_REDIS_API)
                                 .build()));
-
-        transaction.zrank("key", "member");
-        results.add(Pair.of(Zrank, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
-
-        transaction.zrankWithScore("key", "member");
-        results.add(
-                Pair.of(
-                        Zrank,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("member").addArgs("WITHSCORE").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface SortedSetBaseCommands {
     public static final String WITH_SCORES_REDIS_API = "WITHSCORES";
+    public static final String WITH_SCORE_REDIS_API = "WITHSCORE";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>

@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -74,8 +75,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.Script;
@@ -2084,7 +2085,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(Zrank), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.zrank(key, member);
@@ -2101,7 +2102,7 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         String member = "testMember";
-        String[] arguments = new String[] {key, member, "WITHSCORE"};
+        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
         Object[] value = new Object[] {1, 6.0};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -2109,7 +2110,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(Zrank), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[]> response = service.zrankWithScore(key, member);
@@ -2119,7 +2120,6 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, payload);
     }
-
 
     @SneakyThrows
     @Test
