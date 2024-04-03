@@ -37,7 +37,7 @@ jobs:
               env:
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
-              
+ 
             - name: Set the base branch
               run: |
                 export BASE_BRANCH=`if [ "$EVENT_NAME" == 'schedule' ]; then echo 'main'; elif [ "$EVENT_NAME" == 'workflow_dispatch' ]; then echo "$INPUT_BRANCH"; else echo ""; fi`
@@ -52,10 +52,24 @@ jobs:
               with:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
-                  
-            - name: Get submudole
-              run: git submodule update --init --recursive
 
+            - name: Install software dependencies for Ubuntu
+              shell: bash
+              run: |
+                sudo apt update -y
+                sudo apt install -y git gcc pkg-config openssl libssl-dev
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                targets: ${{ inputs.target }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                version: "25.1"
+                repo-token: ${{ secrets.GITHUB_TOKEN }}
+                
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v4
               with:
@@ -134,12 +148,22 @@ jobs:
                 mv package.json package.json.tmpl
                 envsubst < package.json.tmpl > "package.json"
                 cat package.json
-            - name: install and build
+                
+            - name: install Node
+              shell: bash
               working-directory: ./node
               run: |
+                rm -rf node_modules && npm install --frozen-lockfile
+                cd rust-client
                 npm install
+
+            - name: Build Node
+              shell: bash
+              working-directory: ./node
+              run: |
+                source "$HOME/.cargo/env"
                 npm run build
-            
+                
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
               with:
