@@ -137,6 +137,7 @@ enum RequestType {
     Brpop = 93;
     PfAdd = 96;
     PfCount = 97;
+    PfMerge = 98;
 }
 
 message Command {

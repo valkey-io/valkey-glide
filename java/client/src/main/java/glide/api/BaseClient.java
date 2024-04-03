@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
+import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -672,5 +673,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> pfcount(@NonNull String[] keys) {
         return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> pfmerge(@NonNull String destKey, @NonNull String[] sourceKeys) {
+        String[] arguments = ArrayUtils.addFirst(sourceKeys, destKey);
+        return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
     }
 }

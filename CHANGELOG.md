@@ -2,6 +2,7 @@
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Core: Added `PFADD` command. ([#1221](https://github.com/aws/glide-for-redis/pull/1221))
 * Core: Added `PFCOUNT` command. ([#1222](https://github.com/aws/glide-for-redis/pull/1222))
+* Core: Added `PFMERGE` command. ([#1224](https://github.com/aws/glide-for-redis/pull/1224))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

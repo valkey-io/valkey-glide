@@ -18,9 +18,9 @@ public class TransactionTestUtilities {
     private static final String key6 = "{key}" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
-    // TODO rename after #160
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
+    private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -104,6 +104,9 @@ public class TransactionTestUtilities {
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
         baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
+        baseTransaction
+                .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+                .pfcount(new String[] {hllKey3});
 
         return baseTransaction;
     }
@@ -164,7 +167,9 @@ public class TransactionTestUtilities {
             OK,
             "GLIDE", // echo
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
-            3L, // pfcount(new String[] { hllKey1, hllKey2 });
+            3L, // pfcount(new String[] { hllKey1, hllKey2 });;
+            OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+            3L, // pfcount(new String[] { hllKey3 })
         };
     }
 }

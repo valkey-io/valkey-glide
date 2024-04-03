@@ -364,6 +364,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Brpop => Some(cmd("BRPOP")),
         RequestType::PfAdd => Some(cmd("PFADD")),
         RequestType::PfCount => Some(cmd("PFCOUNT")),
+        RequestType::PfMerge => Some(cmd("PFMERGE")),
     }
 }
 
