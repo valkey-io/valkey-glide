@@ -56,5 +56,5 @@ runs:
         - name: Install protoc (protobuf)
           uses: arduino/setup-protoc@v3
           with:
-              version: "25.1"
+              version: "26.1"
               repo-token: ${{ inputs.github-token }}
