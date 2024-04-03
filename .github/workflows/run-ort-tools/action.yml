@@ -13,7 +13,7 @@ runs:
           working-directory: ./ort/
           shell: bash
           run: |
-            ./gradlew cli:run --args="requirements"
+            localectl set-locale LANG=en_US.UTF-8
             echo "Running ORT tools for ${{ inputs.folder_path }}"
             FOLDER=${{ inputs.folder_path }}
             mkdir $FOLDER/ort_results
