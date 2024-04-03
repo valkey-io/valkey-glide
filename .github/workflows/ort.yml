@@ -137,18 +137,6 @@ jobs:
               with:
                 release_version: ${{ env.RELEASE_VERSION }}
                 os: "ubuntu-latest"
-
-            - name: Fix Node base NPM package.json file for ORT
-              working-directory: ./node/npm/glide
-              run: |
-                # Remove the glide-rs dependency to avoid duplication 
-                sed -i '/ "glide-rs":/d' ../../package.json
-                export pkg_name=glide-for-redis-base
-                export package_version="${{ env.RELEASE_VERSION }}"
-                export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                mv package.json package.json.tmpl
-                envsubst < package.json.tmpl > "package.json"
-                cat package.json
                 
             - name: install Node
               shell: bash
@@ -164,6 +152,18 @@ jobs:
               run: |
                 source "$HOME/.cargo/env"
                 npm run build:release
+            
+            - name: Fix Node base NPM package.json file for ORT
+              working-directory: ./node/npm/glide
+              run: |
+                # Remove the glide-rs dependency to avoid duplication 
+                sed -i '/ "glide-rs":/d' ../../package.json
+                export pkg_name=glide-for-redis-base
+                export package_version="${{ env.RELEASE_VERSION }}"
+                export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                mv package.json package.json.tmpl
+                envsubst < package.json.tmpl > "package.json"
+                cat package.json
                 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
