@@ -134,6 +134,11 @@ jobs:
                 mv package.json package.json.tmpl
                 envsubst < package.json.tmpl > "package.json"
                 cat package.json
+            - name: install and build
+              working-directory: ./node
+              run: |
+                npm install
+                npm run build
             
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
