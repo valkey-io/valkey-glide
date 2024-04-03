@@ -162,7 +162,7 @@ jobs:
               working-directory: ./node
               run: |
                 source "$HOME/.cargo/env"
-                npm run build
+                npm run build:release
                 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
