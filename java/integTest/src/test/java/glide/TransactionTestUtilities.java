@@ -102,9 +102,12 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
-        baseTransaction.xadd(key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
-        baseTransaction.xadd(key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
-        baseTransaction.xadd(key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
+        baseTransaction.xadd(
+                key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
+        baseTransaction.xadd(
+                key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
+        baseTransaction.xadd(
+                key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
@@ -175,9 +178,12 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
-            "0-1", // xadd(key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
-            "0-2", // xadd(key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
-            "0-3", // xadd(key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
+            "0-1", // xadd(key9, Map.of("field1", "value1"),
+            // StreamAddOptions.builder().id("0-1").build());
+            "0-2", // xadd(key9, Map.of("field2", "value2"),
+            // StreamAddOptions.builder().id("0-2").build());
+            "0-3", // xadd(key9, Map.of("field3", "value3"),
+            // StreamAddOptions.builder().id("0-3").build());
             OK,
             Map.of("timeout", "1000"),
             OK,

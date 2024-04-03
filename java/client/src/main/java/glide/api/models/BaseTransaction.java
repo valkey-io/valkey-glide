@@ -1492,10 +1492,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code> exists.
      */
     public T xadd(
-        @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
+            @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
         String[] arguments =
-            ArrayUtils.addAll(
-                ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
+                ArrayUtils.addAll(
+                        ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
         ArgsArray commandArgs = buildArgs(arguments);
         protobufTransaction.addCommands(buildCommand(XAdd, commandArgs));
         return getThis();
