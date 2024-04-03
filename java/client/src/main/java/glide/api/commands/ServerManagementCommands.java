@@ -14,7 +14,8 @@ import java.util.concurrent.CompletableFuture;
 public interface ServerManagementCommands {
 
     /**
-     * Get information and statistics about the Redis server using the {@link Section#DEFAULT} option.
+     * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}
+     * option.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @return Response from Redis containing a <code>String</code> with the information for the
@@ -44,7 +45,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> info(InfoOptions options);
 
     /**
-     * Change the currently selected Redis database.
+     * Changes the currently selected Redis database.
      *
      * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
      * @param index The index of the database to select.
@@ -117,4 +118,19 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> configSet(Map<String, String> parameters);
+
+    /**
+     * Returns the server time.
+     *
+     * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
+     * @return The current server time as a <code>String</code> array with two elements: A Unix
+     *     timestamp and the amount of microseconds already elapsed in the current second. The
+     *     returned array is in a <code>[Unix timestamp, Microseconds already elapsed]</code> format.
+     * @example
+     *     <pre>{@code
+     * String[] serverTime = client.time().get();
+     * System.out.println("Server time is: " + serverTime[0] + "." + serverTime[1]);
+     * }</pre>
+     */
+    CompletableFuture<String[]> time();
 }

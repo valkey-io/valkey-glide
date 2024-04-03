@@ -278,6 +278,35 @@ class ClusterCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.DBSize, [], route))
 
+    async def echo(
+        self, message: str, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Echoes the provided `message` back.
+
+        See https://redis.io/commands/echo for more details.
+
+        Args:
+            message (str): The message to be echoed back.
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: The provided `message`.
+            When specifying a route other than a single node, response will be:
+            {Address (str) : response (str) , ... } with type of Dict[str, str].
+
+        Examples:
+            >>> await client.echo("Glide-for-Redis")
+                'Glide-for-Redis'
+            >>> await client.echo("Glide-for-Redis", AllNodes())
+                {'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.Echo, [message], route),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.

@@ -4,6 +4,7 @@ package glide;
 import static glide.api.BaseClient.OK;
 
 import glide.api.models.BaseTransaction;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.SetOptions;
 import java.util.Map;
 import java.util.Set;
@@ -29,11 +30,14 @@ public class TransactionTestUtilities {
 
         baseTransaction.set(key1, value1);
         baseTransaction.get(key1);
+        baseTransaction.type(key1);
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
+        baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
 
         baseTransaction.exists(new String[] {key1});
+        baseTransaction.persist(key1);
 
         baseTransaction.del(new String[] {key1});
         baseTransaction.get(key1);
@@ -57,9 +61,11 @@ public class TransactionTestUtilities {
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
         baseTransaction.hexists(key4, field2);
+        baseTransaction.hsetnx(key4, field1, value1);
         baseTransaction.hmget(key4, new String[] {field1, "non_existing_field", field2});
         baseTransaction.hgetall(key4);
         baseTransaction.hdel(key4, new String[] {field1});
+        baseTransaction.hvals(key4);
 
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
@@ -82,14 +88,22 @@ public class TransactionTestUtilities {
         baseTransaction.smembers(key7);
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        baseTransaction.zrank(key8, "one");
         baseTransaction.zaddIncr(key8, "one", 3);
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
+        baseTransaction.zrange(key8, new RangeByIndex(0, 1));
+        baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
+        baseTransaction.zscore(key8, "two");
+        baseTransaction.zpopmin(key8);
+        baseTransaction.zpopmax(key8);
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
 
         baseTransaction.configResetStat();
+
+        baseTransaction.echo("GLIDE");
 
         return baseTransaction;
     }
@@ -98,9 +112,12 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK,
             value1,
+            "string", // type(key1)
             null,
+            (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
             1L,
+            Boolean.FALSE, // persist(key1)
             1L,
             null,
             1L,
@@ -116,9 +133,11 @@ public class TransactionTestUtilities {
             2L,
             value1,
             true,
+            Boolean.FALSE, // hsetnx(key4, field1, value1)
             new String[] {value1, null, value2},
             Map.of(field1, value1, field2, value2),
             1L,
+            new String[] {value2}, // hvals(key4)
             5L,
             10.5,
             5L,
@@ -136,12 +155,19 @@ public class TransactionTestUtilities {
             1L,
             Set.of("baz"),
             3L,
+            0L, // zrank(key8, "one")
             4.0,
             1L,
             2L,
+            new String[] {"two", "three"}, // zrange
+            Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
+            2.0, // zscore(key8, "two")
+            Map.of("two", 2.0), // zpopmin(key8)
+            Map.of("three", 3.0), // zpopmax(key8)
             OK,
             Map.of("timeout", "1000"),
-            OK
+            OK,
+            "GLIDE", // echo
         };
     }
 }

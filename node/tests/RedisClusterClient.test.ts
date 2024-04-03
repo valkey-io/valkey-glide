@@ -10,6 +10,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
     ClusterTransaction,
@@ -232,7 +233,7 @@ describe("RedisClusterClient", () => {
                 getOptions(cluster.ports(), protocol),
             );
             const transaction = new ClusterTransaction();
-            const expectedRes = transactionTest(transaction);
+            const expectedRes = await transactionTest(transaction);
             const result = await client.exec(transaction);
             expect(result).toEqual(expectedRes);
             client.close();
@@ -262,6 +263,24 @@ describe("RedisClusterClient", () => {
 
             client1.close();
             client2.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `echo with all nodes routing_%p`,
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.ports(), protocol),
+            );
+            const message = uuidv4();
+            const echoDict = await client.echo(message, "allNodes");
+
+            expect(typeof echoDict).toBe("object");
+            expect(Object.values(echoDict)).toEqual(
+                expect.arrayContaining([message]),
+            );
+            client.close();
         },
         TIMEOUT,
     );

@@ -932,6 +932,20 @@ export function createPersist(key: string): redis_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
+export function createZrank(
+    key: string,
+    member: string,
+    withScores?: boolean,
+): redis_request.Command {
+    const args = [key, member];
+
+    if (withScores) {
+        args.push("WITHSCORE");
+    }
+
+    return createCommand(RequestType.Zrank, args);
+}
+
 export type StreamTrimOptions = (
     | {
           /**
@@ -1047,6 +1061,17 @@ export function createXtrim(
  */
 export function createTime(): redis_request.Command {
     return createCommand(RequestType.Time, []);
+}
+
+/**
+ * @internal
+ */
+export function createBrpop(
+    keys: string[],
+    timeout: number,
+): redis_request.Command {
+    const args = [...keys, timeout.toString()];
+    return createCommand(RequestType.Brpop, args);
 }
 
 export type StreamReadOptions = {

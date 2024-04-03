@@ -285,7 +285,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/incr/ for more details.
 
         Args:
-          key (str): The key to increment it's value.
+          key (str): The key to increment its value.
 
         Returns:
             int: The value of `key` after the increment.
@@ -298,7 +298,7 @@ class CoreCommands(Protocol):
         the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
-          key (str): The key to increment it's value.
+          key (str): The key to increment its value.
           amount (int) : The amount to increment.
 
         Returns:
@@ -316,7 +316,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/incrbyfloat/ for more details.
 
         Args:
-          key (str): The key to increment it's value.
+          key (str): The key to increment its value.
           amount (float) : The amount to increment.
 
         Returns:
@@ -366,7 +366,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/decr/ for more details.
 
         Args:
-          key (str): The key to increment it's value.
+          key (str): The key to increment its value.
 
         Returns:
             int: The value of key after the decrement.
@@ -380,7 +380,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/decrby/ for more details.
 
         Args:
-          key (str): The key to decrement it's value.
+          key (str): The key to decrement its value.
           amount (int) : The amount to decrement.
 
         Returns:
@@ -1271,24 +1271,6 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Persist, [key]),
         )
 
-    async def echo(self, message: str) -> str:
-        """
-        Echoes the provided `message` back.
-
-        See https://redis.io/commands/echo for more details.
-
-        Args:
-            message (str): The message to be echoed back.
-
-        Returns:
-            str: The provided `message`.
-
-        Examples:
-            >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
-        """
-        return cast(str, await self._execute_command(RequestType.Echo, [message]))
-
     async def type(self, key: str) -> str:
         """
         Returns the string representation of the type of the value stored at `key`.
@@ -1644,7 +1626,7 @@ class CoreCommands(Protocol):
 
         See https://redis.io/commands/zrank for more details.
 
-        To get the rank of `member` with it's score, see `zrank_withscore`.
+        To get the rank of `member` with its score, see `zrank_withscore`.
 
         Args:
             key (str): The key of the sorted set.
@@ -1670,7 +1652,7 @@ class CoreCommands(Protocol):
         member: str,
     ) -> Optional[List[Union[int, float]]]:
         """
-        Returns the rank of `member` in the sorted set stored at `key` with it's score, where scores are ordered from the lowest to highest.
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
 
         See https://redis.io/commands/zrank for more details.
 
@@ -1687,6 +1669,8 @@ class CoreCommands(Protocol):
                 [1 , 6.0]  # Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
             >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+
+        Since: Redis version 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -1761,6 +1745,8 @@ class CoreCommands(Protocol):
         The script loading, argument preparation, and execution will all be handled internally.
         If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
         After that, it will be invoked using the Redis `EVALSHA` command.
+
+        See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for more details.
 
         Args:
             script (Script): The Lua script to execute.

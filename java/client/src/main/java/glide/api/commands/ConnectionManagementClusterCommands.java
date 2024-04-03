@@ -13,7 +13,8 @@ import java.util.concurrent.CompletableFuture;
 public interface ConnectionManagementClusterCommands {
 
     /**
-     * Ping the Redis server. The command will be routed to all primaries.
+     * Pings the Redis server.<br>
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @return <code>String</code> with <code>"PONG"</code>.
@@ -26,7 +27,8 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping();
 
     /**
-     * Ping the Redis server. The command will be routed to all primaries.
+     * Pings the Redis server.<br>
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The server will respond with a copy of the message.
@@ -40,7 +42,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping(String message);
 
     /**
-     * Ping the Redis server.
+     * Pings the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -55,7 +57,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping(Route route);
 
     /**
-     * Ping the Redis server.
+     * Pings the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The ping argument that will be returned.
@@ -139,4 +141,42 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> clientGetName(Route route);
+
+    /**
+     * Echoes the provided <code>message</code> back.<br>
+     * The command will be routed a random node.
+     *
+     * @see <a href="https://redis.io/commands/echo/">redis.io</a> for details.
+     * @param message The message to be echoed back.
+     * @return The provided <code>message</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = client.echo("GLIDE").get();
+     * assert payload.equals("GLIDE");
+     * }</pre>
+     */
+    CompletableFuture<String> echo(String message);
+
+    /**
+     * Echoes the provided <code>message</code> back.
+     *
+     * @see <a href="https://redis.io/commands/echo/">redis.io</a> for details.
+     * @param message The message to be echoed back.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The provided <code>message</code>.
+     * @examples
+     *     <pre>{@code
+     * // Command sent to a single random node via RANDOM route, expecting a SingleValue result.
+     * String message = client.echo("GLIDE", RANDOM).get().getSingleValue();
+     * assert message.equals("GLIDE");
+     *
+     * // Command sent to all nodes via ALL_NODES route, expecting a MultiValue result.
+     * Map<String, String> msgForAllNodes = client.echo("GLIDE", ALL_NODES).get().getMultiValue();
+     * for(var msgPerNode : msgForAllNodes.entrySet()) {
+     *     assert msgPerNode.equals("GLIDE");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> echo(String message, Route route);
 }

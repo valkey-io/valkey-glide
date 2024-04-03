@@ -18,7 +18,7 @@
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.constants import TOK
+from glide.constants import TOK, TJsonResponse
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.redis_client import TRedisClient
 
@@ -137,3 +137,119 @@ async def get(
         args.extend(paths)
 
     return cast(str, await client.custom_command(args))
+
+
+async def delete(
+    client: TRedisClient,
+    key: str,
+    path: Optional[str] = None,
+) -> int:
+    """
+    Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
+
+    See https://redis.io/commands/json.del/ for more details.
+
+    Args:
+        client (TRedisClient): The Redis client to execute the command.
+        key (str): The key of the JSON document.
+        path (Optional[str]): Represents the path within the JSON document where the value will be deleted.
+            If None, deletes the entire JSON document at `key`. Defaults to None.
+
+    Returns:
+        int: The number of elements removed.
+        If `key` or path doesn't exist, returns 0.
+
+    Examples:
+        >>> from glide import json as redisJson
+        >>> await redisJson.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+        >>> await redisJson.delete(client, "doc", "$..a")
+            2  # Indicates successful deletion of the specific values in the key stored at `doc`.
+        >>> await redisJson.get(client, "doc", "$")
+            "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
+        >>> await redisJson.delete(client, "doc")
+            1  # Deletes the entire JSON document stored at `doc`.
+    """
+
+    return cast(
+        int, await client.custom_command(["JSON.DEL", key] + ([path] if path else []))
+    )
+
+
+async def forget(
+    client: TRedisClient,
+    key: str,
+    path: Optional[str] = None,
+) -> Optional[int]:
+    """
+    Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
+
+    See https://redis.io/commands/json.forget/ for more details.
+
+    Args:
+        client (TRedisClient): The Redis client to execute the command.
+        key (str): The key of the JSON document.
+        path (Optional[str]): Represents the path within the JSON document where the value will be deleted.
+            If None, deletes the entire JSON document at `key`. Defaults to None.
+
+    Returns:
+        int: The number of elements removed.
+        If `key` or path doesn't exist, returns 0.
+
+    Examples:
+        >>> from glide import json as redisJson
+        >>> await redisJson.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+        >>> await redisJson.forget(client, "doc", "$..a")
+            2  # Indicates successful deletion of the specific values in the key stored at `doc`.
+        >>> await redisJson.get(client, "doc", "$")
+            "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
+        >>> await redisJson.forget(client, "doc")
+            1  # Deletes the entire JSON document stored at `doc`.
+    """
+
+    return cast(
+        Optional[int],
+        await client.custom_command(["JSON.FORGET", key] + ([path] if path else [])),
+    )
+
+
+async def toggle(
+    client: TRedisClient,
+    key: str,
+    path: str,
+) -> TJsonResponse[bool]:
+    """
+    Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
+
+    See https://redis.io/commands/json.toggle/ for more details.
+
+    Args:
+        client (TRedisClient): The Redis client to execute the command.
+        key (str): The key of the JSON document.
+        path (str): The JSONPath to specify.
+
+    Returns:
+        TJsonResponse[bool]: For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
+        or None for JSON values matching the path that are not boolean.
+        For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
+        Note that when sending legacy path syntax, If `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
+
+    Examples:
+        >>> from glide import json as redisJson
+        >>> import json
+        >>> await redisJson.set(client, "doc", "$", json.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}))
+            'OK'
+        >>> await redisJson.toggle(client, "doc", "$.bool")
+            [False, True, None]  # Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
+        >>> await redisJson.toggle(client, "doc", "bool")
+            True  # Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
+        >>> json.loads(await redisJson.get(client, "doc", "$"))
+            [{"bool": True, "nested": {"bool": True, "nested": {"bool": 10}}}] # The updated JSON value in the key stored at `doc`.
+    """
+
+    return cast(
+        TJsonResponse[bool],
+        await client.custom_command(["JSON.TOGGLE", key, path]),
+    )

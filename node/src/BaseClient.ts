@@ -18,10 +18,10 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
+    createBrpop,
     createDecr,
     createDecrBy,
     createDel,
-    createEcho,
     createExists,
     createExpire,
     createExpireAt,
@@ -74,6 +74,7 @@ import {
     createZcount,
     createZpopmax,
     createZpopmin,
+    createZrank,
     createZrem,
     createZremRangeByRank,
     createZremRangeByScore,
@@ -986,6 +987,7 @@ export class BaseClient {
      * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
      * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
+     * See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for details.
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
@@ -1189,16 +1191,6 @@ export class BaseClient {
         return this.createWritePromise(createZpopmax(key, count));
     }
 
-    /** Echoes the provided `message` back.
-     * See https://redis.io/commands/echo for more details.
-     *
-     * @param message - The message to be echoed back.
-     * @returns The provided `message`.
-     */
-    public echo(message: string): Promise<string> {
-        return this.createWritePromise(createEcho(message));
-    }
-
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
      * See https://redis.io/commands/pttl for more details.
      *
@@ -1248,6 +1240,36 @@ export class BaseClient {
         return this.createWritePromise(
             createZremRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
+     * See https://redis.io/commands/zrank for more details.
+     * To get the rank of `member` with its score, see `zrankWithScore`.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns The rank of `member` in the sorted set.
+     * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     */
+    public zrank(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZrank(key, member));
+    }
+
+    /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+     * See https://redis.io/commands/zrank for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns A list containing the rank and score of `member` in the sorted set.
+     * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *
+     * since - Redis version 7.2.0.
+     */
+    public zrankWithScore(
+        key: string,
+        member: string,
+    ): Promise<number[] | null> {
+        return this.createWritePromise(createZrank(key, member, true));
     }
 
     /**
@@ -1340,6 +1362,30 @@ export class BaseClient {
      */
     public rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the tail of the first list that is non-empty,
+     * with the given keys being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://redis.io/commands/brpop/ for more details.
+     * Note: BRPOP is a blocking command,
+     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     *
+     * @example
+     *     await client.brpop(["list1", "list2"], 5);
+     *    ["list1", "element"]
+     */
+    public brpop(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string] | null> {
+        return this.createWritePromise(createBrpop(keys, timeout));
     }
 
     /**

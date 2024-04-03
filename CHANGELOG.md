@@ -1,4 +1,18 @@
 #### Changes
+* Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
+* 
+#### Fixes
+* Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
+
+## 0.3.3 (2024-03-28)
+
+#### Fixes
+
+* Node: Fix issue with dual usage, `CommonJS` and `ECMAScript` modules. ([#1199](https://github.com/aws/glide-for-redis/pull/1199))
+
+## 0.3.0 (2024-03-25)
+
+#### Changes
 
 * Python Node: Allow routing Cluster requests by address. ([#1021](https://github.com/aws/glide-for-redis/pull/1021))
 * Python, Node: Added HSETNX command. ([#954](https://github.com/aws/glide-for-redis/pull/954), [#1091](https://github.com/aws/glide-for-redis/pull/1091))
@@ -21,16 +35,16 @@
 * Python: Added json module and JSON.SET JSON.GET commands  ([#1056](https://github.com/aws/glide-for-redis/pull/1056))
 * Python, Node: Added Time command ([#1147](https://github.com/aws/glide-for-redis/pull/1147)), ([#1114](https://github.com/aws/glide-for-redis/pull/1114))
 * Python, Node: Added LINDEX command ([#1058](https://github.com/aws/glide-for-redis/pull/1058), [#999](https://github.com/aws/glide-for-redis/pull/999))
-* Python: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065))
+* Python, Node: Added ZRANK command ([#1065](https://github.com/aws/glide-for-redis/pull/1065), [#1149](https://github.com/aws/glide-for-redis/pull/1149))
 * Core: Enabled Cluster Mode periodic checks by default ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
 * Node: Added Rename command. ([#1124](https://github.com/aws/glide-for-redis/pull/1124))
+* Python: Added JSON.TOGGLE command ([#1184](https://github.com/aws/glide-for-redis/pull/1184))
 
 #### Features
 
 * Python: Allow chaining function calls on transaction. ([#987](https://github.com/aws/glide-for-redis/pull/987))
 * Node: Adding support for GLIDE's usage in projects based on either `CommonJS` or `ECMAScript` modules. ([#1132](https://github.com/aws/glide-for-redis/pull/1132))
-* Python: Added Cluster Mode configuration for periodic checks interval ([#1089](https://github.com/aws/glide-for-redis/pull/1089))
-
+* Python, Node: Added Cluster Mode configuration for periodic checks interval ([#1089](https://github.com/aws/glide-for-redis/pull/1089), [#1158](https://github.com/aws/glide-for-redis/pull/1158))
 
 ## 0.2.0 (2024-02-11)
 

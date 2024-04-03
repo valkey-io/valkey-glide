@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
 public interface ConnectionManagementCommands {
 
     /**
-     * Ping the Redis server.
+     * Pings the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @return <code>String</code> with <code>"PONG"</code>.
@@ -24,7 +24,7 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> ping();
 
     /**
-     * Ping the Redis server.
+     * Pings the Redis server.
      *
      * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
      * @param message The server will respond with a copy of the message.
@@ -63,4 +63,18 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> clientGetName();
+
+    /**
+     * Echoes the provided <code>message</code> back.
+     *
+     * @see <a href="https://redis.io/commands/echo/>redis.io</a> for details.
+     * @param message The message to be echoed back.
+     * @return The provided <code>message</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = client.echo("GLIDE").get();
+     * assert payload.equals("GLIDE");
+     * }</pre>
+     */
+    CompletableFuture<String> echo(String message);
 }

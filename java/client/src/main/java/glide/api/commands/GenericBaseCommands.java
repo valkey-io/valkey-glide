@@ -1,7 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ScriptOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -22,7 +24,7 @@ public interface GenericBaseCommands {
      * @example
      *     <pre>{@code
      * Long num = client.del(new String[] {"key1", "key2"}).get();
-     * assert num == 2l;
+     * assert num == 2L;
      * }</pre>
      */
     CompletableFuture<Long> del(String[] keys);
@@ -253,7 +255,7 @@ public interface GenericBaseCommands {
             String key, long unixMilliseconds, ExpireOptions expireOptions);
 
     /**
-     * Returns the remaining time to live of <code>key</code> that has a timeout.
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in seconds.
      *
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
@@ -261,12 +263,112 @@ public interface GenericBaseCommands {
      *     if <code>key</code> exists but has no associated expire.
      * @example
      *     <pre>{@code
-     * Long timeRemaining = client.ttl("my_key").get()
-     * assert timeRemaining == 3600L //Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     * Long timeRemaining = client.ttl("my_key").get();
+     * assert timeRemaining == 3600L; //Indicates that "my_key" has a remaining time to live of 3600 seconds.
      *
      * Long timeRemaining = client.ttl("nonexistent_key").get();
      * assert timeRemaining == -2L; //Returns -2 for a non-existing key.
      * }</pre>
      */
     CompletableFuture<Long> ttl(String key);
+
+    /**
+     * Invokes a Lua script.<br>
+     * This method simplifies the process of invoking scripts on a Redis server by using an object
+     * that represents a Lua script. The script loading and execution will all be handled internally.
+     * If the script has not already been loaded, it will be loaded automatically using the Redis
+     * <code>SCRIPT LOAD</code> command. After that, it will be invoked using the Redis <code>EVALSHA
+     * </code> command.
+     *
+     * @see <a href="https://redis.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://redis.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @return a value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return 'Hello'")) {
+     *     String result = (String) client.invokeScript(luaScript).get();
+     *     assert result.equals("Hello");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script);
+
+    /**
+     * Invokes a Lua script with its keys and arguments.<br>
+     * This method simplifies the process of invoking scripts on a Redis server by using an object
+     * that represents a Lua script. The script loading, argument preparation, and execution will all
+     * be handled internally. If the script has not already been loaded, it will be loaded
+     * automatically using the Redis <code>SCRIPT LOAD</code> command. After that, it will be invoked
+     * using the Redis <code>EVALSHA</code> command.
+     *
+     * @see <a href="https://redis.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://redis.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param options The script option that contains keys and arguments for the script.
+     * @return a value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }")) {
+     *     ScriptOptions scriptOptions = ScriptOptions.builder().key("foo").arg("bar").build();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
+     *     assert result[0].equals("foo");
+     *     assert result[1].equals("bar");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script, ScriptOptions options);
+
+    /**
+     * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
+     *
+     * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
+     * @param key The key to return its timeout.
+     * @return TTL in milliseconds. <code>-2</code> if <code>key</code> does not exist, <code>-1
+     *     </code> if <code>key</code> exists but has no associated expire.
+     * @example
+     *     <pre>{@code
+     * Long timeRemainingMS = client.pttl("my_key").get()
+     * assert timeRemainingMS == 5000L // Indicates that "my_key" has a remaining time to live of 5000 milliseconds.
+     *
+     * Long timeRemainingMS = client.pttl("nonexistent_key").get();
+     * assert timeRemainingMS == -2L; // Returns -2 for a non-existing key.
+     * }</pre>
+     */
+    CompletableFuture<Long> pttl(String key);
+
+    /**
+     * Removes the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
+     * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
+     * as no timeout is associated).
+     *
+     * @see <a href="https://redis.io/commands/persist/">redis.io</a> for details.
+     * @param key The <code>key</code> to remove the existing timeout on.
+     * @return <code>false</code> if <code>key</code> does not exist or does not have an associated
+     *     timeout, <code>true</code> if the timeout has been removed.
+     * @example
+     *     <pre>{@code
+     * Boolean timeoutRemoved = client.persist("my_key").get();
+     * assert timeoutRemoved; // Indicates that the timeout associated with the key "my_key" was successfully removed.
+     * }</pre>
+     */
+    CompletableFuture<Boolean> persist(String key);
+
+    /**
+     * Returns the string representation of the type of the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @param key The <code>key</code> to check its data type.
+     * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
+     *     "none" string is returned.
+     * @example
+     *     <pre>{@code
+     * String type = client.type("StringKey").get();
+     * assert type.equals("string");
+     *
+     * type = client.type("ListKey").get();
+     * assert type.equals("list");
+     * }</pre>
+     */
+    CompletableFuture<String> type(String key);
 }
