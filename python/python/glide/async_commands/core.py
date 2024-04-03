@@ -238,6 +238,10 @@ class CoreCommands(Protocol):
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
                 If return_old_value is set, return the old value as a string.
+
+        Example:
+            >>> await client.set("key", "value")
+                'OK'
         """
         args = [key, value]
         if conditional_set:
@@ -260,6 +264,10 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
+
+        Example:
+            >>> await client.get("key")
+                'value'
         """
         return cast(
             Optional[str], await self._execute_command(RequestType.GetString, [key])
@@ -275,6 +283,13 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The number of keys that were deleted.
+
+        Examples:
+            >>> await client.set("key", "value")
+            >>> await client.delete("key")
+                1
+            >>> await client.delete("key")
+                0
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
@@ -289,6 +304,11 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The value of `key` after the increment.
+
+        Examples:
+            >>> await client.set("key", "10")
+            >>> await client.incr("key")
+                11
         """
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
@@ -303,6 +323,11 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The value of key after the increment.
+
+        Example:
+            >>> await client.set("key", "10")
+            >>> await client.incrby("key" , 5)
+                15
         """
         return cast(
             int, await self._execute_command(RequestType.IncrBy, [key, str(amount)])
@@ -321,6 +346,11 @@ class CoreCommands(Protocol):
 
         Returns:
             float: The value of key after the increment.
+
+        Examples:
+            >>> await client.set("key", "10")
+            >>> await client.incrbyfloat("key" , 5.5)
+                15.55
         """
         return cast(
             float,
@@ -337,6 +367,10 @@ class CoreCommands(Protocol):
 
         Returns:
             OK: a simple OK response.
+
+        Example:
+            >>> await client.mset({"key" : "value", "key2": "value2"})
+                'OK'
         """
         parameters: List[str] = []
         for pair in key_value_map.items():
@@ -354,6 +388,12 @@ class CoreCommands(Protocol):
         Returns:
             List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
+
+        Examples:
+            >>> await client.set("key1", "value1")
+            >>> await client.set("key1", "value1")
+            >>> await client.mget(["key1", "key2"])
+                ['value1' , 'value2']
         """
         return cast(
             List[Optional[str]], await self._execute_command(RequestType.MGet, keys)
@@ -370,6 +410,11 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The value of key after the decrement.
+
+        Examples:
+            >>> await client.set("key", "10")
+            >>> await client.decr("key")
+                9
         """
         return cast(int, await self._execute_command(RequestType.Decr, [key]))
 
@@ -385,6 +430,11 @@ class CoreCommands(Protocol):
 
         Returns:
             int: The value of key after the decrement.
+
+        Example:
+            >>> await client.set("key", "10")
+            >>> await client.decrby("key" , 5)
+                5
         """
         return cast(
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
@@ -405,7 +455,7 @@ class CoreCommands(Protocol):
 
         Example:
             >>> await client.hset("my_hash", {"field": "value", "field2": "value2"})
-                2
+                2 # Indicates that 2 fields were successfully set in the hash "my_hash".
         """
         field_value_list: List[str] = [key]
         for pair in field_value_map.items():
@@ -667,8 +717,8 @@ class CoreCommands(Protocol):
             int: The length of the list after the push operations.
 
         Examples:
-            >>> await client.lpush("my_list", ["value1", "value2"])
-                2
+            >>> await client.lpush("my_list", ["value2", "value3"])
+                3 # Indicated that the new length of the list is 3 after the push operation.
             >>> await client.lpush("nonexistent_list", ["new_value"])
                 1
         """
@@ -714,9 +764,9 @@ class CoreCommands(Protocol):
             If `key` does not exist, None will be returned.
 
         Examples:
-            >>> await client.lpop("my_list", 2)
+            >>> await client.lpop_count("my_list", 2)
                 ["value1", "value2"]
-            >>> await client.lpop("non_exiting_key" , 3)
+            >>> await client.lpop_count("non_exiting_key" , 3)
                 None
         """
         return cast(
@@ -806,8 +856,8 @@ class CoreCommands(Protocol):
             int: The length of the list after the push operations.
 
         Examples:
-            >>> await client.rpush("my_list", ["value1", "value2"])
-                2
+            >>> await client.rpush("my_list", ["value2", "value3"])
+                3 # Indicated that the new length of the list is 3 after the push operation.
             >>> await client.rpush("nonexistent_list", ["new_value"])
                 1
         """
@@ -853,9 +903,9 @@ class CoreCommands(Protocol):
             If `key` does not exist, None will be returned.
 
         Examples:
-            >>> await client.rpop("my_list", 2)
+            >>> await client.rpop_count("my_list", 2)
                 ["value1", "value2"]
-            >>> await client.rpop("non_exiting_key" , 7)
+            >>> await client.rpop_count("non_exiting_key" , 7)
                 None
         """
         return cast(
@@ -1697,9 +1747,9 @@ class CoreCommands(Protocol):
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
 
         Examples:
-            >>> await zrem("my_sorted_set", ["member1", "member2"])
+            >>> await client.zrem("my_sorted_set", ["member1", "member2"])
                 2  # Indicates that two members have been removed from the sorted set "my_sorted_set."
-            >>> await zrem("non_existing_sorted_set", ["member1", "member2"])
+            >>> await client.zrem("non_existing_sorted_set", ["member1", "member2"])
                 0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
         """
         return cast(
@@ -1723,9 +1773,9 @@ class CoreCommands(Protocol):
             If `key` does not exist,  None is returned.
 
         Examples:
-            >>> await zscore("my_sorted_set", "member")
+            >>> await client.zscore("my_sorted_set", "member")
                 10.5  # Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
-            >>> await zscore("my_sorted_set", "non_existing_member")
+            >>> await client.zscore("my_sorted_set", "non_existing_member")
                 None
         """
         return cast(
