@@ -2238,7 +2238,7 @@ export class BaseClient {
     * @param keys - The `keys` of the lists to pop from.
     * @param timeout - The `timeout` in seconds.
     * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
-    * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+    * formatted as [key, value]. If no element could be popped and the timeout expired, returns null.
     *
     * @example
     *     await client.blpop(["list1", "list2"], 5);
