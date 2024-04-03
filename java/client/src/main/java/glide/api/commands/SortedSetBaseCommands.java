@@ -1,6 +1,11 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.RangeOptions.RangeByLex;
+import glide.api.models.commands.RangeOptions.RangeByScore;
+import glide.api.models.commands.RangeOptions.RangeQuery;
+import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -12,6 +17,8 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
+    public static final String WITH_SCORES_REDIS_API = "WITHSCORES";
+    public static final String WITH_SCORE_REDIS_API = "WITHSCORE";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -23,14 +30,16 @@ public interface SortedSetBaseCommands {
      * @param options The Zadd options.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
-     * @return The number of elements added to the sorted set. <br>
+     * @return The number of elements added to the sorted set.<br>
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
      * @example
      *     <pre>{@code
-     * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build(), false).get();
+     * ZaddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
+     * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), options, false).get();
      * assert num == 2L; // Indicates that two elements have been added or updated in the sorted set "mySortedSet".
      *
-     * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build(), false).get();
+     * options = ZaddOptions.builder().conditionalChange(ONLY_IF_EXISTS).build();
+     * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), options, false).get();
      * assert num == 2L; // Updates the scores of two existing members in the sorted set "existingSortedSet".
      * }</pre>
      */
@@ -48,10 +57,12 @@ public interface SortedSetBaseCommands {
      * @return The number of elements added to the sorted set.
      * @example
      *     <pre>{@code
-     * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), ZaddOptions.builder().build()).get();
+     * ZaddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
+     * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), options).get();
      * assert num == 2L; // Indicates that two elements have been added to the sorted set "mySortedSet".
      *
-     * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), ZaddOptions.builder().conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS).build()).get();
+     * options = ZaddOptions.builder().conditionalChange(ONLY_IF_EXISTS).build();
+     * Long num = client.zadd("existingSortedSet", Map.of("member1", 15.0, "member2", 5.5), options).get();
      * assert num == 0L; // No new members were added to the sorted set "existingSortedSet".
      * }</pre>
      */
@@ -67,9 +78,8 @@ public interface SortedSetBaseCommands {
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
-     * @return The number of elements added to the sorted set. <br>
+     * @return The number of elements added to the sorted set.<br>
      *     If <code>changed</code> is set, returns the number of elements updated in the sorted set.
-     *     <br>
      * @example
      *     <pre>{@code
      * Long num = client.zadd("mySortedSet", Map.of("member1", 10.5, "member2", 8.2), true).get();
@@ -98,7 +108,7 @@ public interface SortedSetBaseCommands {
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
      * </code>.<br>
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
-     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * increment</code> as its score (as if its previous score was <code>0.0</code>).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
      * member is created.
      *
@@ -109,13 +119,15 @@ public interface SortedSetBaseCommands {
      * @param options The Zadd options.
      * @return The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
-     *     returned.<br>
+     *     returned.
      * @example
      *     <pre>{@code
-     * Double num = client.zaddIncr("mySortedSet", member, 5.0, ZaddOptions.builder().build()).get();
+     * ZaddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
+     * Double num = client.zaddIncr("mySortedSet", member, 5.0, options).get();
      * assert num == 5.0;
      *
-     * Double num = client.zaddIncr("existingSortedSet", member, 3.0, ZaddOptions.builder().updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT).build()).get();
+     * options = ZaddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
+     * Double num = client.zaddIncr("existingSortedSet", member, 3.0, options).get();
      * assert num == null;
      * }</pre>
      */
@@ -126,7 +138,7 @@ public interface SortedSetBaseCommands {
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
      * </code>.<br>
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
-     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * increment</code> as its score (as if its previous score was <code>0.0</code>).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
      * member is created.
      *
@@ -279,4 +291,169 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zscore(String key, String member);
+
+    /**
+     * Returns the specified range of elements in the sorted set stored at <code>key</code>.<br>
+     * <code>ZRANGE</code> can perform different types of range queries: by index (rank), by the
+     * score, or by lexicographical order.<br>
+     * To get the elements with their scores, see {@link #zrangeWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @param reverse If true, reverses the sorted set, with index 0 as the element with the highest
+     *     score.
+     * @return An array of elements within the specified range. If <code>key</code> does not exist, it
+     *     is treated as an empty sorted set, and the command returns an empty array.
+     * @example
+     *     <pre>{@code
+     * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
+     * String[] payload1 = client.zrange("mySortedSet", query1, true).get(); // Returns members with scores between 10 and 20.
+     * assert payload1.equals(new String[] {'member3', 'member2', 'member1'}); // Returns all members in descending order.
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
+     * String[] payload2 = client.zrange("mySortedSet", query2, false).get();
+     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * }</pre>
+     */
+    CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery, boolean reverse);
+
+    /**
+     * Returns the specified range of elements in the sorted set stored at <code>key</code>.<br>
+     * <code>ZRANGE</code> can perform different types of range queries: by index (rank), by the
+     * score, or by lexicographical order.<br>
+     * To get the elements with their scores, see {@link #zrangeWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @return An of array elements within the specified range. If <code>key</code> does not exist, it
+     *     is treated as an empty sorted set, and the command returns an empty array.
+     * @example
+     *     <pre>{@code
+     * RangeByIndex query1 = new RangeByIndex(0, -1);
+     * String[] payload1 = client.zrange("mySortedSet",query1).get();
+     * assert payload1.equals(new String[] {'member1', 'member2', 'member3'}); // Returns all members in ascending order.
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
+     * String[] payload2 = client.zrange("mySortedSet", query2).get();
+     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * }</pre>
+     */
+    CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery);
+
+    /**
+     * Returns the specified range of elements with their scores in the sorted set stored at <code>key
+     * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
+     *
+     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @param reverse If true, reverses the sorted set, with index 0 as the element with the highest
+     *     score.
+     * @return A <code>Map</code> of elements and their scores within the specified range. If <code>
+     *     key</code> does not exist, it is treated as an empty sorted set, and the command returns an
+     *     empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
+     * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1, true).get();
+     * assert payload1.equals(Map.of('member2', 15.2, 'member1', 10.5)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
+     * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2, false).get();
+     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zrangeWithScores(
+            String key, ScoredRangeQuery rangeQuery, boolean reverse);
+
+    /**
+     * Returns the specified range of elements with their scores in the sorted set stored at <code>key
+     * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
+     *
+     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @return A <code>Map</code> of elements and their scores within the specified range. If <code>
+     *     key</code> does not exist, it is treated as an empty sorted set, and the command returns an
+     *     empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
+     * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1).get();
+     * assert payload1.equals(Map.of('member1', 10.5, 'member2', 15.2)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
+     * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2).get();
+     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
+     * scores ordered from low to high.<br>
+     * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrank("mySortedSet", "member2").get();
+     * assert num1 == 3L; // Indicates that "member2" has the second-lowest score in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zcard("mySortedSet", "nonExistingMember").get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zrank(String key, String member);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
+     * score, where scores are ordered from the lowest to highest.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
+     *     of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Object[] result1 = client.zrankWithScore("mySortedSet", "member2").get();
+     * assert ((Long)result1[0]) == 1L && ((Double)result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "mySortedSet".
+     *
+     * Object[] result2 = client.zrankWithScore("mySortedSet", "nonExistingMember").get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zrankWithScore(String key, String member);
 }
