@@ -108,10 +108,10 @@ public abstract class BaseClient
     /**
      * Async request for an async (non-blocking) Redis client.
      *
-     * @param config Redis client Configuration
-     * @param constructor Redis client constructor reference
-     * @param <T> Client type
-     * @return a Future to connect and return a RedisClient
+     * @param config Redis client Configuration.
+     * @param constructor Redis client constructor reference.
+     * @param <T> Client type.
+     * @return a Future to connect and return a RedisClient.
      */
     protected static <T> CompletableFuture<T> CreateClient(
             BaseClientConfiguration config,
@@ -169,16 +169,16 @@ public abstract class BaseClient
     }
 
     /**
-     * Extracts the value from a Redis response message and either throws an exception or returns the
-     * value as an object of type {@link T}. If <code>isNullable</code>, than also returns <code>null
-     * </code>.
+     * Extracts the value from a <code>GLIDE core</code> response message and either throws an
+     * exception or returns the value as an object of type <code>T</code>. If <code>isNullable</code>,
+     * than also returns <code>null</code>.
      *
-     * @param response Redis protobuf message
-     * @param classType Parameter {@link T} class type
-     * @param isNullable Accepts null values in the protobuf message
-     * @return Response as an object of type {@link T} or <code>null</code>
-     * @param <T> return type
-     * @throws RedisException on a type mismatch
+     * @param response Redis protobuf message.
+     * @param classType Parameter <code>T</code> class type.
+     * @param isNullable Accepts null values in the protobuf message.
+     * @return Response as an object of type <code>T</code> or <code>null</code>.
+     * @param <T> The return value type.
+     * @throws RedisException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
@@ -237,8 +237,8 @@ public abstract class BaseClient
 
     /**
      * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code>
-     * @param <V> Value type
+     * @return A map of <code>String</code> to <code>V</code>.
+     * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
