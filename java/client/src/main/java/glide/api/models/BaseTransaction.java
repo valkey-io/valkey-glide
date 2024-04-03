@@ -1472,7 +1472,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * otherwise a new HyperLogLog is created.
      *
      * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
-     * @param destKey The keys of the destination HyperLogLog where the merged data sets will be
+     * @param destKey The key of the destination HyperLogLog where the merged data sets will be
      *     stored.
      * @param sourceKeys The keys of the HyperLogLog structures to be merged.
      * @return Command Response - <code>OK</code>.
