@@ -1803,6 +1803,129 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zpopmin_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        Map<String, Double> value = Map.of("member1", 2.5);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zpopmin(key);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zpopmin_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String[] arguments = new String[] {key, Long.toString(count)};
+        Map<String, Double> value = Map.of("member1", 2.0, "member2", 3.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zpopmin(key, count);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zpopmax_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        Map<String, Double> value = Map.of("member1", 2.5);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zpopmax(key);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zpopmax_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String[] arguments = new String[] {key, Long.toString(count)};
+        Map<String, Double> value = Map.of("member1", 3.0, "member2", 1.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zpopmax(key, count);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscore_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member};
+        Double value = 3.5;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZScore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zscore(key, member);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrange_by_index_returns_success() {
         // setup
         String key = "testKey";
@@ -1940,129 +2063,6 @@ public class RedisClientTest {
         CompletableFuture<Map<String, Double>> response =
                 service.zrangeWithScores(key, rangeByScore, false);
         Map<String, Double> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zpopmin_returns_success() {
-        // setup
-        String key = "testKey";
-        String[] arguments = new String[] {key};
-        Map<String, Double> value = Map.of("member1", 2.5);
-
-        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Double>> response = service.zpopmin(key);
-        Map<String, Double> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zpopmin_with_count_returns_success() {
-        // setup
-        String key = "testKey";
-        long count = 2L;
-        String[] arguments = new String[] {key, Long.toString(count)};
-        Map<String, Double> value = Map.of("member1", 2.0, "member2", 3.0);
-
-        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Double>> response = service.zpopmin(key, count);
-        Map<String, Double> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zpopmax_returns_success() {
-        // setup
-        String key = "testKey";
-        String[] arguments = new String[] {key};
-        Map<String, Double> value = Map.of("member1", 2.5);
-
-        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Double>> response = service.zpopmax(key);
-        Map<String, Double> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zpopmax_with_count_returns_success() {
-        // setup
-        String key = "testKey";
-        long count = 2L;
-        String[] arguments = new String[] {key, Long.toString(count)};
-        Map<String, Double> value = Map.of("member1", 3.0, "member2", 1.0);
-
-        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Double>> response = service.zpopmax(key, count);
-        Map<String, Double> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zscore_returns_success() {
-        // setup
-        String key = "testKey";
-        String member = "testMember";
-        String[] arguments = new String[] {key, member};
-        Double value = 3.5;
-
-        CompletableFuture<Double> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Double>submitNewCommand(eq(ZScore), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Double> response = service.zscore(key, member);
-        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
