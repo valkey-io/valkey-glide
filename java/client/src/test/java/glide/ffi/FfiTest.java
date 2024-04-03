@@ -98,8 +98,8 @@ public class FfiTest {
         long[] values = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedMap(keys, values);
         Object mapValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(mapValue instanceof HashMap);
-        HashMap<Object, Object> result = (HashMap<Object, Object>) mapValue;
+        assertTrue(mapValue instanceof HashMap<?, ?>);
+        HashMap<?, ?> result = (HashMap<?, ?>) mapValue;
         assertAll(
                 () -> assertEquals(1L, result.get(12L)),
                 () -> assertEquals(2L, result.get(14L)),
@@ -134,8 +134,8 @@ public class FfiTest {
         long[] array = {1L, 2L, 2L};
         long ptr = FfiTest.createLeakedLongSet(array);
         Object longSetValue = RedisValueResolver.valueFromPointer(ptr);
-        assertTrue(longSetValue instanceof HashSet);
-        HashSet<Long> result = (HashSet<Long>) longSetValue;
+        assertTrue(longSetValue instanceof HashSet<?>);
+        HashSet<?> result = (HashSet<?>) longSetValue;
         assertAll(
                 () -> assertTrue(result.contains(1L)),
                 () -> assertTrue(result.contains(2L)),
