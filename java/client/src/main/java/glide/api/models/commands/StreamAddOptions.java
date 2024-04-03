@@ -75,8 +75,8 @@ public final class StreamAddOptions {
         /**
          * Create a trim option to trim stream based on stream ID.
          *
-         * @param exact whether to match exactly on the threshold.
-         * @param threshold comparison id.
+         * @param exact Whether to match exactly on the threshold.
+         * @param threshold Comparison id.
          */
         public MinId(boolean exact, @NonNull String threshold) {
             this.threshold = threshold;
@@ -86,9 +86,9 @@ public final class StreamAddOptions {
         /**
          * Create a trim option to trim stream based on stream ID.
          *
-         * @param exact whether to match exactly on the threshold.
-         * @param threshold comparison id.
-         * @param limit max number of stream entries to be trimmed.
+         * @param exact Whether to match exactly on the threshold.
+         * @param threshold Comparison id.
+         * @param limit Max number of stream entries to be trimmed.
          */
         public MinId(boolean exact, @NonNull String threshold, long limit) {
             this.threshold = threshold;
@@ -118,8 +118,8 @@ public final class StreamAddOptions {
         /**
          * Create a Max Length trim option to trim stream based on length.
          *
-         * @param exact whether to match exactly on the threshold.
-         * @param threshold comparison count.
+         * @param exact Whether to match exactly on the threshold.
+         * @param threshold Comparison count.
          */
         public MaxLen(boolean exact, long threshold) {
             this.threshold = threshold;
@@ -129,9 +129,9 @@ public final class StreamAddOptions {
         /**
          * Create a Max Length trim option to trim stream entries exceeds the threshold.
          *
-         * @param exact whether to match exactly on the threshold.
-         * @param threshold comparison count.
-         * @param limit max number of stream entries to be trimmed.
+         * @param exact Whether to match exactly on the threshold.
+         * @param threshold Comparison count.
+         * @param limit Max number of stream entries to be trimmed.
          */
         public MaxLen(boolean exact, long threshold, long limit) {
             this.threshold = threshold;
