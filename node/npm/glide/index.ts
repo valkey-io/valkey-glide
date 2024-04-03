@@ -8,20 +8,16 @@ import { arch, platform } from "process";
 
 let globalObject = global as unknown;
 
-async function loadNativeBinding() {
+function loadNativeBinding() {
     let nativeBinding = null;
     switch (platform) {
         case "linux":
             switch (arch) {
                 case "x64":
-                    nativeBinding = await import(
-                        "@scope/glide-for-redis-linux-x64"
-                    );
+                    nativeBinding = require("@scope/glide-for-redis-linux-x64");
                     break;
                 case "arm64":
-                    nativeBinding = await import(
-                        "@scope/glide-for-redis-linux-arm64"
-                    );
+                    nativeBinding = require("@scope/glide-for-redis-linux-arm64");
                     break;
                 default:
                     throw new Error(
@@ -32,14 +28,10 @@ async function loadNativeBinding() {
         case "darwin":
             switch (arch) {
                 case "x64":
-                    nativeBinding = await import(
-                        "@scope/glide-for-redis-darwin-x64"
-                    );
+                    nativeBinding = require("@scope/glide-for-redis-darwin-x64");
                     break;
                 case "arm64":
-                    nativeBinding = await import(
-                        "@scope/glide-for-redis-darwin-arm64"
-                    );
+                    nativeBinding = require("@scope/glide-for-redis-darwin-arm64");
                     break;
                 default:
                     throw new Error(
@@ -58,8 +50,8 @@ async function loadNativeBinding() {
     return nativeBinding;
 }
 
-async function initialize() {
-    const nativeBinding = await loadNativeBinding();
+function initialize() {
+    const nativeBinding = loadNativeBinding();
     const {
         RedisClient,
         RedisClusterClient,
@@ -93,9 +85,6 @@ async function initialize() {
     globalObject = Object.assign(global, nativeBinding);
 }
 
-initialize().catch((error) => {
-    console.error("Failed to initialize:", error);
-    process.exit(1);
-});
+initialize();
 
 export default globalObject;
