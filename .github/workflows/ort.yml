@@ -58,6 +58,7 @@ jobs:
               run: |
                 sudo apt update -y
                 sudo apt install -y git gcc pkg-config openssl libssl-dev
+                sudo apt-get install make
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
