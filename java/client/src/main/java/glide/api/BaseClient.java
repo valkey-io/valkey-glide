@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.commands.GenericBaseCommands;
@@ -62,6 +63,9 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.RangeOptions;
+import glide.api.models.commands.RangeOptions.RangeQuery;
+import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
@@ -657,5 +661,35 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> type(@NonNull String key) {
         return commandManager.submitNewCommand(Type, new String[] {key}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrange(
+            @NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
+        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, false);
+
+        return commandManager.submitNewCommand(
+                Zrange,
+                arguments,
+                response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrange(@NonNull String key, @NonNull RangeQuery rangeQuery) {
+        return this.zrange(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zrangeWithScores(
+            @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
+        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, true);
+
+        return commandManager.submitNewCommand(Zrange, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zrangeWithScores(
+            @NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
+        return this.zrangeWithScores(key, rangeQuery, false);
     }
 }

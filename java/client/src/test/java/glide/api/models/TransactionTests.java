@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -59,10 +60,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.Limit;
+import glide.api.models.commands.RangeOptions.RangeByScore;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.LinkedHashMap;
@@ -413,6 +419,44 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zrange(
+                "key",
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
+                true);
+        results.add(
+                Pair.of(
+                        Zrange,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("-inf")
+                                .addArgs("(3.0")
+                                .addArgs("BYSCORE")
+                                .addArgs("REV")
+                                .addArgs("LIMIT")
+                                .addArgs("1")
+                                .addArgs("2")
+                                .build()));
+
+        transaction.zrangeWithScores(
+                "key",
+                new RangeByScore(
+                        new ScoreBoundary(5, true), InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2)),
+                false);
+        results.add(
+                Pair.of(
+                        Zrange,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("5.0")
+                                .addArgs("+inf")
+                                .addArgs("BYSCORE")
+                                .addArgs("LIMIT")
+                                .addArgs("1")
+                                .addArgs("2")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
