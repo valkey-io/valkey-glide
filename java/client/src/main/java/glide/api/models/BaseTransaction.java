@@ -21,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -418,6 +419,26 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key));
 
         protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets <code>field</code> in the hash stored at <code>key</code> to <code>value</code>, only if
+     * <code>field</code> does not yet exist.<br>
+     * If <code>key</code> does not exist, a new key holding a hash is created.<br>
+     * If <code>field</code> already exists, this operation has no effect.
+     *
+     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to set the value for.
+     * @param value The value to set.
+     * @return Command Response - <code>true</code> if the field was set, <code>false</code> if the
+     *     field already existed and was not set.
+     */
+    public T hsetnx(@NonNull String key, @NonNull String field, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, field, value);
+
+        protobufTransaction.addCommands(buildCommand(HSetNX, commandArgs));
         return getThis();
     }
 

@@ -48,6 +48,29 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap);
 
     /**
+     * Sets <code>field</code> in the hash stored at <code>key</code> to <code>value</code>, only if
+     * <code>field</code> does not yet exist.<br>
+     * If <code>key</code> does not exist, a new key holding a hash is created.<br>
+     * If <code>field</code> already exists, this operation has no effect.
+     *
+     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to set the value for.
+     * @param value The value to set.
+     * @return <code>true</code> if the field was set, <code>false</code> if the field already existed
+     *     and was not set.
+     * @example
+     *     <pre>{@code
+     * Boolean payload1 = client.hsetnx("myHash", "field", "value").get();
+     * assert payload1; // Indicates that the field "field" was set successfully in the hash "myHash".
+     *
+     * Boolean payload2 = client.hsetnx("myHash", "field", "newValue").get();
+     * assert !payload2; // Indicates that the field "field" already existed in the hash "myHash" and was not set again.
+     * }</pre>
+     */
+    CompletableFuture<Boolean> hsetnx(String key, String field, String value);
+
+    /**
      * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
      * not exist within this hash are ignored.
      *
