@@ -88,10 +88,10 @@ public interface SetBaseCommands {
      * @example
      *     <pre>{@code
      * Boolean payload1 = client.sismember("mySet", "member1").get();
-     * assert payload1 == true; // Indicates that "member1" exists in the set "mySet".
+     * assert payload1; // Indicates that "member1" exists in the set "mySet".
      *
      * Boolean payload2 = client.sismember("mySet", "nonExistingMember").get();
-     * assert payload2 == false; // Indicates that "nonExistingMember" does not exist in the set "mySet".
+     * assert !payload2; // Indicates that "nonExistingMember" does not exist in the set "mySet".
      * }</pre>
      */
     CompletableFuture<Boolean> sismember(String key, String member);
