@@ -662,7 +662,7 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
 
         Returns:
-            List[str]: A list of field names in the hash, or an empty list when the key does not exist.
+            List[str]: A list of field names for the hash, or an empty list when the key does not exist.
 
         Examples:
             >>> await client.hkeys("my_hash")

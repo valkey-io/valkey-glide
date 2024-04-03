@@ -553,7 +553,7 @@ class BaseTransaction:
             key (str): The key of the hash.
 
         Command response:
-            List[str]: A list of field names in the hash, or an empty list when the key does not exist.
+            List[str]: A list of field names for the hash, or an empty list when the key does not exist.
         """
         return self.append_command(RequestType.Hkeys, [key])
 
