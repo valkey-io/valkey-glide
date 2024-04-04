@@ -1523,7 +1523,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the sorted set.
      * @param members An array of members whose scores are to be retrieved.
      * @return Command Response - An <code>array</code> representing the scores for the specified
-     *     <code>members</code>. <br>
+     *     <code>members</code>.<br>
      *     If a <code>member</code> does not exist, the corresponding value in the <code>array</code>
      *     will be <code>null</code>.
      */
