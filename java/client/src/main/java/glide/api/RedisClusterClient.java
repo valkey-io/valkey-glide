@@ -26,7 +26,6 @@ import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -88,15 +87,11 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>[]> exec(
-            @NonNull ClusterTransaction transaction, Route route) {
-        return commandManager
-                .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayOrNullResponse)
-                .thenApply(
-                        objects ->
-                                Arrays.stream(objects)
-                                        .map(ClusterValue::of)
-                                        .<ClusterValue<Object>>toArray(ClusterValue[]::new));
+    public CompletableFuture<Object[]> exec(
+            @NonNull ClusterTransaction transaction, @NonNull Route route) {
+        assert route.isSingleNodeRoute() : "Multi-node routes are not supported for exec()";
+        return commandManager.submitNewCommand(
+                transaction, Optional.of(route), this::handleArrayOrNullResponse);
     }
 
     @Override

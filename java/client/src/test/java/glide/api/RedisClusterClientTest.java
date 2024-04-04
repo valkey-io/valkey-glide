@@ -6,7 +6,9 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleR
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,6 +25,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
+import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -31,6 +34,7 @@ import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -147,6 +151,61 @@ public class RedisClusterClientTest {
                 RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void exec_without_routing() {
+        // setup
+        Object[] value = new Object[] {"PONG", "PONG"};
+        ClusterTransaction transaction = new ClusterTransaction().ping().ping();
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(transaction), eq(Optional.empty()), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.exec(transaction);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void exec_with_routing() {
+        // setup
+        Object[] value = new Object[] {"PONG", "PONG"};
+        ClusterTransaction transaction = new ClusterTransaction().ping().ping();
+        Route route = RANDOM;
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(transaction), eq(Optional.of(route)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.exec(transaction, route);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void exec_supports_only_single_node_route() {
+        var exception =
+                assertThrows(Throwable.class, () -> service.exec(new ClusterTransaction(), ALL_NODES));
+        assertEquals("Multi-node routes are not supported for exec()", exception.getMessage());
     }
 
     @SneakyThrows
