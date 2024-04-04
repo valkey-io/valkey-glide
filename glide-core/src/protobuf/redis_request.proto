@@ -137,6 +137,8 @@ enum RequestType {
     Brpop = 93;
     Hkeys = 94;
     PfAdd = 96;
+    RPushX = 102;
+    LPushX = 103;
 }
 
 message Command {
