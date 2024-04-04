@@ -209,27 +209,8 @@ fn convert_array_to_map(
     }
     Ok(Value::Map(map))
 }
-pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
-    let first_arg = cmd.arg_idx(0);
-    match first_arg {
-        Some(b"ZADD") => {
-            return cmd
-                .position(b"INCR")
-                .map(|_| ExpectedReturnType::DoubleOrNull);
-        }
-        Some(b"ZRANGE") | Some(b"ZDIFF") => {
-            return cmd
-                .position(b"WITHSCORES")
-                .map(|_| ExpectedReturnType::MapOfStringToDouble);
-        }
-        Some(b"ZRANK") | Some(b"ZREVRANK") => {
-            return cmd
-                .position(b"WITHSCORE")
-                .map(|_| ExpectedReturnType::ZrankReturnType);
-        }
-        _ => {}
-    }
 
+pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
     match command.as_slice() {
@@ -243,6 +224,15 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
+        b"ZADD" => cmd
+            .position(b"INCR")
+            .map(|_| ExpectedReturnType::DoubleOrNull),
+        b"ZRANGE" | b"ZDIFF" => cmd
+            .position(b"WITHSCORES")
+            .map(|_| ExpectedReturnType::MapOfStringToDouble),
+        b"ZRANK" | b"ZREVRANK" => cmd
+            .position(b"WITHSCORE")
+            .map(|_| ExpectedReturnType::ZrankReturnType),
         _ => None,
     }
 }
@@ -255,10 +245,10 @@ mod tests {
     fn convert_zadd_only_if_incr_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
-                redis::cmd("ZADD")
+                redis::cmd("zadd")
                     .arg("XT")
                     .arg("CH")
-                    .arg("INCR")
+                    .arg("incr")
                     .arg("0.6")
                     .arg("foo")
             ),
@@ -266,7 +256,7 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(
-            redis::cmd("ZADD").arg("XT").arg("CH").arg("0.6").arg("foo")
+            redis::cmd("zadd").arg("XT").arg("CH").arg("0.6").arg("foo")
         )
         .is_none());
     }
@@ -274,14 +264,14 @@ mod tests {
     #[test]
     fn convert_zrange_zdiff_only_if_withsocres_is_included() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1")).is_none());
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("WITHSCORES")),
+            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
@@ -305,22 +295,22 @@ mod tests {
     fn convert_zank_zrevrank_only_if_withsocres_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
-                redis::cmd("ZRANK")
+                redis::cmd("zrank")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));
 
-        assert!(expected_type_for_cmd(redis::cmd("ZRANK").arg("key").arg("member")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("zrank").arg("key").arg("member")).is_none());
 
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("ZREVRANK")
                     .arg("key")
                     .arg("member")
-                    .arg("WITHSCORE")
+                    .arg("withscore")
             ),
             Some(ExpectedReturnType::ZrankReturnType)
         ));

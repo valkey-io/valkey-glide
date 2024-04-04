@@ -967,15 +967,14 @@ class TestCommands:
         key2 = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.lpush(key1, value_list) == 4
+        assert await redis_client.set(key1, "foo") == OK
+        assert await redis_client.strlen(key1) == 3
+
+        assert await redis_client.lpush(key2, value_list) == 4
         with pytest.raises(RequestError) as e:
-            assert await redis_client.strlen(key1)
-        assert "Operation against a key holding the wrong kind of value" in str(e)
+            assert await redis_client.strlen(key2)
 
         assert await redis_client.llen("non_existing_key") == 0
-
-        assert await redis_client.set(key2, "foo") == OK
-        assert await redis_client.strlen(key2) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

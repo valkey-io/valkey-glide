@@ -265,6 +265,25 @@ class CoreCommands(Protocol):
             Optional[str], await self._execute_command(RequestType.GetString, [key])
         )
 
+    async def strlen(self, key: str) -> int:
+        """
+        Get the length of the string value stored at 'key'.
+        See https://redis.io/commands/strlen/ for more details.
+
+        Args:
+            key (str): The key to return its length.
+
+        Returns:
+            int: The length of the string value stored at 'key'.
+                If `key` does not exist, it is treated as an empty string and 0 is returned.
+
+        Examples:
+            >>> await client.set("key", "GLIDE")
+            >>> await client.strlen("key")
+                5  # Indicates that the length of the string value stored at `key` is 5.
+        """
+        return cast(int, await self._execute_command(RequestType.Strlen, [key]))
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -1041,24 +1060,6 @@ class CoreCommands(Protocol):
                 3  # Indicates that there are 3 elements in the list.
         """
         return cast(int, await self._execute_command(RequestType.LLen, [key]))
-    
-    async def strlen(self, key: str) -> int:
-        """
-        Get the length of the string value stored at key.
-        See https://redis.io/commands/strlen/ for details.
-
-        Args:
-            key (str): The key
-
-        Returns:
-            int: The length of the string value stored at key.
-                If `key` does not exist, it is interpreted as an empty list and 0 is returned.
-
-        Examples:
-            >>> await client.strlen("my_list")
-                3  # Indicates the string len is 3.
-        """
-        return cast(int, await self._execute_command(RequestType.Strlen, [key]))
 
     async def exists(self, keys: List[str]) -> int:
         """
@@ -1763,6 +1764,8 @@ class CoreCommands(Protocol):
         The script loading, argument preparation, and execution will all be handled internally.
         If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
         After that, it will be invoked using the Redis `EVALSHA` command.
+
+        See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for more details.
 
         Args:
             script (Script): The Lua script to execute.
