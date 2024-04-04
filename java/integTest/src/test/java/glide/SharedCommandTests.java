@@ -31,6 +31,7 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -53,7 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(10)
+@Timeout(10) // seconds
 public class SharedCommandTests {
 
     private static RedisClient standaloneClient = null;
@@ -1277,6 +1278,97 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void xadd(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+
+        assertNull(
+                client
+                        .xadd(
+                                key,
+                                Map.of(field1, "foo0", field2, "bar0"),
+                                StreamAddOptions.builder().makeStream(Boolean.FALSE).build())
+                        .get());
+
+        String timestamp1 = "0-1";
+        assertEquals(
+                timestamp1,
+                client
+                        .xadd(
+                                key,
+                                Map.of(field1, "foo1", field2, "bar1"),
+                                StreamAddOptions.builder().id(timestamp1).build())
+                        .get());
+
+        assertNotNull(client.xadd(key, Map.of(field1, "foo2", field2, "bar2")).get());
+        // TODO update test when XLEN is available
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                    2L,
+                    ((RedisClusterClient) client)
+                            .customCommand(new String[] {"XLEN", key})
+                            .get()
+                            .getSingleValue());
+        }
+
+        // this will trim the first entry.
+        String id =
+                client
+                        .xadd(
+                                key,
+                                Map.of(field1, "foo3", field2, "bar3"),
+                                StreamAddOptions.builder()
+                                        .trim(new StreamAddOptions.MaxLen(Boolean.TRUE, 2L))
+                                        .build())
+                        .get();
+        assertNotNull(id);
+        // TODO update test when XLEN is available
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                    2L,
+                    ((RedisClusterClient) client)
+                            .customCommand(new String[] {"XLEN", key})
+                            .get()
+                            .getSingleValue());
+        }
+
+        // this will trim the second entry.
+        assertNotNull(
+                client
+                        .xadd(
+                                key,
+                                Map.of(field1, "foo4", field2, "bar4"),
+                                StreamAddOptions.builder()
+                                        .trim(new StreamAddOptions.MinId(Boolean.TRUE, id))
+                                        .build())
+                        .get());
+        // TODO update test when XLEN is available
+        if (client instanceof RedisClient) {
+            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                    2L,
+                    ((RedisClusterClient) client)
+                            .customCommand(new String[] {"XLEN", key})
+                            .get()
+                            .getSingleValue());
+        }
+
+        /**
+         * TODO add test to XTRIM on maxlen expect( await client.xtrim(key, { method: "maxlen",
+         * threshold: 1, exact: true, }), ).toEqual(1); expect(await client.customCommand(["XLEN",
+         * key])).toEqual(1);
+         */
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void type(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
@@ -1290,16 +1382,8 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(listKey, new String[] {"value"}).get());
         assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
         assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
-        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2.)).get());
-
-        // TODO: update after adding XADD
-        // use custom command until XADD is implemented
-        String[] args = new String[] {"XADD", streamKey, "*", "field", "value"};
-        if (client instanceof RedisClient) {
-            assertNotNull(((RedisClient) client).customCommand(args).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertNotNull(((RedisClusterClient) client).customCommand(args).get().getSingleValue());
-        }
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2d)).get());
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
         assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
@@ -1340,6 +1424,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void rpushx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.rpush(key1, new String[] {"0"}).get());
+        assertEquals(4, client.rpushx(key1, new String[] {"1", "2", "3"}).get());
+        assertArrayEquals(new String[] {"0", "1", "2", "3"}, client.lrange(key1, 0, -1).get());
+
+        assertEquals(0, client.rpushx(key2, new String[] {"1"}).get());
+        assertArrayEquals(new String[0], client.lrange(key2, 0, -1).get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.rpushx(key3, new String[] {"_"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        // empty element list
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.rpushx(key2, new String[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void blpop(BaseClient client) {
         String listKey1 = "{listKey}-1-" + UUID.randomUUID();
         String listKey2 = "{listKey}-2-" + UUID.randomUUID();
@@ -1361,6 +1471,31 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.blpop(new String[] {"foo"}, .0001).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void lpushx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.lpush(key1, new String[] {"0"}).get());
+        assertEquals(4, client.lpushx(key1, new String[] {"1", "2", "3"}).get());
+        assertArrayEquals(new String[] {"3", "2", "1", "0"}, client.lrange(key1, 0, -1).get());
+
+        assertEquals(0, client.lpushx(key2, new String[] {"1"}).get());
+        assertArrayEquals(new String[0], client.lrange(key2, 0, -1).get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lpushx(key3, new String[] {"_"}).get());
+        // empty element list
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.lpushx(key2, new String[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -1487,6 +1622,23 @@ public class SharedCommandTests {
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void pfadd(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(1, client.pfadd(key, new String[0]).get());
+        assertEquals(1, client.pfadd(key, new String[] {"one", "two"}).get());
+        assertEquals(0, client.pfadd(key, new String[] {"two"}).get());
+        assertEquals(0, client.pfadd(key, new String[0]).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.pfadd("foo", new String[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

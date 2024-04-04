@@ -19,7 +19,7 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(10)
+@Timeout(10) // seconds
 public class ClusterClientTests {
 
     @SneakyThrows

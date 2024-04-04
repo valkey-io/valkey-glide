@@ -136,7 +136,10 @@ enum RequestType {
     DBSize = 92;
     Brpop = 93;
     Hkeys = 94;
+    PfAdd = 96;
     Blpop = 100;
+    RPushX = 102;
+    LPushX = 103;
 }
 
 message Command {

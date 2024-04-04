@@ -41,6 +41,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
@@ -50,9 +51,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
+import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
+import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
@@ -63,6 +66,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -83,6 +87,7 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
@@ -1467,6 +1472,40 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Adds an entry to the specified stream.
+     *
+     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return Command Response - The id of the added entry.
+     */
+    public T xadd(@NonNull String key, @NonNull Map<String, String> values) {
+        this.xadd(key, values, StreamAddOptions.builder().build());
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream.
+     *
+     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options.
+     * @return Command Response - The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptions#makeStream} is set to <code>false</code> and no stream with the matching
+     *     <code>key</code> exists.
+     */
+    public T xadd(
+            @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
+        String[] arguments =
+                ArrayUtils.addAll(
+                        ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
+        ArgsArray commandArgs = buildArgs(arguments);
+        protobufTransaction.addCommands(buildCommand(XAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
      *
      * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
@@ -1545,6 +1584,36 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T brpop(@NonNull String[] keys, double timeout) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
         protobufTransaction.addCommands(buildCommand(Brpop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operation.
+     */
+    public T lpushx(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+        protobufTransaction.addCommands(buildCommand(LPushX, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operation.
+     */
+    public T rpushx(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+        protobufTransaction.addCommands(buildCommand(RPushX, commandArgs));
         return getThis();
     }
 
@@ -1664,6 +1733,28 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrangeWithScores(@NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
         return getThis().zrangeWithScores(key, rangeQuery, false);
+    }
+
+    /**
+     * Adds all elements to the HyperLogLog data structure stored at the specified <code>key</code>.
+     * <br>
+     * Creates a new structure if the <code>key</code> does not exist.
+     *
+     * <p>When no <code>elements</code> are provided, and <code>key</code> exists and is a
+     * HyperLogLog, then no operation is performed. If <code>key</code> does not exist, then the
+     * HyperLogLog structure is created.
+     *
+     * @see <a href="https://redis.io/commands/pfadd/">redis.io</a> for details.
+     * @param key The <code>key</code> of the HyperLogLog data structure to add elements into.
+     * @param elements An array of members to add to the HyperLogLog stored at <code>key</code>.
+     * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
+     *     approximated cardinality is altered, then returns <code>1</code>. Otherwise, returns <code>
+     *     0</code>.
+     */
+    public T pfadd(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+        protobufTransaction.addCommands(buildCommand(PfAdd, commandArgs));
+        return getThis();
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */
