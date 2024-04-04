@@ -19,6 +19,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HLen;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -165,11 +167,20 @@ public class TransactionTests {
                         HashSet,
                         ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
 
+        transaction.hsetnx("key", "field", "value");
+        results.add(
+                Pair.of(
+                        HSetNX,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("field").addArgs("value").build()));
+
         transaction.hget("key", "field");
         results.add(Pair.of(HashGet, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
 
         transaction.hdel("key", new String[] {"field"});
         results.add(Pair.of(HashDel, ArgsArray.newBuilder().addArgs("key").addArgs("field").build()));
+
+        transaction.hlen("key");
+        results.add(Pair.of(HLen, ArgsArray.newBuilder().addArgs("key").build()));
 
         transaction.hvals("key");
         results.add(Pair.of(Hvals, ArgsArray.newBuilder().addArgs("key").build()));
