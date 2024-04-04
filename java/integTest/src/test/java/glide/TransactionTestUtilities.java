@@ -120,6 +120,11 @@ public class TransactionTestUtilities {
         // TODO should be before LINDEX from #1219 and BRPOP/BLPOP from #1218
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
 
+        baseTransaction
+                .lpush(listKey3, new String[] {value1, value2, value3})
+                .blpop(new String[] {listKey3}, 0.01)
+                .brpop(new String[] {listKey3}, 0.01);
+
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
 
         return baseTransaction;
@@ -194,6 +199,9 @@ public class TransactionTestUtilities {
             "GLIDE", // echo
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
+            3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
+            new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
         };
     }
