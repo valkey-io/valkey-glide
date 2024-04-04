@@ -363,6 +363,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::DBSize => Some(cmd("DBSIZE")),
         RequestType::Brpop => Some(cmd("BRPOP")),
         RequestType::Hkeys => Some(cmd("HKEYS")),
+        RequestType::PfAdd => Some(cmd("PFADD")),
     }
 }
 
