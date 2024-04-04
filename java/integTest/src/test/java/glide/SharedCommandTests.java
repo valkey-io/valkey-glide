@@ -1434,4 +1434,21 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void pfadd(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(1, client.pfadd(key, new String[0]).get());
+        assertEquals(1, client.pfadd(key, new String[] {"one", "two"}).get());
+        assertEquals(0, client.pfadd(key, new String[] {"two"}).get());
+        assertEquals(0, client.pfadd(key, new String[0]).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.pfadd("foo", new String[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
 }
