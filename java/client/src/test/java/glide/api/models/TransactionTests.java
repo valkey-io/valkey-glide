@@ -5,6 +5,8 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
+import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -476,6 +478,15 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.brpop(new String[] {"key1", "key2"}, 0.5);
+        results.add(
+                Pair.of(
+                        Brpop, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
+        transaction.blpop(new String[] {"key1", "key2"}, 0.5);
+        results.add(
+                Pair.of(
+                        Blpop, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
 
         transaction.rpushx("key", new String[] {"element1", "element2"});
         results.add(
