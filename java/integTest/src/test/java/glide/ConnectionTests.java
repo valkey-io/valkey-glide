@@ -4,10 +4,11 @@ package glide;
 import glide.api.RedisClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10) // seconds
 public class ConnectionTests {
 
     @Test
@@ -19,7 +20,7 @@ public class ConnectionTests {
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get();
         regularClient.close();
     }
 
@@ -31,7 +32,7 @@ public class ConnectionTests {
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get();
         regularClient.close();
     }
 }
