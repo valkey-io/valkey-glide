@@ -1539,7 +1539,7 @@ public class RedisClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(true, payload);
+        assertTrue(payload);
     }
 
     @SneakyThrows
