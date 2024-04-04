@@ -6,6 +6,8 @@ import static glide.api.models.commands.RangeOptions.createZrangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
+import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -1563,17 +1565,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Pops an element from the tail of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
      *
-     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
-     * @param key The key of the list.
-     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
-     * @return Command Response - The length of the list after the push operation.
+     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @apiNote <code>BRPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
+     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      */
-    public T rpushx(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(RPushX, commandArgs));
+    public T brpop(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(Brpop, commandArgs));
         return getThis();
     }
 
@@ -1589,6 +1599,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lpushx(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
         protobufTransaction.addCommands(buildCommand(LPushX, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return Command Response - The length of the list after the push operation.
+     */
+    public T rpushx(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+        protobufTransaction.addCommands(buildCommand(RPushX, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Pops an element from the head of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @apiNote <code>BLPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
+     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
+     */
+    public T blpop(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(Blpop, commandArgs));
         return getThis();
     }
 

@@ -230,6 +230,54 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> rpopCount(String key, long count);
 
     /**
+     * Pops an element from the head of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @apiNote <code>BLPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
+     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
+     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String[] response = client.blpop(["list1", "list2"], 0.5).get();
+     * assert response[0].equals("list1");
+     * assert response[1].equals("element");
+     * }</pre>
+     */
+    CompletableFuture<String[]> blpop(String[] keys, double timeout);
+
+    /**
+     * Pops an element from the tail of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @apiNote <code>BRPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
+     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
+     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String[] response = client.brpop(["list1", "list2"], 0.5).get();
+     * assert response[0].equals("list1");
+     * assert response[1].equals("element");
+     * }</pre>
+     */
+    CompletableFuture<String[]> brpop(String[] keys, double timeout);
+
+    /**
      * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
      * exists and holds a list.
      *
