@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
+import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -1616,6 +1617,28 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrangeWithScores(@NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
         return getThis().zrangeWithScores(key, rangeQuery, false);
+    }
+
+    /**
+     * Adds all elements to the HyperLogLog data structure stored at the specified <code>key</code>.
+     * <br>
+     * Creates a new structure if the <code>key</code> does not exist.
+     *
+     * <p>When no <code>elements</code> are provided, and <code>key</code> exists and is a
+     * HyperLogLog, then no operation is performed. If <code>key</code> does not exist, then the
+     * HyperLogLog structure is created.
+     *
+     * @see <a href="https://redis.io/commands/pfadd/">redis.io</a> for details.
+     * @param key The <code>key</code> of the HyperLogLog data structure to add elements into.
+     * @param elements An array of members to add to the HyperLogLog stored at <code>key</code>.
+     * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
+     *     approximated cardinality is altered, then returns <code>1</code>. Otherwise, returns <code>
+     *     0</code>.
+     */
+    public T pfadd(@NonNull String key, @NonNull String[] elements) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
+        protobufTransaction.addCommands(buildCommand(PfAdd, commandArgs));
+        return getThis();
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */
