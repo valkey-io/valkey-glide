@@ -614,7 +614,7 @@ public class RedisClientTest {
         testResponse.complete(payload);
 
         // match on protobuf request
-        when(commandManager.<Object>submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
+        when(commandManager.submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -641,7 +641,7 @@ public class RedisClientTest {
         testResponse.complete(payload);
 
         // match on protobuf request
-        when(commandManager.<Object>submitScript(
+        when(commandManager.submitScript(
                         eq(script), eq(List.of("key1", "key2")), eq(List.of("arg1", "arg2")), any()))
                 .thenReturn(testResponse);
 
@@ -660,8 +660,8 @@ public class RedisClientTest {
         String key = "testKey";
         long pttl = 999000L;
 
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(pttl);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(pttl);
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(PTTL), eq(new String[] {key}), any()))
@@ -937,8 +937,8 @@ public class RedisClientTest {
         String key = "testKey";
         Long value = 10L;
 
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(Strlen), eq(new String[] {key}), any()))
@@ -2012,7 +2012,6 @@ public class RedisClientTest {
         String key = "testKey";
         RangeByScore rangeByScore =
                 new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
-        boolean reversed = true;
         String[] arguments =
                 new String[] {key, rangeByScore.getStart(), rangeByScore.getEnd(), "BYSCORE", "REV"};
         String[] value = new String[] {"two", "one"};
@@ -2183,8 +2182,8 @@ public class RedisClientTest {
         String[] arguments = new String[] {key};
         String value = "none";
 
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(value);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(Type), eq(arguments), any()))
@@ -2203,9 +2202,9 @@ public class RedisClientTest {
     @Test
     public void time_returns_success() {
         // setup
-        CompletableFuture<String[]> testResponse = mock(CompletableFuture.class);
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
         String[] payload = new String[] {"UnixTime", "ms"};
-        when(testResponse.get()).thenReturn(payload);
+        testResponse.complete(payload);
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Time), eq(new String[0]), any()))

@@ -61,10 +61,10 @@ public class RedisClusterClientTest {
     public void custom_command_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, "TEST");
-
-        var value = client.customCommand(TEST_ARGS).get();
-        assertEquals("TEST", value.getSingleValue());
+        try(var client = new TestClient(commandManager, "TEST")) {
+            var value = client.customCommand(TEST_ARGS).get();
+            assertEquals("TEST", value.getSingleValue());
+        }
     }
 
     @Test
@@ -73,10 +73,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -86,10 +86,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS, RANDOM).get();
-        assertEquals(data, value.getSingleValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS, RANDOM).get();
+            assertEquals(data, value.getSingleValue());
+        }
     }
 
     @Test
@@ -98,10 +98,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -111,10 +111,10 @@ public class RedisClusterClientTest {
                 new TestCommandManager(
                         Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
 
-        var client = new TestClient(commandManager, "OK");
-
-        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
-        assertEquals("OK", value.getSingleValue());
+        try (var client = new TestClient(commandManager, "OK")) {
+            var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+            assertEquals("OK", value.getSingleValue());
+        }
     }
 
     private static class TestClient extends RedisClusterClient {
@@ -366,11 +366,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(RANDOM).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(RANDOM).get();
+            assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -379,11 +379,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(ALL_NODES).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(ALL_NODES).get();
+            assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @Test
@@ -392,11 +392,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(InfoOptions.builder().build(), RANDOM).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(InfoOptions.builder().build(), RANDOM).get();
+            assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -405,11 +405,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
+            assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @SneakyThrows
@@ -437,10 +437,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("n1", 42L);
-        var client = new TestClient(commandManager, data);
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.clientId(ALL_NODES).get();
 
-        var value = client.clientId(ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -448,10 +449,10 @@ public class RedisClusterClientTest {
     public void clientId_with_single_node_route_returns_success() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, 42L);
-
-        var value = client.clientId(RANDOM).get();
-        assertEquals(42, value.getSingleValue());
+        try (var client = new TestClient(commandManager, 42L)) {
+            var value = client.clientId(RANDOM).get();
+            assertEquals(42, value.getSingleValue());
+        }
     }
 
     @SneakyThrows
@@ -478,10 +479,10 @@ public class RedisClusterClientTest {
     public void clientGetName_with_single_node_route_returns_success() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, "TEST");
-
-        var value = client.clientGetName(RANDOM).get();
-        assertEquals("TEST", value.getSingleValue());
+        try (var client = new TestClient(commandManager, "TEST")) {
+            var value = client.clientGetName(RANDOM).get();
+            assertEquals("TEST", value.getSingleValue());
+        }
     }
 
     @Test
@@ -490,10 +491,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("n1", "TEST");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.clientGetName(ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.clientGetName(ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @SneakyThrows
@@ -612,11 +613,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("timeout", "1000", "maxmemory", "1GB");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.configGet(TEST_ARGS, RANDOM).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.configGet(TEST_ARGS, RANDOM).get();
+            assertAll(
                 () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -625,11 +626,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("node1", Map.of("timeout", "1000", "maxmemory", "1GB"));
-        var client = new TestClient(commandManager, data);
-
-        var value = client.configGet(TEST_ARGS, ALL_NODES).get();
-        assertAll(
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.configGet(TEST_ARGS, ALL_NODES).get();
+            assertAll(
                 () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @SneakyThrows
