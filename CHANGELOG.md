@@ -83,4 +83,4 @@
 
 Preview release of **GLIDE for Redis** a Polyglot Redis client.
 
-See the [README](README.md) for additional information. 
+See the [README](README.md) for additional information.
