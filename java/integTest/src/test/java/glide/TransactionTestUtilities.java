@@ -20,6 +20,7 @@ public class TransactionTestUtilities {
     private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
+    private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -110,6 +111,8 @@ public class TransactionTestUtilities {
         // TODO should be before LINDEX from #1219 and BRPOP/BLPOP from #1218
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
 
+        baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+
         return baseTransaction;
     }
 
@@ -176,6 +179,7 @@ public class TransactionTestUtilities {
             "GLIDE", // echo
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
+            1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
         };
     }
 }
