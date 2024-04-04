@@ -228,4 +228,36 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> rpopCount(String key, long count);
+
+    /**
+     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.rpushx("my_list", new String[] {"value1", "value2"}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpushx(String key, String[] elements);
+
+    /**
+     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.lpushx("my_list", new String[] {"value1", "value2"}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpushx(String key, String[] elements);
 }
