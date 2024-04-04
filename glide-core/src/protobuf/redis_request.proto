@@ -138,6 +138,9 @@ enum RequestType {
     Hkeys = 94;
     PfAdd = 96;
     PfCount = 97;
+    Blpop = 100;
+    RPushX = 102;
+    LPushX = 103;
 }
 
 message Command {
