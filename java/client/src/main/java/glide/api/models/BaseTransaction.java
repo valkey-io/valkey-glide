@@ -21,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
@@ -457,6 +458,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
 
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of fields contained in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - The number of fields in the hash, or <code>0</code> when the key
+     *     does not exist.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is returned.
+     */
+    public T hlen(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+
+        protobufTransaction.addCommands(buildCommand(HLen, commandArgs));
         return getThis();
     }
 
