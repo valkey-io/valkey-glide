@@ -61,7 +61,7 @@ public class RedisClusterClientTest {
     public void custom_command_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
-        try(var client = new TestClient(commandManager, "TEST")) {
+        try (var client = new TestClient(commandManager, "TEST")) {
             var value = client.customCommand(TEST_ARGS).get();
             assertEquals("TEST", value.getSingleValue());
         }
@@ -369,7 +369,8 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.info(RANDOM).get();
             assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
         }
     }
 
@@ -382,7 +383,7 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.info(ALL_NODES).get();
             assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
         }
     }
 
@@ -395,7 +396,8 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.info(InfoOptions.builder().build(), RANDOM).get();
             assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
         }
     }
 
@@ -408,7 +410,7 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
             assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
         }
     }
 
@@ -616,7 +618,8 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.configGet(TEST_ARGS, RANDOM).get();
             assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
         }
     }
 
@@ -629,7 +632,7 @@ public class RedisClusterClientTest {
         try (var client = new TestClient(commandManager, data)) {
             var value = client.configGet(TEST_ARGS, ALL_NODES).get();
             assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
         }
     }
 
