@@ -815,6 +815,20 @@ class BaseTransaction:
                 If `key` does not exist, it is interpreted as an empty list and 0 is returned.
         """
         return self.append_command(RequestType.LLen, [key])
+    
+    def strlen(self: TTransaction, key: str) -> TTransaction:
+        """
+        Get the length of the list stored at `key`.
+        See https://redis.io/commands/llen/ for details.
+
+        Args:
+            key (str): The key of the list.
+
+        Commands response:
+            int: The length of the list at the specified key.
+                If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+        """
+        return self.append_command(RequestType.Strlen, [key])
 
     def exists(self: TTransaction, keys: List[str]) -> TTransaction:
         """

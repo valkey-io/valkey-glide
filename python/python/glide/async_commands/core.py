@@ -1041,6 +1041,24 @@ class CoreCommands(Protocol):
                 3  # Indicates that there are 3 elements in the list.
         """
         return cast(int, await self._execute_command(RequestType.LLen, [key]))
+    
+    async def strlen(self, key: str) -> int:
+        """
+        Get the length of the string value stored at key.
+        See https://redis.io/commands/strlen/ for details.
+
+        Args:
+            key (str): The key
+
+        Returns:
+            int: The length of the string value stored at key.
+                If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+
+        Examples:
+            >>> await client.strlen("my_list")
+                3  # Indicates the string len is 3.
+        """
+        return cast(int, await self._execute_command(RequestType.Strlen, [key]))
 
     async def exists(self, keys: List[str]) -> int:
         """
