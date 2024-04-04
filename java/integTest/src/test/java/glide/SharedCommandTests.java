@@ -1396,6 +1396,57 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void rpushx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.rpush(key1, new String[] {"0"}).get());
+        assertEquals(4, client.rpushx(key1, new String[] {"1", "2", "3"}).get());
+        assertArrayEquals(new String[] {"0", "1", "2", "3"}, client.lrange(key1, 0, -1).get());
+
+        assertEquals(0, client.rpushx(key2, new String[] {"1"}).get());
+        assertArrayEquals(new String[0], client.lrange(key2, 0, -1).get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.rpushx(key3, new String[] {"_"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        // empty element list
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.rpushx(key2, new String[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void lpushx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.lpush(key1, new String[] {"0"}).get());
+        assertEquals(4, client.lpushx(key1, new String[] {"1", "2", "3"}).get());
+        assertArrayEquals(new String[] {"3", "2", "1", "0"}, client.lrange(key1, 0, -1).get());
+
+        assertEquals(0, client.lpushx(key2, new String[] {"1"}).get());
+        assertArrayEquals(new String[0], client.lrange(key2, 0, -1).get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lpushx(key3, new String[] {"_"}).get());
+        // empty element list
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.lpushx(key2, new String[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void zrange_by_index(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);

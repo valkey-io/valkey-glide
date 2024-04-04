@@ -364,6 +364,8 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Brpop => Some(cmd("BRPOP")),
         RequestType::Hkeys => Some(cmd("HKEYS")),
         RequestType::PfAdd => Some(cmd("PFADD")),
+        RequestType::RPushX => Some(cmd("RPUSHX")),
+        RequestType::LPushX => Some(cmd("LPUSHX")),
     }
 }
 
