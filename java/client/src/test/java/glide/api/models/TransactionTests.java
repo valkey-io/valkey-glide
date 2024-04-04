@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -148,6 +149,11 @@ public class TransactionTests {
 
         transaction.strlen("key");
         results.add(Pair.of(Strlen, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.setrange("key", 42, "str");
+        results.add(
+                Pair.of(
+                        SetRange, ArgsArray.newBuilder().addArgs("key").addArgs("42").addArgs("str").build()));
 
         transaction.hset("key", Map.of("field", "value"));
         results.add(

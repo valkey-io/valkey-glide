@@ -433,6 +433,34 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void setrange(BaseClient client) {
+        String stringKey = UUID.randomUUID().toString();
+        String nonStringKey = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "Hello world").get());
+        assertEquals(11L, client.setrange(stringKey, 6, "GLIDE").get());
+        assertEquals("Hello GLIDE", client.get(stringKey).get());
+        // offset > len
+        assertEquals(20L, client.setrange(stringKey, 15, "GLIDE").get());
+        assertEquals("Hello GLIDE\0\0\0\0GLIDE", client.get(stringKey).get());
+        // new key
+        assertEquals(5L, client.setrange(nonExistingKey, 0, "GLIDE").get());
+        assertEquals("GLIDE", client.get(nonExistingKey).get());
+
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.setrange(nonStringKey, 0, "_").get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        exception =
+                assertThrows(
+                        ExecutionException.class, () -> client.setrange("foo", Integer.MAX_VALUE, "_").get());
+        assertTrue(exception.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
