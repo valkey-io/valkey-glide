@@ -20,7 +20,9 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10) // seconds
 public class ClusterTransactionTests {
 
     private static RedisClusterClient clusterClient = null;
@@ -34,7 +36,7 @@ public class ClusterTransactionTests {
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get();
     }
 
     @AfterAll
@@ -47,7 +49,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void custom_command_info() {
         ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
-        Object[] result = clusterClient.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = clusterClient.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
