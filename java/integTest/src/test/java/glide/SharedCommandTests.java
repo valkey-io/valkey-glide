@@ -511,7 +511,7 @@ public class SharedCommandTests {
         // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
+                assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
