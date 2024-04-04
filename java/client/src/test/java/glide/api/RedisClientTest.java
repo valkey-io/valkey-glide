@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -32,6 +33,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HLen;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -1003,6 +1006,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void hsetnx_success() {
+        // setup
+        String key = "testKey";
+        String field = "testField";
+        String value = "testValue";
+        String[] args = new String[] {key, field, value};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(HSetNX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.hsetnx(key, field, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hdel_success() {
         // setup
         String key = "testKey";
@@ -1012,11 +1040,36 @@ public class RedisClientTest {
 
         CompletableFuture testResponse = mock(CompletableFuture.class);
         when(testResponse.get()).thenReturn(value);
+
+        // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(HashDel), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.hdel(key, fields);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hlen_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HLen), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hlen(key);
         Long payload = response.get();
 
         // verify
@@ -2238,5 +2291,6 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+        assertEquals(payload, response.get());
     }
 }
