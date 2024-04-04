@@ -19,6 +19,7 @@ public class TransactionTestUtilities {
     private static final String key6 = "{key}" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
+    private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -106,6 +107,8 @@ public class TransactionTestUtilities {
 
         baseTransaction.echo("GLIDE");
 
+        baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+
         return baseTransaction;
     }
 
@@ -170,6 +173,7 @@ public class TransactionTestUtilities {
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
         };
     }
 }
