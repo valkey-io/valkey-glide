@@ -31,8 +31,29 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
 }
 
+ext {
+    checkProtocVersion = { String output ->
+        // Line in format like: libprotoc 26.1
+        int majorVersion = java.lang.Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
+        int minorVersion = java.lang.Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
+        if (majorVersion < 26 || (majorVersion == 26 && minorVersion < 1)) {
+            throw new GradleException("Use Protoc version 26.1 or later");
+        }
+        return output.split(" ")[1]
+    }
+}
+
 tasks.register('protobuf', Exec) {
     doFirst {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                commandLine 'protoc', '--version'
+                workingDir Paths.get(project.rootDir.path, '..').toFile()
+                standardOutput = os
+            }
+            checkProtocVersion(os.toString())
+        }
+
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
     }
     commandLine 'protoc',
