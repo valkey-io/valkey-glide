@@ -458,6 +458,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void hsetnx(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+
+        assertTrue(client.hsetnx(key1, field, "value").get());
+        assertFalse(client.hsetnx(key1, field, "newValue").get());
+        assertEquals("value", client.hget(key1, field).get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, "value").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void hdel_multiple_existing_fields_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -470,6 +489,30 @@ public class SharedCommandTests {
         assertEquals(2, client.hdel(key, new String[] {field1, field2}).get());
         assertEquals(0, client.hdel(key, new String[] {"non_existing_field"}).get());
         assertEquals(0, client.hdel("non_existing_key", new String[] {field3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void hlen(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key1, fieldValueMap).get());
+        assertEquals(2, client.hlen(key1).get());
+        assertEquals(1, client.hdel(key1, new String[] {field1}).get());
+        assertEquals(1, client.hlen(key1).get());
+        assertEquals(0, client.hlen("nonExistingHash").get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
