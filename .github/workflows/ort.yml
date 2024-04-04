@@ -53,23 +53,10 @@ jobs:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
 
-            - name: Install software dependencies for Ubuntu
-              shell: bash
-              run: |
-                sudo apt update -y
-                sudo apt install -y git gcc pkg-config openssl libssl-dev
-                sudo apt-get install make
-
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@1.76 
               with:
                 targets: ${{ inputs.target }}
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                version: "25.1"
-                repo-token: ${{ secrets.GITHUB_TOKEN }}
                 
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v4
@@ -137,21 +124,6 @@ jobs:
               with:
                 release_version: ${{ env.RELEASE_VERSION }}
                 os: "ubuntu-latest"
-                
-            - name: install Node
-              shell: bash
-              working-directory: ./node
-              run: |
-                rm -rf node_modules && npm install --frozen-lockfile
-                cd rust-client
-                npm install
-
-            - name: Build Node
-              shell: bash
-              working-directory: ./node
-              run: |
-                source "$HOME/.cargo/env"
-                npm run build:release
             
             - name: Fix Node base NPM package.json file for ORT
               working-directory: ./node/npm/glide
