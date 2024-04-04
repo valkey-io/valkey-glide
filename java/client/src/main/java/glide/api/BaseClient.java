@@ -13,6 +13,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HLen;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
 import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
@@ -66,7 +68,7 @@ import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
-import glide.api.commands.StringCommands;
+import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions;
@@ -103,7 +105,7 @@ import response.ResponseOuterClass.Response;
 public abstract class BaseClient
         implements AutoCloseable,
                 GenericBaseCommands,
-                StringCommands,
+                StringBaseCommands,
                 HashBaseCommands,
                 ListBaseCommands,
                 SetBaseCommands,
@@ -348,9 +350,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> hsetnx(
+            @NonNull String key, @NonNull String field, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                HSetNX, new String[] {key, field, value}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
         String[] args = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(HashDel, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hlen(@NonNull String key) {
+        return commandManager.submitNewCommand(HLen, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
