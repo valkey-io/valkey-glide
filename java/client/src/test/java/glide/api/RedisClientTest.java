@@ -7,7 +7,14 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.StreamAddOptions.TRIM_EXACT_REDIS_API;
+import static glide.api.models.commands.StreamAddOptions.TRIM_LIMIT_REDIS_API;
+import static glide.api.models.commands.StreamAddOptions.TRIM_MAXLEN_REDIS_API;
+import static glide.api.models.commands.StreamAddOptions.TRIM_MINID_REDIS_API;
+import static glide.api.models.commands.StreamAddOptions.TRIM_NOT_EXACT_REDIS_API;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -75,6 +82,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -98,6 +106,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
+import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -109,8 +118,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class RedisClientTest {
 
@@ -2198,6 +2211,176 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        fieldValues.put("testField1", "testValue1");
+        fieldValues.put("testField2", "testValue2");
+        String[] fieldValuesArgs = convertMapToKeyValueStringArray(fieldValues);
+        String[] arguments = new String[] {key, "*"};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        String returnId = "testId";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_with_nomakestream_maxlen_options_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        fieldValues.put("testField1", "testValue1");
+        fieldValues.put("testField2", "testValue2");
+        StreamAddOptions options =
+                StreamAddOptions.builder()
+                        .id("id")
+                        .makeStream(false)
+                        .trim(new StreamAddOptions.MaxLen(true, 5L))
+                        .build();
+
+        String[] arguments =
+                new String[] {
+                    key,
+                    NO_MAKE_STREAM_REDIS_API,
+                    TRIM_MAXLEN_REDIS_API,
+                    TRIM_EXACT_REDIS_API,
+                    Long.toString(5L),
+                    "id"
+                };
+        arguments = ArrayUtils.addAll(arguments, convertMapToKeyValueStringArray(fieldValues));
+
+        String returnId = "testId";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, payload);
+    }
+
+    private static List<Arguments> getStreamAddOptions() {
+        return List.of(
+                Arguments.of(
+                        Pair.of(
+                                // no TRIM option
+                                StreamAddOptions.builder().id("id").makeStream(Boolean.FALSE).build(),
+                                new String[] {"testKey", NO_MAKE_STREAM_REDIS_API, "id"}),
+                        Pair.of(
+                                // MAXLEN with LIMIT
+                                StreamAddOptions.builder()
+                                        .id("id")
+                                        .makeStream(Boolean.TRUE)
+                                        .trim(new StreamAddOptions.MaxLen(Boolean.TRUE, 5L, 10L))
+                                        .build(),
+                                new String[] {
+                                    "testKey",
+                                    TRIM_MAXLEN_REDIS_API,
+                                    TRIM_EXACT_REDIS_API,
+                                    Long.toString(5L),
+                                    TRIM_LIMIT_REDIS_API,
+                                    Long.toString(10L),
+                                    "id"
+                                }),
+                        Pair.of(
+                                // MAXLEN with non exact match
+                                StreamAddOptions.builder()
+                                        .makeStream(Boolean.FALSE)
+                                        .trim(new StreamAddOptions.MaxLen(Boolean.FALSE, 2L))
+                                        .build(),
+                                new String[] {
+                                    "testKey",
+                                    NO_MAKE_STREAM_REDIS_API,
+                                    TRIM_MAXLEN_REDIS_API,
+                                    TRIM_NOT_EXACT_REDIS_API,
+                                    Long.toString(2L),
+                                    "*"
+                                }),
+                        Pair.of(
+                                // MIN ID with LIMIT
+                                StreamAddOptions.builder()
+                                        .id("id")
+                                        .makeStream(Boolean.TRUE)
+                                        .trim(new StreamAddOptions.MinId(Boolean.TRUE, "testKey", 10L))
+                                        .build(),
+                                new String[] {
+                                    "testKey",
+                                    TRIM_MINID_REDIS_API,
+                                    TRIM_EXACT_REDIS_API,
+                                    Long.toString(5L),
+                                    TRIM_LIMIT_REDIS_API,
+                                    Long.toString(10L),
+                                    "id"
+                                }),
+                        Pair.of(
+                                // MIN ID with non exact match
+                                StreamAddOptions.builder()
+                                        .makeStream(Boolean.FALSE)
+                                        .trim(new StreamAddOptions.MinId(Boolean.FALSE, "testKey"))
+                                        .build(),
+                                new String[] {
+                                    "testKey",
+                                    NO_MAKE_STREAM_REDIS_API,
+                                    TRIM_MINID_REDIS_API,
+                                    TRIM_NOT_EXACT_REDIS_API,
+                                    Long.toString(5L),
+                                    "*"
+                                })));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getStreamAddOptions")
+    public void xadd_with_options_returns_success(Pair<StreamAddOptions, String[]> optionAndArgs) {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        fieldValues.put("testField1", "testValue1");
+        fieldValues.put("testField2", "testValue2");
+        String[] arguments =
+                ArrayUtils.addAll(optionAndArgs.getRight(), convertMapToKeyValueStringArray(fieldValues));
+
+        String returnId = "testId";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues, optionAndArgs.getLeft());
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, payload);
     }
 
     @SneakyThrows
