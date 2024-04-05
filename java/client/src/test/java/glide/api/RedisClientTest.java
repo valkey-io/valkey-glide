@@ -72,6 +72,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
+import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -2579,5 +2580,28 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, payload);
         assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pfmerge_returns_success() {
+        // setup
+        String destKey = "testKey";
+        String[] sourceKeys = new String[] {"a", "b", "c"};
+        String[] arguments = new String[] {destKey, "a", "b", "c"};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(PfMerge), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.pfmerge(destKey, sourceKeys);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 }

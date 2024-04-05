@@ -1665,4 +1665,34 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.pfcount(new String[] {"foo"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void pfmerge(BaseClient client) {
+        String key1 = "{test}-hll1-" + UUID.randomUUID();
+        String key2 = "{test}-hll2-" + UUID.randomUUID();
+        String key3 = "{test}-hll3-" + UUID.randomUUID();
+        assertEquals(1, client.pfadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(1, client.pfadd(key2, new String[] {"b", "c", "d"}).get());
+        // new HyperLogLog data set
+        assertEquals(OK, client.pfmerge(key3, new String[] {key1, key2}).get());
+        assertEquals(
+                client.pfcount(new String[] {key1, key2}).get(), client.pfcount(new String[] {key3}).get());
+        // existing HyperLogLog data set
+        assertEquals(OK, client.pfmerge(key1, new String[] {key2}).get());
+        assertEquals(
+                client.pfcount(new String[] {key1, key2}).get(), client.pfcount(new String[] {key1}).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.pfmerge("foo", new String[] {key1}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
 }
