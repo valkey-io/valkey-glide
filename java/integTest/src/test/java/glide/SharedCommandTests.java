@@ -1327,8 +1327,10 @@ public class SharedCommandTests {
             new Double[] {1.0, 2.0, 3.0},
             client.zmscore(key1, new String[] {"one", "two", "three"}).get());
         assertArrayEquals(
-            new Double[] {1.0, null, 3.0},
-            client.zmscore(key1, new String[] {"one", "nonExistentMember", "three"}).get());
+                new Double[] {1.0, null, null, 3.0},
+                client
+                        .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
+                        .get());
         assertArrayEquals(
             new Double[] {null},
             client.zmscore("nonExistentKey", new String[] {"nonExistentMember"}).get());
