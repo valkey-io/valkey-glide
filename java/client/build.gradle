@@ -34,8 +34,8 @@ dependencies {
 ext {
     checkProtocVersion = { String output ->
         // Line in format like: libprotoc 26.1
-        int majorVersion = java.lang.Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
-        int minorVersion = java.lang.Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
+        int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
+        int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
         if (majorVersion < 26 || (majorVersion == 26 && minorVersion < 1)) {
             throw new GradleException("Use Protoc version 26.1 or later");
         }
