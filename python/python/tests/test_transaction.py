@@ -135,17 +135,17 @@ async def transaction_test(
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
 
-    transaction.rpushx(key9, ["_"])
-    args.append(0)
-    transaction.lpushx(key9, ["_"])
-    args.append(0)
-
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
     transaction.rpop(key6)
     args.append(value2)
     transaction.rpop_count(key6, 2)
     args.append([value2, value])
+
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
