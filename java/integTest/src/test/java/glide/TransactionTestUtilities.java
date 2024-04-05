@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.LinsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.SetOptions;
@@ -16,6 +17,8 @@ public class TransactionTestUtilities {
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String key6 = "{key}" + UUID.randomUUID();
+    // TODO rename after #160 merge & rebase
+    private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
@@ -99,6 +102,11 @@ public class TransactionTestUtilities {
 
         baseTransaction.echo("GLIDE");
 
+        // TODO fix after #174 merge and rebase
+        baseTransaction
+                .lpush(listKey3, new String[] {value1, value2, value3})
+                .linsert(listKey3, AFTER, value2, value2);
+
         return baseTransaction;
     }
 
@@ -157,6 +165,9 @@ public class TransactionTestUtilities {
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            // TODO fix after #174 merge and rebase
+            4L, // linsert(listKey3, AFTER, value2, value2)
         };
     }
 }

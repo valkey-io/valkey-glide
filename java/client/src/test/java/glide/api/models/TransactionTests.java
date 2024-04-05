@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.models.commands.LinsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -35,6 +36,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -413,6 +415,17 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.linsert("key", AFTER, "pivot", "elem");
+        results.add(
+                Pair.of(
+                        Linsert,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("AFTER")
+                                .addArgs("pivot")
+                                .addArgs("elem")
+                                .build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

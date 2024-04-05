@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.LinsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -48,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -1956,5 +1958,32 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void linsert_returns_success() {
+        // setup
+        String key = "testKey";
+        var position = BEFORE;
+        String pivot = "pivot";
+        String elem = "elem";
+        String[] arguments = new String[] {key, position.toString(), pivot, elem};
+        long value = 42;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Linsert), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.linsert(key, position, pivot, elem);
+        long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 }

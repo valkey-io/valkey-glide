@@ -30,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -62,6 +63,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StringCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LinsertOptions.InsertPosition;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.ZaddOptions;
@@ -657,5 +659,15 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> type(@NonNull String key) {
         return commandManager.submitNewCommand(Type, new String[] {key}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> linsert(
+            @NonNull String key,
+            @NonNull InsertPosition position,
+            @NonNull String pivot,
+            @NonNull String element) {
+        return commandManager.submitNewCommand(
+                Linsert, new String[] {key, position.toString(), pivot, element}, this::handleLongResponse);
     }
 }

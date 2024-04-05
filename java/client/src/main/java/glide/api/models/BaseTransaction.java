@@ -37,6 +37,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -66,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LinsertOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -1422,6 +1424,29 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts <code>element</code> in the <code>list</code> either before or after the reference
+     * value.
+     *
+     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param position The position definition.
+     * @param pivot The reference value.
+     * @param element The new element to insert.
+     * @return Command Response - The list length after a successful insert operation, <code>0</code>
+     *     if the <code>key</code> doesn't exist or <code>-1</code> if the <code>pivot</code> wasn't
+     *     found.
+     */
+    public T linsert(
+            @NonNull String key,
+            @NonNull LinsertOptions.InsertPosition position,
+            @NonNull String pivot,
+            @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
+        protobufTransaction.addCommands(buildCommand(Linsert, commandArgs));
         return getThis();
     }
 
