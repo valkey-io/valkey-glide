@@ -138,6 +138,7 @@ enum RequestType {
     Hkeys = 94;
     PfAdd = 96;
     PfCount = 97;
+    PfMerge = 98;
     Blpop = 100;
     RPushX = 102;
     LPushX = 103;
