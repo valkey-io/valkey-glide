@@ -39,6 +39,7 @@ public class TransactionTestUtilities {
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
     private static final String geoKey1 = "{key}:geoKey1-" + UUID.randomUUID();
+
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -155,6 +156,11 @@ public class TransactionTestUtilities {
         baseTransaction.zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
         baseTransaction.zinterstore(key8, new KeyArray(new String[] {zSetKey2, key8}));
         baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
+        baseTransaction
+                .zrandmember(zSetKey2)
+                .zrandmemberWithCount(zSetKey2, 1)
+                .zrandmemberWithCountWithScores(zSetKey2, 1);
+        // TODO put bzpopmin here
 
         baseTransaction.geoadd(
                 geoKey1,
@@ -288,6 +294,9 @@ public class TransactionTestUtilities {
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, key8}), MAX)
             0L, // zinterstore(key8, new String[] {zSetKey2, key8})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            "one", // .zrandmember(zSetKey2)
+            new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
+            new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
             "0-2", // xadd(key9, Map.of("field2", "value2"), id("0-2"));

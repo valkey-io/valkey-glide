@@ -53,6 +53,7 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -2568,6 +2569,107 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "xtrimtest").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmember(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        String randMember = client.zrandmember(key1).get();
+        assertTrue(randMember.equals("one") || randMember.equals("two"));
+        assertNull(client.zrandmember("nonExistentKey").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmember(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmemberWithCount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        // Unique values are expected as count is positive
+        String[] randMembers = client.zrandmemberWithCount(key1, 4).get();
+        assertEquals(2, randMembers.length);
+        assertEquals(2, new HashSet<>(Arrays.asList(randMembers)).size());
+        assertTrue(
+                Arrays.stream(randMembers)
+                        .allMatch(member -> member.equals("one") || member.equals("two")));
+
+        // Duplicate values are expected as count is negative
+        randMembers = client.zrandmemberWithCount(key1, -4).get();
+        assertEquals(4, randMembers.length);
+        assertTrue(
+                Arrays.stream(randMembers)
+                        .allMatch(member -> member.equals("one") || member.equals("two")));
+
+        assertArrayEquals(new String[] {}, client.zrandmemberWithCount(key1, 0).get());
+        assertArrayEquals(new String[] {}, client.zrandmemberWithCount("nonExistentKey", 4).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmemberWithCount(key2, 5).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmemberWithCountWithScores(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        //  Unique values are expected as count is negative
+        Object[][] randMembersWithScores = client.zrandmemberWithCountWithScores(key1, 4).get();
+        assertEquals(2, randMembersWithScores.length);
+        for (Object[] membersWithScore : randMembersWithScores) {
+            String member = (String) membersWithScore[0];
+            Double score = (Double) membersWithScore[1];
+
+            boolean isValidPair =
+                    (member.equals("one") && score.equals(1.0))
+                            || (member.equals("two") && score.equals(2.0));
+            assertTrue(isValidPair, "Unexpected value member pairing");
+        }
+
+        //  Duplicate values are expected as count is negative
+        randMembersWithScores = client.zrandmemberWithCountWithScores(key1, -4).get();
+        assertEquals(4, randMembersWithScores.length);
+        for (Object[] randMembersWithScore : randMembersWithScores) {
+            String member = (String) randMembersWithScore[0];
+            Double score = (Double) randMembersWithScore[1];
+
+            boolean isValidPair =
+                    (member.equals("one") && score.equals(1.0))
+                            || (member.equals("two") && score.equals(2.0));
+            assertTrue(isValidPair, "Unexpected value member pairing");
+        }
+
+        assertArrayEquals(new Object[][] {}, client.zrandmemberWithCountWithScores(key1, 0).get());
+        assertArrayEquals(
+                new Object[][] {}, client.zrandmemberWithCountWithScores("nonExistentKey", 4).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zrandmemberWithCountWithScores(key2, 5).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
