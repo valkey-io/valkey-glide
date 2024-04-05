@@ -1781,13 +1781,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * otherwise a new HyperLogLog is created.
      *
      * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
-     * @param destKey The key of the destination HyperLogLog where the merged data sets will be
+     * @param destination The key of the destination HyperLogLog where the merged data sets will be
      *     stored.
      * @param sourceKeys The keys of the HyperLogLog structures to be merged.
      * @return Command Response - <code>OK</code>.
      */
-    public T pfmerge(@NonNull String destKey, @NonNull String[] sourceKeys) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destKey));
+    public T pfmerge(@NonNull String destination, @NonNull String[] sourceKeys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destination));
         protobufTransaction.addCommands(buildCommand(PfMerge, commandArgs));
         return getThis();
     }
