@@ -60,6 +60,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -808,6 +809,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return Command Response - <code>true</code> if the member exists in the set, <code>false
+     *     </code> otherwise. If <code>key</code> doesn't exist, it is treated as an <code>empty set
+     *     </code> and the command returns <code>false</code>.
+     */
+    public T sismember(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, member);
+
+        protobufTransaction.addCommands(buildCommand(SIsMember, commandArgs));
         return getThis();
     }
 
