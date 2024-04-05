@@ -5,6 +5,8 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
+import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -37,6 +39,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
+import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
@@ -52,6 +55,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
+import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
@@ -62,6 +66,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -78,6 +83,7 @@ import glide.api.models.commands.RangeOptions.Limit;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -444,6 +450,28 @@ public class TransactionTests {
                                 .addArgs(WITH_SCORE_REDIS_API)
                                 .build()));
 
+        transaction.xadd("key", Map.of("field1", "foo1"));
+        results.add(
+                Pair.of(
+                        XAdd,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("*")
+                                .addArgs("field1")
+                                .addArgs("foo1")
+                                .build()));
+
+        transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
+        results.add(
+                Pair.of(
+                        XAdd,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("id")
+                                .addArgs("field1")
+                                .addArgs("foo1")
+                                .build()));
+
         transaction.time();
         results.add(Pair.of(Time, ArgsArray.newBuilder().build()));
 
@@ -452,6 +480,27 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.brpop(new String[] {"key1", "key2"}, 0.5);
+        results.add(
+                Pair.of(
+                        Brpop, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
+        transaction.blpop(new String[] {"key1", "key2"}, 0.5);
+        results.add(
+                Pair.of(
+                        Blpop, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
+
+        transaction.rpushx("key", new String[] {"element1", "element2"});
+        results.add(
+                Pair.of(
+                        RPushX,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("element1").addArgs("element2").build()));
+
+        transaction.lpushx("key", new String[] {"element1", "element2"});
+        results.add(
+                Pair.of(
+                        LPushX,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("element1").addArgs("element2").build()));
 
         transaction.zrange(
                 "key",
@@ -496,6 +545,7 @@ public class TransactionTests {
                 Pair.of(
                         PfAdd,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("a").addArgs("b").addArgs("c").build()));
+
         transaction.pfcount(new String[] {"hll1", "hll2"});
         results.add(Pair.of(PfCount, ArgsArray.newBuilder().addArgs("hll1").addArgs("hll2").build()));
         transaction.pfmerge("hll", new String[] {"hll1", "hll2"});

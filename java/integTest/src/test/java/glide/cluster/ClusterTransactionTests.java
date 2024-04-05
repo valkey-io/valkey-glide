@@ -17,12 +17,13 @@ import glide.api.models.ClusterValue;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10) // seconds
 public class ClusterTransactionTests {
 
     private static RedisClusterClient clusterClient = null;
@@ -36,7 +37,7 @@ public class ClusterTransactionTests {
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get();
     }
 
     @AfterAll
@@ -49,7 +50,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void custom_command_info() {
         ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
-        Object[] result = clusterClient.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = clusterClient.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
@@ -68,8 +69,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void info_simple_route_test() {
         ClusterTransaction transaction = new ClusterTransaction().info().info();
-        ClusterValue<Object>[] result =
-                clusterClient.exec(transaction, RANDOM).get(10, TimeUnit.SECONDS);
+        ClusterValue<Object>[] result = clusterClient.exec(transaction, RANDOM).get();
 
         // check single-value result
         assertTrue(result[0].hasSingleData());
@@ -85,8 +85,7 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = (ClusterTransaction) transactionTest(new ClusterTransaction());
         Object[] expectedResult = transactionTestResult();
 
-        ClusterValue<Object>[] clusterValues =
-                clusterClient.exec(transaction, RANDOM).get(10, TimeUnit.SECONDS);
+        ClusterValue<Object>[] clusterValues = clusterClient.exec(transaction, RANDOM).get();
         Object[] results =
                 Arrays.stream(clusterValues)
                         .map(v -> v.hasSingleData() ? v.getSingleValue() : v.getMultiValue())
