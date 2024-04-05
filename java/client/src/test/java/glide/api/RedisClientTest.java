@@ -1354,8 +1354,8 @@ public class RedisClientTest {
     public void lindex_returns_success() {
         // setup
         String key = "testKey";
-        int index = 2;
-        String[] args = new String[] {key, Integer.toString(index)};
+        long index = 2;
+        String[] args = new String[] {key, Long.toString(index)};
         String value = "value";
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();

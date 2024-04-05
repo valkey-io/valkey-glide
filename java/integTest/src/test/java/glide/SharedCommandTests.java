@@ -694,10 +694,11 @@ public class SharedCommandTests {
 
         assertEquals(2, client.lpush(key1, valueArray).get());
         assertEquals(valueArray[1], client.lindex(key1, 0).get());
-        assertEquals(valueArray[0], client.lindex(key1, 1).get());
+        assertEquals(valueArray[0], client.lindex(key1, -1).get());
         assertNull(client.lindex(key1, 3).get());
-        assertNull(client.lindex("nonExistingKey", 3).get());
+        assertNull(client.lindex(key2, 3).get());
 
+        // Key exists, but it is not a List
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());

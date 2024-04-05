@@ -104,7 +104,7 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
     /**
-     * Returns the element at <code>index</code> in the list stored at <code>key</code>.<br>
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
      * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
      * element and so on. Negative indices can be used to designate elements starting at the tail of
      * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
@@ -125,7 +125,7 @@ public interface ListBaseCommands {
      * assert payload2.equals('value3'); // Returns the last element in the list stored at 'myList'.
      * }</pre>
      */
-    CompletableFuture<String> lindex(String key, int index);
+    CompletableFuture<String> lindex(String key, long index);
 
     /**
      * Trims an existing list so that it will contain only the specified range of elements specified.

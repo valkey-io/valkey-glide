@@ -447,9 +447,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> lindex(@NonNull String key, int index) {
+    public CompletableFuture<String> lindex(@NonNull String key, long index) {
         return commandManager.submitNewCommand(
-                Lindex, new String[] {key, Integer.toString(index)}, this::handleStringOrNullResponse);
+                Lindex, new String[] {key, Long.toString(index)}, this::handleStringOrNullResponse);
     }
 
     @Override

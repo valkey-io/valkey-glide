@@ -679,7 +679,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the element at <code>index</code> in the list stored at <code>key</code>.<br>
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
      * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
      * element and so on. Negative indices can be used to designate elements starting at the tail of
      * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
@@ -693,8 +693,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
      *     </code> is returned.
      */
-    public T lindex(@NonNull String key, int index) {
-        ArgsArray commandArgs = buildArgs(key, Integer.toString(index));
+    public T lindex(@NonNull String key, long index) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index));
 
         protobufTransaction.addCommands(buildCommand(Lindex, commandArgs));
         return getThis();
