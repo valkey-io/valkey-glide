@@ -1641,4 +1641,28 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.pfadd("foo", new String[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void pfcount(BaseClient client) {
+        String key1 = "{test}-hll1-" + UUID.randomUUID();
+        String key2 = "{test}-hll2-" + UUID.randomUUID();
+        String key3 = "{test}-hll3-" + UUID.randomUUID();
+        assertEquals(1, client.pfadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(1, client.pfadd(key2, new String[] {"b", "c", "d"}).get());
+        assertEquals(3, client.pfcount(new String[] {key1}).get());
+        assertEquals(3, client.pfcount(new String[] {key2}).get());
+        assertEquals(4, client.pfcount(new String[] {key1, key2}).get());
+        assertEquals(4, client.pfcount(new String[] {key1, key2, key3}).get());
+        // empty HyperLogLog data set
+        assertEquals(1, client.pfadd(key3, new String[0]).get());
+        assertEquals(0, client.pfcount(new String[] {key3}).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.pfcount(new String[] {"foo"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
 }

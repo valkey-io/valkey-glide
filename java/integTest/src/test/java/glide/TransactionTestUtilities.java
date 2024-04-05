@@ -23,6 +23,7 @@ public class TransactionTestUtilities {
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
+    private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -126,6 +127,7 @@ public class TransactionTestUtilities {
                 .brpop(new String[] {listKey3}, 0.01);
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+        baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
 
         return baseTransaction;
     }
@@ -203,6 +205,7 @@ public class TransactionTestUtilities {
             new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
             new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
+            3L, // pfcount(new String[] { hllKey1, hllKey2 });
         };
     }
 }

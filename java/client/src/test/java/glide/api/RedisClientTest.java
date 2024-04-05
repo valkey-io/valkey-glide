@@ -71,6 +71,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -2554,5 +2555,29 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pfcount_returns_success() {
+        // setup
+        String[] keys = new String[] {"a", "b", "c"};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PfCount), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pfcount(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+        assertEquals(payload, response.get());
     }
 }

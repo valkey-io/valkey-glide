@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
@@ -1754,6 +1755,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T pfadd(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
         protobufTransaction.addCommands(buildCommand(PfAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * @see <a href="https://redis.io/commands/pfcount/">redis.io</a> for details.
+     * @param keys The keys of the HyperLogLog data structures to be analyzed.
+     * @return Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     <br>
+     *     The cardinality of a key that does not exist is <code>0</code>.
+     */
+    public T pfcount(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(PfCount, commandArgs));
         return getThis();
     }
 
