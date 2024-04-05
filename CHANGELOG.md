@@ -1,6 +1,7 @@
 #### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
+* Python: Added RPUSHX and LPUSHX commands (TODO: add PR link)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
