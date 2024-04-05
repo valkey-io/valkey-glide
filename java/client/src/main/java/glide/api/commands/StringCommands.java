@@ -208,19 +208,20 @@ public interface StringCommands {
      * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
      * offset</code>, for the entire length of <code>value</code>.<br>
      * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
-     * the string is padded with zero-bytes to make <code>offset</code> fit. Creates the key if it
-     * doesn't exist.
+     * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
+     * </code> if it doesn't exist.
      *
      * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
      * @param key The key of the string to update.
      * @param offset The position in the string where <code>value</code> should be written.
-     * @param value The string which should be written at the position specified by <code>offset
-     *     </code>.
+     * @param value The string written with <code>offset</code>.
      * @return The length of the string stored at <code>key</code> after it was modified.
      * @example
      *     <pre>{@code
      * long len = client.setrange("key", 6, "Redis").get();
-     * assert len == 11L;
+     * assert len == 11L; // new key was created with length of 11 symbols
+     * String value = client.get("key").get();
+     * assert value.equals("\0\0\0\0\0\0Redis"); // the string was padded with zero bytes
      * }</pre>
      */
     CompletableFuture<Long> setrange(String key, int offset, String value);

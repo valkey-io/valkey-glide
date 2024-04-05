@@ -384,14 +384,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
      * offset</code>, for the entire length of <code>value</code>.<br>
      * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
-     * the string is padded with zero-bytes to make <code>offset</code> fit. Creates the key if it
-     * doesn't exist.
+     * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
+     * </code> if it doesn't exist.
      *
      * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
      * @param key The key of the string to update.
      * @param offset The position in the string where <code>value</code> should be written.
-     * @param value The string which should be written at the position specified by <code>offset
-     *     </code>.
+     * @param value The string written with <code>offset</code>.
      * @return Command Response - The length of the string stored at <code>key</code> after it was
      *     modified.
      */
