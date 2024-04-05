@@ -827,6 +827,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void sismember(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String member = UUID.randomUUID().toString();
+
+        assertEquals(1, client.sadd(key1, new String[] {member}).get());
+        assertTrue(client.sismember(key1, member).get());
+        assertFalse(client.sismember(key1, "nonExistingMember").get());
+        assertFalse(client.sismember("nonExistingKey", member).get());
+
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
