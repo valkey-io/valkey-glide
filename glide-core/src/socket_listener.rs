@@ -365,6 +365,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Hkeys => Some(cmd("HKEYS")),
         RequestType::PfAdd => Some(cmd("PFADD")),
         RequestType::PfCount => Some(cmd("PFCOUNT")),
+        RequestType::PfMerge => Some(cmd("PFMERGE")),
         RequestType::RPushX => Some(cmd("RPUSHX")),
         RequestType::LPushX => Some(cmd("LPUSHX")),
         RequestType::Blpop => Some(cmd("BLPOP")),
