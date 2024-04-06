@@ -4,7 +4,7 @@ package glide.cluster;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute.RANDOM;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;

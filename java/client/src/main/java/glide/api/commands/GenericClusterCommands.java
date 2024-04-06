@@ -5,6 +5,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -112,5 +113,5 @@ public interface GenericClusterCommands {
      * assert ((String) result[1]).contains("# Stats");
      * }</pre>
      */
-    CompletableFuture<Object[]> exec(ClusterTransaction transaction, Route route);
+    CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
 }
