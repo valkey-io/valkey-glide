@@ -123,7 +123,7 @@ class BaseTransaction:
             key (str): The key to return its length.
 
         Commands response:
-            int: The length of the string value stored at 'key'.
+            int: The length of the string value stored at `key`.
                 If `key` does not exist, it is treated as an empty string and 0 is returned.
         """
         return self.append_command(RequestType.Strlen, [key])
