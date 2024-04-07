@@ -133,14 +133,14 @@ export class RedisClient extends BaseClient {
      * ```typescript
      * // Example usage of ping method without any message
      * const result = await client.ping();
-     * console.log(result); // Output: "PONG"
+     * console.log(result); // Output: 'PONG'
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of ping method with a message
      * const result = await client.ping("Hello");
-     * console.log(result); // Output: "Hello"
+     * console.log(result); // Output: 'Hello'
      * ```
      */
     public ping(message?: string): Promise<string> {
@@ -243,7 +243,7 @@ export class RedisClient extends BaseClient {
      * ```typescript
      * // Example usage of configGet method with multiple configuration parameters
      * const result = await client.configGet(["timeout", "maxmemory"]);
-     * console.log(result); // Output: \{'timeout': '1000', 'maxmemory': '1GB'\}
+     * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
      * ```
      */
     public configGet(parameters: string[]): Promise<Record<string, string>> {
@@ -260,7 +260,7 @@ export class RedisClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of configSet method to set multiple configuration parameters
-     * const result = await client.configSet(\{ timeout: "1000", maxmemory, "1GB" \});
+     * const result = await client.configSet({ timeout: "1000", maxmemory, "1GB" });
      * console.log(result); // Output: 'OK'
      * ```
      */
@@ -278,7 +278,7 @@ export class RedisClient extends BaseClient {
      * ```typescript
      * // Example usage of the echo command
      * const echoedMessage = await client.echo("Glide-for-Redis");
-     * console.log(echoedMessage); // Output: "Glide-for-Redis"
+     * console.log(echoedMessage); // Output: 'Glide-for-Redis'
      * ```
      */
     public echo(message: string): Promise<string> {

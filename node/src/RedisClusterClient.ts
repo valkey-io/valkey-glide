@@ -309,14 +309,14 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of ping method without any message
      * const result = await client.ping();
-     * console.log(result); // Output: "PONG"
+     * console.log(result); // Output: 'PONG'
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of ping method with a message
      * const result = await client.ping("Hello");
-     * console.log(result); // Output: "Hello"
+     * console.log(result); // Output: 'Hello'
      * ```
      */
     public ping(message?: string, route?: Routes): Promise<string> {
@@ -367,7 +367,7 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of clientGetName method with routing to all nodes
      * const result = await client.clientGetName('allNodes');
-     * console.log(result); // Output: \{'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'\}
+     * console.log(result); // Output: {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
      * ```
      */
     public clientGetName(
@@ -453,14 +453,14 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of config_get method with a single configuration parameter with routing to a random node
      * const result = await client.config_get(["timeout"], "randomNode");
-     * console.log(result); // Output: \{'timeout': '1000'\}
+     * console.log(result); // Output: {'timeout': '1000'}
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of configGet method with multiple configuration parameters
      * const result = await client.configGet(["timeout", "maxmemory"]);
-     * console.log(result); // Output: \{'timeout': '1000', 'maxmemory': '1GB'\}
+     * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
      * ```
      */
     public configGet(
@@ -486,7 +486,7 @@ export class RedisClusterClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of configSet method to set multiple configuration parameters
-     * const result = await client.configSet(\{ timeout: "1000", maxmemory, "1GB" \});
+     * const result = await client.configSet({ timeout: "1000", maxmemory, "1GB" });
      * console.log(result); // Output: 'OK'
      * ```
      */
@@ -519,7 +519,7 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of the echo command with routing to all nodes
      * const echoedMessage = await client.echo("Glide-for-Redis", "allNodes");
-     * console.log(echoedMessage); // Output: \{'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'\}
+     * console.log(echoedMessage); // Output: {'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'}
      * ```
      */
     public echo(
@@ -555,7 +555,7 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of time method with routing to all nodes
      * const result = await client.time('allNodes');
-     * console.log(result); // Output: \{'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']\}
+     * console.log(result); // Output: {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
      * ```
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {

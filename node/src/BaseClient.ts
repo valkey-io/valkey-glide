@@ -809,7 +809,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: "2.5"
+     * console.log(result); // Output: '2.5'
      * ```
      */
     public hincrByFloat(
@@ -900,7 +900,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpop method with an existing list
      * const result = await client.lpop("my_list");
-     * console.log(result); // Output: "value1"
+     * console.log(result); // Output: 'value1'
      * ```
      *
      * @example
@@ -1015,7 +1015,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the ltrim method
      * const result = await client.ltrim("my_list", 0, 1);
-     * console.log(result); // Output: "OK" - Indicates that the list has been trimmed to contain elements from 0 to 1.
+     * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
     public ltrim(key: string, start: number, end: number): Promise<"OK"> {
@@ -1083,7 +1083,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpop method with an existing list
      * const result = await client.rpop("my_list");
-     * console.log(result); // Output: "value1"
+     * console.log(result); // Output: 'value1'
      * ```
      *
      * @example
