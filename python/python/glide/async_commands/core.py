@@ -267,7 +267,7 @@ class CoreCommands(Protocol):
 
     async def strlen(self, key: str) -> int:
         """
-        Get the length of the string value stored at 'key'.
+        Get the length of the string value stored at `key`.
         See https://redis.io/commands/strlen/ for more details.
 
         Args:
