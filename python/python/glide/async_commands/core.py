@@ -858,7 +858,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.rpush("my_list", ["value2", "value3"])
-                3 # Indicated that the new length of the list is 3 after the push operation.
+                3 # Indicates that the new length of the list is 3 after the push operation.
             >>> await client.rpush("nonexistent_list", ["new_value"])
                 1
         """
