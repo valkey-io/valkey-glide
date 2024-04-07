@@ -743,7 +743,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hexists method with non existing field
+     * // Example usage of the hexists method with non-existing field
      * const result = await client.hexists("my_hash", "nonexistent_field");
      * console.log(result); // Output: false
      * ```
