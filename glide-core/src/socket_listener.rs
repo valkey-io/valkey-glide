@@ -6,8 +6,7 @@ use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::redis_request::{
-    command, redis_request, Command, RedisRequest, RequestType, Routes, ScriptInvocation,
-    SlotTypes, Transaction,
+    command, redis_request, Command, RedisRequest, Routes, ScriptInvocation, SlotTypes, Transaction,
 };
 use crate::response;
 use crate::response::Response;
@@ -21,7 +20,7 @@ use redis::cluster_routing::{
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::RedisError;
-use redis::{cmd, Cmd, Value};
+use redis::{Cmd, Value};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::{env, str};
@@ -257,119 +256,9 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-fn get_two_word_command(first: &str, second: &str) -> Cmd {
-    let mut cmd = cmd(first);
-    cmd.arg(second);
-    cmd
-}
-
 fn get_command(request: &Command) -> Option<Cmd> {
-    let request_enum = request
-        .request_type
-        .enum_value_or(RequestType::InvalidRequest);
-    match request_enum {
-        RequestType::InvalidRequest => None,
-        RequestType::CustomCommand => Some(Cmd::new()),
-        RequestType::GetString => Some(cmd("GET")),
-        RequestType::SetString => Some(cmd("SET")),
-        RequestType::Ping => Some(cmd("PING")),
-        RequestType::Info => Some(cmd("INFO")),
-        RequestType::Del => Some(cmd("DEL")),
-        RequestType::Select => Some(cmd("SELECT")),
-        RequestType::ConfigGet => Some(get_two_word_command("CONFIG", "GET")),
-        RequestType::ConfigSet => Some(get_two_word_command("CONFIG", "SET")),
-        RequestType::ConfigResetStat => Some(get_two_word_command("CONFIG", "RESETSTAT")),
-        RequestType::ConfigRewrite => Some(get_two_word_command("CONFIG", "REWRITE")),
-        RequestType::ClientGetName => Some(get_two_word_command("CLIENT", "GETNAME")),
-        RequestType::ClientGetRedir => Some(get_two_word_command("CLIENT", "GETREDIR")),
-        RequestType::ClientId => Some(get_two_word_command("CLIENT", "ID")),
-        RequestType::ClientInfo => Some(get_two_word_command("CLIENT", "INFO")),
-        RequestType::ClientKill => Some(get_two_word_command("CLIENT", "KILL")),
-        RequestType::ClientList => Some(get_two_word_command("CLIENT", "LIST")),
-        RequestType::ClientNoEvict => Some(get_two_word_command("CLIENT", "NO-EVICT")),
-        RequestType::ClientNoTouch => Some(get_two_word_command("CLIENT", "NO-TOUCH")),
-        RequestType::ClientPause => Some(get_two_word_command("CLIENT", "PAUSE")),
-        RequestType::ClientReply => Some(get_two_word_command("CLIENT", "REPLY")),
-        RequestType::ClientSetInfo => Some(get_two_word_command("CLIENT", "SETINFO")),
-        RequestType::ClientSetName => Some(get_two_word_command("CLIENT", "SETNAME")),
-        RequestType::ClientUnblock => Some(get_two_word_command("CLIENT", "UNBLOCK")),
-        RequestType::ClientUnpause => Some(get_two_word_command("CLIENT", "UNPAUSE")),
-        RequestType::Expire => Some(cmd("EXPIRE")),
-        RequestType::HashSet => Some(cmd("HSET")),
-        RequestType::HashGet => Some(cmd("HGET")),
-        RequestType::HashDel => Some(cmd("HDEL")),
-        RequestType::HashExists => Some(cmd("HEXISTS")),
-        RequestType::MSet => Some(cmd("MSET")),
-        RequestType::MGet => Some(cmd("MGET")),
-        RequestType::Incr => Some(cmd("INCR")),
-        RequestType::IncrBy => Some(cmd("INCRBY")),
-        RequestType::IncrByFloat => Some(cmd("INCRBYFLOAT")),
-        RequestType::Decr => Some(cmd("DECR")),
-        RequestType::DecrBy => Some(cmd("DECRBY")),
-        RequestType::HashGetAll => Some(cmd("HGETALL")),
-        RequestType::HashMSet => Some(cmd("HMSET")),
-        RequestType::HashMGet => Some(cmd("HMGET")),
-        RequestType::HashIncrBy => Some(cmd("HINCRBY")),
-        RequestType::HashIncrByFloat => Some(cmd("HINCRBYFLOAT")),
-        RequestType::LPush => Some(cmd("LPUSH")),
-        RequestType::LPop => Some(cmd("LPOP")),
-        RequestType::RPush => Some(cmd("RPUSH")),
-        RequestType::RPop => Some(cmd("RPOP")),
-        RequestType::LLen => Some(cmd("LLEN")),
-        RequestType::LRem => Some(cmd("LREM")),
-        RequestType::LRange => Some(cmd("LRANGE")),
-        RequestType::LTrim => Some(cmd("LTRIM")),
-        RequestType::SAdd => Some(cmd("SADD")),
-        RequestType::SRem => Some(cmd("SREM")),
-        RequestType::SMembers => Some(cmd("SMEMBERS")),
-        RequestType::SCard => Some(cmd("SCARD")),
-        RequestType::PExpireAt => Some(cmd("PEXPIREAT")),
-        RequestType::PExpire => Some(cmd("PEXPIRE")),
-        RequestType::ExpireAt => Some(cmd("EXPIREAT")),
-        RequestType::Exists => Some(cmd("EXISTS")),
-        RequestType::Unlink => Some(cmd("UNLINK")),
-        RequestType::TTL => Some(cmd("TTL")),
-        RequestType::Zadd => Some(cmd("ZADD")),
-        RequestType::Zrem => Some(cmd("ZREM")),
-        RequestType::Zrange => Some(cmd("ZRANGE")),
-        RequestType::Zcard => Some(cmd("ZCARD")),
-        RequestType::Zcount => Some(cmd("ZCOUNT")),
-        RequestType::ZIncrBy => Some(cmd("ZINCRBY")),
-        RequestType::ZScore => Some(cmd("ZSCORE")),
-        RequestType::Type => Some(cmd("TYPE")),
-        RequestType::HLen => Some(cmd("HLEN")),
-        RequestType::Echo => Some(cmd("ECHO")),
-        RequestType::ZPopMin => Some(cmd("ZPOPMIN")),
-        RequestType::Strlen => Some(cmd("STRLEN")),
-        RequestType::Lindex => Some(cmd("LINDEX")),
-        RequestType::ZPopMax => Some(cmd("ZPOPMAX")),
-        RequestType::XAck => Some(cmd("XACK")),
-        RequestType::XAdd => Some(cmd("XADD")),
-        RequestType::XReadGroup => Some(cmd("XREADGROUP")),
-        RequestType::XRead => Some(cmd("XREAD")),
-        RequestType::XGroupCreate => Some(get_two_word_command("XGROUP", "CREATE")),
-        RequestType::XGroupDestroy => Some(get_two_word_command("XGROUP", "DESTROY")),
-        RequestType::XTrim => Some(cmd("XTRIM")),
-        RequestType::HSetNX => Some(cmd("HSETNX")),
-        RequestType::SIsMember => Some(cmd("SISMEMBER")),
-        RequestType::Hvals => Some(cmd("HVALS")),
-        RequestType::PTTL => Some(cmd("PTTL")),
-        RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
-        RequestType::Persist => Some(cmd("PERSIST")),
-        RequestType::ZRemRangeByScore => Some(cmd("ZREMRANGEBYSCORE")),
-        RequestType::Time => Some(cmd("TIME")),
-        RequestType::Zrank => Some(cmd("ZRANK")),
-        RequestType::Rename => Some(cmd("RENAME")),
-        RequestType::DBSize => Some(cmd("DBSIZE")),
-        RequestType::Brpop => Some(cmd("BRPOP")),
-        RequestType::Hkeys => Some(cmd("HKEYS")),
-        RequestType::PfAdd => Some(cmd("PFADD")),
-        RequestType::PfCount => Some(cmd("PFCOUNT")),
-        RequestType::PfMerge => Some(cmd("PFMERGE")),
-        RequestType::RPushX => Some(cmd("RPUSHX")),
-        RequestType::LPushX => Some(cmd("LPUSHX")),
-        RequestType::Blpop => Some(cmd("BLPOP")),
-    }
+    let request_type: crate::request_type::RequestType = request.request_type.into();
+    request_type.get_command()
 }
 
 fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
