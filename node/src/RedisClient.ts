@@ -113,7 +113,7 @@ export class RedisClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients
-     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"],);
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"]);
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
