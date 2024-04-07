@@ -1749,7 +1749,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmax method to remove and return the member with the highest score from a sorted set
      * const result = await client.zpopmax("my_sorted_set");
-     * console.log(result); // Output: \{'member1': 10.0\} - Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+     * console.log(result); // Output: {'member1': 10.0} - Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
      * ```
      *
      * @example
