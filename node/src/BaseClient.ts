@@ -1319,7 +1319,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the expireAt method on a key with no previus expiry
+     * // Example usage of the expireAt method on a key with no previous expiry
      * const result = await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry);
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
@@ -1348,7 +1348,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the pexpire method on a key with no previus expiry
+     * // Example usage of the pexpire method on a key with no previous expiry
      * const result = await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry);
      * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
      * ```
@@ -1377,7 +1377,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the pexpireAt method on a key with no previus expiry
+     * // Example usage of the pexpireAt method on a key with no previous expiry
      * const result = await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry);
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
