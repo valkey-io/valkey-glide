@@ -1505,7 +1505,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
-     * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", \{ UpdateOptions: "ScoreLessThanCurrent" \});
+     * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { UpdateOptions: "ScoreLessThanCurrent" });
      * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
      * ```
      */
