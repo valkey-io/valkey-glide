@@ -1269,6 +1269,8 @@ class CoreCommands(Protocol):
                 3600  # Indicates that "my_key" has a remaining time to live of 3600 seconds.
             >>> await client.ttl("nonexistent_key")
                 -2  # Returns -2 for a non-existing key.
+            >>> await client.ttl("key")
+                -1  # Indicates that "key: has no has no associated expire.
         """
         return cast(int, await self._execute_command(RequestType.TTL, [key]))
 
@@ -1339,6 +1341,9 @@ class CoreCommands(Protocol):
             >>> await client.set("key", "value")
             >>> await client.type("key")
                 'string'
+            >>> await client.lpush("key", ["value"])
+            >>> await client.type("key")
+                'list'
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
 

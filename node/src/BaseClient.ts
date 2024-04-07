@@ -620,7 +620,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hget method
+     * // Example usage of the hget method on an-existing field
      * await client.hset("my_hash", "field");
      * const result = await client.hget("my_hash", "field");
      * console.log(result); // Output: "value"
@@ -628,7 +628,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hget method
+     * // Example usage of the hget method on a non-existing field
      * const result = await client.hget("my_hash", "nonexistent_field");
      * console.log(result); // Output: null
      * ```
@@ -671,7 +671,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hsetnx method
+     * // Example usage of the hsetnx method on a field that already exists          132
      * const result = await client.hsetnx("my_hash", "field", "value");
      * console.log(result); // Output: true - Indicates that the field "field" was set successfully in the hash "my_hash".
      * ```
@@ -782,7 +782,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hincrby method
+     * // Example usage of the hincrby method to increment the value in a hash by a specified amount
      * const result = await client.hincrby("my_hash", "field1", 5);
      * console.log(result); // Output: 5
      * ```
@@ -807,7 +807,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hincrbyfloat method
+     * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
      * console.log(result); // Output: "2.5"
      * ```
@@ -1129,7 +1129,7 @@ export class BaseClient {
      *
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
-     * @returns the number of members that were added to the set, not including all the members already present in the set.
+     * @returns The number of members that were added to the set, not including all the members already present in the set.
      *
      * @example
      * ```typescript
@@ -1147,7 +1147,7 @@ export class BaseClient {
      *
      * @param key - The key to remove the members from its set.
      * @param members - A list of members to remove from the set stored at `key`.
-     * @returns the number of members that were removed from the set, not including non existing members.
+     * @returns The number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
      *
      * @example
@@ -1165,7 +1165,7 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns all members of the set.
+     * @returns All members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      *
      * @example
@@ -1183,7 +1183,7 @@ export class BaseClient {
      * See https://redis.io/commands/scard/ for details.
      *
      * @param key - The key to return the number of its members.
-     * @returns the cardinality (number of elements) of the set, or 0 if key does not exist.
+     * @returns The cardinality (number of elements) of the set, or 0 if key does not exist.
      *
      * @example
      * ```typescript
@@ -1226,7 +1226,7 @@ export class BaseClient {
      * See https://redis.io/commands/exists/ for details.
      *
      * @param keys - The keys list to check.
-     * @returns the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+     * @returns The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
      * it will be counted multiple times.
      *
      * @example
@@ -1246,7 +1246,7 @@ export class BaseClient {
      * See https://redis.io/commands/unlink/ for details.
      *
      * @param keys - The keys we wanted to unlink.
-     * @returns the number of keys that were unlinked.
+     * @returns The number of keys that were unlinked.
      *
      * @example
      * ```typescript
@@ -1275,8 +1275,15 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the expire method
      * const result = await client.expire("my_key", 60);
-     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key."
+     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key".
      * ```
+     * 
+     * @example
+     * ```typescript
+     * // Example usage of the expire method with exisiting expiry
+     * const result = await client.expire("my_key", 60, ExpireOptions.HasNoExpiry);
+     * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
+     * ``` 
      */
     public expire(
         key: string,
@@ -1300,9 +1307,9 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the expireAt method
+     * // Example usage of the expireAt method on a key with no previus expiry
      * const result = await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry);
-     * console.log(result); // Output: true
+     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
     public expireAt(
@@ -1329,9 +1336,9 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the pexpire method
+     * // Example usage of the pexpire method on a key with no previus expiry
      * const result = await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry);
-     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key."
+     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
      * ```
      */
     public pexpire(
@@ -1358,9 +1365,9 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the pexpireAt method
+     * // Example usage of the pexpireAt method on a key with no previus expiry
      * const result = await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry);
-     * console.log(result); // Output: true
+     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
     public pexpireAt(
@@ -1381,16 +1388,23 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the ttl method with an existing key
+     * // Example usage of the ttl method with existing key
      * const result = await client.ttl("my_key");
      * console.log(result); // Output: 3600 - Indicates that "my_key" has a remaining time to live of 3600 seconds.
      * ```
      *
      * @example
      * ```typescript
+     * // Example usage of the ttl method with existing key that has no associated expire.
+     * const result = await client.ttl("key");
+     * console.log(result); // Output: -1 - Indicates that the key has no associated expire.
+     * ```
+     *
+     * @example
+     * ```typescript
      * // Example usage of the ttl method with a non-existing key
      * const result = await client.ttl("nonexistent_key");
-     * console.log(result); // Output: -2
+     * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
      * ```
      */
     public ttl(key: string): Promise<number> {
@@ -1492,7 +1506,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
      * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", \{ UpdateOptions: "ScoreLessThanCurrent" \});
-     * console.log(result); // Output: null
+     * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
      * ```
      */
     public zaddIncr(
@@ -1569,15 +1583,22 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the zscore function to get the score of a member in a sorted set
+     * // Example usage of the zscore method∂∂ to get the score of a member in a sorted set
      * const result = await client.zscore("my_sorted_set", "member");
      * console.log(result); // Output: 10.5 - Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
      * ```
      *
      * @example
      * ```typescript
-     * // Example usage of the zscore function when the member does not exist in the sorted set
+     * // Example usage of the zscore method when the member does not exist in the sorted set
      * const result = await client.zscore("my_sorted_set", "non_existing_member");
+     * console.log(result); // Output: null
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zscore method with non existimng key
+     * const result = await client.zscore("non_existing_set", "member");
      * console.log(result); // Output: null
      * ```
      */
@@ -1626,7 +1647,6 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of set method
      * // Example usage of strlen method with an existing key
      * await client.set("key", "GLIDE");
      * const len1 = await client.strlen("key");
@@ -1652,10 +1672,18 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of type method
+     * // Example usage of type method with a string value
      * await client.set("key", "value");
      * const type = await client.type("key");
      * console.log(type); // Output: 'string'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of type method with a list
+     * await client.lpush("key", ["value"]);
+     * const type = await client.type("key");
+     * console.log(type); // Output: 'list'
      * ```
      */
     public type(key: string): Promise<string> {
@@ -1745,6 +1773,13 @@ export class BaseClient {
      * const result = await client.pttl("non_existing_key");
      * console.log(result); // Output: -2 - Indicates that the key "non_existing_key" does not exist.
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of pttl method with an exisiting key that has no associated expire.
+     * const result = await client.pttl("key");
+     * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
+     * ```
      */
     public pttl(key: string): Promise<number> {
         return this.createWritePromise(createPttl(key));
@@ -1791,14 +1826,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", \{ bound: 5.0, isInclusive: true \}, "positiveInfinity");
+     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
-     * const result = await client.zremRangeByScore("non_existing_sorted_set", \{ bound: 5.0, isInclusive: true \}, \{ bound: 10.0, isInclusive: false \});
+     * const result = await client.zremRangeByScore("non_existing_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
