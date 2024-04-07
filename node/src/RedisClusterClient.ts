@@ -262,9 +262,10 @@ export class RedisClusterClient extends BaseClient {
      *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
      *
      * @example
-     * Returns a list of all pub/sub clients on all primary nodes
-     * ```ts
-     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], "allPrimaries")
+     * ```typescript
+     * // Example usage of customCommand method to retrieve pub/sub clients with routing to all primary nodes
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], "allPrimaries");
+     * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
     public customCommand(args: string[], route?: Routes): Promise<ReturnType> {
@@ -303,6 +304,20 @@ export class RedisClusterClient extends BaseClient {
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of ping method without any message
+     * const result = await client.ping();
+     * console.log(result); // Output: 'PONG'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of ping method with a message
+     * const result = await client.ping("Hello");
+     * console.log(result); // Output: 'Hello'
+     * ```
      */
     public ping(message?: string, route?: Routes): Promise<string> {
         return this.createWritePromise(
@@ -340,6 +355,20 @@ export class RedisClusterClient extends BaseClient {
      * @returns - the name of the client connection as a string if a name is set, or null if no name is assigned.
      * When specifying a route other than a single node, it returns a dictionary where each address is the key and
      * its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of client_getname method
+     * const result = await client.client_getname();
+     * console.log(result); // Output: 'Connection Name'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of clientGetName method with routing to all nodes
+     * const result = await client.clientGetName('allNodes');
+     * console.log(result); // Output: {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
+     * ```
      */
     public clientGetName(
         route?: Routes,
@@ -357,6 +386,13 @@ export class RedisClusterClient extends BaseClient {
      *   case the client will route the command to the nodes defined by `route`.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of configRewrite command
+     * const result = await client.configRewrite();
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configRewrite(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
@@ -372,6 +408,13 @@ export class RedisClusterClient extends BaseClient {
      *   case the client will route the command to the nodes defined by `route`.
      *
      * @returns always "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of configResetStat command
+     * const result = await client.configResetStat();
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configResetStat(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(
@@ -405,6 +448,20 @@ export class RedisClusterClient extends BaseClient {
      *
      * @returns A map of values corresponding to the configuration parameters. When specifying a route other than a single node,
      *  it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of config_get method with a single configuration parameter with routing to a random node
+     * const result = await client.config_get(["timeout"], "randomNode");
+     * console.log(result); // Output: {'timeout': '1000'}
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of configGet method with multiple configuration parameters
+     * const result = await client.configGet(["timeout", "maxmemory"]);
+     * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
+     * ```
      */
     public configGet(
         parameters: string[],
@@ -427,8 +484,11 @@ export class RedisClusterClient extends BaseClient {
      * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
-     *   config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
-     *
+     * ```typescript
+     * // Example usage of configSet method to set multiple configuration parameters
+     * const result = await client.configSet({ timeout: "1000", maxmemory, "1GB" });
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configSet(
         parameters: Record<string, string>,
@@ -459,7 +519,7 @@ export class RedisClusterClient extends BaseClient {
      * ```typescript
      * // Example usage of the echo command with routing to all nodes
      * const echoedMessage = await client.echo("Glide-for-Redis", "allNodes");
-     * console.log(echoedMessage); // Output: \{'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'\}
+     * console.log(echoedMessage); // Output: {'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'}
      * ```
      */
     public echo(
@@ -483,6 +543,20 @@ export class RedisClusterClient extends BaseClient {
      * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
      * When specifying a route other than a single node, it returns a dictionary where each address is the key and
      * its corresponding node response is the value.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of time method without any argument
+     * const result = await client.time();
+     * console.log(result); // Output: ['1710925775', '913580']
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of time method with routing to all nodes
+     * const result = await client.time('allNodes');
+     * console.log(result); // Output: {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
+     * ```
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), toProtobufRoute(route));

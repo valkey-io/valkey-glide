@@ -111,9 +111,10 @@ export class RedisClient extends BaseClient {
      *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
      *
      * @example
-     * Returns a list of all pub/sub clients:
-     * ```ts
-     * connection.customCommand(["CLIENT","LIST","TYPE", "PUBSUB"])
+     * ```typescript
+     * // Example usage of customCommand method to retrieve pub/sub clients
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"]);
+     * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
     public customCommand(args: string[]): Promise<ReturnType> {
@@ -127,6 +128,20 @@ export class RedisClient extends BaseClient {
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of ping method without any message
+     * const result = await client.ping();
+     * console.log(result); // Output: 'PONG'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of ping method with a message
+     * const result = await client.ping("Hello");
+     * console.log(result); // Output: 'Hello'
+     * ```
      */
     public ping(message?: string): Promise<string> {
         return this.createWritePromise(createPing(message));
@@ -148,6 +163,13 @@ export class RedisClient extends BaseClient {
      *
      * @param index - The index of the database to select.
      * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of select method
+     * const result = await client.select(2);
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index));
@@ -157,6 +179,13 @@ export class RedisClient extends BaseClient {
      *  See https://redis.io/commands/client-getname/ for more details.
      *
      * @returns the name of the client connection as a string if a name is set, or null if no name is assigned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of client_getname method
+     * const result = await client.client_getname();
+     * console.log(result); // Output: 'Client Name'
+     * ```
      */
     public clientGetName(): Promise<string | null> {
         return this.createWritePromise(createClientGetName());
@@ -166,6 +195,13 @@ export class RedisClient extends BaseClient {
      * See https://redis.io/commands/config-rewrite/ for details.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of configRewrite command
+     * const result = await client.configRewrite();
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configRewrite(): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite());
@@ -175,6 +211,13 @@ export class RedisClient extends BaseClient {
      * See https://redis.io/commands/config-resetstat/ for details.
      *
      * @returns always "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of configResetStat command
+     * const result = await client.configResetStat();
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
@@ -196,6 +239,12 @@ export class RedisClient extends BaseClient {
      *
      * @returns A map of values corresponding to the configuration parameters.
      *
+     * @example
+     * ```typescript
+     * // Example usage of configGet method with multiple configuration parameters
+     * const result = await client.configGet(["timeout", "maxmemory"]);
+     * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
+     * ```
      */
     public configGet(parameters: string[]): Promise<Record<string, string>> {
         return this.createWritePromise(createConfigGet(parameters));
@@ -209,8 +258,11 @@ export class RedisClient extends BaseClient {
      * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
-     *  config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
-     *
+     * ```typescript
+     * // Example usage of configSet method to set multiple configuration parameters
+     * const result = await client.configSet({ timeout: "1000", maxmemory, "1GB" });
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public configSet(parameters: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters));
@@ -226,7 +278,7 @@ export class RedisClient extends BaseClient {
      * ```typescript
      * // Example usage of the echo command
      * const echoedMessage = await client.echo("Glide-for-Redis");
-     * console.log(echoedMessage); // Output: "Glide-for-Redis"
+     * console.log(echoedMessage); // Output: 'Glide-for-Redis'
      * ```
      */
     public echo(message: string): Promise<string> {
@@ -239,6 +291,13 @@ export class RedisClient extends BaseClient {
      * @returns - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
      * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of time method without any argument
+     * const result = await client.time();
+     * console.log(result); // Output: ['1710925775', '913580']
+     * ```
      */
     public time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
