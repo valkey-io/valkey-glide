@@ -621,6 +621,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hget method
+     * await client.hset("my_hash", "field");
      * const result = await client.hget("my_hash", "field");
      * console.log(result); // Output: "value"
      * ```
