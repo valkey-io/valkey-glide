@@ -762,7 +762,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hgetall method
      * const result = await client.hgetall("my_hash");
-     * console.log(result); // Output: \{"field1": "value1", "field2": "value2"\}
+     * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
     public hgetall(key: string): Promise<Record<string, string>> {
