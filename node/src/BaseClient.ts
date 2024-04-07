@@ -881,7 +881,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the lpush method with a non-existing list
      * const result = await client.lpush("nonexistent_list", ["new_value"]);
-     * console.log(result); // Output: 1
+     * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
     public lpush(key: string, elements: string[]): Promise<number> {
