@@ -226,6 +226,13 @@ public class AsyncClient : IDisposable
         Rename = 91,
         DBSize = 92,
         Brpop = 93,
+        Hkeys = 94,
+        PfAdd = 96,
+        PfCount = 97,
+        PfMerge = 98,
+        Blpop = 100,
+        RPushX = 102,
+        LPushX = 103,
     }
 
     #endregion
