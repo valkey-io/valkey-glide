@@ -216,11 +216,7 @@ class CoreCommands(Protocol):
     ) -> Optional[str]:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
-            See https://redis.io/commands/set/ for details.
-
-            @example - Set "foo" to "bar" only if "foo" already exists, and set the key expiration to 5 seconds:
-
-                connection.set("foo", "bar", conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+        See https://redis.io/commands/set/ for more details.
 
         Args:
             key (str): the key to store.
@@ -242,6 +238,12 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.set("key", "value")
                 'OK'
+            >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
+                'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
+            >>> await client.set("key", "value", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,return_old_value=True)
+                'new_value' # Returns the old value of "key".
+            >>> await client.get("key")
+                'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
         """
         args = [key, value]
         if conditional_set:
@@ -286,10 +288,10 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key", "value")
-            >>> await client.delete("key")
-                1
-            >>> await client.delete("key")
-                0
+            >>> await client.delete(["key"])
+                1 # Indicates that the key was successfully deleted.
+            >>> await client.delete(["key"])
+                0 # No keys we're deleted since "key" doesn't exist.
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 

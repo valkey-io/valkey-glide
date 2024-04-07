@@ -444,6 +444,18 @@ export class BaseClient {
      * // Example usage of set method to set a key-value pair
      * const result = await client.set("my_key", "my_value");
      * console.log(result); // Output: 'OK'
+     *
+     * // Example usage of set method with conditional options and expiration
+     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: "seconds", count: 5 }});
+     * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
+     *
+     * // Example usage of set method with conditional options and returning old value
+     * const result3 = await client.set("key", "value", {conditionalSet: "onlyIfDoesNotExist", returnOldValue: true});
+     * console.log(result3); // Output: 'new_value' - Returns the old value of "key".
+     *
+     * // Example usage of get method to retrieve the value of a key
+     * const result4 = await client.get("key");
+     * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
      * ```
      */
     public set(
@@ -464,14 +476,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of del method to delete an existing key
      * await client.set("my_key", "my_value");
-     * const result = await client.del("my_key");
+     * const result = await client.del(["my_key"]);
      * console.log(result); // Output: 1
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of del method for a non-existing key
-     * const result = await client.del("non_existing_key");
+     * const result = await client.del(["non_existing_key"]);
      * console.log(result); // Output: 0
      * ```
      */
@@ -671,14 +683,14 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hsetnx method on a field that already exists          132
+     * // Example usage of the hsetnx method
      * const result = await client.hsetnx("my_hash", "field", "value");
      * console.log(result); // Output: true - Indicates that the field "field" was set successfully in the hash "my_hash".
      * ```
      *
      * @example
      * ```typescript
-     * // Example usage of the hsetnx method
+     * // Example usage of the hsetnx method on a field that already exists
      * const result = await client.hsetnx("my_hash", "field", "new_value");
      * console.log(result); // Output: false - Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
      * ```
