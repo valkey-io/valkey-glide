@@ -184,7 +184,7 @@ export class RedisClient extends BaseClient {
      * ```typescript
      * // Example usage of client_getname method
      * const result = await client.client_getname();
-     * console.log(result); // Output: 'Connection Name'
+     * console.log(result); // Output: 'Client Name'
      * ```
      */
     public clientGetName(): Promise<string | null> {
