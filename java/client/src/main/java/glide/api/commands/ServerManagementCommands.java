@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Server Management" group for standalone clients.
+ * Supports commands and transactions for the "Server Management" group for a standalone client.
  *
  * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
  */
