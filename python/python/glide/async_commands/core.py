@@ -391,7 +391,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key1", "value1")
-            >>> await client.set("key1", "value1")
+            >>> await client.set("key2", "value2")
             >>> await client.mget(["key1", "key2"])
                 ['value1' , 'value2']
         """
