@@ -1717,7 +1717,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zpopmin method to remove and return the member with the lowest score from a sorted set
      * const result = await client.zpopmin("my_sorted_set");
-     * console.log(result); // Output: \{'member1': 5.0\} - Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+     * console.log(result); // Output: {'member1': 5.0} - Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
      * ```
      *
      * @example
