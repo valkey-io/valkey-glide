@@ -1277,13 +1277,13 @@ export class BaseClient {
      * const result = await client.expire("my_key", 60);
      * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key".
      * ```
-     * 
+     *
      * @example
      * ```typescript
      * // Example usage of the expire method with exisiting expiry
      * const result = await client.expire("my_key", 60, ExpireOptions.HasNoExpiry);
      * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
-     * ``` 
+     * ```
      */
     public expire(
         key: string,
