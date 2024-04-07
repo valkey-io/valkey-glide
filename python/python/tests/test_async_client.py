@@ -988,6 +988,7 @@ class TestCommands:
 
         assert await redis_client.set(key1, "foo") == OK
         assert await redis_client.strlen(key1) == 3
+        assert await redis_client.strlen("non_existing_key") == 0
 
         assert await redis_client.lpush(key2, value_list) == 4
         with pytest.raises(RequestError) as e:
