@@ -1057,7 +1057,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the rpush method with an existing list
      * const result = await client.rpush("my_list", ["value2", "value3"]);
-     * console.log(result); // Output: 3 - # Indicated that the new length of the list is 3 after the push operation.
+     * console.log(result); // Output: 3 - Indicates that the new length of the list is 3 after the push operation.
      * ```
      *
      * @example
