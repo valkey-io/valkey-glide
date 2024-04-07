@@ -274,7 +274,7 @@ class CoreCommands(Protocol):
             key (str): The key to return its length.
 
         Returns:
-            int: The length of the string value stored at 'key'.
+            int: The length of the string value stored at `key`.
                 If `key` does not exist, it is treated as an empty string and 0 is returned.
 
         Examples:
