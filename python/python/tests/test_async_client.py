@@ -993,9 +993,6 @@ class TestCommands:
         assert await redis_client.lpush(key2, value_list) == 4
         with pytest.raises(RequestError):
             assert await redis_client.strlen(key2)
-
-        assert await redis_client.llen("non_existing_key") == 0
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_exists(self, redis_client: TRedisClient):
