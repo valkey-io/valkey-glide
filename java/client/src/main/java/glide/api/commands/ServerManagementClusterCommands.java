@@ -9,16 +9,16 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Set Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Server Management Commands" group for a cluster
+ * client.
  *
- * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
+ * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
  */
 public interface ServerManagementClusterCommands {
 
     /**
-     * Get information and statistics about the Redis server using the {@link Section#DEFAULT} option.
-     * The command will be routed to all primary nodes.
+     * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}
+     * option. The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
@@ -35,7 +35,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info();
 
     /**
-     * Get information and statistics about the Redis server. If no argument is provided, so the
+     * Gets information and statistics about the Redis server. If no argument is provided, so the
      * {@link Section#DEFAULT} option is assumed.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
@@ -57,7 +57,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(Route route);
 
     /**
-     * Get information and statistics about the Redis server. The command will be routed to all
+     * Gets information and statistics about the Redis server. The command will be routed to all
      * primary nodes.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
@@ -79,7 +79,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
 
     /**
-     * Get information and statistics about the Redis server.
+     * Gets information and statistics about the Redis server.
      *
      * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
      * @param options A list of {@link InfoOptions.Section} values specifying which sections of

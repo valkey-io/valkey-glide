@@ -96,6 +96,8 @@ async def transaction_test(
     args.append(2)
     transaction.hvals(key4)
     args.append([value, value2])
+    transaction.hkeys(key4)
+    args.append([key, key2])
     transaction.hsetnx(key4, key, value)
     args.append(False)
     transaction.hincrby(key4, key3, 5)
