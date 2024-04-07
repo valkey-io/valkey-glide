@@ -479,6 +479,7 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
+            >>> await client.hset("my_hash", "field")
             >>> await client.hget("my_hash", "field")
                 "value"
             >>> await client.hget("my_hash", "nonexistent_field")
