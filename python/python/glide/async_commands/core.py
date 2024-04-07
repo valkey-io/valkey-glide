@@ -719,7 +719,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpush("my_list", ["value2", "value3"])
-                3 # Indicated that the new length of the list is 3 after the push operation.
+                3 # Indicates that the new length of the list is 3 after the push operation.
             >>> await client.lpush("nonexistent_list", ["new_value"])
                 1
         """
