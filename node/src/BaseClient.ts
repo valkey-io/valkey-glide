@@ -1619,7 +1619,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", \{ bound: 5.0, isInclusive: true \}, "positiveInfinity");
+     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
