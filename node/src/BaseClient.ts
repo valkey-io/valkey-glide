@@ -508,7 +508,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of mset method to set values for multiple keys
-     * const result = await client.mset(\{"key1": "value1", "key2": "value2"\});
+     * const result = await client.mset({"key1": "value1", "key2": "value2"});
      * console.log(result); // Output: 'OK'
      * ```
      */
