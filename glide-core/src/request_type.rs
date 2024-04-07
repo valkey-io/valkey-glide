@@ -215,6 +215,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Zrank => RequestType::Zrank,
             ProtobufRequestType::Rename => RequestType::Rename,
             ProtobufRequestType::DBSize => RequestType::DBSize,
+            ProtobufRequestType::Brpop => RequestType::Brpop,
             ProtobufRequestType::Hkeys => RequestType::Hkeys,
             ProtobufRequestType::PfAdd => RequestType::PfAdd,
             ProtobufRequestType::PfCount => RequestType::PfCount,
