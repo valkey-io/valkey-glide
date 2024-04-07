@@ -116,7 +116,7 @@ class BaseTransaction:
 
     def strlen(self: TTransaction, key: str) -> TTransaction:
         """
-        Get the length of the string value stored at 'key'.
+        Get the length of the string value stored at `key`.
         See https://redis.io/commands/strlen/ for more details.
 
         Args:
