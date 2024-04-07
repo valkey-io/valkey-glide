@@ -103,6 +103,13 @@ pub enum RequestType {
     Rename = 91,
     DBSize = 92,
     Brpop = 93,
+    Hkeys = 94,
+    PfAdd = 96,
+    PfCount = 97,
+    PfMerge = 98,
+    Blpop = 100,
+    RPushX = 102,
+    LPushX = 103,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -208,7 +215,13 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Zrank => RequestType::Zrank,
             ProtobufRequestType::Rename => RequestType::Rename,
             ProtobufRequestType::DBSize => RequestType::DBSize,
-            ProtobufRequestType::Brpop => RequestType::Brpop,
+            ProtobufRequestType::Hkeys => RequestType::Hkeys,
+            ProtobufRequestType::PfAdd => RequestType::PfAdd,
+            ProtobufRequestType::PfCount => RequestType::PfCount,
+            ProtobufRequestType::PfMerge => RequestType::PfMerge,
+            ProtobufRequestType::RPushX => RequestType::RPushX,
+            ProtobufRequestType::LPushX => RequestType::LPushX,
+            ProtobufRequestType::Blpop => RequestType::Blpop,
         }
     }
 }
@@ -311,6 +324,13 @@ impl RequestType {
             RequestType::Rename => Some(cmd("RENAME")),
             RequestType::DBSize => Some(cmd("DBSIZE")),
             RequestType::Brpop => Some(cmd("BRPOP")),
+            RequestType::Hkeys => Some(cmd("HKEYS")),
+            RequestType::PfAdd => Some(cmd("PFADD")),
+            RequestType::PfCount => Some(cmd("PFCOUNT")),
+            RequestType::PfMerge => Some(cmd("PFMERGE")),
+            RequestType::RPushX => Some(cmd("RPUSHX")),
+            RequestType::LPushX => Some(cmd("LPUSHX")),
+            RequestType::Blpop => Some(cmd("BLPOP")),
         }
     }
 }
