@@ -1459,6 +1459,57 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zcount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        assertEquals(
+            3,
+            client
+                .zcount(key1, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                .get());
+        assertEquals(
+            3,
+            client
+                .zcount(
+                    key1,
+                    new ScoreBoundary(Double.NEGATIVE_INFINITY),
+                    new ScoreBoundary(Double.POSITIVE_INFINITY))
+                .get());
+        assertEquals(
+            1, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, false)).get());
+        assertEquals(
+            2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
+        assertEquals(
+            3, client.zcount(key1, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        assertEquals(
+            0, client.zcount(key1, InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        assertEquals(
+            0,
+            client
+                .zcount(
+                    "non_existing_key",
+                    InfScoreBound.NEGATIVE_INFINITY,
+                    InfScoreBound.POSITIVE_INFINITY)
+                .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+            assertThrows(
+                ExecutionException.class,
+                () ->
+                    client
+                        .zcount(key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();

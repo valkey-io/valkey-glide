@@ -87,6 +87,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
@@ -377,6 +378,11 @@ public class TransactionTests {
 
         transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
+
+        transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
+        results.add(
+                Pair.of(
+                        Zcount, ArgsArray.newBuilder().addArgs("key").addArgs("(5.0").addArgs("+inf").build()));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
