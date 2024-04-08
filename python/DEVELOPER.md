@@ -16,7 +16,7 @@ Software Dependencies
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler) >= v26.1
+-   protoc (protobuf compiler) >= v3.20.0
 -   openssl
 -   openssl-dev
 -   rustup
