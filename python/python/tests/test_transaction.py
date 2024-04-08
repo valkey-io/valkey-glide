@@ -47,6 +47,8 @@ async def transaction_test(
     args.append("string")
     transaction.echo(value)
     args.append(value)
+    transaction.strlen(key)
+    args.append(len(value))
 
     transaction.persist(key)
     args.append(False)

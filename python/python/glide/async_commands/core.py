@@ -275,6 +275,25 @@ class CoreCommands(Protocol):
             Optional[str], await self._execute_command(RequestType.GetString, [key])
         )
 
+    async def strlen(self, key: str) -> int:
+        """
+        Get the length of the string value stored at `key`.
+        See https://redis.io/commands/strlen/ for more details.
+
+        Args:
+            key (str): The key to return its length.
+
+        Returns:
+            int: The length of the string value stored at `key`.
+                If `key` does not exist, it is treated as an empty string and 0 is returned.
+
+        Examples:
+            >>> await client.set("key", "GLIDE")
+            >>> await client.strlen("key")
+                5  # Indicates that the length of the string value stored at `key` is 5.
+        """
+        return cast(int, await self._execute_command(RequestType.Strlen, [key]))
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.

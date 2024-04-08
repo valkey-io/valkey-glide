@@ -114,6 +114,20 @@ class BaseTransaction:
             args.extend(expiry.get_cmd_args())
         return self.append_command(RequestType.SetString, args)
 
+    def strlen(self: TTransaction, key: str) -> TTransaction:
+        """
+        Get the length of the string value stored at `key`.
+        See https://redis.io/commands/strlen/ for more details.
+
+        Args:
+            key (str): The key to return its length.
+
+        Commands response:
+            int: The length of the string value stored at `key`.
+                If `key` does not exist, it is treated as an empty string and 0 is returned.
+        """
+        return self.append_command(RequestType.Strlen, [key])
+
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.
