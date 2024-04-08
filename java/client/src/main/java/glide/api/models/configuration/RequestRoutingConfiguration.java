@@ -24,6 +24,7 @@ public class RequestRoutingConfiguration {
 
     /** A route that addresses single node. */
     public interface SingleNodeRoute extends Route {}
+
     /** A route that addresses multiple nodes. */
     public interface MultiNodeRoute extends Route {}
 

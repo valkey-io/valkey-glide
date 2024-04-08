@@ -199,12 +199,12 @@ public class CommandManager {
     protected RedisRequest.Builder prepareRedisRequest(
             Script script, List<String> keys, List<String> args) {
         return RedisRequest.newBuilder()
-                        .setScriptInvocation(
-                                ScriptInvocation.newBuilder()
-                                        .setHash(script.getHash())
-                                        .addAllKeys(keys)
-                                        .addAllArgs(args)
-                                        .build());
+                .setScriptInvocation(
+                        ScriptInvocation.newBuilder()
+                                .setHash(script.getHash())
+                                .addAllKeys(keys)
+                                .addAllArgs(args)
+                                .build());
     }
 
     /**
