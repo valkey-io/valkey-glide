@@ -81,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -367,6 +368,17 @@ public class TransactionTests {
                                 .addArgs("key2")
                                 .addArgs(WITH_SCORES_REDIS_API)
                                 .build()));
+
+        transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
+        results.add(
+            Pair.of(
+                ZDiffStore,
+                ArgsArray.newBuilder()
+                    .addArgs("destKey")
+                    .addArgs("2")
+                    .addArgs("key1")
+                    .addArgs("key2")
+                    .build()));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
