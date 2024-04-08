@@ -67,7 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LinsertOptions;
+import glide.api.models.commands.LinsertOptions.InsertPosition;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -1428,12 +1428,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts <code>element</code> in the <code>list</code> either before or after the reference
-     * value.
+     * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
+     * pivot</code> value.
      *
      * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
      * @param key The key of the list.
-     * @param position The position definition.
+     * @param position The position to insert into - either {@link InsertPosition#BEFORE} or {@link
+     *     InsertPosition#AFTER} the <code>pivot</code>.
      * @param pivot The reference value.
      * @param element The new element to insert.
      * @return Command Response - The list length after a successful insert operation, <code>0</code>
@@ -1442,7 +1443,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T linsert(
             @NonNull String key,
-            @NonNull LinsertOptions.InsertPosition position,
+            @NonNull InsertPosition position,
             @NonNull String pivot,
             @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
