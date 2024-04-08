@@ -1105,6 +1105,26 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sinter(BaseClient client) {
+        String key1 = "{sinter}-" + UUID.randomUUID();
+        String key2 = "{sinter}-" + UUID.randomUUID();
+        String key3 = "{sinter}-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+        assertEquals(Set.of("c"), client.sinter(new String[] {key1, key2}).get());
+        assertEquals(0, client.sinter(new String[] {key1, key3}).get().size());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+            assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
