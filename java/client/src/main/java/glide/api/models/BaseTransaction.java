@@ -1559,7 +1559,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination Destination key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
-     * @return The number of members in the resulting sorted set stored at <code>destination</code>.
+     * @return Command Response - The number of members in the resulting sorted set stored at <code>
+     *     destination</code>.
      */
     public T zdiffstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs =
