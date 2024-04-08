@@ -218,10 +218,10 @@ public interface StringCommands {
      * @return The length of the string stored at <code>key</code> after it was modified.
      * @example
      *     <pre>{@code
-     * long len = client.setrange("key", 6, "Redis").get();
-     * assert len == 11L; // new key was created with length of 11 symbols
+     * long len = client.setrange("key", 6, "GLIDE").get();
+     * assert len == 11L; // Wew key was created with length of 11 symbols
      * String value = client.get("key").get();
-     * assert value.equals("\0\0\0\0\0\0Redis"); // the string was padded with zero bytes
+     * assert value.equals("\0\0\0\0\0\0GLIDE"); // The string was padded with zero bytes
      * }</pre>
      */
     CompletableFuture<Long> setrange(String key, int offset, String value);

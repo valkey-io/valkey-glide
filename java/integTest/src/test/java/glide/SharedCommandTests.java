@@ -441,9 +441,11 @@ public class SharedCommandTests {
         // existing key
         assertEquals(11L, client.setrange(stringKey, 6, "GLIDE").get());
         assertEquals("Hello GLIDE", client.get(stringKey).get());
+
         // offset > len
         assertEquals(20L, client.setrange(stringKey, 15, "GLIDE").get());
         assertEquals("Hello GLIDE\0\0\0\0GLIDE", client.get(stringKey).get());
+
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
         Exception exception =
