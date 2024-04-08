@@ -14,7 +14,8 @@ import java.util.concurrent.CompletableFuture;
 public interface StreamBaseCommands {
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
@@ -29,7 +30,8 @@ public interface StreamBaseCommands {
     CompletableFuture<String> xadd(String key, Map<String, String> values);
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.

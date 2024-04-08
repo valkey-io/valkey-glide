@@ -1480,7 +1480,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
@@ -1493,7 +1494,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.

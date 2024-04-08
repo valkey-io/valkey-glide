@@ -119,7 +119,9 @@ public abstract class BaseClient
                 HashBaseCommands,
                 ListBaseCommands,
                 SetBaseCommands,
-                SortedSetBaseCommands {
+                SortedSetBaseCommands,
+                StreamBaseCommands,
+                HyperLogLogBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -729,10 +731,10 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xadd(
-            @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
+        @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
         String[] arguments =
-                ArrayUtils.addAll(
-                        ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
+            ArrayUtils.addAll(
+                ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
         return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
     }
 
