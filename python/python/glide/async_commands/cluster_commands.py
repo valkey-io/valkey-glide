@@ -118,6 +118,10 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise an error is raised.
+
+        Example:
+            >>> await client.config_rewrite()
+                'OK'
         """
         return cast(
             TOK, await self._execute_command(RequestType.ConfigRewrite, [], route)
@@ -327,7 +331,7 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.time()
             ['1710925775', '913580']
-            >>> await client.client_getname(AllNodes())
+            >>> await client.time(AllNodes())
             {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
         """
         return cast(

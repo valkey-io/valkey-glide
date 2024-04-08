@@ -7,8 +7,8 @@ import glide.api.models.commands.ScriptOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Generic Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Generic Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
@@ -24,7 +24,7 @@ public interface GenericBaseCommands {
      * @example
      *     <pre>{@code
      * Long num = client.del(new String[] {"key1", "key2"}).get();
-     * assert num == 2l;
+     * assert num == 2L;
      * }</pre>
      */
     CompletableFuture<Long> del(String[] keys);
@@ -263,8 +263,8 @@ public interface GenericBaseCommands {
      *     if <code>key</code> exists but has no associated expire.
      * @example
      *     <pre>{@code
-     * Long timeRemaining = client.ttl("my_key").get()
-     * assert timeRemaining == 3600L //Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     * Long timeRemaining = client.ttl("my_key").get();
+     * assert timeRemaining == 3600L; //Indicates that "my_key" has a remaining time to live of 3600 seconds.
      *
      * Long timeRemaining = client.ttl("nonexistent_key").get();
      * assert timeRemaining == -2L; //Returns -2 for a non-existing key.
