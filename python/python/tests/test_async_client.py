@@ -981,6 +981,21 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_strlen(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        value_list = ["value4", "value3", "value2", "value1"]
+
+        assert await redis_client.set(key1, "foo") == OK
+        assert await redis_client.strlen(key1) == 3
+        assert await redis_client.strlen("non_existing_key") == 0
+
+        assert await redis_client.lpush(key2, value_list) == 4
+        with pytest.raises(RequestError):
+            assert await redis_client.strlen(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_exists(self, redis_client: TRedisClient):
         keys = [get_random_string(10), get_random_string(10)]
 
