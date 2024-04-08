@@ -208,7 +208,6 @@ public class TransactionTestUtilities {
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
             3L, // lpush(listKey3, new String[] { value1, value2, value3})
-            // TODO fix after #174 merge and rebase
             4L, // linsert(listKey3, AFTER, value2, value2)
             new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
             new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
