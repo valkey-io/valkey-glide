@@ -2,7 +2,7 @@
 
 import asyncio
 import threading
-from typing import List, Optional, Tuple, Union, cast
+from typing import List, Optional, Tuple, Type, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
@@ -35,7 +35,7 @@ from .glide import (
 
 def get_request_error_class(
     error_type: Optional[RequestErrorType.ValueType],
-) -> type[RequestError]:
+) -> Type[RequestError]:
     if error_type == RequestErrorType.Disconnect:
         return ConnectionError
     if error_type == RequestErrorType.ExecAbort:

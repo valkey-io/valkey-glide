@@ -12,13 +12,19 @@ using static tests.Integration.IntegrationTestBase;
 
 public class GetAndSet
 {
+    private async Task GetAndSetValues(AsyncClient client, string key, string value)
+    {
+        var setResult = await client.SetAsync(key, value);
+        Assert.That(setResult, Is.EqualTo("OK"));
+        var result = await client.GetAsync(key);
+        Assert.That(result, Is.EqualTo(value));
+    }
+
     private async Task GetAndSetRandomValues(AsyncClient client)
     {
         var key = Guid.NewGuid().ToString();
         var value = Guid.NewGuid().ToString();
-        await client.SetAsync(key, value);
-        var result = await client.GetAsync(key);
-        Assert.That(result, Is.EqualTo(value));
+        await GetAndSetValues(client, key, value);
     }
 
     [Test]
@@ -37,9 +43,7 @@ public class GetAndSet
         {
             var key = Guid.NewGuid().ToString();
             var value = "שלום hello 汉字";
-            await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            await GetAndSetValues(client, key, value);
         }
     }
 
@@ -60,9 +64,7 @@ public class GetAndSet
         {
             var key = Guid.NewGuid().ToString();
             var value = "";
-            await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            await GetAndSetValues(client, key, value);
         }
     }
 
@@ -81,9 +83,7 @@ public class GetAndSet
             {
                 value += value;
             }
-            await client.SetAsync(key, value);
-            var result = await client.GetAsync(key);
-            Assert.That(result, Is.EqualTo(value));
+            await GetAndSetValues(client, key, value);
         }
     }
 

@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Hash Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Hash Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=hash">Hash Commands</a>
  */
@@ -48,6 +48,29 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap);
 
     /**
+     * Sets <code>field</code> in the hash stored at <code>key</code> to <code>value</code>, only if
+     * <code>field</code> does not yet exist.<br>
+     * If <code>key</code> does not exist, a new key holding a hash is created.<br>
+     * If <code>field</code> already exists, this operation has no effect.
+     *
+     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to set the value for.
+     * @param value The value to set.
+     * @return <code>true</code> if the field was set, <code>false</code> if the field already existed
+     *     and was not set.
+     * @example
+     *     <pre>{@code
+     * Boolean payload1 = client.hsetnx("myHash", "field", "value").get();
+     * assert payload1; // Indicates that the field "field" was set successfully in the hash "myHash".
+     *
+     * Boolean payload2 = client.hsetnx("myHash", "field", "newValue").get();
+     * assert !payload2; // Indicates that the field "field" already existed in the hash "myHash" and was not set again.
+     * }</pre>
+     */
+    CompletableFuture<Boolean> hsetnx(String key, String field, String value);
+
+    /**
      * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
      * not exist within this hash are ignored.
      *
@@ -59,11 +82,44 @@ public interface HashBaseCommands {
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
      * @example
      *     <pre>{@code
-     * Long num = client.hdel("my_hash", new String[] {}).get("field1", "field2");
+     * Long num = client.hdel("my_hash", new String[] {"field1", "field2"}).get();
      * assert num == 2L; //Indicates that two fields were successfully removed from the hash.
      * }</pre>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
+
+    /**
+     * Returns the number of fields contained in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return The number of fields in the hash, or <code>0</code> when the key does not exist.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.hlen("myHash").get();
+     * assert num1 == 3L;
+     *
+     * Long num2 = client.hlen("nonExistingKey").get();
+     * assert num2 == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hlen(String key);
+
+    /**
+     * Returns all values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return An <code>array</code> of values in the hash, or an <code>empty array</code> when the
+     *     key does not exist.
+     * @example
+     *     <pre>{@code
+     * String[] values = client.hvals("myHash").get();
+     * assert values.equals(new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
+     * }</pre>
+     */
+    CompletableFuture<String[]> hvals(String key);
 
     /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
@@ -142,7 +198,7 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hincrBy(String key, String field, long amount);
 
     /**
-     * Increment the string representing a floating point number stored at <code>field</code> in the
+     * Increments the string representing a floating point number stored at <code>field</code> in the
      * hash stored at <code>key</code> by increment. By using a negative increment value, the value
      * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
      * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
@@ -154,7 +210,7 @@ public interface HashBaseCommands {
      *     value.
      * @param amount The amount by which to increment or decrement the field's value. Use a negative
      *     value to decrement.
-     * @returns The value of <code>field</code> in the hash stored at <code>key</code> after the
+     * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
      *     increment or decrement.
      * @example
      *     <pre>{@code

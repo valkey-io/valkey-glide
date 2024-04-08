@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
-        "target": "esnext" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
+        "target": "ESNext",
+        "module": "commonjs",
         "allowJs": true,
         "esModuleInterop": true,
         "baseUrl": "./",
@@ -19,9 +20,7 @@
         "resolveJsonModule": true,
         "traceResolution": false,
         "types": ["node", "jest"],
-        /* The bellow parts are for developer extention usage and should be overriden in cjs and mjs tscofig's files */
-        "module": "ESNext" /* Specify what module code is generated. Ovrride in tsconfig-cjs/mjs */,
-        "outDir": "./build-ts/mjs" /* Specify an output folder for all emitted files. Ovrride in tsconfig-cjs */
+        "outDir": "./build-ts" /* Specify an output folder for all emitted files */
     },
     "include": ["./*.ts", "src/*.ts", "src/*.js"],
     "exclude": [
