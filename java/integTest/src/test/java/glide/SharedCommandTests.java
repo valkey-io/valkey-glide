@@ -1345,6 +1345,50 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zdiff(BaseClient client) {
+        String key1 = "{testKey}:" + UUID.randomUUID();
+        String key2 = "{testKey}:" + UUID.randomUUID();
+        String key3 = "{testKey}:" + UUID.randomUUID();
+        String nonExistentKey = "{testKey}:" + UUID.randomUUID();
+
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        Map<String, Double> membersScores2 = Map.of("two", 2.0);
+        Map<String, Double> membersScores3 = Map.of("one", 0.5, "two", 2.0, "three", 3.0, "four", 4.0);
+
+        assertEquals(3, client.zadd(key1, membersScores1).get());
+        assertEquals(1, client.zadd(key2, membersScores2).get());
+        assertEquals(4, client.zadd(key3, membersScores3).get());
+
+        assertArrayEquals(new String[] {"one", "three"}, client.zdiff(new String[] {key1, key2}).get());
+        assertArrayEquals(new String[] {}, client.zdiff(new String[] {key1, key3}).get());
+        assertArrayEquals(new String[] {}, client.zdiff(new String[] {nonExistentKey, key3}).get());
+
+        assertEquals(
+            Map.of("one", 1.0, "three", 3.0), client.zdiffWithScores(new String[] {key1, key2}).get());
+        assertEquals(Map.of(), client.zdiffWithScores(new String[] {key1, key3}).get());
+        assertTrue(client.zdiffWithScores(new String[] {nonExistentKey, key3}).get().isEmpty());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonExistentKey, "bar").get());
+
+        ExecutionException executionException =
+            assertThrows(
+                ExecutionException.class,
+                () -> client.zdiff(new String[] {nonExistentKey, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+            assertThrows(
+                ExecutionException.class,
+                () -> client.zdiffWithScores(new String[] {nonExistentKey, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")

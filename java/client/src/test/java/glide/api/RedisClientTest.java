@@ -5,6 +5,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -96,6 +97,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -2343,6 +2345,57 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Double[]> response = service.zmscore(key, members);
         Double[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zdiff_returns_success() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments = new String[] {"2", key1, key2};
+        String[] value = new String[] {"element1"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZDiff), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zdiff(new String[] {key1, key2});
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zdiffWithScores_returns_success() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_REDIS_API};
+        Map<String, Double> value = Map.of("element1", 2.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZDiff), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response =
+            service.zdiffWithScores(new String[] {key1, key2});
+        Map<String, Double> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

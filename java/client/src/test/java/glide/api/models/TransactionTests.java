@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
@@ -79,6 +80,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -355,6 +357,22 @@ public class TransactionTests {
                 Pair.of(
                         ZMScore,
                         ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
+
+        transaction.zdiff(new String[] {"key1", "key2"});
+        results.add(
+            Pair.of(
+                ZDiff, ArgsArray.newBuilder().addArgs("2").addArgs("key1").addArgs("key2").build()));
+
+        transaction.zdiffWithScores(new String[] {"key1", "key2"});
+        results.add(
+            Pair.of(
+                ZDiff,
+                ArgsArray.newBuilder()
+                    .addArgs("2")
+                    .addArgs("key1")
+                    .addArgs("key2")
+                    .addArgs(WITH_SCORES_REDIS_API)
+                    .build()));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));

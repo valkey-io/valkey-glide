@@ -110,6 +110,11 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
+        baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        baseTransaction.zadd(key9, Map.of("two", 2.2));
+        baseTransaction.zdiff(new String[] {key8, key9});
+        baseTransaction.zdiffWithScores(new String[] {key8, key9});
+
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
         baseTransaction.xadd(
@@ -201,6 +206,10 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            3L, // zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+            1L, // zadd(key9, Map.of("two", 2.2))
+            new String[] {"one", "three"}, // zdiff(new String[] {key8, key9})
+            Map.of("one", 1.0, "three", 3.0), // zdiffWithScores(new String[] {key8, key9})
             "0-1", // xadd(key9, Map.of("field1", "value1"),
             // StreamAddOptions.builder().id("0-1").build());
             "0-2", // xadd(key9, Map.of("field2", "value2"),
