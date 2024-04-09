@@ -777,7 +777,7 @@ class CoreCommands(Protocol):
             elements (List[str]): The elements to insert at the head of the list stored at `key`.
 
         Returns:
-            int: The length of the list after the push operations.
+            int: The length of the list after the push operation.
 
         Examples:
             >>> await client.lpushx("my_list", ["value1", "value2"])
@@ -939,7 +939,7 @@ class CoreCommands(Protocol):
             elements (List[str]): The elements to insert at the tail of the list stored at `key`.
 
         Returns:
-            int: The length of the list after the push operations.
+            int: The length of the list after the push operation.
 
         Examples:
             >>> await client.rpushx("my_list", ["value1", "value2"])

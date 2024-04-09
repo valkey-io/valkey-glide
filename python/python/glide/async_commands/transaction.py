@@ -598,7 +598,7 @@ class BaseTransaction:
             elements (List[str]): The elements to insert at the head of the list stored at `key`.
 
         Command response:
-            int: The length of the list after the push operations.
+            int: The length of the list after the push operation.
         """
         return self.append_command(RequestType.LPushX, [key] + elements)
 
@@ -704,7 +704,7 @@ class BaseTransaction:
             elements (List[str]): The elements to insert at the tail of the list stored at `key`.
 
         Command response:
-            int: The length of the list after the push operations.
+            int: The length of the list after the push operation.
         """
         return self.append_command(RequestType.RPushX, [key] + elements)
 
