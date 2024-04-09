@@ -548,7 +548,7 @@ public interface SortedSetBaseCommands {
      *     If <code>maxScore < minScore</code>, <code>0</code> is returned.
      * @example
      *     <pre>{@code
-     * Long num1 = client.zcount("my_sorted_set", new ScoreBoundary(5.0, true), InfBound.POSITIVE_INFINITY).get();
+     * Long num1 = client.zcount("my_sorted_set", new ScoreBoundary(5.0, true), InfScoreBound.POSITIVE_INFINITY).get();
      * assert num1 == 2L; // Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      *
      * Long num2 = client.zcount("my_sorted_set", new ScoreBoundary(5.0, true), new ScoreBoundary(10.0, false)).get();
