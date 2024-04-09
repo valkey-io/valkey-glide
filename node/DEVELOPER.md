@@ -90,13 +90,13 @@ Before starting this step, make sure you've installed all software requirments.
    ```
    Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
-6. Run tests:
+5. Run tests:
     1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
     2. Execute the following command from the node folder:
         ```bash
         npm test
         ```
-7. Integrating the built GLIDE package into your project:
+6. Integrating the built GLIDE package into your project:
     Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 -   For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
