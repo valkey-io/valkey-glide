@@ -2365,7 +2365,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(ZDiff), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String[]> response = service.zdiff(new String[] {key1, key2});
@@ -2390,11 +2390,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZDiff), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Map<String, Double>> response =
-            service.zdiffWithScores(new String[] {key1, key2});
+                service.zdiffWithScores(new String[] {key1, key2});
         Map<String, Double> payload = response.get();
 
         // verify

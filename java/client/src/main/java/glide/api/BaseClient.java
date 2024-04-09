@@ -738,7 +738,7 @@ public abstract class BaseClient
     public CompletableFuture<String[]> zdiff(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
         return commandManager.submitNewCommand(
-            ZDiff, arguments, response -> castArray(handleArrayResponse(response), String.class));
+                ZDiff, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override

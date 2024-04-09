@@ -23,6 +23,8 @@ public class TransactionTestUtilities {
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
+    private static final String key10 = "{key}" + UUID.randomUUID();
+
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
@@ -116,11 +118,11 @@ public class TransactionTestUtilities {
         baseTransaction.zdiffWithScores(new String[] {key8, key9});
 
         baseTransaction.xadd(
-                key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
+                key10, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
         baseTransaction.xadd(
-                key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
+                key10, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
         baseTransaction.xadd(
-                key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
+                key10, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
