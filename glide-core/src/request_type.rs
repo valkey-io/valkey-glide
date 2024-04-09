@@ -104,6 +104,7 @@ pub enum RequestType {
     DBSize = 92,
     Brpop = 93,
     Hkeys = 94,
+    Spop = 95,
     PfAdd = 96,
     PfCount = 97,
     PfMerge = 98,
@@ -223,6 +224,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RPushX => RequestType::RPushX,
             ProtobufRequestType::LPushX => RequestType::LPushX,
             ProtobufRequestType::Blpop => RequestType::Blpop,
+            ProtobufRequestType::Spop => RequestType::Spop,
         }
     }
 }
@@ -332,6 +334,7 @@ impl RequestType {
             RequestType::RPushX => Some(cmd("RPUSHX")),
             RequestType::LPushX => Some(cmd("LPUSHX")),
             RequestType::Blpop => Some(cmd("BLPOP")),
+            RequestType::Spop => Some(cmd("SPOP")),
         }
     }
 }
