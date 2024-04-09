@@ -362,6 +362,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::Rename => Some(cmd("RENAME")),
         RequestType::DBSize => Some(cmd("DBSIZE")),
         RequestType::Brpop => Some(cmd("BRPOP")),
+        RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
     }
 }
 

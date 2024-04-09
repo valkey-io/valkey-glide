@@ -19,6 +19,7 @@ public class TransactionTestUtilities {
     private static final String key6 = "{key}" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
+    private static final String zsetKey2 = "{key}:zsetKey2-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -98,6 +99,10 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
+        baseTransaction
+                .zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                .bzpopmax(new String[] {zsetKey2}, .1);
+
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
 
@@ -164,6 +169,8 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            3L, // zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+            new Object[] {zsetKey2, "three", 3.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
             OK,
             Map.of("timeout", "1000"),
             OK,

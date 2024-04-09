@@ -5,6 +5,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -417,6 +418,12 @@ public class TransactionTests {
 
         transaction.zpopmax("key");
         results.add(Pair.of(ZPopMax, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.bzpopmax(new String[] {"key1", "key2"}, .5);
+        results.add(
+                Pair.of(
+                        BZPopMax,
+                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
 
         transaction.zpopmax("key", 2);
         results.add(Pair.of(ZPopMax, ArgsArray.newBuilder().addArgs("key").addArgs("2").build()));
