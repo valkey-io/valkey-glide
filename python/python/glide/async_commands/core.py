@@ -696,7 +696,7 @@ class CoreCommands(Protocol):
 
     async def lpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the head of the list, only if `key` already exists and holds a list.
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -709,9 +709,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpushx("my_list", ["value1", "value2"])
-                2
+                3 // Indicates new length of the list
             >>> await client.lpushx("nonexistent_list", ["new_value"])
-                0
+                0 // Indicates that operation did nothing
         """
         return cast(
             int, await self._execute_command(RequestType.LPushX, [key] + elements)
@@ -858,7 +858,7 @@ class CoreCommands(Protocol):
 
     async def rpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the tail of the list, only if `key` already exists and holds a list.
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
 
         See https://redis.io/commands/rpushx/ for more details.
 
@@ -871,9 +871,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.rpushx("my_list", ["value1", "value2"])
-                2
+                3 // Indicates new length of the list
             >>> await client.rpushx("nonexistent_list", ["new_value"])
-                0
+                0 // Indicates that operation did nothing
         """
         return cast(
             int, await self._execute_command(RequestType.RPushX, [key] + elements)

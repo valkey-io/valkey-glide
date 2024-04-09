@@ -575,7 +575,7 @@ class BaseTransaction:
 
     def lpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
-        Inserts specified values at the head of the list, only if `key` already exists and holds a list.
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -681,7 +681,7 @@ class BaseTransaction:
 
     def rpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
-        Inserts specified values at the tail of the list, only if `key` already exists and holds a list.
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
 
         See https://redis.io/commands/rpushx/ for more details.
 
