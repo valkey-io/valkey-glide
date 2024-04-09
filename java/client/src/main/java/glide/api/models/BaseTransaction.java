@@ -880,8 +880,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Moves a set element from one set to another. Creates a new destination set if needed.<br>
-     * The operation is atomic.
+     * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
+     * </code>, removing it from the source set. Creates a new destination set if needed. The
+     * operation is atomic.
      *
      * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
      * @param source The key of the set to remove the element from.
