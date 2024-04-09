@@ -213,13 +213,14 @@ fn convert_array_to_map(
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
+    // TODO use enum to avoid mistakes
     match command.as_slice() {
         b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
             Some(ExpectedReturnType::Map)
         }
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
-        | b"SISMEMBER" | b"PERSIST" => Some(ExpectedReturnType::Boolean),
+        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" => Some(ExpectedReturnType::Boolean),
         b"SMEMBERS" => Some(ExpectedReturnType::Set),
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -316,6 +317,14 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZREVRANK").arg("key").arg("member")).is_none());
+    }
+
+    #[test]
+    fn convert_smove_to_bool() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SMOVE").arg("key1").arg("key2").arg("elem")),
+            Some(ExpectedReturnType::Boolean)
+        ));
     }
 
     #[test]

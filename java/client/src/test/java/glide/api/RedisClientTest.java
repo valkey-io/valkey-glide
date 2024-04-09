@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -60,6 +61,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -1478,6 +1480,30 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void smove_returns_success() {
+        // setup
+        String source = "src";
+        String destination = "dst";
+        String member = "elem";
+        String[] arguments = {source, destination, member};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(SMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.smove(source, destination, member);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(response.get());
     }
 
     @SneakyThrows

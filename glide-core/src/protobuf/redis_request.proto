@@ -135,6 +135,7 @@ enum RequestType {
     Rename = 91;
     DBSize = 92;
     Brpop = 93;
+    SMove = 106;
 }
 
 message Command {

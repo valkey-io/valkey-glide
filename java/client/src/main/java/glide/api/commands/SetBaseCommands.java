@@ -75,4 +75,22 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> scard(String key);
+
+    /**
+     * Moves a set element from one set to another. Creates a new destination set if needed.<br>
+     * The operation is atomic.
+     *
+     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @param source The key of the set to remove the element from.
+     * @param destination The key of the set to add the element to.
+     * @param member The set element to move.
+     * @return <code>true</code> on success, or <code>false</code> if the <code>source</code> set does
+     *     not exist or the element is not a member of the source set.
+     * @example
+     *     <pre>{@code
+     * boolean moved = client.smove("set1", "set2", "element").get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> smove(String source, String destination, String member);
 }

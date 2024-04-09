@@ -747,6 +747,52 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void smove(BaseClient client) {
+        String setKey1 = "{key}" + UUID.randomUUID();
+        String setKey2 = "{key}" + UUID.randomUUID();
+        String setKey3 = "{key}" + UUID.randomUUID();
+        String nonSetKey = "{key}" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(setKey1, new String[] {"1", "2", "3"}).get());
+        assertEquals(2, client.sadd(setKey2, new String[] {"2", "3"}).get());
+        // move an elem
+        assertTrue(client.smove(setKey1, setKey2, "1").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "2", "3"), client.smembers(setKey2).get());
+        // move an elem which preset at destination
+        assertTrue(client.smove(setKey2, setKey1, "2").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "3"), client.smembers(setKey2).get());
+        // move from missing key
+        assertFalse(client.smove(setKey3, setKey1, "4").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        // move to a new set
+        assertTrue(client.smove(setKey1, setKey3, "2").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+        // move missing element
+        assertFalse(client.smove(setKey1, setKey3, "42").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+        // move missing element to missing key
+        assertFalse(client.smove(setKey1, nonSetKey, "42").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals("none", client.type(nonSetKey).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonSetKey, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(nonSetKey, setKey1, "_").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
