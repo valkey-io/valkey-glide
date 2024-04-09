@@ -3,6 +3,7 @@
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
 * Python: Added ZREMRANGEBYSCORE command ([#1151](https://github.com/aws/glide-for-redis/pull/1151))
+* Node: Added SPOP, SPOPCOUNT commands. ([#1117](https://github.com/aws/glide-for-redis/pull/1117))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
