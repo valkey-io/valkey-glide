@@ -52,12 +52,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
+import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -806,6 +809,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
 
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return Command Response - <code>true</code> if the member exists in the set, <code>false
+     *     </code> otherwise. If <code>key</code> doesn't exist, it is treated as an <code>empty set
+     *     </code> and the command returns <code>false</code>.
+     */
+    public T sismember(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, member);
+
+        protobufTransaction.addCommands(buildCommand(SIsMember, commandArgs));
         return getThis();
     }
 
@@ -1754,6 +1774,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T pfadd(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
         protobufTransaction.addCommands(buildCommand(PfAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * @see <a href="https://redis.io/commands/pfcount/">redis.io</a> for details.
+     * @param keys The keys of the HyperLogLog data structures to be analyzed.
+     * @return Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     <br>
+     *     The cardinality of a key that does not exist is <code>0</code>.
+     */
+    public T pfcount(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(PfCount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value.<br>
+     * If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
+     * otherwise a new HyperLogLog is created.
+     *
+     * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
+     * @param destination The key of the destination HyperLogLog where the merged data sets will be
+     *     stored.
+     * @param sourceKeys The keys of the HyperLogLog structures to be merged.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T pfmerge(@NonNull String destination, @NonNull String[] sourceKeys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destination));
+        protobufTransaction.addCommands(buildCommand(PfMerge, commandArgs));
         return getThis();
     }
 

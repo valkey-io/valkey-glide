@@ -43,11 +43,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
+import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -488,6 +491,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> sismember(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SIsMember, new String[] {key, member}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> srem(@NonNull String key, @NonNull String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
@@ -788,5 +797,17 @@ public abstract class BaseClient
     public CompletableFuture<Long> pfadd(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pfcount(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> pfmerge(
+            @NonNull String destination, @NonNull String[] sourceKeys) {
+        String[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
+        return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
     }
 }

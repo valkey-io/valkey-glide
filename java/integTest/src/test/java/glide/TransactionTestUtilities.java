@@ -23,6 +23,8 @@ public class TransactionTestUtilities {
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
+    private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
+    private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -90,6 +92,7 @@ public class TransactionTestUtilities {
         baseTransaction.sadd(key7, new String[] {"baz", "foo"});
         baseTransaction.srem(key7, new String[] {"foo"});
         baseTransaction.scard(key7);
+        baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -126,6 +129,10 @@ public class TransactionTestUtilities {
                 .brpop(new String[] {listKey3}, 0.01);
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+        baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
+        baseTransaction
+                .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+                .pfcount(new String[] {hllKey3});
 
         return baseTransaction;
     }
@@ -176,6 +183,7 @@ public class TransactionTestUtilities {
             2L,
             1L,
             1L,
+            true, // sismember(key7, "baz")
             Set.of("baz"),
             3L,
             0L, // zrank(key8, "one")
@@ -203,6 +211,9 @@ public class TransactionTestUtilities {
             new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
             new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
+            3L, // pfcount(new String[] { hllKey1, hllKey2 });;
+            OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+            3L, // pfcount(new String[] { hllKey3 })
         };
     }
 }
