@@ -128,6 +128,23 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Strlen, [key])
 
+    def rename(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key`.
+        If `newkey` already exists it is overwritten.
+        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+        See https://redis.io/commands/rename/ for more details.
+
+        Args:
+            key (str) : The key to rename.
+            new_key (str) : The new name of the key.
+
+        Command response:
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+        """
+        return self.append_command(RequestType.Rename, [key, new_key])
+
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.
