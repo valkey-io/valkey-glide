@@ -2,6 +2,7 @@
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
+* Python: Added ZREMRANGEBYSCORE command ([#1151](https://github.com/aws/glide-for-redis/pull/1151))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
