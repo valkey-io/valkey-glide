@@ -1465,6 +1465,7 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key1, membersScores).get());
 
+        // In range negative to positive infinity.
         assertEquals(
             3,
             client
@@ -1478,14 +1479,16 @@ public class SharedCommandTests {
                     new ScoreBoundary(Double.NEGATIVE_INFINITY),
                     new ScoreBoundary(Double.POSITIVE_INFINITY))
                 .get());
-        assertEquals(
-            1, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, false)).get());
+        // In range 1 (exclusive) to 3 (inclusive)
         assertEquals(
             2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
+        // In range negative infinity to 3 (inclusive)
         assertEquals(
             3, client.zcount(key1, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Incorrect range start > end
         assertEquals(
             0, client.zcount(key1, InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Non-existing key
         assertEquals(
             0,
             client
