@@ -1349,10 +1349,10 @@ public class SharedCommandTests {
     @ParameterizedTest
     @MethodSource("getClients")
     public void zdiff(BaseClient client) {
-        String key1 = "{testKey}:" + UUID.randomUUID();
-        String key2 = "{testKey}:" + UUID.randomUUID();
-        String key3 = "{testKey}:" + UUID.randomUUID();
-        String nonExistentKey = "{testKey}:" + UUID.randomUUID();
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        String nonExistentKey = "{testKey}:4-" + UUID.randomUUID();
 
         Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         Map<String, Double> membersScores2 = Map.of("two", 2.0);
