@@ -113,6 +113,7 @@ pub enum RequestType {
     RPushX = 102,
     LPushX = 103,
     ZMScore = 104,
+    ZDiff = 105,
     SetRange = 107,
 }
 
@@ -230,7 +231,6 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LInsert => RequestType::LInsert,
             ProtobufRequestType::Spop => RequestType::Spop,
             ProtobufRequestType::ZMScore => RequestType::ZMScore,
-            ProtobufRequestType::SetRange => RequestType::SetRange,
         }
     }
 }
@@ -343,7 +343,6 @@ impl RequestType {
             RequestType::LInsert => Some(cmd("LINSERT")),
             RequestType::Spop => Some(cmd("SPOP")),
             RequestType::ZMScore => Some(cmd("ZMSCORE")),
-            RequestType::SetRange => Some(cmd("SETRANGE")),
         }
     }
 }
