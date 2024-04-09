@@ -45,7 +45,9 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             items.into()
         }
         Value::Map(map) => {
-            let linked_hash_map = env.new_object("java/util/LinkedHashMap", "()V", &[]).unwrap();
+            let linked_hash_map = env
+                .new_object("java/util/LinkedHashMap", "()V", &[])
+                .unwrap();
 
             for (key, value) in map {
                 let java_key = redis_value_to_java(env, key);
