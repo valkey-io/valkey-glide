@@ -6,6 +6,7 @@ import static glide.api.BaseClient.OK;
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.StreamAddOptions;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -17,9 +18,14 @@ public class TransactionTestUtilities {
     private static final String key4 = "{key}" + UUID.randomUUID();
     private static final String key5 = "{key}" + UUID.randomUUID();
     private static final String key6 = "{key}" + UUID.randomUUID();
+    private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String zsetKey2 = "{key}:zsetKey2-" + UUID.randomUUID();
+    private static final String key9 = "{key}" + UUID.randomUUID();
+    private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
+    private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
+    private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -61,6 +67,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
+        baseTransaction.hlen(key4);
         baseTransaction.hexists(key4, field2);
         baseTransaction.hsetnx(key4, field1, value1);
         baseTransaction.hmget(key4, new String[] {field1, "non_existing_field", field2});
@@ -86,6 +93,7 @@ public class TransactionTestUtilities {
         baseTransaction.sadd(key7, new String[] {"baz", "foo"});
         baseTransaction.srem(key7, new String[] {"foo"});
         baseTransaction.scard(key7);
+        baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -99,9 +107,12 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
 
-        baseTransaction
-                .zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
-                .bzpopmax(new String[] {zsetKey2}, .1);
+        baseTransaction.xadd(
+                key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
+        baseTransaction.xadd(
+                key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
+        baseTransaction.xadd(
+                key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
@@ -109,6 +120,24 @@ public class TransactionTestUtilities {
         baseTransaction.configResetStat();
 
         baseTransaction.echo("GLIDE");
+
+        // TODO should be before LINDEX from #1219 and BRPOP/BLPOP from #1218
+        baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
+
+        baseTransaction
+                .lpush(listKey3, new String[] {value1, value2, value3})
+                .blpop(new String[] {listKey3}, 0.01)
+                .brpop(new String[] {listKey3}, 0.01);
+
+        baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+        baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
+        baseTransaction
+                .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+                .pfcount(new String[] {hllKey3});
+
+        baseTransaction
+                .zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                .bzpopmax(new String[] {zsetKey2}, .1);
 
         return baseTransaction;
     }
@@ -137,6 +166,7 @@ public class TransactionTestUtilities {
             1L,
             2L,
             value1,
+            2L, // hlen(key4)
             true,
             Boolean.FALSE, // hsetnx(key4, field1, value1)
             new String[] {value1, null, value2},
@@ -158,6 +188,7 @@ public class TransactionTestUtilities {
             2L,
             1L,
             1L,
+            true, // sismember(key7, "baz")
             Set.of("baz"),
             3L,
             0L, // zrank(key8, "one")
@@ -169,12 +200,27 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
-            3L, // zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
-            new Object[] {zsetKey2, "three", 3.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            "0-1", // xadd(key9, Map.of("field1", "value1"),
+            // StreamAddOptions.builder().id("0-1").build());
+            "0-2", // xadd(key9, Map.of("field2", "value2"),
+            // StreamAddOptions.builder().id("0-2").build());
+            "0-3", // xadd(key9, Map.of("field3", "value3"),
+            // StreamAddOptions.builder().id("0-3").build());
             OK,
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            0L, // rpushx(listKey3, new String[] { "_" })
+            0L, // lpushx(listKey3, new String[] { "_" })
+            3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
+            new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
+            1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})
+            3L, // pfcount(new String[] { hllKey1, hllKey2 });;
+            OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+            3L, // pfcount(new String[] { hllKey3 })
+            3L, // zadd(zsetKey2, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+            new Object[] {zsetKey2, "three", 3.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
         };
     }
 }
