@@ -236,12 +236,12 @@ public interface ListBaseCommands {
      *
      * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
      * @param key The key of the list.
-     * @param position The position to insert into - either {@link InsertPosition#BEFORE} or {@link
-     *     InsertPosition#AFTER} the <code>pivot</code>.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
      * @param pivot The reference value.
      * @param element The new element to insert.
-     * @return The list length after a successful insert operation, <code>0</code> if the <code>key
-     *     </code> doesn't exist or <code>-1</code> if the <code>pivot</code> wasn't found.
+     * @return The list length after a successful insert operation. If the <code>key</code> doesn't
+     *     exist or <code>-1</code> if the <code>pivot</code> wasn't found, return <code>0</code>.
      * @example
      *     <pre>{@code
      * Long length = client.linsert("my_list", BEFORE, "World", "There").get();

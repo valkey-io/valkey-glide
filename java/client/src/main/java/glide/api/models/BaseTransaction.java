@@ -1592,13 +1592,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
      * @param key The key of the list.
-     * @param position The position to insert into - either {@link InsertPosition#BEFORE} or {@link
-     *     InsertPosition#AFTER} the <code>pivot</code>.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
      * @param pivot The reference value.
      * @param element The new element to insert.
-     * @return Command Response - The list length after a successful insert operation, <code>0</code>
-     *     if the <code>key</code> doesn't exist or <code>-1</code> if the <code>pivot</code> wasn't
-     *     found.
+     * @return Command Response - The list length after a successful insert operation. If the <code>
+     *     key</code> doesn't exist or <code>-1</code> if the <code>pivot</code> wasn't found, return
+     *     <code>0</code>.
      */
     public T linsert(
             @NonNull String key,
