@@ -1516,12 +1516,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the difference between the first sorted set and all the successive sorted sets.
+     * Returns the difference between the first sorted set and all the successive sorted sets.<br>
+     * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - An <code>array</code> of elements representing the difference
-     *     between the sorted sets.<br>
+     *     between the sorted sets. <br>
      *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
      *     command returns an empty <code>array</code>.
      */

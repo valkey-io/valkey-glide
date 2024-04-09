@@ -476,8 +476,8 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Double[]> zmscore(String key, String[] members);
 
     /**
-     * Returns the difference between the first sorted set and all the successive sorted sets. To get
-     * the elements with their scores, see {@link #zdiffWithScores}.
+     * Returns the difference between the first sorted set and all the successive sorted sets.<br>
+     * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
