@@ -5,15 +5,15 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Set Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Set Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
 public interface SetBaseCommands {
     /**
-     * Add specified members to the set stored at <code>key</code>. Specified members that are already
-     * a member of this set are ignored.
+     * Adds specified members to the set stored at <code>key</code>. Specified members that are
+     * already a member of this set are ignored.
      *
      * @see <a href="https://redis.io/commands/sadd/">redis.io</a> for details.
      * @param key The <code>key</code> where members will be added to its set.
@@ -30,7 +30,7 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sadd(String key, String[] members);
 
     /**
-     * Remove specified members from the set stored at <code>key</code>. Specified members that are
+     * Removes specified members from the set stored at <code>key</code>. Specified members that are
      * not a member of this set are ignored.
      *
      * @see <a href="https://redis.io/commands/srem/">redis.io</a> for details.
@@ -38,7 +38,7 @@ public interface SetBaseCommands {
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return The number of members that were removed from the set, excluding non-existing members.
      * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
-     *     returns 0.
+     *     returns <code>0</code>.
      * @example
      *     <pre>{@code
      * Long result = client.srem("my_set", new String[]{"member1", "member2"}).get();
@@ -48,7 +48,7 @@ public interface SetBaseCommands {
     CompletableFuture<Long> srem(String key, String[] members);
 
     /**
-     * Retrieve all the members of the set value stored at <code>key</code>.
+     * Retrieves all the members of the set value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/smembers/">redis.io</a> for details.
      * @param key The key from which to retrieve the set members.
@@ -63,7 +63,7 @@ public interface SetBaseCommands {
     CompletableFuture<Set<String>> smembers(String key);
 
     /**
-     * Retrieve the set cardinality (number of elements) of the set stored at <code>key</code>.
+     * Retrieves the set cardinality (number of elements) of the set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/scard/">redis.io</a> for details.
      * @param key The key from which to retrieve the number of set members.
@@ -93,4 +93,24 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> smove(String source, String destination, String member);
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return <code>true</code> if the member exists in the set, <code>false</code> otherwise. If
+     *     <code>key</code> doesn't exist, it is treated as an <code>empty set</code> and the command
+     *     returns <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean payload1 = client.sismember("mySet", "member1").get();
+     * assert payload1; // Indicates that "member1" exists in the set "mySet".
+     *
+     * Boolean payload2 = client.sismember("mySet", "nonExistingMember").get();
+     * assert !payload2; // Indicates that "nonExistingMember" does not exist in the set "mySet".
+     * }</pre>
+     */
+    CompletableFuture<Boolean> sismember(String key, String member);
 }

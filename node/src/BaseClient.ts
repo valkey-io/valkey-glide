@@ -417,6 +417,13 @@ export class BaseClient {
      *
      * @param key - The key to retrieve from the database.
      * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of get method to retrieve the value of a key
+     * const result = await client.get("key");
+     * console.log(result); // Output: 'value'
+     * ```
      */
     public get(key: string): Promise<string | null> {
         return this.createWritePromise(createGet(key));
@@ -431,6 +438,25 @@ export class BaseClient {
      * @returns - If the value is successfully set, return OK.
      * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of set method to set a key-value pair
+     * const result = await client.set("my_key", "my_value");
+     * console.log(result); // Output: 'OK'
+     *
+     * // Example usage of set method with conditional options and expiration
+     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: "seconds", count: 5 }});
+     * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
+     *
+     * // Example usage of set method with conditional options and returning old value
+     * const result3 = await client.set("key", "value", {conditionalSet: "onlyIfDoesNotExist", returnOldValue: true});
+     * console.log(result3); // Output: 'new_value' - Returns the old value of "key".
+     *
+     * // Example usage of get method to retrieve the value of a key
+     * const result4 = await client.get("key");
+     * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
+     * ```
      */
     public set(
         key: string,
@@ -445,6 +471,21 @@ export class BaseClient {
      *
      * @param keys - the keys we wanted to remove.
      * @returns the number of keys that were removed.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of del method to delete an existing key
+     * await client.set("my_key", "my_value");
+     * const result = await client.del(["my_key"]);
+     * console.log(result); // Output: 1
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of del method for a non-existing key
+     * const result = await client.del(["non_existing_key"]);
+     * console.log(result); // Output: 0
+     * ```
      */
     public del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
@@ -456,6 +497,15 @@ export class BaseClient {
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of mget method to retrieve values of multiple keys
+     * await client.set("key1", "value1");
+     * await client.set("key2", "value2");
+     * const result = await client.mget(["key1", "key2"]);
+     * console.log(result); // Output: ['value1', 'value2']
+     * ```
      */
     public mget(keys: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createMGet(keys));
@@ -466,6 +516,13 @@ export class BaseClient {
      *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of mset method to set values for multiple keys
+     * const result = await client.mset({"key1": "value1", "key2": "value2"});
+     * console.log(result); // Output: 'OK'
+     * ```
      */
     public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
@@ -476,6 +533,14 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @returns the value of `key` after the increment.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of incr method to increment the value of a key
+     * await client.set("my_counter", "10");
+     * const result = await client.incr("my_counter");
+     * console.log(result); // Output: 11
+     * ```
      */
     public incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
@@ -487,6 +552,14 @@ export class BaseClient {
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of incrBy method to increment the value of a key by a specified amount
+     * await client.set("my_counter", "10");
+     * const result = await client.incrBy("my_counter", 5);
+     * console.log(result); // Output: 15
+     * ```
      */
     public incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
@@ -501,6 +574,13 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment.
      *
+     * @example
+     * ```typescript
+     * // Example usage of incrByFloat method to increment the value of a floating point key by a specified amount
+     * await client.set("my_float_counter", "10.5");
+     * const result = await client.incrByFloat("my_float_counter", 2.5);
+     * console.log(result); // Output: 13.0
+     * ```
      */
     public incrByFloat(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
@@ -511,6 +591,14 @@ export class BaseClient {
      *
      * @param key - The key to decrement its value.
      * @returns the value of `key` after the decrement.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of decr method to decrement the value of a key by 1
+     * await client.set("my_counter", "10");
+     * const result = await client.decr("my_counter");
+     * console.log(result); // Output: 9
+     * ```
      */
     public decr(key: string): Promise<number> {
         return this.createWritePromise(createDecr(key));
@@ -522,6 +610,14 @@ export class BaseClient {
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
      * @returns the value of `key` after the decrement.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of decrby method to decrement the value of a key by a specified amount
+     * await client.set("my_counter", "10");
+     * const result = await client.decrby("my_counter", 5);
+     * console.log(result); // Output: 5
+     * ```
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
@@ -533,6 +629,21 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hget method on an-existing field
+     * await client.hset("my_hash", "field");
+     * const result = await client.hget("my_hash", "field");
+     * console.log(result); // Output: "value"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hget method on a non-existing field
+     * const result = await client.hget("my_hash", "nonexistent_field");
+     * console.log(result); // Output: null
+     * ```
      */
     public hget(key: string, field: string): Promise<string | null> {
         return this.createWritePromise(createHGet(key, field));
@@ -545,6 +656,13 @@ export class BaseClient {
      * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
      * to be set in the hash stored at the specified key.
      * @returns The number of fields that were added.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hset method
+     * const result = await client.hset("my_hash", \{"field": "value", "field2": "value2"\});
+     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     * ```
      */
     public hset(
         key: string,
@@ -562,6 +680,20 @@ export class BaseClient {
      * @param field - The field to set the value for.
      * @param value - The value to set.
      * @returns `true` if the field was set, `false` if the field already existed and was not set.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hsetnx method
+     * const result = await client.hsetnx("my_hash", "field", "value");
+     * console.log(result); // Output: true - Indicates that the field "field" was set successfully in the hash "my_hash".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hsetnx method on a field that already exists
+     * const result = await client.hsetnx("my_hash", "field", "new_value");
+     * console.log(result); // Output: false - Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
+     * ```
      */
     public hsetnx(key: string, field: string, value: string): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
@@ -575,6 +707,13 @@ export class BaseClient {
      * @param fields - The fields to remove from the hash stored at `key`.
      * @returns the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hdel method
+     * const result = await client.hdel("my_hash", ["field1", "field2"]);
+     * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
+     * ```
      */
     public hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
@@ -588,6 +727,13 @@ export class BaseClient {
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hmget method
+     * const result = await client.hmget("my_hash", ["field1", "field2"]);
+     * console.log(result); // Output: ["value1", "value2"] - A list of values associated with the specified fields.
+     * ```
      */
     public hmget(key: string, fields: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createHMGet(key, fields));
@@ -599,6 +745,20 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
      * @returns `true` the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist, it returns `false`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hexists method with existing field
+     * const result = await client.hexists("my_hash", "field1");
+     * console.log(result); // Output: true
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hexists method with non-existing field
+     * const result = await client.hexists("my_hash", "nonexistent_field");
+     * console.log(result); // Output: false
+     * ```
      */
     public hexists(key: string, field: string): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
@@ -610,6 +770,13 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
      * If `key` does not exist, it returns an empty list.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hgetall method
+     * const result = await client.hgetall("my_hash");
+     * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
+     * ```
      */
     public hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
@@ -624,6 +791,13 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hincrby method to increment the value in a hash by a specified amount
+     * const result = await client.hincrby("my_hash", "field1", 5);
+     * console.log(result); // Output: 5
+     * ```
      */
     public hincrBy(
         key: string,
@@ -642,6 +816,13 @@ export class BaseClient {
      * @param amount - The amount to increment.
      * @param field - The field in the hash stored at `key` to increment its value.
      * @returns the value of `field` in the hash stored at `key` after the increment.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
+     * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
+     * console.log(result); // Output: '2.5'
+     * ```
      */
     public hincrByFloat(
         key: string,
@@ -656,6 +837,20 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @returns The number of fields in the hash, or 0 when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hlen method with an existing key
+     * const result = await client.hlen("my_hash");
+     * console.log(result); // Output: 3
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hlen method with a non-existing key
+     * const result = await client.hlen("non_existing_key");
+     * console.log(result); // Output: 0
+     * ```
      */
     public hlen(key: string): Promise<number> {
         return this.createWritePromise(createHLen(key));
@@ -666,6 +861,13 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hvals method
+     * const result = await client.hvals("my_hash");
+     * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
+     * ```
      */
     public hvals(key: string): Promise<string[]> {
         return this.createWritePromise(createHvals(key));
@@ -679,6 +881,20 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
      * @returns the length of the list after the push operations.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpush method with an existing list
+     * const result = await client.lpush("my_list", ["value2", "value3"]);
+     * console.log(result); // Output: 3 - Indicated that the new length of the list is 3 after the push operation.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpush method with a non-existing list
+     * const result = await client.lpush("nonexistent_list", ["new_value"]);
+     * console.log(result); // Output: 1 - Indicates that a new list was created with one element
+     * ```
      */
     public lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
@@ -691,6 +907,20 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpop method with an existing list
+     * const result = await client.lpop("my_list");
+     * console.log(result); // Output: 'value1'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpop method with a non-existing list
+     * const result = await client.lpop("non_exiting_key");
+     * console.log(result); // Output: null
+     * ```
      */
     public lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
@@ -703,6 +933,20 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpopCount method with an existing list
+     * const result = await client.lpopCount("my_list", 2);
+     * console.log(result); // Output: ["value1", "value2"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lpopCount method with a non-existing list
+     * const result = await client.lpopCount("non_exiting_key", 3);
+     * console.log(result); // Output: null
+     * ```
      */
     public lpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
@@ -721,6 +965,27 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
      * If `key` does not exist an empty list will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lrange method with an existing list and positive indices
+     * const result = await client.lrange("my_list", 0, 2);
+     * console.log(result); // Output: ["value1", "value2", "value3"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lrange method with an existing list and negative indices
+     * const result = await client.lrange("my_list", -2, -1);
+     * console.log(result); // Output: ["value2", "value3"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lrange method with a non-existing list
+     * const result = await client.lrange("non_exiting_key", 0, 2);
+     * console.log(result); // Output: []
+     * ```
      */
     public lrange(key: string, start: number, end: number): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
@@ -732,6 +997,13 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns the length of the list at `key`.
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the llen method
+     * const result = await client.llen("my_list");
+     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
+     * ```
      */
     public llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
@@ -750,6 +1022,13 @@ export class BaseClient {
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list (which causes key to be removed).
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the ltrim method
+     * const result = await client.ltrim("my_list", 0, 1);
+     * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
+     * ```
      */
     public ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
@@ -765,6 +1044,13 @@ export class BaseClient {
      * @param element - The element to remove from the list.
      * @returns the number of the removed elements.
      * If `key` does not exist, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lrem method
+     * const result = await client.lrem("my_list", 2, "value");
+     * console.log(result); // Output: 2 - Removes the first 2 occurrences of "value" in the list.
+     * ```
      */
     public lrem(key: string, count: number, element: string): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
@@ -778,6 +1064,20 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
      * @returns the length of the list after the push operations.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpush method with an existing list
+     * const result = await client.rpush("my_list", ["value2", "value3"]);
+     * console.log(result); // Output: 3 - Indicates that the new length of the list is 3 after the push operation.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpush method with a non-existing list
+     * const result = await client.rpush("nonexistent_list", ["new_value"]);
+     * console.log(result); // Output: 1
+     * ```
      */
     public rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
@@ -790,6 +1090,20 @@ export class BaseClient {
      * @param key - The key of the list.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpop method with an existing list
+     * const result = await client.rpop("my_list");
+     * console.log(result); // Output: 'value1'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpop method with a non-existing list
+     * const result = await client.rpop("non_exiting_key");
+     * console.log(result); // Output: null
+     * ```
      */
     public rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
@@ -802,6 +1116,20 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the list.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpopCount method with an existing list
+     * const result = await client.rpopCount("my_list", 2);
+     * console.log(result); // Output: ["value1", "value2"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the rpopCount method with a non-existing list
+     * const result = await client.rpopCount("non_exiting_key", 7);
+     * console.log(result); // Output: null
+     * ```
      */
     public rpopCount(key: string, count: number): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
@@ -813,7 +1141,14 @@ export class BaseClient {
      *
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
-     * @returns the number of members that were added to the set, not including all the members already present in the set.
+     * @returns The number of members that were added to the set, not including all the members already present in the set.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the sadd method with an existing set
+     * const result = await client.sadd("my_set", ["member1", "member2"]);
+     * console.log(result); // Output: 2
+     * ```
      */
     public sadd(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
@@ -824,8 +1159,15 @@ export class BaseClient {
      *
      * @param key - The key to remove the members from its set.
      * @param members - A list of members to remove from the set stored at `key`.
-     * @returns the number of members that were removed from the set, not including non existing members.
+     * @returns The number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the srem method
+     * const result = await client.srem("my_set", ["member1", "member2"]);
+     * console.log(result); // Output: 2
+     * ```
      */
     public srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
@@ -835,8 +1177,15 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns all members of the set.
+     * @returns All members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the smembers method
+     * const result = await client.smembers("my_set");
+     * console.log(result); // Output: ["member1", "member2", "member3"]
+     * ```
      */
     public smembers(key: string): Promise<string[]> {
         return this.createWritePromise(createSMembers(key));
@@ -846,7 +1195,14 @@ export class BaseClient {
      * See https://redis.io/commands/scard/ for details.
      *
      * @param key - The key to return the number of its members.
-     * @returns the cardinality (number of elements) of the set, or 0 if key does not exist.
+     * @returns The cardinality (number of elements) of the set, or 0 if key does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the scard method
+     * const result = await client.scard("my_set");
+     * console.log(result); // Output: 3
+     * ```
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
@@ -859,6 +1215,20 @@ export class BaseClient {
      * @param member - The member to check for existence in the set.
      * @returns `true` if the member exists in the set, `false` otherwise.
      * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the sismember method when member exists
+     * const result = await client.sismember("my_set", "member1");
+     * console.log(result); // Output: true - Indicates that "member1" exists in the set "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the sismember method when member does not exist
+     * const result = await client.sismember("my_set", "non_existing_member");
+     * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
+     * ```
      */
     public sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSismember(key, member));
@@ -868,8 +1238,15 @@ export class BaseClient {
      * See https://redis.io/commands/exists/ for details.
      *
      * @param keys - The keys list to check.
-     * @returns the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
+     * @returns The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
      * it will be counted multiple times.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the exists method
+     * const result = await client.exists(["key1", "key2", "key3"]);
+     * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
+     * ```
      */
     public exists(keys: string[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
@@ -881,7 +1258,14 @@ export class BaseClient {
      * See https://redis.io/commands/unlink/ for details.
      *
      * @param keys - The keys we wanted to unlink.
-     * @returns the number of keys that were unlinked.
+     * @returns The number of keys that were unlinked.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the unlink method
+     * const result = await client.unlink(["key1", "key2", "key3"]);
+     * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
+     * ```
      */
     public unlink(keys: string[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
@@ -898,6 +1282,20 @@ export class BaseClient {
      * @param option - The expire option.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the expire method
+     * const result = await client.expire("my_key", 60);
+     * console.log(result); // Output: true - Indicates that a timeout of 60 seconds has been set for "my_key".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the expire method with exisiting expiry
+     * const result = await client.expire("my_key", 60, ExpireOptions.HasNoExpiry);
+     * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
+     * ```
      */
     public expire(
         key: string,
@@ -918,6 +1316,13 @@ export class BaseClient {
      * @param option - The expire option.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the expireAt method on a key with no previous expiry
+     * const result = await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry);
+     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * ```
      */
     public expireAt(
         key: string,
@@ -940,6 +1345,13 @@ export class BaseClient {
      * @param option - The expire option.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the pexpire method on a key with no previous expiry
+     * const result = await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry);
+     * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
+     * ```
      */
     public pexpire(
         key: string,
@@ -962,6 +1374,13 @@ export class BaseClient {
      * @param option - The expire option.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the pexpireAt method on a key with no previous expiry
+     * const result = await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry);
+     * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
+     * ```
      */
     public pexpireAt(
         key: string,
@@ -978,6 +1397,27 @@ export class BaseClient {
      *
      * @param key - The key to return its timeout.
      * @returns TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the ttl method with existing key
+     * const result = await client.ttl("my_key");
+     * console.log(result); // Output: 3600 - Indicates that "my_key" has a remaining time to live of 3600 seconds.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the ttl method with existing key that has no associated expire.
+     * const result = await client.ttl("key");
+     * console.log(result); // Output: -1 - Indicates that the key has no associated expire.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the ttl method with a non-existing key
+     * const result = await client.ttl("nonexistent_key");
+     * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
+     * ```
      */
     public ttl(key: string): Promise<number> {
         return this.createWritePromise(createTTL(key));
@@ -1026,12 +1466,18 @@ export class BaseClient {
      * If `changed` is set, returns the number of elements updated in the sorted set.
      *
      * @example
-     *      await client.zadd("mySortedSet", \{ "member1": 10.5, "member2": 8.2 \})
-     *      2 (Indicates that two elements have been added to the sorted set "mySortedSet".)
+     * ```typescript
+     * // Example usage of the zadd method to add elements to a sorted set
+     * const result = await client.zadd("my_sorted_set", \{ "member1": 10.5, "member2": 8.2 \});
+     * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
+     * ```
      *
-     *      await client.zadd("existingSortedSet", \{ member1: 15.0, member2: 5.5 \}, \{ conditionalChange: "onlyIfExists" \} , true);
-     *      2 (Updates the scores of two existing members in the sorted set "existingSortedSet".)
-     *
+     * @example
+     * ```typescript
+     * // Example usage of the zadd method to update scores in an existing sorted set
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options={ conditionalChange: "onlyIfExists" } , changed=true);
+     * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
+     * ```
      */
     public zadd(
         key: string,
@@ -1062,11 +1508,18 @@ export class BaseClient {
      * If there was a conflict with the options, the operation aborts and null is returned.
      *
      * @example
-     *      await client.zaddIncr("mySortedSet", member , 5.0)
-     *      5.0
+     * ```typescript
+     * // Example usage of the zaddIncr method to add a member with a score to a sorted set
+     * const result = await client.zaddIncr("my_sorted_set", member, 5.0);
+     * console.log(result); // Output: 5.0
+     * ```
      *
-     *      await client.zaddIncr("existingSortedSet", member , "3.0" , \{ UpdateOptions: "ScoreLessThanCurrent" \})
-     *      null
+     * @example
+     * ```typescript
+     * // Example usage of the zaddIncr method to add or update a member with a score in an existing sorted set
+     * const result = await client.zaddIncr("existing_sorted_set", member, "3.0", { UpdateOptions: "ScoreLessThanCurrent" });
+     * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
+     * ```
      */
     public zaddIncr(
         key: string,
@@ -1087,6 +1540,20 @@ export class BaseClient {
      * @param members - A list of members to remove from the sorted set.
      * @returns The number of members that were removed from the sorted set, not including non-existing members.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zrem function to remove members from a sorted set
+     * const result = await client.zrem("my_sorted_set", ["member1", "member2"]);
+     * console.log(result); // Output: 2 - Indicates that two members have been removed from the sorted set "my_sorted_set."
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zrem function when the sorted set does not exist
+     * const result = await client.zrem("non_existing_sorted_set", ["member1", "member2"]);
+     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * ```
      */
     public zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZrem(key, members));
@@ -1098,6 +1565,20 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zcard method to get the cardinality of a sorted set
+     * const result = await client.zcard("my_sorted_set");
+     * console.log(result); // Output: 3 - Indicates that there are 3 elements in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zcard method with a non-existing key
+     * const result = await client.zcard("non_existing_key");
+     * console.log(result); // Output: 0
+     * ```
      */
     public zcard(key: string): Promise<number> {
         return this.createWritePromise(createZcard(key));
@@ -1111,6 +1592,27 @@ export class BaseClient {
      * @returns The score of the member.
      * If `member` does not exist in the sorted set, null is returned.
      * If `key` does not exist, null is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zscore method∂∂ to get the score of a member in a sorted set
+     * const result = await client.zscore("my_sorted_set", "member");
+     * console.log(result); // Output: 10.5 - Indicates that the score of "member" in the sorted set "my_sorted_set" is 10.5.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zscore method when the member does not exist in the sorted set
+     * const result = await client.zscore("my_sorted_set", "non_existing_member");
+     * console.log(result); // Output: null
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zscore method with non existimng key
+     * const result = await client.zscore("non_existing_set", "member");
+     * console.log(result); // Output: null
+     * ```
      */
     public zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZscore(key, member));
@@ -1125,6 +1627,20 @@ export class BaseClient {
      * @returns The number of members in the specified score range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minScore` is greater than `maxScore`, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zcount method to count members in a sorted set within a score range
+     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the zcount method to count members in a sorted set within a score range
+     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
+     * ```
      */
     public zcount(
         key: string,
@@ -1140,6 +1656,21 @@ export class BaseClient {
      * @param key - The key to check its length.
      * @returns - The length of the string value stored at key
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of strlen method with an existing key
+     * await client.set("key", "GLIDE");
+     * const len1 = await client.strlen("key");
+     * console.log(len1); // Output: 5
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of strlen method with a non-existing key
+     * const len2 = await client.strlen("non_existing_key");
+     * console.log(len2); // Output: 0
+     * ```
      */
     public strlen(key: string): Promise<number> {
         return this.createWritePromise(createStrlen(key));
@@ -1150,6 +1681,22 @@ export class BaseClient {
      *
      * @param key - The `key` to check its data type.
      * @returns If the `key` exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of type method with a string value
+     * await client.set("key", "value");
+     * const type = await client.type("key");
+     * console.log(type); // Output: 'string'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of type method with a list
+     * await client.lpush("key", ["value"]);
+     * const type = await client.type("key");
+     * console.log(type); // Output: 'list'
+     * ```
      */
     public type(key: string): Promise<string> {
         return this.createWritePromise(createType(key));
@@ -1165,6 +1712,20 @@ export class BaseClient {
      * @returns A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zpopmin method to remove and return the member with the lowest score from a sorted set
+     * const result = await client.zpopmin("my_sorted_set");
+     * console.log(result); // Output: {'member1': 5.0} - Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zpopmin method to remove and return multiple members with the lowest scores from a sorted set
+     * const result = await client.zpopmin("my_sorted_set", 2);
+     * console.log(result); // Output: {'member3': 7.5 , 'member2': 8.0} - Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
+     * ```
      */
     public zpopmin(
         key: string,
@@ -1183,6 +1744,20 @@ export class BaseClient {
      * @returns A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zpopmax method to remove and return the member with the highest score from a sorted set
+     * const result = await client.zpopmax("my_sorted_set");
+     * console.log(result); // Output: {'member1': 10.0} - Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zpopmax method to remove and return multiple members with the highest scores from a sorted set
+     * const result = await client.zpopmax("my_sorted_set", 2);
+     * console.log(result); // Output: {'member2': 8.0, 'member3': 7.5} - Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+     * ```
      */
     public zpopmax(
         key: string,
@@ -1196,6 +1771,27 @@ export class BaseClient {
      *
      * @param key - The key to return its timeout.
      * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of pttl method with an existing key
+     * const result = await client.pttl("my_key");
+     * console.log(result); // Output: 5000 - Indicates that the key "my_key" has a remaining time to live of 5000 milliseconds.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of pttl method with a non-existing key
+     * const result = await client.pttl("non_existing_key");
+     * console.log(result); // Output: -2 - Indicates that the key "non_existing_key" does not exist.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of pttl method with an exisiting key that has no associated expire.
+     * const result = await client.pttl("key");
+     * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
+     * ```
      */
     public pttl(key: string): Promise<number> {
         return this.createWritePromise(createPttl(key));
@@ -1213,6 +1809,13 @@ export class BaseClient {
      * If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, 0 returned.
      * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
      * If `key` does not exist 0 will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByRank method
+     * const result = await client.zremRangeByRank("my_sorted_set", 0, 2);
+     * console.log(result); // Output: 3 - Indicates that three elements have been removed from the sorted set "my_sorted_set" between ranks 0 and 2.
+     * ```
      */
     public zremRangeByRank(
         key: string,
@@ -1231,6 +1834,20 @@ export class BaseClient {
      * @returns the number of members removed.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minScore` is greater than `maxScore`, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
+     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByScore method when the sorted set does not exist
+     * const result = await client.zremRangeByScore("non_existing_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+     * ```
      */
     public zremRangeByScore(
         key: string,
@@ -1250,6 +1867,20 @@ export class BaseClient {
      * @param member - The member whose rank is to be retrieved.
      * @returns The rank of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrank method to retrieve the rank of a member in a sorted set
+     * const result = await client.zrank("my_sorted_set", "member2");
+     * console.log(result); // Output: 1 - Indicates that "member2" has the second-lowest score in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrank method with a non-existing member
+     * const result = await client.zrank("my_sorted_set", "non_existing_member");
+     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * ```
      */
     public zrank(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZrank(key, member));
@@ -1264,6 +1895,20 @@ export class BaseClient {
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      *
      * since - Redis version 7.2.0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrank_withscore method to retrieve the rank and score of a member in a sorted set
+     * const result = await client.zrank_withscore("my_sorted_set", "member2");
+     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrank_withscore method with a non-existing member
+     * const result = await client.zrank_withscore("my_sorted_set", "non_existing_member");
+     * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
+     * ```
      */
     public zrankWithScore(
         key: string,
@@ -1333,6 +1978,20 @@ export class BaseClient {
      * @param index - The `index` of the element in the list to retrieve.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of lindex method to retrieve elements from a list by index
+     * const result = await client.lindex("my_list", 0);
+     * console.log(result); // Output: 'value1' - Returns the first element in the list stored at 'my_list'.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of lindex method to retrieve elements from a list by negative index
+     * const result = await client.lindex("my_list", -1);
+     * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
+     * ```
      */
     public lindex(key: string, index: number): Promise<string | null> {
         return this.createWritePromise(createLindex(key, index));
@@ -1344,6 +2003,13 @@ export class BaseClient {
      *
      * @param key - The key to remove the existing timeout on.
      * @returns `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of persist method to remove the timeout associated with a key
+     * const result = await client.persist("my_key");
+     * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
+     * ```
      */
     public persist(key: string): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
@@ -1359,6 +2025,14 @@ export class BaseClient {
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of rename method to rename a key
+     * await client.set("old_key", "value");
+     * const result = await client.rename("old_key", "new_key");
+     * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
+     * ```
      */
     public rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
@@ -1378,8 +2052,11 @@ export class BaseClient {
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
      *
      * @example
-     *     await client.brpop(["list1", "list2"], 5);
-     *    ["list1", "element"]
+     * ```typescript
+     * // Example usage of brpop method to block and wait for elements from multiple lists
+     * const result = await client.brpop(["list1", "list2"], 5);
+     * console.log(result); // Output: ["list1", "element"] - Indicates an element "element" was popped from "list1".
+     * ```
      */
     public brpop(
         keys: string[],

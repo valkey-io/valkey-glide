@@ -16,13 +16,14 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(10) // seconds
 public class TransactionTests {
 
     private static RedisClient client = null;
@@ -36,7 +37,7 @@ public class TransactionTests {
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
                                         .build())
-                        .get(10, TimeUnit.SECONDS);
+                        .get();
     }
 
     @AfterAll
@@ -49,7 +50,7 @@ public class TransactionTests {
     @SneakyThrows
     public void custom_command_info() {
         Transaction transaction = new Transaction().customCommand(new String[] {"info"});
-        Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = client.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
     }
 
@@ -60,7 +61,7 @@ public class TransactionTests {
                 new Transaction()
                         .info()
                         .info(InfoOptions.builder().section(InfoOptions.Section.CLUSTER).build());
-        Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = client.exec(transaction).get();
 
         // sanity check
         assertTrue(((String) result[0]).contains("# Stats"));
@@ -79,7 +80,7 @@ public class TransactionTests {
                 transaction.ping(Integer.toString(idx));
             }
         }
-        Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = client.exec(transaction).get();
         for (int idx = 0; idx < numberOfPings; idx++) {
             if ((idx % 2) == 0) {
                 assertEquals("PONG", result[idx]);
@@ -106,7 +107,7 @@ public class TransactionTests {
 
         expectedResult = ArrayUtils.addAll(expectedResult, OK, OK, value, OK, null);
 
-        Object[] result = client.exec(transaction).get(10, TimeUnit.SECONDS);
+        Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);
     }
 }
