@@ -709,9 +709,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpushx("my_list", ["value1", "value2"])
-                3 // Indicates new length of the list
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
             >>> await client.lpushx("nonexistent_list", ["new_value"])
-                0 // Indicates that operation did nothing
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
         """
         return cast(
             int, await self._execute_command(RequestType.LPushX, [key] + elements)
@@ -871,9 +871,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.rpushx("my_list", ["value1", "value2"])
-                3 // Indicates new length of the list
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
             >>> await client.rpushx("nonexistent_list", ["new_value"])
-                0 // Indicates that operation did nothing
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
         """
         return cast(
             int, await self._execute_command(RequestType.RPushX, [key] + elements)
