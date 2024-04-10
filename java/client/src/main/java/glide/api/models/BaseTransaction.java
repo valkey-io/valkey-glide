@@ -93,6 +93,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
@@ -1533,7 +1534,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
@@ -1546,15 +1548,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
-     *     StreamAddOptions#makeStream} is set to <code>false</code> and no stream with the matching
-     *     <code>key</code> exists.
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
      */
     public T xadd(
             @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {

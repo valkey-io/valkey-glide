@@ -4,11 +4,12 @@ package glide.api.models.commands;
 import glide.api.commands.StreamBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.NonNull;
 
 /**
- * Optional arguments to {@link StreamBaseCommands#xadd}
+ * Optional arguments to {@link StreamBaseCommands#xadd(String, Map, StreamAddOptions)}
  *
  * @see <a href="https://redis.io/commands/xadd/">redis.io</a>
  */
