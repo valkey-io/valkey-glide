@@ -70,6 +70,7 @@ public class RequestRoutingConfiguration {
          */
         private final int slotId;
 
+        /** Defines type of the node being addressed. */
         private final SlotType slotType;
     }
 
@@ -84,6 +85,7 @@ public class RequestRoutingConfiguration {
         /** The request will be sent to nodes managing this key. */
         private final String slotKey;
 
+        /** Defines type of the node being addressed. */
         private final SlotType slotType;
     }
 
