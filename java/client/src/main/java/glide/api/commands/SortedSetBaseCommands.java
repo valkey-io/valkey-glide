@@ -460,7 +460,7 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zrank(String key, String member);
 
     /**
-     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
      * score, where scores are ordered from the lowest to highest.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
