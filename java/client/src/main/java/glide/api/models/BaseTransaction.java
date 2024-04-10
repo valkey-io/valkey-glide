@@ -45,6 +45,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -71,6 +72,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -92,6 +94,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
@@ -695,6 +698,28 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
         protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return Command Response - The element at <code>index</code> in the list stored at <code>key
+     *     </code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     */
+    public T lindex(@NonNull String key, long index) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index));
+
+        protobufTransaction.addCommands(buildCommand(Lindex, commandArgs));
         return getThis();
     }
 
@@ -1513,7 +1538,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Returns the scores associated with the specified <code>members</code> in the sorted set stored
+     * at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members in the sorted set.
+     * @return Command Response - An <code>Array</code> of scores of the <code>members</code>.<br>
+     *     If a <code>member</code> does not exist, the corresponding value in the <code>Array</code>
+     *     will be <code>null</code>.
+     */
+    public T zmscore(@NonNull String key, @NonNull String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+        protobufTransaction.addCommands(buildCommand(ZMScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
@@ -1526,15 +1569,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
-     *     StreamAddOptions#makeStream} is set to <code>false</code> and no stream with the matching
-     *     <code>key</code> exists.
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
      */
     public T xadd(
             @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {

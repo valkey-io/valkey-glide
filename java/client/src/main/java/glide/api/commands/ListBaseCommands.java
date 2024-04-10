@@ -104,6 +104,30 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
     /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return The element at <code>index</code> in the list stored at <code>key</code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * String payload1 = client.lindex("myList", 0).get();
+     * assert payload1.equals('value1'); // Returns the first element in the list stored at 'myList'.
+     *
+     * String payload2 = client.lindex("myList", -1).get();
+     * assert payload2.equals('value3'); // Returns the last element in the list stored at 'myList'.
+     * }</pre>
+     */
+    CompletableFuture<String> lindex(String key, long index);
+
+    /**
      * Trims an existing list so that it will contain only the specified range of elements specified.
      * <br>
      * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
