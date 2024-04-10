@@ -139,7 +139,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * }</pre>
      */
     public T customCommand(String[] args) {
-
         ArgsArray commandArgs = buildArgs(args);
         protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));
         return getThis();
@@ -178,7 +177,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T ping(@NonNull String msg) {
         ArgsArray commandArgs = buildArgs(msg);
-
         protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
         return getThis();
     }
@@ -205,7 +203,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T info(@NonNull InfoOptions options) {
         ArgsArray commandArgs = buildArgs(options.toArgs());
-
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
         return getThis();
     }
@@ -220,7 +217,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T del(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Del, commandArgs));
         return getThis();
     }
@@ -235,7 +231,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
         return getThis();
     }
@@ -250,7 +245,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T set(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
-
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
         return getThis();
     }
@@ -288,7 +282,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T mget(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
         return getThis();
     }
@@ -318,7 +311,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
         return getThis();
     }
@@ -334,7 +326,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
         return getThis();
     }
@@ -352,7 +343,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incrByFloat(@NonNull String key, double amount) {
         ArgsArray commandArgs = buildArgs(key, Double.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
         return getThis();
     }
@@ -367,7 +357,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T decr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Decr, commandArgs));
         return getThis();
     }
@@ -383,7 +372,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T decrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
         return getThis();
     }
@@ -414,7 +402,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hget(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-
         protobufTransaction.addCommands(buildCommand(HashGet, commandArgs));
         return getThis();
     }
@@ -451,7 +438,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hsetnx(@NonNull String key, @NonNull String field, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, field, value);
-
         protobufTransaction.addCommands(buildCommand(HSetNX, commandArgs));
         return getThis();
     }
@@ -469,7 +455,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hdel(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
         return getThis();
     }
@@ -485,7 +470,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hlen(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(HLen, commandArgs));
         return getThis();
     }
@@ -500,7 +484,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hvals(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Hvals, commandArgs));
         return getThis();
     }
@@ -519,7 +502,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hmget(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-
         protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
         return getThis();
     }
@@ -536,7 +518,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hexists(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-
         protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
         return getThis();
     }
@@ -552,7 +533,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hgetall(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
         return getThis();
     }
@@ -574,7 +554,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
         ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
         return getThis();
     }
@@ -597,7 +576,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
         return getThis();
     }
@@ -615,7 +593,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpush(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-
         protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
         return getThis();
     }
@@ -631,7 +608,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
         return getThis();
     }
@@ -649,7 +625,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpopCount(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
         return getThis();
     }
@@ -675,7 +650,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lrange(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-
         protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
         return getThis();
     }
@@ -722,7 +696,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T ltrim(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-
         protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
         return getThis();
     }
@@ -762,7 +735,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lrem(@NonNull String key, long count, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count), element);
-
         protobufTransaction.addCommands(buildCommand(LRem, commandArgs));
         return getThis();
     }
@@ -780,7 +752,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpush(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-
         protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
         return getThis();
     }
@@ -796,7 +767,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
         return getThis();
     }
@@ -813,7 +783,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpopCount(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-
         protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
         return getThis();
     }
@@ -832,7 +801,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T sadd(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
         return getThis();
     }
@@ -849,7 +817,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T sismember(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(key, member);
-
         protobufTransaction.addCommands(buildCommand(SIsMember, commandArgs));
         return getThis();
     }
@@ -868,7 +835,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T srem(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-
         protobufTransaction.addCommands(buildCommand(SRem, commandArgs));
         return getThis();
     }
@@ -883,7 +849,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T smembers(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(SMembers, commandArgs));
         return getThis();
     }
@@ -898,7 +863,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
         return getThis();
     }
@@ -914,7 +878,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T configGet(@NonNull String[] parameters) {
         ArgsArray commandArgs = buildArgs(parameters);
-
         protobufTransaction.addCommands(buildCommand(ConfigGet, commandArgs));
         return getThis();
     }
@@ -930,7 +893,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T configSet(@NonNull Map<String, String> parameters) {
         ArgsArray commandArgs = buildArgs(convertMapToKeyValueStringArray(parameters));
-
         protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
         return getThis();
     }
@@ -945,7 +907,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T exists(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
         return getThis();
     }
@@ -962,7 +923,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T unlink(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
         return getThis();
     }
@@ -985,7 +945,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T expire(@NonNull String key, long seconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(seconds));
-
         protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
         return getThis();
     }
@@ -1035,7 +994,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T expireAt(@NonNull String key, long unixSeconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(unixSeconds));
-
         protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
         return getThis();
     }
@@ -1086,7 +1044,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T pexpire(@NonNull String key, long milliseconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(milliseconds));
-
         protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
         return getThis();
     }
@@ -1278,7 +1235,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
             @NonNull ZaddOptions options) {
-        return getThis().zadd(key, membersScoresMap, options, false);
+        return zadd(key, membersScoresMap, options, false);
     }
 
     /**
@@ -1295,7 +1252,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
-        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
     }
 
     /**
@@ -1308,7 +1265,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements added to the sorted set.
      */
     public T zadd(@NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
-        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
     }
 
     /**
@@ -1356,7 +1313,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The score of the member.
      */
     public T zaddIncr(@NonNull String key, @NonNull String member, double increment) {
-        return getThis().zaddIncr(key, member, increment, ZaddOptions.builder().build());
+        return zaddIncr(key, member, increment, ZaddOptions.builder().build());
     }
 
     /**
@@ -1387,7 +1344,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     return <code>0</code>.
      */
     public T zcard(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Zcard, commandArgs));
         return getThis();
     }
@@ -1407,7 +1364,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmin(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, Long.toString(count)});
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(ZPopMin, commandArgs));
         return getThis();
     }
@@ -1423,7 +1380,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmin(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ZPopMin, commandArgs));
         return getThis();
     }
@@ -1443,7 +1400,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmax(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, Long.toString(count)});
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(ZPopMax, commandArgs));
         return getThis();
     }
@@ -1459,7 +1416,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmax(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ZPopMax, commandArgs));
         return getThis();
     }
@@ -1475,7 +1432,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, <code>null</code> is returned.
      */
     public T zscore(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member});
+        ArgsArray commandArgs = buildArgs(key, member);
         protobufTransaction.addCommands(buildCommand(ZScore, commandArgs));
         return getThis();
     }
@@ -1483,7 +1440,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
      * scores ordered from low to high.<br>
-     * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
+     * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1493,13 +1450,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>null</code> will be returned.
      */
     public T zrank(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member});
+        ArgsArray commandArgs = buildArgs(key, member);
         protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
         return getThis();
     }
 
     /**
-     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -1511,7 +1468,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>null</code> will be returned.
      */
     public T zrankWithScore(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member, WITH_SCORE_REDIS_API});
+        ArgsArray commandArgs = buildArgs(key, member, WITH_SCORE_REDIS_API);
         protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
         return getThis();
     }
@@ -1543,8 +1500,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The id of the added entry.
      */
     public T xadd(@NonNull String key, @NonNull Map<String, String> values) {
-        this.xadd(key, values, StreamAddOptions.builder().build());
-        return getThis();
+        return xadd(key, values, StreamAddOptions.builder().build());
     }
 
     /**
@@ -1579,7 +1535,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T pttl(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
         return getThis();
     }
@@ -1595,7 +1550,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     have an associated timeout, <code>true</code> if the timeout has been removed.
      */
     public T persist(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Persist, commandArgs));
         return getThis();
     }
