@@ -285,9 +285,10 @@ public interface SortedSetBaseCommands {
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return An array containing the key where the member was popped out, the member itself, and the
-     *     member score.<br>
-     *     If no member could be popped and the timeout expired, returns </code>null</code>.
+     * @return An <code>array</code> containing the key where the member was popped out, the member
+     *     itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
      * @example
      *     <pre>{@code
      * Object[] data = client.bzpopmax(new String[] {"zset1", "zset2"}, 0.5).get();

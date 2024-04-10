@@ -1478,9 +1478,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return Command Response - An array containing the key where the member was popped out, the
-     *     member itself, and the member score.<br>
-     *     If no member could be popped and the timeout expired, returns </code>null</code>.
+     * @return Command Response - An <code>array</code> containing the key where the member was popped
+     *     out, the member itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
      */
     public T bzpopmax(@NonNull String[] keys, double timeout) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));

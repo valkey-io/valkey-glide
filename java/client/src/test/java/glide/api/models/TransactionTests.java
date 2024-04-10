@@ -334,10 +334,7 @@ public class TransactionTests {
         results.add(Pair.of(ZPopMax, buildArgs("key")));
 
         transaction.bzpopmax(new String[] {"key1", "key2"}, .5);
-        results.add(
-                Pair.of(
-                        BZPopMax,
-                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("0.5").build()));
+        results.add(Pair.of(BZPopMax, buildArgs("key1", "key2", "0.5")));
 
         transaction.zpopmax("key", 2);
         results.add(Pair.of(ZPopMax, buildArgs("key", "2")));
