@@ -88,6 +88,7 @@ public class SharedClientTests {
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
         ExecutorService executorService = Executors.newCachedThreadPool();
+        @SuppressWarnings("rawtypes")
         CompletableFuture[] futures = new CompletableFuture[100];
 
         for (int i = 0; i < 100; i++) {

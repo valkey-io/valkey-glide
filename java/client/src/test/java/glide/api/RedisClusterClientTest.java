@@ -132,6 +132,9 @@ public class RedisClusterClientTest {
             T returnValue = (T) object;
             return returnValue;
         }
+
+        @Override
+        public void close() {}
     }
 
     private static class TestCommandManager extends CommandManager {
