@@ -43,7 +43,8 @@
         "${scope}glide-for-redis-darwin-arm64": "${package_version}",
         "${scope}glide-for-redis-darwin-x64": "${package_version}",
         "${scope}glide-for-redis-linux-arm64": "${package_version}",
-        "${scope}glide-for-redis-linux-x64": "${package_version}"
+        "${scope}glide-for-redis-linux-x64": "${package_version}",
+        "${scope}glide-for-redis-linux-musl-arm64": "${package_version}"
     },
     "eslintConfig": {
         "extends": [

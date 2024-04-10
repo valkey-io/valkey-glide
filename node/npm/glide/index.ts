@@ -5,6 +5,7 @@
  */
 
 import { arch, platform } from "process";
+import { existsSync } from "fs";
 
 let globalObject = global as unknown;
 
@@ -17,7 +18,9 @@ function loadNativeBinding() {
                     nativeBinding = require("@scope/glide-for-redis-linux-x64");
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                    nativeBinding = existsSync("./node_modules/@scope/glide-for-redis-linux-musl-arm64")
+                        ? require("@scope/glide-for-redis-linux-musl-arm64")
+                        : require("@scope/glide-for-redis-linux-arm64")
                     break;
                 default:
                     throw new Error(
