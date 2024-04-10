@@ -101,6 +101,7 @@ public class TransactionTestUtilities {
         baseTransaction.zaddIncr(key8, "one", 3);
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
+        baseTransaction.zmscore(key8, new String[] {"two", "three"});
         baseTransaction.zrange(key8, new RangeByIndex(0, 1));
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
         baseTransaction.zscore(key8, "two");
@@ -192,6 +193,7 @@ public class TransactionTestUtilities {
             4.0,
             1L,
             2L,
+            new Double[] {2.0, 3.0}, // zmscore(key8, new String[] {"two", "three"})
             new String[] {"two", "three"}, // zrange
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
             2.0, // zscore(key8, "two")

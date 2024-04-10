@@ -76,6 +76,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -342,6 +343,12 @@ public class TransactionTests {
 
         transaction.zrankWithScore("key", "member");
         results.add(Pair.of(Zrank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+
+        transaction.zmscore("key", new String[] {"member1", "member2"});
+        results.add(
+                Pair.of(
+                        ZMScore,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
