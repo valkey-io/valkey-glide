@@ -53,12 +53,15 @@ async def transaction_test(
     transaction.persist(key)
     args.append(False)
 
-    transaction.exists([key])
+    transaction.rename(key, key2)
+    args.append(OK)
+
+    transaction.exists([key2])
     args.append(1)
 
-    transaction.delete([key])
+    transaction.delete([key2])
     args.append(1)
-    transaction.get(key)
+    transaction.get(key2)
     args.append(None)
 
     transaction.mset({key: value, key2: value2})
