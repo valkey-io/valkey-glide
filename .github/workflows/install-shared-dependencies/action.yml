@@ -17,6 +17,7 @@ inputs:
         options:
             - x86_64-unknown-linux-gnu
             - aarch64-unknown-linux-gnu
+            - aarch64-unknown-linux-musl
             - x86_64-apple-darwin
             - aarch64-apple-darwin
     github-token:
@@ -35,7 +36,7 @@ runs:
               brew upgrade || true
               brew install git gcc pkgconfig openssl redis coreutils
 
-        - name: Install software dependencies for Ubuntu
+        - name: Install software dependencies for Ubuntu GNU
           shell: bash
           if: "${{ inputs.os == 'ubuntu' }}"
           run: |
@@ -48,12 +49,24 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl redis6 gettext --allowerasing
 
+        - name: Install software dependencies for Ubuntu MUSL
+          shell: sh
+          if: "${{ inputs.os == 'ubuntu-latest-musl' }}"
+          run: |
+              apk update
+              wget -O - https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+              apk add protobuf-dev musl-dev make gcc
+
+
         - name: Install Rust toolchain
+          if: "${{ inputs.os != 'ubuntu-latest-musl' }}"
           uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
 
         - name: Install protoc (protobuf)
+          if: "${{ inputs.os != 'ubuntu-latest-musl' }}"
           uses: arduino/setup-protoc@v3
           with:
               version: "25.1"

@@ -64,7 +64,7 @@ jobs:
             - name: Install Redis Modules
               uses: ./.github/workflows/install-redis-modules
               with:
-                  redis-version: ${{ matrix.redis }} 
+                  redis-version: ${{ matrix.redis }}
 
             - name: test
               run: npm test
@@ -73,17 +73,17 @@ jobs:
             - name: test hybrid node modules - commonjs
               run: |
                 npm install --package-lock-only
-                npm ci 
+                npm ci
                 npm run build-and-test
               working-directory: ./node/hybrid-node-tests/commonjs-test
-            
+
             - name: test hybrid node modules - ecma
               run: |
                 npm install --package-lock-only
                 npm ci
                 npm run build-and-test
               working-directory: ./node/hybrid-node-tests/ecmascript-test
-            
+
             - name: test redis modules
               run: npm run test-modules -- --load-module=$GITHUB_WORKSPACE/redisjson.so
               working-directory: ./node
@@ -148,7 +148,7 @@ jobs:
                   yum -y remove git
                   yum -y remove git-*
                   yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum install -y git 
+                  yum install -y git
                   git --version
 
             - uses: actions/checkout@v4
@@ -168,6 +168,42 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create a symbolic Link for redis6 binaries
+              working-directory: ./node
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
+            - name: Test compatibility
+              run: npm test -- -t "set and get flow works"
+              working-directory: ./node
+
+
+    build-linux-musl-latest:
+        runs-on: ubuntu-latest
+        container:
+            image: node:18.19.0-alpine
+        timeout-minutes: 15
+        steps:
+            - name: Install git
+              run: apk add git
+
+            - uses: actions/checkout@v4
+
+            - name: Checkout submodules
+              run: |
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  git submodule update --init --recursive
+
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: "ubuntu-latest-musl"
+                  target: "aarch64-unknown-linux-musl"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  arch: "arm64"
+                  named_os: "linux-musl"
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node
