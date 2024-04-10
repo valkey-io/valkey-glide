@@ -760,9 +760,9 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zcount(
-        @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
-            Zcount, new String[] {key, minScore.toArgs(), maxScore.toArgs()}, this::handleLongResponse);
+                Zcount, new String[] {key, minScore.toArgs(), maxScore.toArgs()}, this::handleLongResponse);
     }
 
     @Override

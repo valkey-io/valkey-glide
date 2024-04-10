@@ -1467,46 +1467,46 @@ public class SharedCommandTests {
 
         // In range negative to positive infinity.
         assertEquals(
-            3,
-            client
-                .zcount(key1, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
-                .get());
+                3,
+                client
+                        .zcount(key1, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                        .get());
         assertEquals(
-            3,
-            client
-                .zcount(
-                    key1,
-                    new ScoreBoundary(Double.NEGATIVE_INFINITY),
-                    new ScoreBoundary(Double.POSITIVE_INFINITY))
-                .get());
+                3,
+                client
+                        .zcount(
+                                key1,
+                                new ScoreBoundary(Double.NEGATIVE_INFINITY),
+                                new ScoreBoundary(Double.POSITIVE_INFINITY))
+                        .get());
         // In range 1 (exclusive) to 3 (inclusive)
         assertEquals(
-            2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
+                2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
         // In range negative infinity to 3 (inclusive)
         assertEquals(
-            3, client.zcount(key1, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
+                3, client.zcount(key1, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
         // Incorrect range start > end
         assertEquals(
-            0, client.zcount(key1, InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
+                0, client.zcount(key1, InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
         // Non-existing key
         assertEquals(
-            0,
-            client
-                .zcount(
-                    "non_existing_key",
-                    InfScoreBound.NEGATIVE_INFINITY,
-                    InfScoreBound.POSITIVE_INFINITY)
-                .get());
+                0,
+                client
+                        .zcount(
+                                "non_existing_key",
+                                InfScoreBound.NEGATIVE_INFINITY,
+                                InfScoreBound.POSITIVE_INFINITY)
+                        .get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
-            assertThrows(
-                ExecutionException.class,
-                () ->
-                    client
-                        .zcount(key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
-                        .get());
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zcount(key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                                        .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
