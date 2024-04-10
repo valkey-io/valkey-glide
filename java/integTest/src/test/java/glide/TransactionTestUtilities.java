@@ -79,6 +79,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.lpush(key5, new String[] {value1, value1, value2, value3, value3});
         baseTransaction.llen(key5);
+        baseTransaction.lindex(key5, 0);
         baseTransaction.lrem(key5, 1, value1);
         baseTransaction.ltrim(key5, 1, -1);
         baseTransaction.lrange(key5, 0, -2);
@@ -172,6 +173,7 @@ public class TransactionTestUtilities {
             10.5,
             5L,
             5L,
+            value3, // lindex(key5, 0)
             1L,
             OK,
             new String[] {value3, value2},
