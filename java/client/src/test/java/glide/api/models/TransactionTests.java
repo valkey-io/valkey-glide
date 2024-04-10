@@ -169,9 +169,7 @@ public class TransactionTests {
         results.add(Pair.of(Strlen, buildArgs("key")));
 
         transaction.setrange("key", 42, "str");
-        results.add(
-                Pair.of(
-                        SetRange, ArgsArray.newBuilder().addArgs("key").addArgs("42").addArgs("str").build()));
+        results.add(Pair.of(SetRange, buildArgs("key", "42", "str")));
 
         transaction.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HashSet, buildArgs("key", "field", "value")));
