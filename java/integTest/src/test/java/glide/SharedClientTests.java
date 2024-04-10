@@ -25,7 +25,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(25)
+@Timeout(25) // seconds
 public class SharedClientTests {
 
     private static RedisClient standaloneClient = null;
@@ -88,7 +88,8 @@ public class SharedClientTests {
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
         ExecutorService executorService = Executors.newCachedThreadPool();
-        CompletableFuture[] futures = new CompletableFuture[100];
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void>[] futures = new CompletableFuture[100];
 
         for (int i = 0; i < 100; i++) {
             futures[i] =

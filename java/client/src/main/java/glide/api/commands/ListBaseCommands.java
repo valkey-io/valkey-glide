@@ -4,8 +4,8 @@ package glide.api.commands;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "List Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "List Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
  */
@@ -102,6 +102,30 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> lrange(String key, long start, long end);
+
+    /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return The element at <code>index</code> in the list stored at <code>key</code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * String payload1 = client.lindex("myList", 0).get();
+     * assert payload1.equals('value1'); // Returns the first element in the list stored at 'myList'.
+     *
+     * String payload2 = client.lindex("myList", -1).get();
+     * assert payload2.equals('value3'); // Returns the last element in the list stored at 'myList'.
+     * }</pre>
+     */
+    CompletableFuture<String> lindex(String key, long index);
 
     /**
      * Trims an existing list so that it will contain only the specified range of elements specified.
@@ -228,4 +252,84 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> rpopCount(String key, long count);
+
+    /**
+     * Pops an element from the head of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @apiNote <code>BLPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
+     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
+     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String[] response = client.blpop(["list1", "list2"], 0.5).get();
+     * assert response[0].equals("list1");
+     * assert response[1].equals("element");
+     * }</pre>
+     */
+    CompletableFuture<String[]> blpop(String[] keys, double timeout);
+
+    /**
+     * Pops an element from the tail of the first list that is non-empty, with the given keys being
+     * checked in the order that they are given.<br>
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @apiNote <code>BRPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The <code>keys</code> of the lists to pop from.
+     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
+     *     complete. A value of <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
+     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
+     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String[] response = client.brpop(["list1", "list2"], 0.5).get();
+     * assert response[0].equals("list1");
+     * assert response[1].equals("element");
+     * }</pre>
+     */
+    CompletableFuture<String[]> brpop(String[] keys, double timeout);
+
+    /**
+     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.rpushx("my_list", new String[] {"value1", "value2"}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpushx(String key, String[] elements);
+
+    /**
+     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
+     * exists and holds a list.
+     *
+     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.lpushx("my_list", new String[] {"value1", "value2"}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpushx(String key, String[] elements);
 }

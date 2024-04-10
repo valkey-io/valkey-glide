@@ -30,7 +30,7 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
 )
 from glide.config import ProtocolVersion, RedisCredentials
-from glide.constants import OK
+from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
     AllNodes,
@@ -778,6 +778,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hkeys(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hkeys(key) == [field, field2]
+        assert await redis_client.hdel(key, [field]) == 1
+        assert await redis_client.hkeys(key) == [field2]
+        assert await redis_client.hkeys("non_existing_key") == []
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hkeys(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -959,6 +978,34 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await redis_client.llen(key2)
         assert "Operation against a key holding the wrong kind of value" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_strlen(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        value_list = ["value4", "value3", "value2", "value1"]
+
+        assert await redis_client.set(key1, "foo") == OK
+        assert await redis_client.strlen(key1) == 3
+        assert await redis_client.strlen("non_existing_key") == 0
+
+        assert await redis_client.lpush(key2, value_list) == 4
+        with pytest.raises(RequestError):
+            assert await redis_client.strlen(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_rename(self, redis_client: TRedisClient):
+        key1 = "{" + get_random_string(10) + "}"
+        assert await redis_client.set(key1, "foo") == OK
+        assert await redis_client.rename(key1, key1 + "_rename") == OK
+        assert await redis_client.exists([key1 + "_rename"]) == 1
+
+        with pytest.raises(RequestError):
+            assert await redis_client.rename(
+                "{same_slot}" + "non_existing_key", "{same_slot}" + "_rename"
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1214,6 +1261,34 @@ class TestCommands:
         assert await redis_client.zrem(key, ["one", "two", "three"]) == 2
 
         assert await redis_client.zrem("non_existing_set", ["member"]) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zremrangebyscore(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+        assert await redis_client.zadd(key, members_scores) == 3
+
+        assert (
+            await redis_client.zremrangebyscore(
+                key, ScoreBoundary(1, False), ScoreBoundary(2)
+            )
+            == 1
+        )
+        assert (
+            await redis_client.zremrangebyscore(key, ScoreBoundary(1), InfBound.NEG_INF)
+            == 0
+        )
+        assert (
+            await redis_client.zremrangebyscore(
+                "non_existing_set", InfBound.NEG_INF, InfBound.POS_INF
+            )
+            == 0
+        )
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zremrangebyscore(key, InfBound.NEG_INF, InfBound.POS_INF)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1760,9 +1835,14 @@ class TestClusterRoutes:
         self, redis_client: RedisClusterClient
     ):
         # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
-        clean_result = lambda value: [
-            line for line in value.split("\n") if "myself" in line
-        ][0]
+        def clean_result(value: TResult):
+            assert type(value) is str
+            for line in value.splitlines():
+                if "myself" in line:
+                    return line.split("myself")[0]
+            raise Exception(
+                f"Couldn't find 'myself' in the cluster nodes output: {value}"
+            )
 
         cluster_nodes = clean_result(
             await redis_client.custom_command(["cluster", "nodes"], RandomNode())

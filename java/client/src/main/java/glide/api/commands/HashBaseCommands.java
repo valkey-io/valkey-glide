@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Hash Commands" group for standalone clients and
- * cluster clients.
+ * Supports commands and transactions for the "Hash Commands" group for standalone and cluster
+ * clients.
  *
  * @see <a href="https://redis.io/commands/?group=hash">Hash Commands</a>
  */
@@ -87,6 +87,24 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> hdel(String key, String[] fields);
+
+    /**
+     * Returns the number of fields contained in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return The number of fields in the hash, or <code>0</code> when the key does not exist.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.hlen("myHash").get();
+     * assert num1 == 3L;
+     *
+     * Long num2 = client.hlen("nonExistingKey").get();
+     * assert num2 == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hlen(String key);
 
     /**
      * Returns all values in the hash stored at <code>key</code>.

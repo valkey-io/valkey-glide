@@ -8,7 +8,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands for the "Generic Commands" group for cluster clients.
+ * Supports commands for the "Generic Commands" group for a cluster client.
  *
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
