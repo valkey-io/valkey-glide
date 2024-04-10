@@ -416,7 +416,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
      * scores ordered from low to high.<br>
-     * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
+     * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -436,7 +436,7 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zrank(String key, String member);
 
     /**
-     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
