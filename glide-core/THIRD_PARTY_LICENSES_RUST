@@ -3451,7 +3451,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bumpalo:3.15.4
+Package: bumpalo:3.16.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9734,7 +9734,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: getrandom:0.2.13
+Package: getrandom:0.2.14
 
 The following copyrights and licenses were found in the source code of this package:
 
