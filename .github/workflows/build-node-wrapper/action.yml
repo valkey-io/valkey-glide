@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos-latest
             - ubuntu-latest
+            - ubuntu-latest-musl
     named_os:
         description: "The name of the current operating system"
         required: false
@@ -16,6 +17,7 @@ inputs:
         type: string
         options:
             - linux
+            - linux-musl
             - darwin
     arch:
         description: "The current architecture"
