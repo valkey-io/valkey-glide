@@ -368,15 +368,7 @@ public class TransactionTests {
         results.add(Pair.of(Type, buildArgs("key")));
 
         transaction.linsert("key", AFTER, "pivot", "elem");
-        results.add(
-                Pair.of(
-                        LInsert,
-                        ArgsArray.newBuilder()
-                                .addArgs("key")
-                                .addArgs("AFTER")
-                                .addArgs("pivot")
-                                .addArgs("elem")
-                                .build()));
+        results.add(Pair.of(LInsert, buildArgs("key", "AFTER", "pivot", "elem")));
 
         transaction.brpop(new String[] {"key1", "key2"}, 0.5);
         results.add(Pair.of(Brpop, buildArgs("key1", "key2", "0.5")));
