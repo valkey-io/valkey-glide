@@ -36,7 +36,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -79,7 +79,7 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.LinsertOptions.InsertPosition;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
@@ -746,7 +746,7 @@ public abstract class BaseClient
             @NonNull String pivot,
             @NonNull String element) {
         return commandManager.submitNewCommand(
-                Linsert, new String[] {key, position.toString(), pivot, element}, this::handleLongResponse);
+                LInsert, new String[] {key, position.toString(), pivot, element}, this::handleLongResponse);
     }
 
     @Override

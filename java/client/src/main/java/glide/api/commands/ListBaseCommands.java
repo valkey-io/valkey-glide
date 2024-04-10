@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.LinsertOptions.InsertPosition;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -241,7 +241,8 @@ public interface ListBaseCommands {
      * @param pivot The reference value.
      * @param element The new element to insert.
      * @return The list length after a successful insert operation. If the <code>key</code> doesn't
-     *     exist or <code>-1</code> if the <code>pivot</code> wasn't found, return <code>0</code>.
+     *     exist returns <code>-1</code>, or if the <code>pivot</code> wasn't found, returns <code>0
+     *     </code>.
      * @example
      *     <pre>{@code
      * Long length = client.linsert("my_list", BEFORE, "World", "There").get();

@@ -2,7 +2,7 @@
 package glide;
 
 import static glide.api.BaseClient.OK;
-import static glide.api.models.commands.LinsertOptions.InsertPosition.AFTER;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.RangeOptions.RangeByIndex;

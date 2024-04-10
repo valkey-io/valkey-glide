@@ -141,7 +141,7 @@ enum RequestType {
     PfCount = 97;
     PfMerge = 98;
     Blpop = 100;
-    Linsert = 101;
+    LInsert = 101;
     RPushX = 102;
     LPushX = 103;
 }

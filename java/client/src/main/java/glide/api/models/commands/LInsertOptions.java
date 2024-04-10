@@ -3,8 +3,12 @@ package glide.api.models.commands;
 
 import glide.api.commands.ListBaseCommands;
 
-/** Options for {@link ListBaseCommands#linsert}. */
-public class LinsertOptions {
+/**
+ * Options for {@link ListBaseCommands#linsert}.
+ *
+ * @see <a href="https://redis.io/commands/linsert/">redis.io</a>
+ */
+public class LInsertOptions {
     /** Defines where to insert new elements into a list. */
     public enum InsertPosition {
         /** Insert new element before the pivot. */

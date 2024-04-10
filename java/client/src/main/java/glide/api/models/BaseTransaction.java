@@ -45,7 +45,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.Linsert;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -83,7 +83,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LinsertOptions.InsertPosition;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -1597,8 +1597,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param pivot The reference value.
      * @param element The new element to insert.
      * @return Command Response - The list length after a successful insert operation. If the <code>
-     *     key</code> doesn't exist or <code>-1</code> if the <code>pivot</code> wasn't found, return
-     *     <code>0</code>.
+     *     key</code> doesn't exist returns <code>-1</code>, or if the <code>pivot</code> wasn't
+     *     found, returns <code>0</code>.
      */
     public T linsert(
             @NonNull String key,
@@ -1606,7 +1606,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String pivot,
             @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
-        protobufTransaction.addCommands(buildCommand(Linsert, commandArgs));
+        protobufTransaction.addCommands(buildCommand(LInsert, commandArgs));
         return getThis();
     }
 
