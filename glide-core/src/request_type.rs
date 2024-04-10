@@ -111,6 +111,7 @@ pub enum RequestType {
     Blpop = 100,
     RPushX = 102,
     LPushX = 103,
+    ZMScore = 104,
     SMove = 109,
 }
 
@@ -225,8 +226,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RPushX => RequestType::RPushX,
             ProtobufRequestType::LPushX => RequestType::LPushX,
             ProtobufRequestType::Blpop => RequestType::Blpop,
-            ProtobufRequestType::SMove => RequestType::SMove,
             ProtobufRequestType::Spop => RequestType::Spop,
+            ProtobufRequestType::ZMScore => RequestType::ZMScore,
+            ProtobufRequestType::SMove => RequestType::SMove,
         }
     }
 }
@@ -336,8 +338,9 @@ impl RequestType {
             RequestType::RPushX => Some(cmd("RPUSHX")),
             RequestType::LPushX => Some(cmd("LPUSHX")),
             RequestType::Blpop => Some(cmd("BLPOP")),
-            RequestType::SMove => Some(cmd("SMOVE")),
             RequestType::Spop => Some(cmd("SPOP")),
+            RequestType::ZMScore => Some(cmd("ZMSCORE")),
+            RequestType::SMove => Some(cmd("SMOVE")),
         }
     }
 }

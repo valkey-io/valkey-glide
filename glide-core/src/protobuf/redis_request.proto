@@ -143,7 +143,8 @@ enum RequestType {
     Blpop = 100;
     RPushX = 102;
     LPushX = 103;
-    SMove = 106;
+    ZMScore = 104;
+    SMove = 109;
 }
 
 message Command {
@@ -170,7 +171,7 @@ message Transaction {
 
 message RedisRequest {
     uint32 callback_idx = 1;
-    
+
     oneof command {
         Command single_command = 2;
         Transaction transaction = 3;
