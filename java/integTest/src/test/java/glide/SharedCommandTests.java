@@ -1332,8 +1332,7 @@ public class SharedCommandTests {
                         .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
                         .get());
         assertArrayEquals(
-                new Double[] {null},
-                client.zmscore("nonExistentKey", new String[] {"nonExistentMember"}).get());
+                new Double[] {null}, client.zmscore("nonExistentKey", new String[] {"one"}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "bar").get());
