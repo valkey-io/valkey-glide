@@ -2072,7 +2072,7 @@ export class BaseClient {
     }
 
     /**
-     * * Trims the stream stored at `key` by evicting older entries.
+     * Trims the stream stored at `key` by evicting older entries.
      * See https://redis.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream

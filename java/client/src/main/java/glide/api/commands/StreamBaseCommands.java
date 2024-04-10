@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -37,8 +38,9 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options.
-     * @return The id of the added entry, or <code>null</code> if {@link StreamAddOptions#makeStream}
-     *     is set to <code>false</code> and no stream with the matching <code>key</code> exists.
+     * @return The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
