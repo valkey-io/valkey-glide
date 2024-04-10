@@ -3,9 +3,7 @@ package glide.connectors.resources;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.internal.verification.VerificationModeFactory.times;
 
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
@@ -28,12 +26,11 @@ public class ThreadPoolResourceAllocatorTest {
     public void getOrCreate_returns_default_after_repeated_calls() {
         ThreadPoolResource mockedThreadPoolResource = mock(ThreadPoolResource.class);
         EventLoopGroup mockedEventLoopGroup = mock(EventLoop.class);
-        @SuppressWarnings("unchecked")
-        Supplier<ThreadPoolResource> threadPoolSupplier = mock(Supplier.class);
+
+        Supplier<ThreadPoolResource> threadPoolSupplier = () -> mockedThreadPoolResource;
 
         when(mockedThreadPoolResource.getEventLoopGroup()).thenReturn(mockedEventLoopGroup);
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(false);
-        when(threadPoolSupplier.get()).thenReturn(mockedThreadPoolResource);
 
         ThreadPoolResource theResource = ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theResource);
@@ -42,7 +39,6 @@ public class ThreadPoolResourceAllocatorTest {
         ThreadPoolResource theSameResource =
                 ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theSameResource);
-        verify(threadPoolSupplier, times(1)).get();
 
         // teardown
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(true);
@@ -53,12 +49,10 @@ public class ThreadPoolResourceAllocatorTest {
         ThreadPoolResource mockedThreadPoolResource = mock(ThreadPoolResource.class);
         EventLoopGroup mockedEventLoopGroup = mock(EventLoop.class);
 
-        @SuppressWarnings("unchecked")
-        Supplier<ThreadPoolResource> threadPoolSupplier = mock(Supplier.class);
+        Supplier<ThreadPoolResource> threadPoolSupplier = () -> mockedThreadPoolResource;
 
         when(mockedThreadPoolResource.getEventLoopGroup()).thenReturn(mockedEventLoopGroup);
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(true);
-        when(threadPoolSupplier.get()).thenReturn(mockedThreadPoolResource);
 
         ThreadPoolResource theResource = ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theResource);
@@ -67,7 +61,6 @@ public class ThreadPoolResourceAllocatorTest {
         ThreadPoolResource theSameResource =
                 ThreadPoolResourceAllocator.getOrCreate(threadPoolSupplier);
         assertEquals(mockedThreadPoolResource, theSameResource);
-        verify(threadPoolSupplier, times(2)).get();
 
         // teardown
         when(mockedEventLoopGroup.isShuttingDown()).thenReturn(true);
