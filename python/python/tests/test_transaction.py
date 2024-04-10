@@ -5,6 +5,7 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
+from glide.async_commands.core import GeospatialData
 from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
 from glide.async_commands.transaction import (
     BaseTransaction,
@@ -198,6 +199,15 @@ async def transaction_test(
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+
+    transaction.geoadd(
+        key9,
+        {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        },
+    )
+    args.append(2)
     return args
 
 
