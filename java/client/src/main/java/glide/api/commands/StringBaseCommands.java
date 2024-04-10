@@ -214,8 +214,8 @@ public interface StringBaseCommands {
      * @return The length of the string stored at <code>key</code> after it was modified.
      * @example
      *     <pre>{@code
-     * long len = client.setrange("key", 6, "GLIDE").get();
-     * assert len == 11L; // Wew key was created with length of 11 symbols
+     * Long len = client.setrange("key", 6, "GLIDE").get();
+     * assert len == 11L; // New key was created with length of 11 symbols
      * String value = client.get("key").get();
      * assert value.equals("\0\0\0\0\0\0GLIDE"); // The string was padded with zero bytes
      * }</pre>
