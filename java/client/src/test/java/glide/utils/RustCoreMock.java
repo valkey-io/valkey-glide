@@ -21,6 +21,7 @@ import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 import java.nio.file.Files;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import redis_request.RedisRequestOuterClass.RedisRequest;
@@ -67,13 +68,6 @@ public class RustCoreMock {
         }
     }
 
-    public abstract static class GlideMockConnectAll extends GlideMockProtobuf {
-        @Override
-        public Response connection(ConnectionRequest request) {
-            return Response.newBuilder().build();
-        }
-    }
-
     /** Thread pool supplied to <em>Netty</em> to perform all async IO. */
     private final EventLoopGroup group;
 
@@ -113,7 +107,7 @@ public class RustCoreMock {
                                 new ChannelInitializer<DomainSocketChannel>() {
 
                                     @Override
-                                    protected void initChannel(DomainSocketChannel ch) throws Exception {
+                                    protected void initChannel(@NonNull DomainSocketChannel ch) {
                                         ch.pipeline()
                                                 // https://netty.io/4.1/api/io/netty/handler/codec/protobuf/ProtobufEncoder.html
                                                 .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
@@ -155,7 +149,8 @@ public class RustCoreMock {
         private final AtomicBoolean anybodyConnected = new AtomicBoolean(false);
 
         @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg)
+                throws Exception {
             var buf = (ByteBuf) msg;
             var bytes = new byte[buf.readableBytes()];
             buf.readBytes(bytes);
@@ -165,7 +160,7 @@ public class RustCoreMock {
                 return;
             }
             var handler = (GlideMockProtobuf) messageProcessor;
-            Response response = null;
+            Response response;
             if (!anybodyConnected.get()) {
                 var connection = ConnectionRequest.parseFrom(bytes);
                 response = handler.connection(connection);
@@ -180,7 +175,7 @@ public class RustCoreMock {
         }
 
         @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             cause.printStackTrace();
             ctx.close();
             failed.setPlain(true);

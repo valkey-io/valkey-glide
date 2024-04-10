@@ -49,6 +49,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -1127,7 +1128,7 @@ public class SharedCommandTests {
 
         assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
         assertEquals(3, client.zadd(key, membersScores, onlyIfDoesNotExistOptions).get());
-        assertEquals(null, client.zaddIncr(key, "one", 5, onlyIfDoesNotExistOptions).get());
+        assertNull(client.zaddIncr(key, "one", 5, onlyIfDoesNotExistOptions).get());
         assertEquals(6, client.zaddIncr(key, "one", 5, onlyIfExistsOptions).get());
     }
 
@@ -1156,25 +1157,24 @@ public class SharedCommandTests {
         assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
         assertEquals(0, client.zadd(key, membersScores, scoreLessThanOptions, true).get());
         assertEquals(7, client.zaddIncr(key, "one", -3, scoreLessThanOptions).get());
-        assertEquals(null, client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
+        assertNull(client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
     }
 
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void zadd_illegal_arguments(BaseClient client) {
+    // TODO move to another class
+    @Test
+    public void zadd_illegal_arguments() {
         ZaddOptions existsGreaterThanOptions =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
-        assertThrows(IllegalArgumentException.class, () -> existsGreaterThanOptions.toArgs());
+        assertThrows(IllegalArgumentException.class, existsGreaterThanOptions::toArgs);
         ZaddOptions existsLessThanOptions =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
-        assertThrows(IllegalArgumentException.class, () -> existsLessThanOptions.toArgs());
+        assertThrows(IllegalArgumentException.class, existsLessThanOptions::toArgs);
         ZaddOptions options =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)

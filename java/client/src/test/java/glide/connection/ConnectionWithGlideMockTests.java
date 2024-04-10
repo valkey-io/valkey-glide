@@ -169,15 +169,16 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
     @Test
     @SneakyThrows
     public void rethrow_error_if_UDS_channel_closed() {
-        var client = new TestClient(channelHandler);
-        stopRustCoreLibMock();
-        try {
-            var exception =
-                    assertThrows(ExecutionException.class, () -> client.customCommand(new String[0]).get());
-            assertTrue(exception.getCause() instanceof ClosingException);
-        } finally {
-            // restart mock to let other tests pass if this one failed
-            startRustCoreLibMock(null);
+        try (var client = new TestClient(channelHandler)) {
+            stopRustCoreLibMock();
+            try {
+                var exception =
+                        assertThrows(ExecutionException.class, () -> client.customCommand(new String[0]).get());
+                assertTrue(exception.getCause() instanceof ClosingException);
+            } finally {
+                // restart mock to let other tests pass if this one failed
+                startRustCoreLibMock(null);
+            }
         }
     }
 
