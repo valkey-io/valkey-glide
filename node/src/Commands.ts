@@ -888,8 +888,8 @@ export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /**
  * Returns a string representation of a score boundary in Redis protocol format.
- * @param score The score boundary object containing value and inclusivity information.
- * @param isLex Indicates whether to return lexical representation for positive/negative infinity.
+ * @param score - The score boundary object containing value and inclusivity information.
+ * @param isLex - Indicates whether to return lexical representation for positive/negative infinity.
  * @returns A string representation of the score boundary in Redis protocol format.
  */
 function getScoreBoundaryArg(
