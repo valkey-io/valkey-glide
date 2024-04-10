@@ -45,13 +45,15 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             items.into()
         }
         Value::Map(map) => {
-            let hashmap = env.new_object("java/util/HashMap", "()V", &[]).unwrap();
+            let linked_hash_map = env
+                .new_object("java/util/LinkedHashMap", "()V", &[])
+                .unwrap();
 
             for (key, value) in map {
                 let java_key = redis_value_to_java(env, key);
                 let java_value = redis_value_to_java(env, value);
                 env.call_method(
-                    &hashmap,
+                    &linked_hash_map,
                     "put",
                     "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
                     &[(&java_key).into(), (&java_value).into()],
@@ -59,7 +61,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 .unwrap();
             }
 
-            hashmap
+            linked_hash_map
         }
         Value::Double(float) => env
             .new_object("java/lang/Double", "(D)V", &[float.into()])
