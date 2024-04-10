@@ -886,7 +886,13 @@ type SortedSetRange<T> = {
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
-function getScoreLimitArg(
+/**
+ * Returns a string representation of a score boundary in Redis protocol format.
+ * @param score The score boundary object containing value and inclusivity information.
+ * @param isLex Indicates whether to return lexical representation for positive/negative infinity.
+ * @returns A string representation of the score boundary in Redis protocol format.
+ */
+function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
     isLex: boolean = false,
 ): string {
@@ -915,8 +921,8 @@ function createZrangeArgs(
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
         const isLex = rangeQuery.type == "byLex";
-        args.push(getScoreLimitArg(rangeQuery.start, isLex));
-        args.push(getScoreLimitArg(rangeQuery.stop, isLex));
+        args.push(getScoreBoundaryArg(rangeQuery.start, isLex));
+        args.push(getScoreBoundaryArg(rangeQuery.stop, isLex));
         args.push(isLex == true ? "BYLEX" : "BYSCORE");
     } else {
         args.push(rangeQuery.start.toString());
@@ -951,8 +957,8 @@ export function createZcount(
     maxScore: ScoreBoundary<number>,
 ): redis_request.Command {
     const args = [key];
-    args.push(getScoreLimitArg(minScore));
-    args.push(getScoreLimitArg(maxScore));
+    args.push(getScoreBoundaryArg(minScore));
+    args.push(getScoreBoundaryArg(maxScore));
     return createCommand(RequestType.Zcount, args);
 }
 
@@ -1064,8 +1070,8 @@ export function createZremRangeByScore(
     maxScore: ScoreBoundary<number>,
 ): redis_request.Command {
     const args = [key];
-    args.push(getScoreLimitArg(minScore));
-    args.push(getScoreLimitArg(maxScore));
+    args.push(getScoreBoundaryArg(minScore));
+    args.push(getScoreBoundaryArg(maxScore));
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 

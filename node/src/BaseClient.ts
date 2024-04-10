@@ -1696,17 +1696,20 @@ export class BaseClient {
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      *
      * @example
-     *      await client.zadd("mySortedSet", \{ member1: 1.0, member2: 2.0, member3: 3.0 \});
+     * ```typescript
+     * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
+     * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
+     * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
      *
-     *      await client.zrange("mySortedSet", \{ start: 0, stop: -1 \});
-     *      ['member1', 'member2', 'member3']  (Returns all members in ascending order.)
-     *
-     *      await client.zrange("mySortedSet", \{
+     * @example
+     * // Example usage of zrange method to retrieve members within a score range in ascending order
+     * const result = await client.zrange("my_sorted_set", {
      *              start: "negativeInfinity",
-     *              stop: \{ value: 3, isInclusive: false \},
+     *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
-     *           \});
-     *      ['member2', 'member3'] (Returns members with scores within the range of negative infinity to 3, in ascending order.)
+     *           });
+     * console.log(result); // Output: ['member2', 'member3'] - Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * ```
      */
     public zrange(
         key: string,
@@ -1728,23 +1731,26 @@ export class BaseClient {
      * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
      * @returns A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
-     * 
+     *
      * @example
-     *      await client.zadd("mySortedSet", \{ member1: 1.0, member2: 2.0, member3: 3.5, member4: -2.0 \});
-
-     *      await client.zrangeWithScores("mySortedSet", \{
-     *              start: \{ value: 0.5, isInclusive: false \},
-     *              stop: \{ value: 3, isInclusive: false \},
+     * ```typescript
+     * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
+     * const result = await client.zrangeWithScores("my_sorted_set", {
+     *              start: { value: 10, isInclusive: false },
+     *              stop: { value: 20, isInclusive: false },
      *              type: "byScore",
-     *           \});
-     *      \{ 'member1': 1.0, 'member2': 2.0 \}  (Returns members with scores between 0.5 and 3 with their scores.)
-     * 
-     *      await client.zrange("mySortedSet", \{
-     *              start: \{ value: 3, isInclusive: false \},
-     *              stop: "positiveInfinity",
+     *           });
+     * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
+     *
+     * @example
+     * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
+     * const result = await client.zrangeWithScores("my_sorted_set", {
+     *              start: "negativeInfinity",
+     *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
-     *           \});
-     *      \{ 'member3': 3.5 \} (Returns members with scores within the range of negative infinity to 3, in ascending order.)
+     *           });
+     * console.log(result); // Output: {'member4': -2.0, 'member7': 1.5} - Returns members with scores within the range of negative infinity to 3, with their scores.
+     * ```
      */
     public zrangeWithScores(
         key: string,
