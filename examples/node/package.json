@@ -4,8 +4,7 @@
         "@aws/glide-for-redis": "^0.1.0",
         "@types/node": "^20.4.8"
     },
-    "scripts": {
-        "build": "tsc --build",
-        "clean": "tsc --build --clean"
+    "devDependencies": {
+        "typescript": "^5.1.6"
     }
 }

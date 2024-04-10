@@ -1255,7 +1255,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
     public brpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBrpop(keys, timeout));
@@ -1287,7 +1287,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
     public blpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBlpop(keys, timeout));
