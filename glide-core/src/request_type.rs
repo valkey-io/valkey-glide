@@ -112,6 +112,7 @@ pub enum RequestType {
     LInsert = 101,
     RPushX = 102,
     LPushX = 103,
+    ZMScore = 104,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -227,6 +228,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Blpop => RequestType::Blpop,
             ProtobufRequestType::LInsert => RequestType::LInsert,
             ProtobufRequestType::Spop => RequestType::Spop,
+            ProtobufRequestType::ZMScore => RequestType::ZMScore,
         }
     }
 }
@@ -338,6 +340,7 @@ impl RequestType {
             RequestType::Blpop => Some(cmd("BLPOP")),
             RequestType::LInsert => Some(cmd("LINSERT")),
             RequestType::Spop => Some(cmd("SPOP")),
+            RequestType::ZMScore => Some(cmd("ZMSCORE")),
         }
     }
 }

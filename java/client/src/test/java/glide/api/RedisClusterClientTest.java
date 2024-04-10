@@ -39,7 +39,6 @@ import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
-@SuppressWarnings("unchecked,resource")
 public class RedisClusterClientTest {
 
     RedisClusterClient service;
@@ -62,10 +61,10 @@ public class RedisClusterClientTest {
     public void custom_command_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, "TEST");
-
-        var value = client.customCommand(TEST_ARGS).get();
-        assertEquals("TEST", value.getSingleValue());
+        try (var client = new TestClient(commandManager, "TEST")) {
+            var value = client.customCommand(TEST_ARGS).get();
+            assertEquals("TEST", value.getSingleValue());
+        }
     }
 
     @Test
@@ -74,10 +73,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -87,10 +86,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS, RANDOM).get();
-        assertEquals(data, value.getSingleValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS, RANDOM).get();
+            assertEquals(data, value.getSingleValue());
+        }
     }
 
     @Test
@@ -99,10 +98,10 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -112,10 +111,10 @@ public class RedisClusterClientTest {
                 new TestCommandManager(
                         Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
 
-        var client = new TestClient(commandManager, "OK");
-
-        var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
-        assertEquals("OK", value.getSingleValue());
+        try (var client = new TestClient(commandManager, "OK")) {
+            var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
+            assertEquals("OK", value.getSingleValue());
+        }
     }
 
     private static class TestClient extends RedisClusterClient {
@@ -129,8 +128,13 @@ public class RedisClusterClientTest {
 
         @Override
         protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
-            return (T) object;
+            @SuppressWarnings("unchecked")
+            T returnValue = (T) object;
+            return returnValue;
         }
+
+        @Override
+        public void close() {}
     }
 
     private static class TestCommandManager extends CommandManager {
@@ -153,8 +157,8 @@ public class RedisClusterClientTest {
     @Test
     public void ping_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn("PONG");
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete("PONG");
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(Ping), eq(new String[0]), any()))
@@ -175,7 +179,7 @@ public class RedisClusterClientTest {
         // setup
         String message = "RETURN OF THE PONG";
         String[] arguments = new String[] {message};
-        CompletableFuture<String> testResponse = new CompletableFuture();
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
 
         // match on protobuf request
@@ -195,8 +199,8 @@ public class RedisClusterClientTest {
     @Test
     public void ping_with_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn("PONG");
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete("PONG");
 
         Route route = ALL_NODES;
 
@@ -286,12 +290,12 @@ public class RedisClusterClientTest {
     @Test
     public void info_returns_string() {
         // setup
-        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
-        Map<String, String> testPayload = new HashMap<String, String>();
+        Map<String, String> testPayload = new HashMap<>();
         testPayload.put("addr1", "value1");
         testPayload.put("addr2", "value2");
         testPayload.put("addr3", "value3");
-        when(testResponse.get()).thenReturn(ClusterValue.of(testPayload));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.of(testPayload));
         when(commandManager.<ClusterValue<String>>submitNewCommand(eq(Info), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
@@ -309,10 +313,10 @@ public class RedisClusterClientTest {
     @Test
     public void info_with_route_returns_string() {
         // setup
-        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
         Route route = ALL_NODES;
-        when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.of(testClusterValue));
         when(commandManager.<ClusterValue<String>>submitNewCommand(
                         eq(Info), eq(new String[0]), eq(route), any()))
                 .thenReturn(testResponse);
@@ -333,9 +337,10 @@ public class RedisClusterClientTest {
     public void info_with_route_with_infoOptions_returns_string() {
         // setup
         String[] infoArguments = new String[] {"ALL", "DEFAULT"};
-        CompletableFuture<ClusterValue<String>> testResponse = mock(CompletableFuture.class);
         Map<String, String> testClusterValue = Map.of("addr1", "addr1 result", "addr2", "addr2 result");
-        when(testResponse.get()).thenReturn(ClusterValue.of(testClusterValue));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.of(testClusterValue));
+
         Route route = ALL_PRIMARIES;
         when(commandManager.<ClusterValue<String>>submitNewCommand(
                         eq(Info), eq(infoArguments), eq(route), any()))
@@ -364,11 +369,12 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(RANDOM).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(RANDOM).get();
+            assertAll(
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -377,11 +383,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(ALL_NODES).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(ALL_NODES).get();
+            assertAll(
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @Test
@@ -390,11 +396,12 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(InfoOptions.builder().build(), RANDOM).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(InfoOptions.builder().build(), RANDOM).get();
+            assertAll(
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -403,19 +410,19 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("key1", "value1", "key2", "value2");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
+            assertAll(
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @SneakyThrows
     @Test
     public void clientId_returns_success() {
         // setup
-        CompletableFuture<Long> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(42L);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(42L);
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(ClientId), eq(new String[0]), any()))
@@ -435,10 +442,11 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("n1", 42L);
-        var client = new TestClient(commandManager, data);
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.clientId(ALL_NODES).get();
 
-        var value = client.clientId(ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @Test
@@ -446,18 +454,18 @@ public class RedisClusterClientTest {
     public void clientId_with_single_node_route_returns_success() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, 42L);
-
-        var value = client.clientId(RANDOM).get();
-        assertEquals(42, value.getSingleValue());
+        try (var client = new TestClient(commandManager, 42L)) {
+            var value = client.clientId(RANDOM).get();
+            assertEquals(42, value.getSingleValue());
+        }
     }
 
     @SneakyThrows
     @Test
     public void clientGetName_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn("TEST");
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete("TEST");
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ClientGetName), eq(new String[0]), any()))
@@ -476,10 +484,10 @@ public class RedisClusterClientTest {
     public void clientGetName_with_single_node_route_returns_success() {
         var commandManager = new TestCommandManager(null);
 
-        var client = new TestClient(commandManager, "TEST");
-
-        var value = client.clientGetName(RANDOM).get();
-        assertEquals("TEST", value.getSingleValue());
+        try (var client = new TestClient(commandManager, "TEST")) {
+            var value = client.clientGetName(RANDOM).get();
+            assertEquals("TEST", value.getSingleValue());
+        }
     }
 
     @Test
@@ -488,18 +496,18 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("n1", "TEST");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.clientGetName(ALL_NODES).get();
-        assertEquals(data, value.getMultiValue());
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.clientGetName(ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
     }
 
     @SneakyThrows
     @Test
     public void configRewrite_without_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ConfigRewrite), eq(new String[0]), any()))
@@ -518,8 +526,8 @@ public class RedisClusterClientTest {
     @Test
     public void configRewrite_with_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         Route route = ALL_NODES;
 
@@ -541,8 +549,8 @@ public class RedisClusterClientTest {
     @Test
     public void configResetStat_without_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ConfigResetStat), eq(new String[0]), any()))
@@ -561,8 +569,8 @@ public class RedisClusterClientTest {
     @Test
     public void configResetStat_with_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         Route route = ALL_NODES;
 
@@ -585,9 +593,9 @@ public class RedisClusterClientTest {
     @Test
     public void configGet_returns_success() {
         // setup
-        CompletableFuture<Map<String, String>> testResponse = mock(CompletableFuture.class);
         var testPayload = Map.of("timeout", "1000");
-        when(testResponse.get()).thenReturn(testPayload);
+        CompletableFuture<Map<String, String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(testPayload);
 
         // match on protobuf request
         when(commandManager.<Map<String, String>>submitNewCommand(
@@ -610,11 +618,12 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("timeout", "1000", "maxmemory", "1GB");
-        var client = new TestClient(commandManager, data);
-
-        var value = client.configGet(TEST_ARGS, RANDOM).get();
-        assertAll(
-                () -> assertTrue(value.hasSingleData()), () -> assertEquals(data, value.getSingleValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.configGet(TEST_ARGS, RANDOM).get();
+            assertAll(
+                    () -> assertTrue(value.hasSingleData()),
+                    () -> assertEquals(data, value.getSingleValue()));
+        }
     }
 
     @Test
@@ -623,19 +632,19 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = Map.of("node1", Map.of("timeout", "1000", "maxmemory", "1GB"));
-        var client = new TestClient(commandManager, data);
-
-        var value = client.configGet(TEST_ARGS, ALL_NODES).get();
-        assertAll(
-                () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        try (var client = new TestClient(commandManager, data)) {
+            var value = client.configGet(TEST_ARGS, ALL_NODES).get();
+            assertAll(
+                    () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
+        }
     }
 
     @SneakyThrows
     @Test
     public void configSet_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -654,8 +663,8 @@ public class RedisClusterClientTest {
     @Test
     public void configSet_with_route_returns_success() {
         // setup
-        CompletableFuture<String> testResponse = mock(CompletableFuture.class);
-        when(testResponse.get()).thenReturn(OK);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(

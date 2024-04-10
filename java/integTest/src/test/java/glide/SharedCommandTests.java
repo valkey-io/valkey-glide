@@ -51,6 +51,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -689,6 +690,27 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void lindex(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String[] valueArray = new String[] {"value1", "value2"};
+
+        assertEquals(2, client.lpush(key1, valueArray).get());
+        assertEquals(valueArray[1], client.lindex(key1, 0).get());
+        assertEquals(valueArray[0], client.lindex(key1, -1).get());
+        assertNull(client.lindex(key1, 3).get());
+        assertNull(client.lindex(key2, 3).get());
+
+        // Key exists, but it is not a List
+        assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void ltrim_existing_non_existing_key_and_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
@@ -1108,7 +1130,7 @@ public class SharedCommandTests {
 
         assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
         assertEquals(3, client.zadd(key, membersScores, onlyIfDoesNotExistOptions).get());
-        assertEquals(null, client.zaddIncr(key, "one", 5, onlyIfDoesNotExistOptions).get());
+        assertNull(client.zaddIncr(key, "one", 5, onlyIfDoesNotExistOptions).get());
         assertEquals(6, client.zaddIncr(key, "one", 5, onlyIfExistsOptions).get());
     }
 
@@ -1137,25 +1159,24 @@ public class SharedCommandTests {
         assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
         assertEquals(0, client.zadd(key, membersScores, scoreLessThanOptions, true).get());
         assertEquals(7, client.zaddIncr(key, "one", -3, scoreLessThanOptions).get());
-        assertEquals(null, client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
+        assertNull(client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
     }
 
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void zadd_illegal_arguments(BaseClient client) {
+    // TODO move to another class
+    @Test
+    public void zadd_illegal_arguments() {
         ZaddOptions existsGreaterThanOptions =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
-        assertThrows(IllegalArgumentException.class, () -> existsGreaterThanOptions.toArgs());
+        assertThrows(IllegalArgumentException.class, existsGreaterThanOptions::toArgs);
         ZaddOptions existsLessThanOptions =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
-        assertThrows(IllegalArgumentException.class, () -> existsLessThanOptions.toArgs());
+        assertThrows(IllegalArgumentException.class, existsLessThanOptions::toArgs);
         ZaddOptions options =
                 ZaddOptions.builder()
                         .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
@@ -1293,6 +1314,33 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrank(key, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zmscore(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+        assertArrayEquals(
+                new Double[] {1.0, 2.0, 3.0},
+                client.zmscore(key1, new String[] {"one", "two", "three"}).get());
+        assertArrayEquals(
+                new Double[] {1.0, null, null, 3.0},
+                client
+                        .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
+                        .get());
+        assertArrayEquals(
+                new Double[] {null}, client.zmscore("nonExistentKey", new String[] {"one"}).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
