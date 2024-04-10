@@ -1247,6 +1247,20 @@ export class BaseClient {
      * @param key - The key of the set.
      * @returns the value of the popped member.
      * If `key` does not exist, null will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of spop method to remove and return a random member from a set
+     * const result = await client.spop("my_set");
+     * console.log(result); // Output: 'member1' - Removes and returns a random member from the set "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of spop method with non-existing key
+     * const result = await client.spop("non_existing_key");
+     * console.log(result); // Output: null
+     * ```
      */
     public spop(key: string): Promise<string | null> {
         return this.createWritePromise(createSPop(key));
@@ -1259,6 +1273,18 @@ export class BaseClient {
      * @param count - The count of the elements to pop from the set.
      * @returns A list of popped elements will be returned depending on the set's length.
      * If `key` does not exist, empty list will be returned.
+     *
+     * @example
+     * // Example usage of spopCount method to remove and return multiple random members from a set
+     * const result = await client.spopCount("my_set", 2);
+     * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of spopCount method with non-existing key
+     * const result = await client.spopCount("non_existing_key");
+     * console.log(result); // Output: []
+     * ```
      */
     public spopCount(key: string, count: number): Promise<string[]> {
         return this.createWritePromise(createSPop(key, count));

@@ -141,7 +141,7 @@ class BaseTransaction:
             new_key (str) : The new name of the key.
 
         Command response:
-            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
 
