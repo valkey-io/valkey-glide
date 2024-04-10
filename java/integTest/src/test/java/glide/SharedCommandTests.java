@@ -859,7 +859,7 @@ public class SharedCommandTests {
         assertFalse(client.smove(setKey1, setKey3, "42").get());
         assertEquals(Set.of("3"), client.smembers(setKey1).get());
         assertEquals(Set.of("2"), client.smembers(setKey3).get());
-        
+
         // move missing element to missing key
         assertFalse(client.smove(setKey1, nonSetKey, "42").get());
         assertEquals(Set.of("3"), client.smembers(setKey1).get());
