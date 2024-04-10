@@ -45,6 +45,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -674,6 +675,28 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
         protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return Command Response - The element at <code>index</code> in the list stored at <code>key
+     *     </code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     */
+    public T lindex(@NonNull String key, long index) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index));
+
+        protobufTransaction.addCommands(buildCommand(Lindex, commandArgs));
         return getThis();
     }
 

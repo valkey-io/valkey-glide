@@ -64,6 +64,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -1342,6 +1343,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.lrange(key, start, end);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lindex_returns_success() {
+        // setup
+        String key = "testKey";
+        long index = 2;
+        String[] args = new String[] {key, Long.toString(index)};
+        String value = "value";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Lindex), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lindex(key, index);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
