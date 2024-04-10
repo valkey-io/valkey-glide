@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
@@ -45,7 +46,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -1588,17 +1588,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
-     * pivot</code> value.
+     * pivot</code>.
      *
      * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
      * @param key The key of the list.
      * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
      *     {@link InsertPosition#AFTER} the <code>pivot</code>.
-     * @param pivot The reference value.
+     * @param pivot An element of the list.
      * @param element The new element to insert.
-     * @return Command Response - The list length after a successful insert operation. If the <code>
-     *     key</code> doesn't exist returns <code>-1</code>, or if the <code>pivot</code> wasn't
-     *     found, returns <code>0</code>.
+     * @return Command Response - The list length after a successful insert operation.<br>
+     *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
+     *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
      */
     public T linsert(
             @NonNull String key,
