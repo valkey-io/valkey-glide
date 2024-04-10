@@ -996,6 +996,19 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_rename(self, redis_client: TRedisClient):
+        key1 = "{" + get_random_string(10) + "}"
+        assert await redis_client.set(key1, "foo") == OK
+        assert await redis_client.rename(key1, key1 + "_rename") == OK
+        assert await redis_client.exists([key1 + "_rename"]) == 1
+
+        with pytest.raises(RequestError):
+            assert await redis_client.rename(
+                "{same_slot}" + "non_existing_key", "{same_slot}" + "_rename"
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_exists(self, redis_client: TRedisClient):
         keys = [get_random_string(10), get_random_string(10)]
 
