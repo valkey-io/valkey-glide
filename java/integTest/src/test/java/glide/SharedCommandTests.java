@@ -1324,22 +1324,22 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key1, membersScores).get());
         assertArrayEquals(
-            new Double[] {1.0, 2.0, 3.0},
-            client.zmscore(key1, new String[] {"one", "two", "three"}).get());
+                new Double[] {1.0, 2.0, 3.0},
+                client.zmscore(key1, new String[] {"one", "two", "three"}).get());
         assertArrayEquals(
                 new Double[] {1.0, null, null, 3.0},
                 client
                         .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
                         .get());
         assertArrayEquals(
-            new Double[] {null},
-            client.zmscore("nonExistentKey", new String[] {"nonExistentMember"}).get());
+                new Double[] {null},
+                client.zmscore("nonExistentKey", new String[] {"nonExistentMember"}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "bar").get());
         ExecutionException executionException =
-            assertThrows(
-                ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
