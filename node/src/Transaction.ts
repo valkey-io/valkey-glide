@@ -1174,7 +1174,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
      * See https://redis.io/commands/xadd/ for more details.
      *
      * @param key - The key of the stream.
@@ -1190,12 +1190,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Trims the stream by evicting older entries.
+     * Trims the stream stored at `key` by evicting older entries.
      * See https://redis.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream.
+     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXtrim(key, options));
