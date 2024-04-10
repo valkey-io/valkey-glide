@@ -98,6 +98,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -2351,7 +2352,6 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
-
     @SneakyThrows
     @Test
     public void zdiffstore_returns_success() {
@@ -2366,7 +2366,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(ZDiffStore), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.zdiffstore(destKey, keys);

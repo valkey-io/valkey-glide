@@ -77,6 +77,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
@@ -1564,7 +1565,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zdiffstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs =
-            buildArgs(ArrayUtils.addAll(new String[] {destination, Long.toString(keys.length)}, keys));
+                buildArgs(ArrayUtils.addAll(new String[] {destination, Long.toString(keys.length)}, keys));
         protobufTransaction.addCommands(buildCommand(ZDiffStore, commandArgs));
         return getThis();
     }

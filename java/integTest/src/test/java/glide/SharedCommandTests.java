@@ -1434,8 +1434,8 @@ public class SharedCommandTests {
 
         assertEquals(2, client.zdiffstore(key4, new String[] {key1, key2}).get());
         assertEquals(
-            Map.of("one", 1.0, "three", 3.0),
-            client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get());
+                Map.of("one", 1.0, "three", 3.0),
+                client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get());
 
         assertEquals(1, client.zdiffstore(key4, new String[] {key3, key2, key1}).get());
         assertEquals(Map.of("four", 4.0), client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get());
@@ -1450,9 +1450,9 @@ public class SharedCommandTests {
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key5, "bar").get());
         ExecutionException executionException =
-            assertThrows(
-                ExecutionException.class,
-                () -> client.zdiffstore(key4, new String[] {key5, key1}).get());
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zdiffstore(key4, new String[] {key5, key1}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
