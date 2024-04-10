@@ -233,6 +233,13 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZRANK" | b"ZREVRANK" => cmd
             .position(b"WITHSCORE")
             .map(|_| ExpectedReturnType::ZrankReturnType),
+        b"SPOP" => {
+            if cmd.arg_idx(2).is_some() {
+                Some(ExpectedReturnType::Set)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }

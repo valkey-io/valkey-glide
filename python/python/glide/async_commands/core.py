@@ -1047,6 +1047,52 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
+    async def spop(self, key: str) -> str:
+        """
+        Removes and returns one random member from the set value store at `key`.
+        See https://valkey-io.github.io/commands/spop/ for details.
+        To pop multiple members, see `spop_count`
+
+        Args:
+            key (str): The key of the set.
+
+        Returns:
+            str: The value of the popped member.
+
+        Examples:
+            >>> await client.spop("my_list")
+                "value1"
+            >>> await client.spop("non_exiting_key")
+                None
+
+        """
+        return cast(str, await self._execute_command(RequestType.Spop, [key]))
+
+    async def spop_count(self, key: str, count: int) -> Set[str]:
+        """
+        Removes and returns one random member from the set value store at `key`.
+        See https://valkey-io.github.io/commands/spop/ for details.
+        To pop a single member, see `spop`
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Returns:
+            list: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, empty list will be returned.
+
+        Examples:
+            >>> await client.spop_count("my_list", 2)
+                {"value1", "value2"}
+            >>> await client.spop_count("non_exiting_key", 2)
+                Set()
+
+        """
+        return cast(
+            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+        )
+
     async def sismember(
         self,
         key: str,

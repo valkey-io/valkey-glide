@@ -784,6 +784,38 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SCard, [key])
 
+    def spop(self: TTransaction, key: str) -> TTransaction:
+        """
+        Removes and returns one random member from the set value store at `key`.
+        See https://valkey-io.github.io/commands/spop/ for details.
+        To pop multiple members, see `spop_count`
+
+        Args:
+            key (str): The key of the set.
+
+        Commands response:
+            str: The value of the popped member.
+
+        """
+        return self.append_command(RequestType.Spop, [key])
+
+    def spop_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Removes and returns one random member from the set value store at `key`.
+        See https://valkey-io.github.io/commands/spop/ for details.
+        To pop a single member, see `spop`
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Commands response:
+            list: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, empty list will be returned.
+
+        """
+        return self.append_command(RequestType.Spop, [key, str(count)])
+
     def sismember(
         self: TTransaction,
         key: str,
