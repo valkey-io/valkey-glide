@@ -1195,7 +1195,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream.
+     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXtrim(key, options));

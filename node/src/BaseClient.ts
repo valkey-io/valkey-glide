@@ -2077,7 +2077,7 @@ export class BaseClient {
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream.
+     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
         return this.createWritePromise(createXtrim(key, options));
