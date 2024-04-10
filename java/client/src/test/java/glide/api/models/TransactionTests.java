@@ -279,6 +279,9 @@ public class TransactionTests {
         transaction.smove("key1", "key2", "elem");
         results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
 
+        transaction.sinter(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInter, buildArgs("key1", "key2")));
+
         transaction.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
 
