@@ -1529,6 +1529,38 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zremrangebylex(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0, "d", 4.0);
+        assertEquals(4, client.zadd(key1, membersScores).get());
+
+        assertEquals(
+                2, client.zremrangebylex(key1, new LexBoundary("a", false), new LexBoundary("c")).get());
+        assertEquals(
+                1, client.zremrangebylex(key1, new LexBoundary("d"), InfLexBound.POSITIVE_INFINITY).get());
+        // MinLex > MaxLex
+        assertEquals(
+                0, client.zremrangebylex(key1, new LexBoundary("a"), InfLexBound.NEGATIVE_INFINITY).get());
+        // Non Existing Key
+        assertEquals(
+                0,
+                client
+                        .zremrangebylex(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zremrangebylex(key2, new LexBoundary("a"), new LexBoundary("c")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
