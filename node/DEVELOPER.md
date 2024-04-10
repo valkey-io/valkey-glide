@@ -74,21 +74,25 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 4. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
 
-   1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
-   ```bash
-   npm run build:release
-   ```
+    1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
 
-   2. Build in release mode with debug symbols (optimized but large binary size):
-   ```bash
-   npm run build:benchmark
-   ```
+    ```bash
+    npm run build:release
+    ```
 
-   3. For testing purposes, you can execute an unoptimized but fast build using:
-   ```bash
-   npm run build
-   ```
-   Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
+    2. Build in release mode with debug symbols (optimized but large binary size):
+
+    ```bash
+    npm run build:benchmark
+    ```
+
+    3. For testing purposes, you can execute an unoptimized but fast build using:
+
+    ```bash
+    npm run build
+    ```
+
+    Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 5. Run tests:
     1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
@@ -97,7 +101,7 @@ Before starting this step, make sure you've installed all software requirments.
         npm test
         ```
 6. Integrating the built GLIDE package into your project:
-    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
+   Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 -   For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
 -   If your modifications are limited to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
