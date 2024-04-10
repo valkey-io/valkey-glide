@@ -251,9 +251,7 @@ public class TransactionTests {
         results.add(Pair.of(SCard, buildArgs("key")));
 
         transaction.smove("key1", "key2", "elem");
-        results.add(
-                Pair.of(
-                        SMove, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("elem").build()));
+        results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
