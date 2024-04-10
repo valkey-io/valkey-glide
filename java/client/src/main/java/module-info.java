@@ -12,4 +12,7 @@ module glide.api {
     requires io.netty.transport;
     requires io.netty.transport.classes.kqueue;
     requires lombok;
+    requires io.netty.transport.unix.common;
+    requires io.netty.transport.classes.epoll;
+    requires io.netty.codec;
 }
