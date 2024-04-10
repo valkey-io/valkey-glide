@@ -109,6 +109,7 @@ pub enum RequestType {
     PfCount = 97,
     PfMerge = 98,
     Blpop = 100,
+    LInsert = 101,
     RPushX = 102,
     LPushX = 103,
     ZMScore = 104,
@@ -225,6 +226,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RPushX => RequestType::RPushX,
             ProtobufRequestType::LPushX => RequestType::LPushX,
             ProtobufRequestType::Blpop => RequestType::Blpop,
+            ProtobufRequestType::LInsert => RequestType::LInsert,
             ProtobufRequestType::Spop => RequestType::Spop,
             ProtobufRequestType::ZMScore => RequestType::ZMScore,
         }
@@ -336,6 +338,7 @@ impl RequestType {
             RequestType::RPushX => Some(cmd("RPUSHX")),
             RequestType::LPushX => Some(cmd("LPUSHX")),
             RequestType::Blpop => Some(cmd("BLPOP")),
+            RequestType::LInsert => Some(cmd("LINSERT")),
             RequestType::Spop => Some(cmd("SPOP")),
             RequestType::ZMScore => Some(cmd("ZMSCORE")),
         }

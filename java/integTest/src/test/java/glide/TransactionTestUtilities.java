@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -122,13 +123,12 @@ public class TransactionTestUtilities {
 
         baseTransaction.echo("GLIDE");
 
-        // TODO should be before LINDEX from #1219 and BRPOP/BLPOP from #1218
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
-
         baseTransaction
                 .lpush(listKey3, new String[] {value1, value2, value3})
-                .blpop(new String[] {listKey3}, 0.01)
-                .brpop(new String[] {listKey3}, 0.01);
+                .linsert(listKey3, AFTER, value2, value2);
+
+        baseTransaction.blpop(new String[] {listKey3}, 0.01).brpop(new String[] {listKey3}, 0.01);
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
         baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
@@ -212,6 +212,7 @@ public class TransactionTestUtilities {
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
             3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            4L, // linsert(listKey3, AFTER, value2, value2)
             new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
             new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})

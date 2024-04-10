@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
@@ -84,6 +85,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -1580,6 +1582,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
+     * pivot</code>.
+     *
+     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
+     * @param pivot An element of the list.
+     * @param element The new element to insert.
+     * @return Command Response - The list length after a successful insert operation.<br>
+     *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
+     *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
+     */
+    public T linsert(
+            @NonNull String key,
+            @NonNull InsertPosition position,
+            @NonNull String pivot,
+            @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
+        protobufTransaction.addCommands(buildCommand(LInsert, commandArgs));
         return getThis();
     }
 

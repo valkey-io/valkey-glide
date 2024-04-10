@@ -5,6 +5,8 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
@@ -1459,6 +1461,29 @@ public class SharedCommandTests {
         assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
         assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
         assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void linsert(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertEquals(4, client.lpush(key1, new String[] {"4", "3", "2", "1"}).get());
+        assertEquals(5, client.linsert(key1, BEFORE, "2", "1.5").get());
+        assertEquals(6, client.linsert(key1, AFTER, "3", "3.5").get());
+        assertArrayEquals(
+                new String[] {"1", "1.5", "2", "3", "3.5", "4"}, client.lrange(key1, 0, -1).get());
+
+        assertEquals(0, client.linsert(key2, BEFORE, "pivot", "elem").get());
+        assertEquals(-1, client.linsert(key1, AFTER, "5", "6").get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key2, "linsert").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.linsert(key2, AFTER, "p", "e").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
