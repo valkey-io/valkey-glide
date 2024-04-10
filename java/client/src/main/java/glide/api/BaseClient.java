@@ -691,7 +691,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout) {
+    public CompletableFuture<Object[]> bzpopmax(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
         return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
     }
