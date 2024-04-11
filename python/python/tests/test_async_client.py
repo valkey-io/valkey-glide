@@ -830,6 +830,27 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lpushx(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        # new key
+        assert await redis_client.lpushx(key1, ["1"]) == 0
+        assert await redis_client.lrange(key1, 0, -1) == []
+        # existing key
+        assert await redis_client.lpush(key1, ["0"]) == 1
+        assert await redis_client.lpushx(key1, ["1", "2", "3"]) == 4
+        assert await redis_client.lrange(key1, 0, -1) == ["3", "2", "1", "0"]
+        # key exists, but not a list
+        assert await redis_client.set(key2, "bar") == OK
+        with pytest.raises(RequestError) as e:
+            await redis_client.lpushx(key2, ["_"])
+        # incorrect arguments
+        with pytest.raises(RequestError):
+            await redis_client.lpushx(key1, [])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lindex(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
@@ -864,6 +885,27 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await redis_client.rpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_rpushx(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        # new key
+        assert await redis_client.rpushx(key1, ["1"]) == 0
+        assert await redis_client.lrange(key1, 0, -1) == []
+        # existing key
+        assert await redis_client.rpush(key1, ["0"]) == 1
+        assert await redis_client.rpushx(key1, ["1", "2", "3"]) == 4
+        assert await redis_client.lrange(key1, 0, -1) == ["0", "1", "2", "3"]
+        # key existing, but it is not a list
+        assert await redis_client.set(key2, "bar") == OK
+        with pytest.raises(RequestError) as e:
+            await redis_client.rpushx(key2, ["_"])
+        # incorrect arguments
+        with pytest.raises(RequestError):
+            await redis_client.rpushx(key2, [])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -2,6 +2,7 @@
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
+* Python: Added RPUSHX and LPUSHX commands ([#1239](https://github.com/aws/glide-for-redis/pull/1239))
 * Python: Added ZREMRANGEBYSCORE command ([#1151](https://github.com/aws/glide-for-redis/pull/1151))
 * Node: Added SPOP, SPOPCOUNT commands. ([#1117](https://github.com/aws/glide-for-redis/pull/1117))
 * Node: Added ZRANGE command ([#1115](https://github.com/aws/glide-for-redis/pull/1115))
