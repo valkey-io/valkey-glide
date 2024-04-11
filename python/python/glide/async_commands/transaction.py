@@ -796,7 +796,6 @@ class BaseTransaction:
 
         Commands response:
             str: The value of the popped member.
-
         """
         return self.append_command(RequestType.Spop, [key])
 
