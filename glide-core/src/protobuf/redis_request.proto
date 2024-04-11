@@ -146,6 +146,7 @@ enum RequestType {
     LPushX = 103;
     ZMScore = 104;
     ZDiff = 105;
+    ZDiffStore = 106;
     SetRange = 107;
 }
 

@@ -114,6 +114,7 @@ pub enum RequestType {
     LPushX = 103,
     ZMScore = 104,
     ZDiff = 105,
+    ZDiffStore = 106,
     SetRange = 107,
 }
 
@@ -232,6 +233,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Spop => RequestType::Spop,
             ProtobufRequestType::ZMScore => RequestType::ZMScore,
             ProtobufRequestType::ZDiff => RequestType::ZDiff,
+            ProtobufRequestType::ZDiffStore => RequestType::ZDiffStore,
             ProtobufRequestType::SetRange => RequestType::SetRange,
         }
     }
@@ -346,6 +348,7 @@ impl RequestType {
             RequestType::Spop => Some(cmd("SPOP")),
             RequestType::ZMScore => Some(cmd("ZMSCORE")),
             RequestType::ZDiff => Some(cmd("ZDIFF")),
+            RequestType::ZDiffStore => Some(cmd("ZDIFFSTORE")),
             RequestType::SetRange => Some(cmd("SETRANGE")),
         }
     }

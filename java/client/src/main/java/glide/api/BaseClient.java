@@ -63,6 +63,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -746,6 +747,13 @@ public abstract class BaseClient
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
         arguments = ArrayUtils.add(arguments, WITH_SCORES_REDIS_API);
         return commandManager.submitNewCommand(ZDiff, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        String[] arguments =
+                ArrayUtils.addAll(new String[] {destination, Long.toString(keys.length)}, keys);
+        return commandManager.submitNewCommand(ZDiffStore, arguments, this::handleLongResponse);
     }
 
     @Override

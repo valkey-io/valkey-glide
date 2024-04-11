@@ -110,6 +110,7 @@ public class TransactionTestUtilities {
         baseTransaction.zscore(key8, "two");
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
+        baseTransaction.zdiffstore(key8, new String[] {key8, key8});
 
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
@@ -206,6 +207,7 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            0L, // zdiffstore(key8, new String[] {key8, key8})
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
