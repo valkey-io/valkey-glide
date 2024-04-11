@@ -22,7 +22,7 @@ public class TransactionTestUtilities {
     private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
-    private static final String zSetKey2 = "{key}" + UUID.randomUUID();
+    private static final String zSetKey2 = "{key}:zsetKey2-" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
