@@ -2,9 +2,9 @@
 package glide.api.commands;
 
 import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.LexRange;
-import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -593,12 +593,12 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of {@link InfLexBound}
-     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
-     *     and inclusivity.
-     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of {@link InfLexBound}
-     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
-     *     and inclusivity.
+     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
      * @return The number of members removed from the sorted set.<br>
      *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
      *     returns <code>0</code>.<br>

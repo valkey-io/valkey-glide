@@ -96,8 +96,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
-import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.Limit;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
@@ -384,6 +384,9 @@ public class TransactionTests {
         transaction.zremrangebyrank("key", 0, -1);
         results.add(Pair.of(ZRemRangeByRank, buildArgs("key", "0", "-1")));
 
+        transaction.zremrangebylex("key", new LexBoundary("a", false), InfLexBound.POSITIVE_INFINITY);
+        results.add(Pair.of(ZRemRangeByLex, buildArgs("key", "(a", "+")));
+
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
@@ -428,12 +431,6 @@ public class TransactionTests {
                 Pair.of(
                         Zrange,
                         buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_REDIS_API)));
-
-        transaction.zremrangebylex("key", new LexBoundary("a", false), InfLexBound.POSITIVE_INFINITY);
-        results.add(
-                Pair.of(
-                        ZRemRangeByLex,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("(a").addArgs("+").build()));
 
         transaction.pfadd("hll", new String[] {"a", "b", "c"});
         results.add(Pair.of(PfAdd, buildArgs("hll", "a", "b", "c")));
