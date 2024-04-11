@@ -110,6 +110,7 @@ pub enum RequestType {
     Blpop = 100,
     RPushX = 102,
     LPushX = 103,
+    ZLexCount = 105,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -223,6 +224,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RPushX => RequestType::RPushX,
             ProtobufRequestType::LPushX => RequestType::LPushX,
             ProtobufRequestType::Blpop => RequestType::Blpop,
+            ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
         }
     }
 }
@@ -332,6 +334,7 @@ impl RequestType {
             RequestType::RPushX => Some(cmd("RPUSHX")),
             RequestType::LPushX => Some(cmd("LPUSHX")),
             RequestType::Blpop => Some(cmd("BLPOP")),
+            RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
         }
     }
 }

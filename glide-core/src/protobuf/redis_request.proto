@@ -142,6 +142,7 @@ enum RequestType {
     Blpop = 100;
     RPushX = 102;
     LPushX = 103;
+    ZLexCount = 105;
 }
 
 message Command {
