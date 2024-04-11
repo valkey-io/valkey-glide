@@ -812,7 +812,7 @@ class BaseTransaction:
 
         Commands response:
             Set[str]: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, empty set will be returned.
+                  If `key` does not exist, an empty set will be returned.
 
         """
         return self.append_command(RequestType.Spop, [key, str(count)])
