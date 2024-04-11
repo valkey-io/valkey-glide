@@ -1061,7 +1061,7 @@ class CoreCommands(Protocol):
             str: The value of the popped member.
 
         Examples:
-            >>> await client.spop("my_list")
+            >>> await client.spop("my_set")
                 "value1"
             >>> await client.spop("non_exiting_key")
                 None
