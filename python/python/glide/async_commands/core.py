@@ -1065,7 +1065,6 @@ class CoreCommands(Protocol):
                 "value1" # Removes and returns a random member from the set "my_set".
             >>> await client.spop("non_exiting_key")
                 None
-
         """
         return cast(str, await self._execute_command(RequestType.Spop, [key]))
 
