@@ -65,6 +65,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -390,6 +391,26 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T strlen(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Strlen, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
+     * offset</code>, for the entire length of <code>value</code>.<br>
+     * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
+     * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
+     * </code> if it doesn't exist.
+     *
+     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @param key The key of the string to update.
+     * @param offset The position in the string where <code>value</code> should be written.
+     * @param value The string written with <code>offset</code>.
+     * @return Command Response - The length of the string stored at <code>key</code> after it was
+     *     modified.
+     */
+    public T setrange(@NonNull String key, int offset, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, Integer.toString(offset), value);
+        protobufTransaction.addCommands(buildCommand(SetRange, commandArgs));
         return getThis();
     }
 
