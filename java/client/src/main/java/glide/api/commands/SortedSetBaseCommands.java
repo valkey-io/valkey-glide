@@ -509,4 +509,21 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zdiffWithScores(String[] keys);
+
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets at
+     * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
+     * overwriting it if it already exists. Non-existent keys are treated as empty sets.
+     *
+     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @param destination The key for the resulting sorted set.
+     * @param keys The keys of the sorted sets to compare.
+     * @return The number of members in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.zdiffstore("mySortedSet", new String[] {"key1", "key2"}).get();
+     * assert payload > 0; // At least one member differed in "key1" compared to "key2", and this difference was stored in "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zdiffstore(String destination, String[] keys);
 }

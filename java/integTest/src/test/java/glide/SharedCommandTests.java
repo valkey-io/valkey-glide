@@ -1417,6 +1417,48 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zdiffstore(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        String key4 = "{testKey}:4-" + UUID.randomUUID();
+        String key5 = "{testKey}:5-" + UUID.randomUUID();
+
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        Map<String, Double> membersScores2 = Map.of("two", 2.0);
+        Map<String, Double> membersScores3 = Map.of("one", 0.5, "two", 2.0, "three", 3.0, "four", 4.0);
+
+        assertEquals(3, client.zadd(key1, membersScores1).get());
+        assertEquals(1, client.zadd(key2, membersScores2).get());
+        assertEquals(4, client.zadd(key3, membersScores3).get());
+
+        assertEquals(2, client.zdiffstore(key4, new String[] {key1, key2}).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0),
+                client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get());
+
+        assertEquals(1, client.zdiffstore(key4, new String[] {key3, key2, key1}).get());
+        assertEquals(Map.of("four", 4.0), client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get());
+
+        assertEquals(0, client.zdiffstore(key4, new String[] {key1, key3}).get());
+        assertTrue(client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get().isEmpty());
+
+        // Non-Existing key
+        assertEquals(0, client.zdiffstore(key4, new String[] {key5, key1}).get());
+        assertTrue(client.zrangeWithScores(key4, new RangeByIndex(0, -1)).get().isEmpty());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key5, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zdiffstore(key4, new String[] {key5, key1}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
