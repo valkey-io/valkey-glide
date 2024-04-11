@@ -1080,8 +1080,8 @@ class CoreCommands(Protocol):
             count (int): The count of the elements to pop from the set.
 
         Returns:
-            list: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, empty list will be returned.
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, empty set will be returned.
 
         Examples:
             >>> await client.spop_count("my_list", 2)
