@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZrangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -73,6 +74,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -1510,6 +1512,41 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zmscore(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
         protobufTransaction.addCommands(buildCommand(ZMScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.<br>
+     * To get the elements with their scores, see {@link #zdiffWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return Command Response - An <code>array</code> of elements representing the difference
+     *     between the sorted sets. <br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>array</code>.
+     */
+    public T zdiff(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, Long.toString(keys.length)));
+        protobufTransaction.addCommands(buildCommand(ZDiff, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return Command Response - A <code>Map</code> of elements and their scores representing the
+     *     difference between the sorted sets.<br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>Map</code>.
+     */
+    public T zdiffWithScores(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
+        arguments = ArrayUtils.add(arguments, WITH_SCORES_REDIS_API);
+        ArgsArray commandArgs = buildArgs(arguments);
+        protobufTransaction.addCommands(buildCommand(ZDiff, commandArgs));
         return getThis();
     }
 
