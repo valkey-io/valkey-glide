@@ -1571,18 +1571,27 @@ public class SharedCommandTests {
     public void zremrangebyscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, -1);
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0, "four", 4.0);
         assertEquals(4, client.zadd(key1, membersScores).get());
 
-        assertEquals(
-                2, client.zremrangebyscore(key1, new ScoreBoundary(1, false), new ScoreBoundary(3)).get());
-        assertEquals(
-                1,
-                client.zremrangebyscore(key1, new ScoreBoundary(4), InfScoreBound.POSITIVE_INFINITY).get());
         // MinScore > MaxScore
         assertEquals(
                 0,
                 client.zremrangebyscore(key1, new ScoreBoundary(1), InfScoreBound.NEGATIVE_INFINITY).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0, "four", 4.0),
+                client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                2, client.zremrangebyscore(key1, new ScoreBoundary(1, false), new ScoreBoundary(3)).get());
+        assertEquals(Map.of("one", 1.0, "four", 4.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                1,
+                client.zremrangebyscore(key1, new ScoreBoundary(4), InfScoreBound.POSITIVE_INFINITY).get());
+        assertEquals(Map.of("one", 1.0), client.zrangeWithScores(key1, query).get());
+
         // Non Existing Key
         assertEquals(
                 0,

@@ -637,7 +637,7 @@ public interface SortedSetBaseCommands {
      * assert payload1 == 4L; // Indicates that 4 members, with scores ranging from 1 (exclusive) to 5 (inclusive), have been removed from "mySortedSet".
      *
      * Long payload2 = client.zremrangebyscore("mySortedSet", InfScoreBound.NEGATIVE_INFINITY , new ScoreBoundary(-42)).get();
-     * assert payload2 == 0; // Indicates that no elements were removed.
+     * assert payload2 == 0L; // Indicates that no elements were removed.
      * }</pre>
      */
     CompletableFuture<Long> zremrangebyscore(String key, ScoreRange minScore, ScoreRange maxScore);
