@@ -604,6 +604,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPush, [key] + elements)
 
+    def lpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.LPushX, [key] + elements)
+
     def lpop(self: TTransaction, key: str) -> TTransaction:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -694,6 +709,21 @@ class BaseTransaction:
                 If `key` holds a value that is not a list, the transaction fails.
         """
         return self.append_command(RequestType.RPush, [key] + elements)
+
+    def rpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.RPushX, [key] + elements)
 
     def rpop(self: TTransaction, key: str, count: Optional[int] = None) -> TTransaction:
         """
