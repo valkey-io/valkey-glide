@@ -787,7 +787,7 @@ class BaseTransaction:
     def spop(self: TTransaction, key: str) -> TTransaction:
         """
         Removes and returns one random member from the set value store at `key`.
-        
+
         See https://valkey-io.github.io/commands/spop/ for details.
         To pop multiple members, see `spop_count`.
 
@@ -802,7 +802,7 @@ class BaseTransaction:
     def spop_count(self: TTransaction, key: str, count: int) -> TTransaction:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
-        
+
         See https://valkey-io.github.io/commands/spop/ for details.
         To pop a single member, see `spop`.
 
