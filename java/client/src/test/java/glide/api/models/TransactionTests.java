@@ -371,15 +371,7 @@ public class TransactionTests {
                                 .build()));
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
-        results.add(
-                Pair.of(
-                        ZDiffStore,
-                        ArgsArray.newBuilder()
-                                .addArgs("destKey")
-                                .addArgs("2")
-                                .addArgs("key1")
-                                .addArgs("key2")
-                                .build()));
+        results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));

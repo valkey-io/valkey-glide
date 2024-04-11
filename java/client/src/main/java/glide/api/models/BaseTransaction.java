@@ -1558,7 +1558,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
-     * @param destination Destination key for the resulting sorted set.
+     * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
      * @return Command Response - The number of members in the resulting sorted set stored at <code>
      *     destination</code>.
