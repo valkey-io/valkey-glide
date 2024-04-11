@@ -352,15 +352,10 @@ public class TransactionTests {
         results.add(Pair.of(Zrank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
-        results.add(
-                Pair.of(
-                        ZMScore,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
+        results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
 
         transaction.zdiff(new String[] {"key1", "key2"});
-        results.add(
-                Pair.of(
-                        ZDiff, ArgsArray.newBuilder().addArgs("2").addArgs("key1").addArgs("key2").build()));
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
 
         transaction.zdiffWithScores(new String[] {"key1", "key2"});
         results.add(
