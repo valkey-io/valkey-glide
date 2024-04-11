@@ -96,6 +96,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -2344,6 +2345,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Double[]> response = service.zmscore(key, members);
         Double[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zdiffstore_returns_success() {
+        // setup
+        String destKey = "testDestKey";
+        String[] keys = new String[] {"testKey1", "testKey2"};
+        String[] arguments = new String[] {destKey, Long.toString(keys.length), "testKey1", "testKey2"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZDiffStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zdiffstore(destKey, keys);
+        Long payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
