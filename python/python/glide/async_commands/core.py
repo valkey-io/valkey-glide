@@ -1073,7 +1073,7 @@ class CoreCommands(Protocol):
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
         See https://valkey-io.github.io/commands/spop/ for details.
-        To pop a single member, see `spop`
+        To pop a single member, see `spop`.
 
         Args:
             key (str): The key of the set.
