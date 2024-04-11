@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.24.3'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.26.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.100.Final'
@@ -31,8 +31,35 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
 }
 
+ext {
+    checkProtocVersion = { String output ->
+        // Line in format like: libprotoc 26.1
+        int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
+        int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
+        if (majorVersion < 26 || (majorVersion == 26 && minorVersion < 1)) {
+            throw new GradleException("Protobuf compiler (protoc) version 26.1 or newer is required. Current version: $output");
+        }
+        return output.split(" ")[1]
+    }
+}
+
 tasks.register('protobuf', Exec) {
     doFirst {
+        try {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    commandLine 'protoc', '--version'
+                    workingDir Paths.get(project.rootDir.path, '..').toFile()
+                    standardOutput = os
+                }
+                checkProtocVersion(os.toString());
+            }
+        } catch (Exception e) {
+            if (e.getMessage().startsWith("A problem occurred starting process")) {
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 26.1 or newer is required.");
+            }
+        }
+
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
     }
     commandLine 'protoc',
@@ -126,4 +153,8 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
+}
+
+jar {
+    archiveBaseName = "glide"
 }
