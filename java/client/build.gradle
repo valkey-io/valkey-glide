@@ -156,5 +156,5 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "glide-client"
+    archiveBaseName = "glide"
 }
