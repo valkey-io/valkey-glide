@@ -31,6 +31,7 @@ async def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -145,6 +146,11 @@ async def transaction_test(
     args.append(value2)
     transaction.rpop_count(key6, 2)
     args.append([value2, value])
+
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
