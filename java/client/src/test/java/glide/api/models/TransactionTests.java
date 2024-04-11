@@ -374,16 +374,14 @@ public class TransactionTests {
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
 
+        transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
+        results.add(Pair.of(Zcount, buildArgs("key", "(5.0", "+inf")));
+
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
         transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
-
-        transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
-        results.add(
-                Pair.of(
-                        Zcount, ArgsArray.newBuilder().addArgs("key").addArgs("(5.0").addArgs("+inf").build()));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
