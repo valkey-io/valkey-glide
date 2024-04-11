@@ -1513,7 +1513,7 @@ public class SharedCommandTests {
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> client.zremrangebyrank(key2, 2, 1).get());
+                assertThrows(ExecutionException.class, () -> client.zremrangebyrank(key2, 2, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 

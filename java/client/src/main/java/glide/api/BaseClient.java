@@ -769,9 +769,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zremrangebyrank(@NonNull String key, long start, long end) {
         return commandManager.submitNewCommand(
-            ZRemRangeByRank,
-            new String[] {key, Long.toString(start), Long.toString(end)},
-            this::handleLongResponse);
+                ZRemRangeByRank,
+                new String[] {key, Long.toString(start), Long.toString(end)},
+                this::handleLongResponse);
     }
 
     @Override
