@@ -1049,8 +1049,9 @@ class CoreCommands(Protocol):
 
     async def spop(self, key: str) -> str:
         """
-        Removes and returns one random member from the set value store at `key`.
-        See https://valkey-io.github.io/commands/spop/ for details.
+        Removes and returns one random member from the set stored at `key`.
+        
+        See https://valkey-io.github.io/commands/spop/ for more details.
         To pop multiple members, see `spop_count`
 
         Args:
