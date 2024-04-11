@@ -79,6 +79,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -96,6 +97,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -392,6 +395,9 @@ public class TransactionTests {
         transaction.zremrangebyscore(
                 "key", new ScoreBoundary(5, false), RangeOptions.InfScoreBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZRemRangeByScore, buildArgs("key", "(5.0", "+inf")));
+
+        transaction.zlexcount("key", new LexBoundary("c", false), InfLexBound.POSITIVE_INFINITY);
+        results.add(Pair.of(ZLexCount, buildArgs("key", "(c", "+")));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));

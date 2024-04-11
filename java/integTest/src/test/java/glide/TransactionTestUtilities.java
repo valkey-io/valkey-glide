@@ -8,6 +8,8 @@ import glide.api.models.BaseTransaction;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
@@ -113,6 +115,7 @@ public class TransactionTestUtilities {
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
         baseTransaction.zscore(key8, "two");
         baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
+        baseTransaction.zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY);
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
         baseTransaction.zremrangebyrank(key8, 5, 10);
@@ -214,6 +217,7 @@ public class TransactionTestUtilities {
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
             2.0, // zscore(key8, "two")
             2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+            2L, // zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
             0L, // zremrangebyrank(key8, 5, 10)
