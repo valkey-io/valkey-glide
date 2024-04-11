@@ -593,13 +593,13 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param minLex The minimum lex to remove from. Can be an implementation of {@link InfLexBound}
+     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of {@link InfLexBound}
      *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
      *     and inclusivity.
-     * @param maxLex The maximum lex to remove to. Can be an implementation of {@link InfLexBound}
+     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of {@link InfLexBound}
      *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
      *     and inclusivity.
-     * @return The number of members removed.<br>
+     * @return The number of members removed from the sorted set.<br>
      *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
      *     returns <code>0</code>.<br>
      *     If <code>minLex</code> is greater than <code>maxLex</code>, <code>0</code> is returned.
@@ -609,7 +609,7 @@ public interface SortedSetBaseCommands {
      * assert payload1 == 4L; // Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "mySortedSet".
      *
      * Long payload2 = client.zremrangebylex("mySortedSet", InfLexBound.NEGATIVE_INFINITY , new LexBoundary("e")).get();
-     * assert payload2 == 0; // Indicates that no elements were removed.
+     * assert payload2 == 0L; // Indicates that no elements were removed.
      * }</pre>
      */
     CompletableFuture<Long> zremrangebylex(String key, LexRange minLex, LexRange maxLex);
