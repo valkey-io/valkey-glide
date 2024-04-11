@@ -24,9 +24,9 @@ import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -72,7 +72,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
-        if (route.isSingleNodeRoute()) {
+        if (route instanceof SingleNodeRoute) {
             return ClusterValue.ofSingleValue(handleObjectOrNullResponse(response));
         }
         if (response.hasConstantResponse()) {
@@ -88,15 +88,10 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Object>[]> exec(
-            @NonNull ClusterTransaction transaction, Route route) {
-        return commandManager
-                .submitNewCommand(transaction, Optional.ofNullable(route), this::handleArrayOrNullResponse)
-                .thenApply(
-                        objects ->
-                                Arrays.stream(objects)
-                                        .map(ClusterValue::of)
-                                        .<ClusterValue<Object>>toArray(ClusterValue[]::new));
+    public CompletableFuture<Object[]> exec(
+            @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                transaction, Optional.of(route), this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -133,7 +128,7 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
     }
@@ -152,7 +147,7 @@ public class RedisClusterClient extends BaseClient
                 options.toArgs(),
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
     }
@@ -169,7 +164,7 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleLongResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
     }
@@ -187,7 +182,7 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringOrNullResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
     }
@@ -229,7 +224,7 @@ public class RedisClusterClient extends BaseClient
                 parameters,
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleMapResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
@@ -261,7 +256,7 @@ public class RedisClusterClient extends BaseClient
                 new String[] {message},
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleStringResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
@@ -279,7 +274,7 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response ->
-                        route.isSingleNodeRoute()
+                        route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
                                 : ClusterValue.ofMultiValue(
                                         castMapOfArrays(handleMapResponse(response), String.class)));

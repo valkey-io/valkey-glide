@@ -13,31 +13,46 @@ public class RequestRoutingConfiguration {
      * Basic interface. Please use one of the following implementations:
      *
      * <ul>
-     *   <li>{@link SimpleRoute}
+     *   <li>{@link SimpleMultiNodeRoute}
+     *   <li>{@link SimpleSingleNodeRoute}
      *   <li>{@link SlotIdRoute}
      *   <li>{@link SlotKeyRoute}
+     *   <li>{@link ByAddressRoute}
      * </ul>
      */
-    public interface Route {
-        boolean isSingleNodeRoute();
-    }
+    public interface Route {}
 
-    public enum SimpleRoute implements Route {
-        /** Route request to all nodes. */
-        ALL_NODES,
-        /** Route request to all primary nodes. */
-        ALL_PRIMARIES,
+    /** A route that addresses single node. */
+    public interface SingleNodeRoute extends Route {}
+
+    /** A route that addresses multiple nodes. */
+    public interface MultiNodeRoute extends Route {}
+
+    @RequiredArgsConstructor
+    @Getter
+    public enum SimpleSingleNodeRoute implements SingleNodeRoute {
         /** Route request to a random node. */
-        RANDOM;
+        RANDOM(2);
 
-        @Override
-        public boolean isSingleNodeRoute() {
-            return this == RANDOM;
-        }
+        private final int ordinal;
     }
 
+    @RequiredArgsConstructor
+    @Getter
+    public enum SimpleMultiNodeRoute implements MultiNodeRoute {
+        /** Route request to all nodes. */
+        ALL_NODES(0),
+        /** Route request to all primary nodes. */
+        ALL_PRIMARIES(1);
+
+        private final int ordinal;
+    }
+
+    /** Defines type of the node being addressed. */
     public enum SlotType {
+        /** Address a primary node. */
         PRIMARY,
+        /** Address a replica node. */
         REPLICA,
     }
 
@@ -48,19 +63,15 @@ public class RequestRoutingConfiguration {
      */
     @RequiredArgsConstructor
     @Getter
-    public static class SlotIdRoute implements Route {
+    public static class SlotIdRoute implements SingleNodeRoute {
         /**
          * Slot number. There are 16384 slots in a redis cluster, and each shard manages a slot range.
          * Unless the slot is known, it's better to route using {@link SlotType#PRIMARY}.
          */
         private final int slotId;
 
+        /** Defines type of the node being addressed. */
         private final SlotType slotType;
-
-        @Override
-        public boolean isSingleNodeRoute() {
-            return true;
-        }
     }
 
     /**
@@ -70,21 +81,17 @@ public class RequestRoutingConfiguration {
      */
     @RequiredArgsConstructor
     @Getter
-    public static class SlotKeyRoute implements Route {
+    public static class SlotKeyRoute implements SingleNodeRoute {
         /** The request will be sent to nodes managing this key. */
         private final String slotKey;
 
+        /** Defines type of the node being addressed. */
         private final SlotType slotType;
-
-        @Override
-        public boolean isSingleNodeRoute() {
-            return true;
-        }
     }
 
-    /** Routes a request to a node by its address */
+    /** Routes a request to a node by its address. */
     @Getter
-    public static class ByAddressRoute implements Route {
+    public static class ByAddressRoute implements SingleNodeRoute {
         /**
          * The endpoint of the node. If <code>port</code> is not provided, should be in the <code>
          * "address:port"</code> format, where <code>address</code> is the preferred endpoint as shown
@@ -98,11 +105,13 @@ public class RequestRoutingConfiguration {
          */
         private final int port;
 
+        /** Create a route using hostname/address and port. */
         public ByAddressRoute(@NonNull String host, int port) {
             this.host = host;
             this.port = port;
         }
 
+        /** Create a route using address string formatted as <code>"address:port"</code>. */
         public ByAddressRoute(@NonNull String host) {
             String[] split = host.split(":");
             if (split.length < 2) {
@@ -118,11 +127,6 @@ public class RequestRoutingConfiguration {
             } catch (NumberFormatException e) {
                 throw new RequestException("Port must be a valid integer. Received: " + split[1]);
             }
-        }
-
-        @Override
-        public boolean isSingleNodeRoute() {
-            return true;
         }
     }
 }

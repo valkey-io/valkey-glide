@@ -1,6 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,7 +20,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
-import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
@@ -27,11 +30,14 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
@@ -126,9 +132,13 @@ public class CommandManagerTest {
         assertEquals(testString, respPointer);
     }
 
+    public static Stream<Arguments> getEnumRoutes() {
+        return Stream.of(Arguments.of(RANDOM), Arguments.of(ALL_NODES), Arguments.of(ALL_PRIMARIES));
+    }
+
     @ParameterizedTest
-    @EnumSource(value = SimpleRoute.class)
-    public void prepare_request_with_simple_routes(SimpleRoute routeType) {
+    @MethodSource("getEnumRoutes")
+    public void prepare_request_with_simple_routes(Route routeType) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
@@ -142,9 +152,9 @@ public class CommandManagerTest {
 
         var protobufToClientRouteMapping =
                 Map.of(
-                        SimpleRoutes.AllNodes, SimpleRoute.ALL_NODES,
-                        SimpleRoutes.AllPrimaries, SimpleRoute.ALL_PRIMARIES,
-                        SimpleRoutes.Random, SimpleRoute.RANDOM);
+                        SimpleRoutes.AllNodes, ALL_NODES,
+                        SimpleRoutes.AllPrimaries, ALL_PRIMARIES,
+                        SimpleRoutes.Random, RANDOM);
 
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
@@ -255,8 +265,9 @@ public class CommandManagerTest {
         var exception =
                 assertThrows(
                         RequestException.class,
-                        () -> service.submitNewCommand(CustomCommand, new String[0], () -> false, r -> null));
-        assertEquals("Unknown type of route", exception.getMessage());
+                        () ->
+                                service.submitNewCommand(CustomCommand, new String[0], new Route() {}, r -> null));
+        assertTrue(exception.getMessage().startsWith("Unknown type of route"));
     }
 
     @SneakyThrows
@@ -300,9 +311,9 @@ public class CommandManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = SimpleRoute.class)
+    @MethodSource("getEnumRoutes")
     public void submitNewCommand_with_ClusterTransaction_with_route_sends_protobuf_request(
-            SimpleRoute routeType) {
+            Route routeType) {
 
         String[] arg1 = new String[] {"GETSTRING", "one"};
         String[] arg2 = new String[] {"GETSTRING", "two"};
@@ -323,9 +334,9 @@ public class CommandManagerTest {
 
         var protobufToClientRouteMapping =
                 Map.of(
-                        SimpleRoutes.AllNodes, SimpleRoute.ALL_NODES,
-                        SimpleRoutes.AllPrimaries, SimpleRoute.ALL_PRIMARIES,
-                        SimpleRoutes.Random, SimpleRoute.RANDOM);
+                        SimpleRoutes.AllNodes, ALL_NODES,
+                        SimpleRoutes.AllPrimaries, ALL_PRIMARIES,
+                        SimpleRoutes.Random, RANDOM);
 
         assertAll(
                 () -> assertTrue(requestBuilder.hasRoute()),
