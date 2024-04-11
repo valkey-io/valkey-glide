@@ -48,9 +48,8 @@ tasks.register('protobuf', Exec) {
         try {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
-                    commandLine 'brotoc', '--version'
+                    commandLine 'protoc', '--version'
                     workingDir Paths.get(project.rootDir.path, '..').toFile()
-                    ignoreExitValue true
                     standardOutput = os
                 }
                 checkProtocVersion(os.toString());
