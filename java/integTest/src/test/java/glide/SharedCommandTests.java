@@ -1501,12 +1501,21 @@ public class SharedCommandTests {
     public void zremrangebyrank(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, -1);
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key1, membersScores).get());
 
+        // Incorrect range start > stop
         assertEquals(0, client.zremrangebyrank(key1, 2, 1).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key1, query).get());
+
         assertEquals(2, client.zremrangebyrank(key1, 0, 1).get());
+        assertEquals(Map.of("three", 3.0), client.zrangeWithScores(key1, query).get());
+
         assertEquals(1, client.zremrangebyrank(key1, 0, 10).get());
+        assertTrue(client.zrangeWithScores(key1, query).get().isEmpty());
+
         // Non Existing Key
         assertEquals(0, client.zremrangebyrank(key2, 0, 10).get());
 
