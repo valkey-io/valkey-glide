@@ -79,6 +79,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -351,10 +352,21 @@ public class TransactionTests {
         results.add(Pair.of(Zrank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
+        results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
+
+        transaction.zdiff(new String[] {"key1", "key2"});
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
+
+        transaction.zdiffWithScores(new String[] {"key1", "key2"});
         results.add(
                 Pair.of(
-                        ZMScore,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
+                        ZDiff,
+                        ArgsArray.newBuilder()
+                                .addArgs("2")
+                                .addArgs("key1")
+                                .addArgs("key2")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));

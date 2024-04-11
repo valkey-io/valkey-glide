@@ -22,6 +22,7 @@ public class TransactionTestUtilities {
     private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
+    private static final String zSetKey2 = "{key}:zsetKey2-" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
@@ -109,6 +110,10 @@ public class TransactionTestUtilities {
         baseTransaction.zscore(key8, "two");
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
+
+        baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
+        baseTransaction.zdiff(new String[] {zSetKey2, key8});
+        baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -201,6 +206,9 @@ public class TransactionTestUtilities {
             2.0, // zscore(key8, "two")
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+            new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
+            Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
             "0-1", // xadd(key9, Map.of("field1", "value1"),
             // StreamAddOptions.builder().id("0-1").build());
             "0-2", // xadd(key9, Map.of("field2", "value2"),
