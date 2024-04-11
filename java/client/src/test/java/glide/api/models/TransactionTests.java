@@ -84,7 +84,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -378,17 +377,14 @@ public class TransactionTests {
         transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
         results.add(Pair.of(Zcount, buildArgs("key", "(5.0", "+inf")));
 
+        transaction.zremrangebyrank("key", 0, -1);
+        results.add(Pair.of(XAdd, buildArgs("key", "0", "-1")));
+
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
         transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
-
-        transaction.zremrangebyrank("key", 0, -1);
-        results.add(
-                Pair.of(
-                        ZRemRangeByRank,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("0").addArgs("-1").build()));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
