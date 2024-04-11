@@ -68,7 +68,7 @@ jobs:
               uses: arduino/setup-protoc@v3
               with:
                   version: "26.1"
-                  repo-token: ${{ inputs.github-token }}
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install redis
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
@@ -141,7 +141,7 @@ jobs:
               uses: arduino/setup-protoc@v3
               with:
                   version: "26.1"
-                  repo-token: ${{ inputs.github-token }}
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create a symbolic Link for redis6 binaries
               run: |
