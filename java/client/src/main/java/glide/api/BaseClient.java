@@ -62,6 +62,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -731,6 +732,20 @@ public abstract class BaseClient
                 ZMScore,
                 arguments,
                 response -> castArray(handleArrayOrNullResponse(response), Double.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zdiff(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
+        return commandManager.submitNewCommand(
+                ZDiff, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zdiffWithScores(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
+        arguments = ArrayUtils.add(arguments, WITH_SCORES_REDIS_API);
+        return commandManager.submitNewCommand(ZDiff, arguments, this::handleMapResponse);
     }
 
     @Override

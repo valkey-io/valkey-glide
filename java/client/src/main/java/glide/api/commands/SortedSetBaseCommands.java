@@ -474,4 +474,39 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double[]> zmscore(String key, String[] members);
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.<br>
+     * To get the elements with their scores, see {@link #zdiffWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return An <code>array</code> of elements representing the difference between the sorted sets.
+     *     <br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>array</code>.
+     * @example
+     *     <pre>{@code
+     * String[] payload = client.zdiff(new String[] {"sortedSet1", "sortedSet2", "sortedSet3"}).get();
+     * assert payload.equals(new String[]{"element1"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> zdiff(String[] keys);
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return A <code>Map</code> of elements and their scores representing the difference between the
+     *     sorted sets.<br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, Double> payload = client.zdiffWithScores(new String[] {"sortedSet1", "sortedSet2", "sortedSet3"}).get();
+     * assert payload.equals(Map.of("element1", 1.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zdiffWithScores(String[] keys);
 }
