@@ -1050,7 +1050,7 @@ class CoreCommands(Protocol):
     async def spop(self, key: str) -> str:
         """
         Removes and returns one random member from the set stored at `key`.
-        
+
         See https://valkey-io.github.io/commands/spop/ for more details.
         To pop multiple members, see `spop_count`
 
@@ -1071,7 +1071,7 @@ class CoreCommands(Protocol):
     async def spop_count(self, key: str, count: int) -> Set[str]:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
-        
+
         See https://valkey-io.github.io/commands/spop/ for details.
         To pop a single member, see `spop`
 
@@ -1084,8 +1084,8 @@ class CoreCommands(Protocol):
                   If `key` does not exist, empty set will be returned.
 
         Examples:
-            >>> await client.spop_count("my_list", 2)
-                {"value1", "value2"}
+            >>> await client.spop_count("my_set", 2)
+                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
             >>> await client.spop_count("non_exiting_key", 2)
                 Set()
 

@@ -936,6 +936,8 @@ class TestCommands:
         assert await redis_client.sadd(key, [member, member2, member3]) == 3
         assert await redis_client.spop_count(key, 4) == {member, member2, member3}
 
+        assert await redis_client.scard(key) == 0
+
         assert await redis_client.spop("non_existing_key") == None
         assert await redis_client.spop_count("non_existing_key", 3) == set()
 

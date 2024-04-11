@@ -486,4 +486,13 @@ mod tests {
         )
         .is_err());
     }
+
+    #[test]
+    fn test_convert_spop_to_set_for_spop_count() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SPOP").arg("key1").arg("3")),
+            Some(ExpectedReturnType::Set)
+        ));
+        assert!(expected_type_for_cmd(redis::cmd("SPOP").arg("key1")).is_none());
+    }
 }

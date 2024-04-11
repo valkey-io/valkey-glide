@@ -801,7 +801,7 @@ class BaseTransaction:
 
     def spop_count(self: TTransaction, key: str, count: int) -> TTransaction:
         """
-        Removes and returns one random member from the set value store at `key`.
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
         See https://valkey-io.github.io/commands/spop/ for details.
         To pop a single member, see `spop`
 
@@ -810,8 +810,8 @@ class BaseTransaction:
             count (int): The count of the elements to pop from the set.
 
         Commands response:
-            list: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, empty list will be returned.
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, empty set will be returned.
 
         """
         return self.append_command(RequestType.Spop, [key, str(count)])
