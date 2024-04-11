@@ -113,6 +113,7 @@ public class TransactionTestUtilities {
         baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
+        baseTransaction.zremrangebyrank(key8, 5, 10);
         baseTransaction.zdiffstore(key8, new String[] {key8, key8});
 
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
@@ -211,6 +212,7 @@ public class TransactionTestUtilities {
             2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            0L, // zremrangebyrank(key8, 5, 10)
             0L, // zdiffstore(key8, new String[] {key8, key8})
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
