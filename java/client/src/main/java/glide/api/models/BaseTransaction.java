@@ -1607,7 +1607,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the sorted set.
      * @param start The starting point of the range.
      * @param end The end of the range.
-     * @return Command Response - The number of members removed.<br>
+     * @return Command Response - The number of elements removed.<br>
      *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
      *     greater than <code>end</code>, <code>0</code> returned.<br>
      *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the

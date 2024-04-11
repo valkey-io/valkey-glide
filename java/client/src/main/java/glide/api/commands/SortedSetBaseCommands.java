@@ -567,7 +567,7 @@ public interface SortedSetBaseCommands {
      * @param key The key of the sorted set.
      * @param start The starting point of the range.
      * @param end The end of the range.
-     * @return The number of members removed.<br>
+     * @return The number of elements removed.<br>
      *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
      *     greater than <code>end</code>, <code>0</code> returned.<br>
      *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the
@@ -576,10 +576,10 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Long payload1 = client.zremrangebyrank("mySortedSet", 0, 4).get();
-     * assert payload1 == 5L; // Indicates that 5 members, with ranks ranging from 0 to 4 (inclusive), have been removed from "mySortedSet".
+     * assert payload1 == 5L; // Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "mySortedSet".
      *
      * Long payload2 = client.zremrangebyrank("mySortedSet", 0, 4).get();
-     * assert payload2 == 0; // Indicates that nothing was removed.
+     * assert payload2 == 0L; // Indicates that nothing was removed.
      * }</pre>
      */
     CompletableFuture<Long> zremrangebyrank(String key, long start, long end);
