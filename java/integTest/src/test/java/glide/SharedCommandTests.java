@@ -7,6 +7,8 @@ import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
+import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
+import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFINITY;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
@@ -24,7 +26,6 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
-import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.Limit;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -1459,6 +1460,44 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void zcount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        // In range negative to positive infinity.
+        assertEquals(3, client.zcount(key1, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
+        assertEquals(
+                3,
+                client
+                        .zcount(
+                                key1,
+                                new ScoreBoundary(Double.NEGATIVE_INFINITY),
+                                new ScoreBoundary(Double.POSITIVE_INFINITY))
+                        .get());
+        // In range 1 (exclusive) to 3 (inclusive)
+        assertEquals(
+                2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
+        // In range negative infinity to 3 (inclusive)
+        assertEquals(3, client.zcount(key1, NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Incorrect range start > end
+        assertEquals(0, client.zcount(key1, POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Non-existing key
+        assertEquals(0, client.zcount("non_existing_key", NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zcount(key2, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -1734,37 +1773,34 @@ public class SharedCommandTests {
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
         assertEquals(3, client.zadd(key, membersScores).get());
 
-        RangeByScore query =
-                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        RangeByScore query = new RangeByScore(NEGATIVE_INFINITY, new ScoreBoundary(3, false));
         assertArrayEquals(new String[] {"one", "two"}, client.zrange(key, query).get());
 
-        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY);
+        query = new RangeByScore(NEGATIVE_INFINITY, POSITIVE_INFINITY);
         assertEquals(
                 Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key, query).get());
 
-        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        query = new RangeByScore(new ScoreBoundary(3, false), NEGATIVE_INFINITY);
         assertArrayEquals(new String[] {"two", "one"}, client.zrange(key, query, true).get());
 
-        query =
-                new RangeByScore(
-                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        query = new RangeByScore(NEGATIVE_INFINITY, POSITIVE_INFINITY, new Limit(1, 2));
         assertArrayEquals(new String[] {"two", "three"}, client.zrange(key, query).get());
 
-        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        query = new RangeByScore(NEGATIVE_INFINITY, new ScoreBoundary(3, false));
         assertArrayEquals(
                 new String[] {},
                 client
                         .zrange(key, query, true)
                         .get()); // stop is greater than start with reverse set to True
 
-        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        query = new RangeByScore(POSITIVE_INFINITY, new ScoreBoundary(3, false));
         assertArrayEquals(
                 new String[] {}, client.zrange(key, query, true).get()); // start is greater than stop
 
-        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        query = new RangeByScore(POSITIVE_INFINITY, new ScoreBoundary(3, false));
         assertTrue(client.zrangeWithScores(key, query).get().isEmpty()); // start is greater than stop
 
-        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        query = new RangeByScore(NEGATIVE_INFINITY, new ScoreBoundary(3, false));
         assertTrue(
                 client
                         .zrangeWithScores(key, query, true)
