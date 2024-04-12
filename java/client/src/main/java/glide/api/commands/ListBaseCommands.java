@@ -239,11 +239,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.blpop(["list1", "list2"], 0.5).get();
@@ -263,11 +264,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.brpop(["list1", "list2"], 0.5).get();
