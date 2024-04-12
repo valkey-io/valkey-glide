@@ -294,6 +294,25 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Strlen, [key]))
 
+    async def rename(self, key: str, new_key: str) -> TOK:
+        """
+        Renames `key` to `new_key`.
+        If `newkey` already exists it is overwritten.
+        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+        See https://redis.io/commands/rename/ for more details.
+
+        Args:
+            key (str) : The key to rename.
+            new_key (str) : The new name of the key.
+
+        Returns:
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.Rename, [key, new_key])
+        )
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -766,6 +785,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
+    async def lpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.lpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.lpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.LPushX, [key] + elements)
+        )
+
     async def lpop(self, key: str) -> Optional[str]:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -903,6 +945,29 @@ class CoreCommands(Protocol):
         """
         return cast(
             int, await self._execute_command(RequestType.RPush, [key] + elements)
+        )
+
+    async def rpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.rpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.rpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPushX, [key] + elements)
         )
 
     async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
@@ -1702,7 +1767,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
                 {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
-           >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
                 {'member4': -2.0, 'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)

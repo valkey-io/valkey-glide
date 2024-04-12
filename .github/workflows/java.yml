@@ -64,6 +64,12 @@ jobs:
                   target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Install redis
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
               if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -130,6 +136,12 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create a symbolic Link for redis6 binaries
               run: |

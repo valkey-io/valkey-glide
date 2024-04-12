@@ -40,21 +40,21 @@ public class ConnectionManagerTest {
 
     ChannelHandler channel;
 
-    private static String HOST = "aws.com";
-    private static int PORT = 9999;
+    private static final String HOST = "aws.com";
+    private static final int PORT = 9999;
 
-    private static String USERNAME = "JohnDoe";
-    private static String PASSWORD = "Password1";
+    private static final String USERNAME = "JohnDoe";
+    private static final String PASSWORD = "Password1";
 
-    private static int NUM_OF_RETRIES = 5;
-    private static int FACTOR = 10;
-    private static int EXPONENT_BASE = 50;
+    private static final int NUM_OF_RETRIES = 5;
+    private static final int FACTOR = 10;
+    private static final int EXPONENT_BASE = 50;
 
-    private static int DATABASE_ID = 1;
+    private static final int DATABASE_ID = 1;
 
-    private static int REQUEST_TIMEOUT = 3;
+    private static final int REQUEST_TIMEOUT = 3;
 
-    private static String CLIENT_NAME = "ClientName";
+    private static final String CLIENT_NAME = "ClientName";
 
     @BeforeEach
     public void setUp() {

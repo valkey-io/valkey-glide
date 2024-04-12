@@ -128,6 +128,23 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Strlen, [key])
 
+    def rename(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key`.
+        If `newkey` already exists it is overwritten.
+        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+        See https://redis.io/commands/rename/ for more details.
+
+        Args:
+            key (str) : The key to rename.
+            new_key (str) : The new name of the key.
+
+        Command response:
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
+        """
+        return self.append_command(RequestType.Rename, [key, new_key])
+
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.
@@ -587,6 +604,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPush, [key] + elements)
 
+    def lpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.LPushX, [key] + elements)
+
     def lpop(self: TTransaction, key: str) -> TTransaction:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -677,6 +709,21 @@ class BaseTransaction:
                 If `key` holds a value that is not a list, the transaction fails.
         """
         return self.append_command(RequestType.RPush, [key] + elements)
+
+    def rpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.RPushX, [key] + elements)
 
     def rpop(self: TTransaction, key: str, count: Optional[int] = None) -> TTransaction:
         """
