@@ -58,6 +58,7 @@ tasks.register('protobuf', Exec) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
                 throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 26.1 or newer is required.");
             }
+            throw e
         }
 
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())
