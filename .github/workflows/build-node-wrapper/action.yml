@@ -45,6 +45,14 @@ inputs:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
+    shell_os:
+        description: "The shell to work with"
+        required: false
+        type: string
+        default: "bash"
+        options:
+            - "bash"
+            - "sh"
 
 env:
     CARGO_TERM_COLOR: always
@@ -67,6 +75,7 @@ runs:
             named_os: ${{ inputs.named_os }}
             arch: ${{ inputs.arch }}
             npm_scope: ${{ inputs.npm_scope }}
+            shell_os: ${{ inputs.shell_os }}
 
         - name: npm install
           shell: bash
