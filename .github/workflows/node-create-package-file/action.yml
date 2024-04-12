@@ -49,7 +49,7 @@ runs:
     using: "composite"
     steps:
         - name: Create package.json file
-          shell: ${{inputs.shell_os}}
+          shell: sh
           working-directory: ./node
           run: |
               # set the package name
