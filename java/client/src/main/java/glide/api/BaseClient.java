@@ -796,6 +796,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zremrangebyscore(
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByScore,
+                new String[] {key, minScore.toArgs(), maxScore.toArgs()},
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> xadd(@NonNull String key, @NonNull Map<String, String> values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
