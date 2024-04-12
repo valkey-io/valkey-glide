@@ -474,7 +474,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -738,7 +738,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ltrim_existing_non_existing_key_and_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1389,7 +1389,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zmscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1416,7 +1416,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiffstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
@@ -1458,7 +1458,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zcount(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1496,7 +1496,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zremrangebyrank(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1527,7 +1527,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zremrangebylex(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1566,7 +1566,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1708,7 +1708,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void brpop(BaseClient client) {
         String listKey1 = "{listKey}-1-" + UUID.randomUUID();
