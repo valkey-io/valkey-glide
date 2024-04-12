@@ -186,6 +186,11 @@ jobs:
             image: node:18.19.0-alpine
         timeout-minutes: 15
         steps:
+            - name: Install bash
+              run: |
+                apk add bash
+                apk add gettext
+
             - name: Install git
               run: apk add git
 
@@ -204,7 +209,6 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   arch: "arm64"
                   named_os: "linux-musl"
-                  shell_os: "sh"
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node
