@@ -17,6 +17,9 @@ subprojects {
     // minimal java compatibility level
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = "11"
+        dependencies {
+            testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()
@@ -29,10 +32,6 @@ subprojects {
         // TODO: add jacoco with code coverage
         // finalizedBy jacocoTestReport, jacocoTestCoverageVerification
     }
-}
-
-dependencies {
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.9.2'
 }
 
 // JaCoCo section (code coverage by unit tests)
