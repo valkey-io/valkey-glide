@@ -785,6 +785,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
+    async def lpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.lpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.lpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.LPushX, [key] + elements)
+        )
+
     async def lpop(self, key: str) -> Optional[str]:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -922,6 +945,29 @@ class CoreCommands(Protocol):
         """
         return cast(
             int, await self._execute_command(RequestType.RPush, [key] + elements)
+        )
+
+    async def rpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.rpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.rpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPushX, [key] + elements)
         )
 
     async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:

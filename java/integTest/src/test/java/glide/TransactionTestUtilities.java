@@ -2,9 +2,14 @@
 package glide;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.StreamAddOptions;
 import java.util.Map;
@@ -22,6 +27,7 @@ public class TransactionTestUtilities {
     private static final String key7 = "{key}" + UUID.randomUUID();
     private static final String setKey2 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
+    private static final String zSetKey2 = "{key}:zsetKey2-" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
@@ -64,6 +70,7 @@ public class TransactionTestUtilities {
         baseTransaction.incrByFloat(key3, 0.5);
 
         baseTransaction.unlink(new String[] {key3});
+        baseTransaction.setrange(key3, 0, "GLIDE");
 
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
@@ -107,8 +114,16 @@ public class TransactionTestUtilities {
         baseTransaction.zrange(key8, new RangeByIndex(0, 1));
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
         baseTransaction.zscore(key8, "two");
+        baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
+        baseTransaction.zremrangebyrank(key8, 5, 10);
+        baseTransaction.zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY);
+        baseTransaction.zdiffstore(key8, new String[] {key8, key8});
+
+        baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
+        baseTransaction.zdiff(new String[] {zSetKey2, key8});
+        baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -124,13 +139,12 @@ public class TransactionTestUtilities {
 
         baseTransaction.echo("GLIDE");
 
-        // TODO should be before LINDEX from #1219 and BRPOP/BLPOP from #1218
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
-
         baseTransaction
                 .lpush(listKey3, new String[] {value1, value2, value3})
-                .blpop(new String[] {listKey3}, 0.01)
-                .brpop(new String[] {listKey3}, 0.01);
+                .linsert(listKey3, AFTER, value2, value2);
+
+        baseTransaction.blpop(new String[] {listKey3}, 0.01).brpop(new String[] {listKey3}, 0.01);
 
         baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
         baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
@@ -163,6 +177,7 @@ public class TransactionTestUtilities {
             0L,
             0.5,
             1L,
+            5L, // setrange(key3, 0, "GLIDE")
             2L,
             value1,
             2L, // hlen(key4)
@@ -200,8 +215,15 @@ public class TransactionTestUtilities {
             new String[] {"two", "three"}, // zrange
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
             2.0, // zscore(key8, "two")
+            2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
+            0L, // zremrangebyrank(key8, 5, 10)
+            0L, // zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+            0L, // zdiffstore(key8, new String[] {key8, key8})
+            2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+            new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
+            Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
             "0-1", // xadd(key9, Map.of("field1", "value1"),
             // StreamAddOptions.builder().id("0-1").build());
             "0-2", // xadd(key9, Map.of("field2", "value2"),
@@ -215,6 +237,7 @@ public class TransactionTestUtilities {
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
             3L, // lpush(listKey3, new String[] { value1, value2, value3})
+            4L, // linsert(listKey3, AFTER, value2, value2)
             new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
             new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01);
             1L, // pfadd(hllKey1, new String[] {"a", "b", "c"})

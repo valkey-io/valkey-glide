@@ -141,10 +141,15 @@ enum RequestType {
     PfCount = 97;
     PfMerge = 98;
     Blpop = 100;
+    LInsert = 101;
     RPushX = 102;
     LPushX = 103;
     ZMScore = 104;
-    SMove = 109;
+    ZDiff = 105;
+    ZDiffStore = 106;
+    SetRange = 107;
+    ZRemRangeByLex = 108;
+    SMove = 110;
 }
 
 message Command {

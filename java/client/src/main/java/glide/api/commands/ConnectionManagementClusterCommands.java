@@ -165,7 +165,7 @@ public interface ConnectionManagementClusterCommands {
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return The provided <code>message</code>.
-     * @examples
+     * @example
      *     <pre>{@code
      * // Command sent to a single random node via RANDOM route, expecting a SingleValue result.
      * String message = client.echo("GLIDE", RANDOM).get().getSingleValue();

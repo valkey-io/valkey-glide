@@ -5,6 +5,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -93,8 +94,8 @@ public interface GenericClusterCommands {
      * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
-     * @param route Specifies the routing configuration for the transaction. The client will route the
-     *     transaction to the nodes defined by <code>route</code>.
+     * @param route A single-node routing configuration for the transaction. The client will route the
+     *     transaction to the node defined by <code>route</code>.
      * @return A list of results corresponding to the execution of each command in the transaction.
      * @remarks
      *     <ul>
@@ -107,10 +108,10 @@ public interface GenericClusterCommands {
      * @example
      *     <pre>{@code
      * ClusterTransaction transaction = new ClusterTransaction().ping().info();
-     * ClusterValue<Object>[] result = clusterClient.exec(transaction, RANDOM).get();
-     * assert ((String) result[0].getSingleValue()).equals("PONG");
-     * assert ((String) result[1].getSingleValue()).contains("# Stats");
+     * Object[] result = clusterClient.exec(transaction, RANDOM).get();
+     * assert ((String) result[0]).equals("PONG");
+     * assert ((String) result[1]).contains("# Stats");
      * }</pre>
      */
-    CompletableFuture<ClusterValue<Object>[]> exec(ClusterTransaction transaction, Route route);
+    CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
 }
