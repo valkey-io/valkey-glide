@@ -12,12 +12,13 @@ import lombok.RequiredArgsConstructor;
 /**
  * Arguments for {@link SortedSetBaseCommands#zcount}, {@link
  * SortedSetBaseCommands#zremrangebyrank}, {@link SortedSetBaseCommands#zremrangebylex(String,
- * LexRange, LexRange)}, {@link SortedSetBaseCommands#zrange}, and {@link
- * SortedSetBaseCommands#zrangeWithScores}
+ * LexRange, LexRange)}, {@link SortedSetBaseCommands#zremrangebyscore}, {@link
+ * SortedSetBaseCommands#zrange}, and {@link SortedSetBaseCommands#zrangeWithScores}
  *
  * @see <a href="https://redis.io/commands/zcount/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a>
+ * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a>
  * @see <a href="https://redis.io/commands/zrange/">redis.io</a>
  */
 public class RangeOptions {
