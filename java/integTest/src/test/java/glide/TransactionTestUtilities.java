@@ -5,7 +5,9 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
+import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
@@ -114,6 +116,7 @@ public class TransactionTestUtilities {
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
         baseTransaction.zremrangebyrank(key8, 5, 10);
+        baseTransaction.zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY);
         baseTransaction.zdiffstore(key8, new String[] {key8, key8});
 
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
@@ -213,6 +216,7 @@ public class TransactionTestUtilities {
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
             0L, // zremrangebyrank(key8, 5, 10)
+            0L, // zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
             0L, // zdiffstore(key8, new String[] {key8, key8})
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
