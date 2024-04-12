@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'java-library'
-    id 'io.freefair.lombok' version '6.4.0'
+    id 'io.freefair.lombok' version '8.6'
     id 'jacoco'
     id 'com.diffplug.spotless' version '6.19.0'
 }
@@ -17,6 +17,13 @@ subprojects {
     // minimal java compatibility level
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = "11"
+        dependencies {
+            //lombok
+            compileOnly 'org.projectlombok:lombok:1.18.32'
+            annotationProcessor 'org.projectlombok:lombok:1.18.32'
+            testCompileOnly 'org.projectlombok:lombok:1.18.32'
+            testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()
