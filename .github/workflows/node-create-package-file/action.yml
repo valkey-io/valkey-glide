@@ -40,7 +40,7 @@ inputs:
         description: "The shell to work with"
         required: false
         type: string
-        default: "bash"
+        default: "sh"
         options:
             - "bash"
             - "sh"
@@ -49,7 +49,7 @@ runs:
     using: "composite"
     steps:
         - name: Create package.json file
-          shell: bash
+          shell: ${{ inputs.shell_os}}
           working-directory: ./node
           run: |
               # set the package name
