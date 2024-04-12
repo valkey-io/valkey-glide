@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - ubuntu-musl
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
