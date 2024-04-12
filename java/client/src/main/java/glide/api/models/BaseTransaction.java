@@ -81,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
@@ -97,11 +98,11 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.LexRange;
-import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -1690,12 +1691,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set.
      */
     public T zrangestore(
-        @NonNull String destination,
-        @NonNull String source,
-        @NonNull RangeQuery rangeQuery,
-        boolean reverse) {
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull RangeQuery rangeQuery,
+            boolean reverse) {
         ArgsArray commandArgs =
-            buildArgs(RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse));
+                buildArgs(RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse));
         protobufTransaction.addCommands(buildCommand(ZRangeStore, commandArgs));
         return getThis();
     }

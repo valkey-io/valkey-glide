@@ -404,36 +404,19 @@ public class TransactionTests {
         results.add(Pair.of(ZLexCount, buildArgs("key", "(c", "+")));
 
         transaction.zrangestore(
-            "destination",
-            "source",
-            new RangeByScore(
-                InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
-            true);
+                "destination",
+                "source",
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
+                true);
         results.add(
-            Pair.of(
-                ZRangeStore,
-                ArgsArray.newBuilder()
-                    .addArgs("destination")
-                    .addArgs("source")
-                    .addArgs("-inf")
-                    .addArgs("(3.0")
-                    .addArgs("BYSCORE")
-                    .addArgs("REV")
-                    .addArgs("LIMIT")
-                    .addArgs("1")
-                    .addArgs("2")
-                    .build()));
+                Pair.of(
+                        ZRangeStore,
+                        buildArgs(
+                                "destination", "source", "-inf", "(3.0", "BYSCORE", "REV", "LIMIT", "1", "2")));
 
         transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
-        results.add(
-            Pair.of(
-                ZRangeStore,
-                ArgsArray.newBuilder()
-                    .addArgs("destination")
-                    .addArgs("source")
-                    .addArgs("2")
-                    .addArgs("3")
-                    .build()));
+        results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
