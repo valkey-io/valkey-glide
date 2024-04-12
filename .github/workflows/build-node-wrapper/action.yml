@@ -45,14 +45,6 @@ inputs:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
-    shell_os:
-        description: "The shell to work with"
-        required: false
-        type: string
-        default: "bash"
-        options:
-            - "bash"
-            - "sh"
 
 env:
     CARGO_TERM_COLOR: always
