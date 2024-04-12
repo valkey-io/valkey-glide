@@ -81,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -1644,6 +1645,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zremrangebylex(@NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
         ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
         protobufTransaction.addCommands(buildCommand(ZRemRangeByLex, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
+     * minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to remove from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to remove to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return Command Response - The number of members removed.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minScore</code> is greater than <code>maxScore</code>, <code>0</code> is returned.
+     */
+    public T zremrangebyscore(
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByScore, commandArgs));
         return getThis();
     }
 
