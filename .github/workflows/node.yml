@@ -60,7 +60,6 @@ jobs:
                   os: "ubuntu-musl"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  shell_os: "sh"
 
             - name: Install Redis Modules
               uses: ./.github/workflows/install-redis-modules
@@ -205,6 +204,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   arch: "arm64"
                   named_os: "linux-musl"
+                  shell_os: "sh"
 
             - name: Create a symbolic Link for redis6 binaries
               working-directory: ./node
