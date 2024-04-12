@@ -798,9 +798,9 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zlexcount(
-        @NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+            @NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
         return commandManager.submitNewCommand(
-            ZLexCount, new String[] {key, minLex.toArgs(), maxLex.toArgs()}, this::handleLongResponse);
+                ZLexCount, new String[] {key, minLex.toArgs(), maxLex.toArgs()}, this::handleLongResponse);
     }
 
     @Override

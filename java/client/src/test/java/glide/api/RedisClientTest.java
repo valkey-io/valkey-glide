@@ -2546,11 +2546,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(ZLexCount), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response =
-            service.zlexcount(key, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true));
+                service.zlexcount(key, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true));
         Long payload = response.get();
 
         // verify

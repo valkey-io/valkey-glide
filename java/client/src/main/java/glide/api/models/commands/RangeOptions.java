@@ -13,7 +13,8 @@ import lombok.RequiredArgsConstructor;
  * Arguments for {@link SortedSetBaseCommands#zcount}, {@link
  * SortedSetBaseCommands#zremrangebyrank}, {@link SortedSetBaseCommands#zremrangebylex(String,
  * LexRange, LexRange)}, {@link SortedSetBaseCommands#zremrangebyscore}, {@link
- * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangeWithScores}, and {@link SortedSetBaseCommands#zlexcount}
+ * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangeWithScores}, and {@link
+ * SortedSetBaseCommands#zlexcount}
  *
  * @see <a href="https://redis.io/commands/zcount/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a>
