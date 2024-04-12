@@ -613,4 +613,31 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zremrangebylex(String key, LexRange minLex, LexRange maxLex);
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
+     * minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to remove from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to remove to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return The number of members removed.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minScore</code> is greater than <code>maxScore</code>, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.zremrangebyscore("mySortedSet", new ScoreBoundary(1, false), new ScoreBoundary(5)).get();
+     * assert payload1 == 4L; // Indicates that 4 members, with scores ranging from 1 (exclusive) to 5 (inclusive), have been removed from "mySortedSet".
+     *
+     * Long payload2 = client.zremrangebyscore("mySortedSet", InfScoreBound.NEGATIVE_INFINITY , new ScoreBoundary(-42)).get();
+     * assert payload2 == 0L; // Indicates that no elements were removed.
+     * }</pre>
+     */
+    CompletableFuture<Long> zremrangebyscore(String key, ScoreRange minScore, ScoreRange maxScore);
 }
