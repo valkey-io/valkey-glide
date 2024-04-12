@@ -1,6 +1,4 @@
-/**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Buffers;
 using System.Runtime.InteropServices;
@@ -10,59 +8,59 @@ namespace Glide;
 public class AsyncClient : IDisposable
 {
     #region public methods
-    public AsyncClient(string host, UInt32 port, bool useTLS)
+    public AsyncClient(string host, uint port, bool useTLS)
     {
-        successCallbackDelegate = SuccessCallback;
-        var successCallbackPointer = Marshal.GetFunctionPointerForDelegate(successCallbackDelegate);
-        failureCallbackDelegate = FailureCallback;
-        var failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(failureCallbackDelegate);
-        clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
-        if (clientPointer == IntPtr.Zero)
+        _successCallbackDelegate = SuccessCallback;
+        nint successCallbackPointer = Marshal.GetFunctionPointerForDelegate(_successCallbackDelegate);
+        _failureCallbackDelegate = FailureCallback;
+        nint failureCallbackPointer = Marshal.GetFunctionPointerForDelegate(_failureCallbackDelegate);
+        _clientPointer = CreateClientFfi(host, port, useTLS, successCallbackPointer, failureCallbackPointer);
+        if (_clientPointer == IntPtr.Zero)
         {
             throw new Exception("Failed creating a client");
         }
     }
 
-    private async Task<string?> command(IntPtr[] args, int argsCount, RequestType requestType)
+    private async Task<string?> Command(IntPtr[] args, int argsCount, RequestType requestType)
     {
         // We need to pin the array in place, in order to ensure that the GC doesn't move it while the operation is running.
         GCHandle pinnedArray = GCHandle.Alloc(args, GCHandleType.Pinned);
         IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-        var message = messageContainer.GetMessageForCall(args, argsCount);
-        CommandFfi(clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)argsCount);
-        var result = await message;
+        Message<string> message = _messageContainer.GetMessageForCall(args, argsCount);
+        CommandFfi(_clientPointer, (ulong)message.Index, (int)requestType, pointer, (uint)argsCount);
+        string? result = await message;
         pinnedArray.Free();
         return result;
     }
 
     public async Task<string?> SetAsync(string key, string value)
     {
-        var args = this.arrayPool.Rent(2);
+        IntPtr[] args = _arrayPool.Rent(2);
         args[0] = Marshal.StringToHGlobalAnsi(key);
         args[1] = Marshal.StringToHGlobalAnsi(value);
-        var result = await command(args, 2, RequestType.SetString);
-        this.arrayPool.Return(args);
+        string? result = await Command(args, 2, RequestType.SetString);
+        _arrayPool.Return(args);
         return result;
     }
 
     public async Task<string?> GetAsync(string key)
     {
-        var args = this.arrayPool.Rent(1);
+        IntPtr[] args = _arrayPool.Rent(1);
         args[0] = Marshal.StringToHGlobalAnsi(key);
-        var result = await command(args, 1, RequestType.GetString);
-        this.arrayPool.Return(args);
+        string? result = await Command(args, 1, RequestType.GetString);
+        _arrayPool.Return(args);
         return result;
     }
 
     public void Dispose()
     {
-        if (clientPointer == IntPtr.Zero)
+        if (_clientPointer == IntPtr.Zero)
         {
             return;
         }
-        messageContainer.DisposeWithError(null);
-        CloseClientFfi(clientPointer);
-        clientPointer = IntPtr.Zero;
+        _messageContainer.DisposeWithError(null);
+        CloseClientFfi(_clientPointer);
+        _clientPointer = IntPtr.Zero;
     }
 
     #endregion public methods
@@ -71,24 +69,22 @@ public class AsyncClient : IDisposable
 
     private void SuccessCallback(ulong index, IntPtr str)
     {
-        var result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
+        string? result = str == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(str);
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
-        Task.Run(() =>
+        _ = Task.Run(() =>
         {
-            var message = messageContainer.GetMessage((int)index);
+            Message<string> message = _messageContainer.GetMessage((int)index);
             message.SetResult(result);
         });
     }
 
-    private void FailureCallback(ulong index)
-    {
+    private void FailureCallback(ulong index) =>
         // Work needs to be offloaded from the calling thread, because otherwise we might starve the client's thread pool.
         Task.Run(() =>
         {
-            var message = messageContainer.GetMessage((int)index);
+            Message<string> message = _messageContainer.GetMessage((int)index);
             message.SetException(new Exception("Operation failed"));
         });
-    }
 
     ~AsyncClient() => Dispose();
     #endregion private methods
@@ -97,17 +93,16 @@ public class AsyncClient : IDisposable
 
     /// Held as a measure to prevent the delegate being garbage collected. These are delegated once
     /// and held in order to prevent the cost of marshalling on each function call.
-    private readonly FailureAction failureCallbackDelegate;
+    private readonly FailureAction _failureCallbackDelegate;
 
     /// Held as a measure to prevent the delegate being garbage collected. These are delegated once
     /// and held in order to prevent the cost of marshalling on each function call.
-    private readonly StringAction successCallbackDelegate;
+    private readonly StringAction _successCallbackDelegate;
 
     /// Raw pointer to the underlying native client.
-    private IntPtr clientPointer;
-
-    private readonly MessageContainer<string> messageContainer = new();
-    private readonly ArrayPool<IntPtr> arrayPool = ArrayPool<IntPtr>.Shared;
+    private IntPtr _clientPointer;
+    private readonly MessageContainer<string> _messageContainer = new();
+    private readonly ArrayPool<IntPtr> _arrayPool = ArrayPool<IntPtr>.Shared;
 
     #endregion private fields
 
@@ -116,11 +111,11 @@ public class AsyncClient : IDisposable
     private delegate void StringAction(ulong index, IntPtr str);
     private delegate void FailureAction(ulong index);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "command")]
-    private static extern void CommandFfi(IntPtr client, ulong index, Int32 requestType, IntPtr args, UInt32 argCount);
+    private static extern void CommandFfi(IntPtr client, ulong index, int requestType, IntPtr args, uint argCount);
 
     private delegate void IntAction(IntPtr arg);
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "create_client")]
-    private static extern IntPtr CreateClientFfi(String host, UInt32 port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
+    private static extern IntPtr CreateClientFfi(string host, uint port, bool useTLS, IntPtr successCallback, IntPtr failureCallback);
 
     [DllImport("libglide_rs", CallingConvention = CallingConvention.Cdecl, EntryPoint = "close_client")]
     private static extern void CloseClientFfi(IntPtr client);
