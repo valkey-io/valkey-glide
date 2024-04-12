@@ -75,7 +75,7 @@ runs:
             named_os: ${{ inputs.named_os }}
             arch: ${{ inputs.arch }}
             npm_scope: ${{ inputs.npm_scope }}
-            # shell_os: ${{ inputs.shell_os }}
+            shell_os: ${{ inputs.shell_os }}
 
         - name: npm install
           shell: bash
