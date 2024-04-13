@@ -2,19 +2,23 @@
 
 using System.Runtime.InteropServices;
 
+using FluentAssertions;
+
 using Glide;
 
 using static Tests.Integration.IntegrationTestBase;
 
 namespace Tests.Integration;
-public class GetAndSet
+public class GetAndSet : IClassFixture<IntegrationTestBase>
 {
     private async Task GetAndSetValues(AsyncClient client, string key, string value)
     {
-        string? setResult = await client.SetAsync(key, value);
-        Assert.That(setResult, Is.EqualTo("OK"));
-        string? result = await client.GetAsync(key);
-        Assert.That(result, Is.EqualTo(value));
+        _ = (await client.SetAsync(key, value))
+            .Should()
+            .Be("OK");
+        _ = (await client.GetAsync(key))
+            .Should()
+            .Be(value);
     }
 
     private async Task GetAndSetRandomValues(AsyncClient client)
@@ -24,14 +28,14 @@ public class GetAndSet
         await GetAndSetValues(client, key, value);
     }
 
-    [Test]
+    [Fact]
     public async Task GetReturnsLastSet()
     {
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         await GetAndSetRandomValues(client);
     }
 
-    [Test]
+    [Fact]
     public async Task GetAndSetCanHandleNonASCIIUnicode()
     {
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
@@ -40,15 +44,16 @@ public class GetAndSet
         await GetAndSetValues(client, key, value);
     }
 
-    [Test]
+    [Fact]
     public async Task GetReturnsNull()
     {
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
-        string? result = await client.GetAsync(Guid.NewGuid().ToString());
-        Assert.That(result, Is.EqualTo(null));
+        _ = (await client.GetAsync(Guid.NewGuid().ToString()))
+            .Should()
+            .BeNull();
     }
 
-    [Test]
+    [Fact]
     public async Task GetReturnsEmptyString()
     {
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
@@ -57,13 +62,14 @@ public class GetAndSet
         await GetAndSetValues(client, key, value);
     }
 
-    [Test]
+    [Fact]
     public async Task HandleVeryLargeInput()
     {
         // TODO invesitage and fix
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            Assert.Ignore("Flaky on MacOS");
+            //"Flaky on MacOS"
+            return;
         }
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
 
@@ -80,7 +86,7 @@ public class GetAndSet
 
     // This test is slow and hardly a unit test, but it caught timing and releasing issues in the past,
     // so it's being kept.
-    [Test]
+    [Fact]
     public void ConcurrentOperationsWork()
     {
         // TODO investigate and fix
@@ -105,8 +111,9 @@ public class GetAndSet
                     }
                     else
                     {
-                        string? result = await client.GetAsync(Guid.NewGuid().ToString());
-                        Assert.That(result, Is.EqualTo(null));
+                        _ = (await client.GetAsync(Guid.NewGuid().ToString()))
+                            .Should()
+                            .BeNull();
                     }
                 }
             }));
