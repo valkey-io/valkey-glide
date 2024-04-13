@@ -85,7 +85,9 @@ public class GetAndSet
     {
         // TODO investigate and fix
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
             Assert.Ignore("Flaky on MacOS");
+        }
 
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
         List<Task> operations = [];
