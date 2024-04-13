@@ -113,10 +113,12 @@ public class TransactionTestUtilities {
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
         baseTransaction.zscore(key8, "two");
         baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
+        baseTransaction.zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY);
         baseTransaction.zpopmin(key8);
         baseTransaction.zpopmax(key8);
         baseTransaction.zremrangebyrank(key8, 5, 10);
         baseTransaction.zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY);
+        baseTransaction.zremrangebyscore(key8, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY);
         baseTransaction.zdiffstore(key8, new String[] {key8, key8});
 
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
@@ -213,10 +215,12 @@ public class TransactionTestUtilities {
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
             2.0, // zscore(key8, "two")
             2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+            2L, // zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
             Map.of("two", 2.0), // zpopmin(key8)
             Map.of("three", 3.0), // zpopmax(key8)
             0L, // zremrangebyrank(key8, 5, 10)
             0L, // zremrangebylex(key8, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+            0L, // zremrangebyscore(key8, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
             0L, // zdiffstore(key8, new String[] {key8, key8})
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
