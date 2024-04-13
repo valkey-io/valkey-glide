@@ -148,6 +148,7 @@ enum RequestType {
     ZDiff = 105;
     ZDiffStore = 106;
     SetRange = 107;
+    SInterStore = 114;
 }
 
 message Command {

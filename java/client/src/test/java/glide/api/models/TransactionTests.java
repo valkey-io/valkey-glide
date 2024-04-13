@@ -68,6 +68,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
@@ -258,6 +259,9 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, buildArgs("key")));
+
+        transaction.sinterstore("key", new String[] {"set1", "set2"});
+        results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));

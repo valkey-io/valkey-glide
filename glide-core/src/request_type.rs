@@ -116,6 +116,7 @@ pub enum RequestType {
     ZDiff = 105,
     ZDiffStore = 106,
     SetRange = 107,
+    SInterStore = 114,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -235,6 +236,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZDiff => RequestType::ZDiff,
             ProtobufRequestType::ZDiffStore => RequestType::ZDiffStore,
             ProtobufRequestType::SetRange => RequestType::SetRange,
+            ProtobufRequestType::SInterStore => RequestType::SInterStore,
         }
     }
 }
@@ -350,6 +352,7 @@ impl RequestType {
             RequestType::ZDiff => Some(cmd("ZDIFF")),
             RequestType::ZDiffStore => Some(cmd("ZDIFFSTORE")),
             RequestType::SetRange => Some(cmd("SETRANGE")),
+            RequestType::SInterStore => Some(cmd("SINTERSTORE")),
         }
     }
 }
