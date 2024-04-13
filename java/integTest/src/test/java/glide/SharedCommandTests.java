@@ -26,6 +26,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.Limit;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -1539,6 +1540,166 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zcount(key2, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zremrangebyrank(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        // Incorrect range start > stop
+        assertEquals(0, client.zremrangebyrank(key1, 2, 1).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(2, client.zremrangebyrank(key1, 0, 1).get());
+        assertEquals(Map.of("three", 3.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(1, client.zremrangebyrank(key1, 0, 10).get());
+        assertTrue(client.zrangeWithScores(key1, query).get().isEmpty());
+
+        // Non Existing Key
+        assertEquals(0, client.zremrangebyrank(key2, 0, 10).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zremrangebyrank(key2, 2, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zremrangebylex(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0, "d", 4.0);
+        assertEquals(4, client.zadd(key1, membersScores).get());
+
+        assertEquals(
+                2, client.zremrangebylex(key1, new LexBoundary("a", false), new LexBoundary("c")).get());
+        assertEquals(Map.of("a", 1.0, "d", 4.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                1, client.zremrangebylex(key1, new LexBoundary("d"), InfLexBound.POSITIVE_INFINITY).get());
+        assertEquals(Map.of("a", 1.0), client.zrangeWithScores(key1, query).get());
+
+        // MinLex > MaxLex
+        assertEquals(
+                0, client.zremrangebylex(key1, new LexBoundary("a"), InfLexBound.NEGATIVE_INFINITY).get());
+        assertEquals(Map.of("a", 1.0), client.zrangeWithScores(key1, query).get());
+
+        // Non Existing Key
+        assertEquals(
+                0,
+                client
+                        .zremrangebylex(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zremrangebylex(key2, new LexBoundary("a"), new LexBoundary("c")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zremrangebyscore(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0, "four", 4.0);
+        assertEquals(4, client.zadd(key1, membersScores).get());
+
+        // MinScore > MaxScore
+        assertEquals(
+                0,
+                client.zremrangebyscore(key1, new ScoreBoundary(1), InfScoreBound.NEGATIVE_INFINITY).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0, "four", 4.0),
+                client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                2, client.zremrangebyscore(key1, new ScoreBoundary(1, false), new ScoreBoundary(3)).get());
+        assertEquals(Map.of("one", 1.0, "four", 4.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                1,
+                client.zremrangebyscore(key1, new ScoreBoundary(4), InfScoreBound.POSITIVE_INFINITY).get());
+        assertEquals(Map.of("one", 1.0), client.zrangeWithScores(key1, query).get());
+
+        // Non Existing Key
+        assertEquals(
+                0,
+                client
+                        .zremrangebyscore(
+                                key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zremrangebyscore(key2, new ScoreBoundary(1), new ScoreBoundary(2)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
+    public void zlexcount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        // In range negative to positive infinity.
+        assertEquals(
+                3,
+                client.zlexcount(key1, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY).get());
+
+        // In range a (exclusive) to c (inclusive)
+        assertEquals(
+                2, client.zlexcount(key1, new LexBoundary("a", false), new LexBoundary("c", true)).get());
+
+        // In range negative infinity to c (inclusive)
+        assertEquals(
+                3, client.zlexcount(key1, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true)).get());
+
+        // Incorrect range start > end
+        assertEquals(
+                0, client.zlexcount(key1, InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", true)).get());
+
+        // Non-existing key
+        assertEquals(
+                0,
+                client
+                        .zlexcount(
+                                "non_existing_key", InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zlexcount(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                                        .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 

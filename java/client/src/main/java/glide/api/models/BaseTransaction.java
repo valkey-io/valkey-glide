@@ -77,9 +77,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -92,7 +96,10 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -1609,6 +1616,99 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zcount(@NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
         protobufTransaction.addCommands(buildCommand(Zcount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with rank between <code>start
+     * </code> and <code>end</code>. Both <code>start</code> and <code>end</code> are zero-based
+     * indexes with <code>0</code> being the element with the lowest score. These indexes can be
+     * negative numbers, where they indicate offsets starting at the element with the highest score.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - The number of elements removed.<br>
+     *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
+     *     greater than <code>end</code>, <code>0</code> returned.<br>
+     *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the
+     *     actual end of the sorted set.<br>
+     *     If <code>key</code> does not exist <code>0</code> will be returned.
+     */
+    public T zremrangebyrank(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByRank, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
+     * between <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @return Command Response - The number of members removed from the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minLex</code> is greater than <code>maxLex</code>, <code>0</code> is returned.
+     */
+    public T zremrangebylex(@NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByLex, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
+     * minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to remove from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to remove to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return Command Response - The number of members removed.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minScore</code> is greater than <code>maxScore</code>, <code>0</code> is returned.
+     */
+    public T zremrangebyscore(
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
+     * <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum lex to count from. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @param maxLex The maximum lex to count up to. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @return Command Response - The number of members in the specified lex range.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>maxLex < minLex</code>, <code>0</code> is returned.
+     */
+    public T zlexcount(@NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZLexCount, commandArgs));
         return getThis();
     }
 
