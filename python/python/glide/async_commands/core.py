@@ -1047,7 +1047,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
-    async def spop(self, key: str) -> str:
+    async def spop(self, key: str) -> Optional[str]:
         """
         Removes and returns one random member from the set stored at `key`.
 
@@ -1058,7 +1058,8 @@ class CoreCommands(Protocol):
             key (str): The key of the set.
 
         Returns:
-            str: The value of the popped member.
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.spop("my_set")
@@ -1066,7 +1067,7 @@ class CoreCommands(Protocol):
             >>> await client.spop("non_exiting_key")
                 None
         """
-        return cast(str, await self._execute_command(RequestType.Spop, [key]))
+        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
 
     async def spop_count(self, key: str, count: int) -> Set[str]:
         """
