@@ -27,9 +27,19 @@ Software Dependencies
 
 ```bash
 sudo apt update -y
-sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
+sudo apt install -y npm git gcc pkg-config protobuf-compiler openssl libssl-dev
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Install npm latest version
+sudo npm install -g npm@latest
+# Install NodeJS with higher version than the default.
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+source ~/.bashrc
+nvm list-remote
+nvm install <Latest version> # currently v20.12.2
 ```
 
 **Dependencies installation for CentOS**
