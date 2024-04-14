@@ -788,7 +788,7 @@ class BaseTransaction:
         """
         Removes and returns one random member from the set stored at `key`.
 
-        See https://valkey-io.github.io/commands/spop/ for details.
+        See https://valkey-io.github.io/commands/spop/ for more details.
         To pop multiple members, see `spop_count`.
 
         Args:
@@ -804,7 +804,7 @@ class BaseTransaction:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
-        See https://valkey-io.github.io/commands/spop/ for details.
+        See https://valkey-io.github.io/commands/spop/ for more details.
         To pop a single member, see `spop`.
 
         Args:
