@@ -1093,6 +1093,53 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
+    async def spop(self, key: str) -> Optional[str]:
+        """
+        Removes and returns one random member from the set stored at `key`.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop multiple members, see `spop_count`.
+
+        Args:
+            key (str): The key of the set.
+
+        Returns:
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
+
+        Examples:
+            >>> await client.spop("my_set")
+                "value1" # Removes and returns a random member from the set "my_set".
+            >>> await client.spop("non_exiting_key")
+                None
+        """
+        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+
+    async def spop_count(self, key: str, count: int) -> Set[str]:
+        """
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop a single member, see `spop`.
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Returns:
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.spop_count("my_set", 2)
+                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
+            >>> await client.spop_count("non_exiting_key", 2)
+                Set()
+        """
+        return cast(
+            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+        )
+
     async def sismember(
         self,
         key: str,
