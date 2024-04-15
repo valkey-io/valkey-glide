@@ -437,8 +437,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
      * @param key The key of the string.
-     * @param start The starting point of the range.
-     * @param end The end of the range.
+     * @param start The starting offset.
+     * @param end The ending offset.
      * @return Command Response - A substring extracted from the <code>key</code>.
      */
     public T getrange(@NonNull String key, int start, int end) {

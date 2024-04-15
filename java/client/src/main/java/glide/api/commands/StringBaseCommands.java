@@ -230,8 +230,8 @@ public interface StringBaseCommands {
      *
      * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
      * @param key The key of the string.
-     * @param start The starting point of the range.
-     * @param end The end of the range.
+     * @param start The starting offset.
+     * @param end The ending offset.
      * @return A substring extracted from the <code>key</code>.
      * @example
      *     <pre>{@code
@@ -240,10 +240,6 @@ public interface StringBaseCommands {
      * assert substring.equals("This");
      * String substring = client.getrange("mykey", -3, -1).get();
      * assert substring.equals("ing"); // extracted last 3 characters of a string
-     * String substring = client.getrange("mykey", -0, -1).get();
-     * assert substring.equals("This is a string"); // extracted entire string, same as `get` does
-     * String substring = client.getrange("mykey", 10, 100).get();
-     * assert substring.equals("string"); // out of range request limited by the actual length of the string
      * }</pre>
      */
     CompletableFuture<String> getrange(String key, int start, int end);
