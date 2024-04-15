@@ -58,6 +58,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
@@ -558,6 +559,12 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+
+        transaction.sdiffstore("key1", new String[] {"key2", "key3"});
+        results.add(
+                Pair.of(
+                        SDiffStore,
+                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

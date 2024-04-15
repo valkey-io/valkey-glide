@@ -846,6 +846,53 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest
     @MethodSource("getClients")
+    public void sdiffstore(BaseClient client) {
+        String key1 = "{key}-1-" + UUID.randomUUID();
+        String key2 = "{key}-2-" + UUID.randomUUID();
+        String key3 = "{key}-3-" + UUID.randomUUID();
+        String key4 = "{key}-4-" + UUID.randomUUID();
+        String key5 = "{key}-5-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+        assertEquals(3, client.sadd(key4, new String[] {"e", "f", "g"}).get());
+
+        // create new
+        assertEquals(2, client.sdiffstore(key3, new String[] {key1, key2}).get());
+        assertEquals(Set.of("a", "b"), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(2, client.sdiffstore(key2, new String[] {key3, key2}).get());
+        assertEquals(Set.of("a", "b"), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key4}).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
+
+        // overwrite source
+        assertEquals(3, client.sdiffstore(key1, new String[] {key1}).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sdiffstore(key1, new String[] {key5}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // overwrite destination - not a set
+        assertEquals(1, client.sdiffstore(key5, new String[] {key1, key2}).get());
+        assertEquals(Set.of("c"), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.sdiffstore(key5, new String[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();

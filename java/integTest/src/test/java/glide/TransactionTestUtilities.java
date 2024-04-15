@@ -20,6 +20,8 @@ public class TransactionTestUtilities {
     private static final String key6 = "{key}" + UUID.randomUUID();
     private static final String listKey3 = "{key}:listKey3-" + UUID.randomUUID();
     private static final String key7 = "{key}" + UUID.randomUUID();
+    private static final String setKey2 = "{key}" + UUID.randomUUID();
+    private static final String setKey3 = "{key}" + UUID.randomUUID();
     private static final String key8 = "{key}" + UUID.randomUUID();
     private static final String key9 = "{key}" + UUID.randomUUID();
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
@@ -94,6 +96,9 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
+        // TODO update after #1249 and #203 merge & rebase
+        baseTransaction.sadd(setKey2, new String[] {"a", "b"});
+        baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zrank(key8, "one");
@@ -185,6 +190,9 @@ public class TransactionTestUtilities {
             1L,
             true, // sismember(key7, "baz")
             Set.of("baz"),
+            // TODO update after #1249 and #203 merge & rebase
+            2L, // sadd(setKey2, new String[] {"a", "b"})
+            2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             3L,
             0L, // zrank(key8, "one")
             4.0,

@@ -60,6 +60,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
@@ -875,6 +876,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SDiffStore, commandArgs));
         return getThis();
     }
 
