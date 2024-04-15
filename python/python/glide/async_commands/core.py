@@ -278,7 +278,7 @@ class CoreCommands(Protocol):
     async def append(self, key: str, value: str) -> int:
         """
         Appends a value to a key.
-        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to SET in this special case.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
 
         See https://redis.io/commands/append for more details.
 
@@ -290,8 +290,12 @@ class CoreCommands(Protocol):
             int: The length of the string after appending the value.
 
         Examples:
-            >>> await client.append("my_key", "world")
-                5  # Indicates that "world" has been appended to the value of "my_key", which now has a length of 5.
+            >>> await client.append("key", "Hello")
+                5  # Indicates that "Hello" has been appended to the value of "key", which was initially empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+            >>> await client.append("key", " world")
+                11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
+            >>> await client.get("key")
+                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
         """
         return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
