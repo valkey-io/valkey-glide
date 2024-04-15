@@ -65,11 +65,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -790,6 +792,22 @@ public abstract class BaseClient
                 ZRemRangeByLex,
                 new String[] {key, minLex.toArgs(), maxLex.toArgs()},
                 this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebyscore(
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByScore,
+                new String[] {key, minScore.toArgs(), maxScore.toArgs()},
+                this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zlexcount(
+            @NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        return commandManager.submitNewCommand(
+                ZLexCount, new String[] {key, minLex.toArgs(), maxLex.toArgs()}, this::handleLongResponse);
     }
 
     @Override

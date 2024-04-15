@@ -118,6 +118,7 @@ pub enum RequestType {
     SetRange = 107,
     ZRemRangeByLex = 108,
     GetRange = 116,
+    ZLexCount = 109,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -239,6 +240,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SetRange => RequestType::SetRange,
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::GetRange => RequestType::GetRange,
+            ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
         }
     }
 }
@@ -356,6 +358,7 @@ impl RequestType {
             RequestType::SetRange => Some(cmd("SETRANGE")),
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::GetRange => Some(cmd("GETRANGE")),
+            RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
         }
     }
 }
