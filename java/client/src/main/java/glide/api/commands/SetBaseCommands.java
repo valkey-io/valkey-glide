@@ -95,4 +95,20 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> sismember(String key, String member);
+
+    /**
+     * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
+     * new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sinterstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sinterstore(String destination, String[] keys);
 }
