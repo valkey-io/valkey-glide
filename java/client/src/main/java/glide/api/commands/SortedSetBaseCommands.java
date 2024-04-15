@@ -1,7 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -583,4 +586,85 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zremrangebyrank(String key, long start, long end);
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
+     * between <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @return The number of members removed from the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minLex</code> is greater than <code>maxLex</code>, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.zremrangebylex("mySortedSet", new LexBoundary("a", false), new LexBoundary("e")).get();
+     * assert payload1 == 4L; // Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "mySortedSet".
+     *
+     * Long payload2 = client.zremrangebylex("mySortedSet", InfLexBound.NEGATIVE_INFINITY , new LexBoundary("e")).get();
+     * assert payload2 == 0L; // Indicates that no elements were removed.
+     * }</pre>
+     */
+    CompletableFuture<Long> zremrangebylex(String key, LexRange minLex, LexRange maxLex);
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
+     * minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to remove from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to remove to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return The number of members removed.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minScore</code> is greater than <code>maxScore</code>, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.zremrangebyscore("mySortedSet", new ScoreBoundary(1, false), new ScoreBoundary(5)).get();
+     * assert payload1 == 4L; // Indicates that 4 members, with scores ranging from 1 (exclusive) to 5 (inclusive), have been removed from "mySortedSet".
+     *
+     * Long payload2 = client.zremrangebyscore("mySortedSet", InfScoreBound.NEGATIVE_INFINITY , new ScoreBoundary(-42)).get();
+     * assert payload2 == 0L; // Indicates that no elements were removed.
+     * }</pre>
+     */
+    CompletableFuture<Long> zremrangebyscore(String key, ScoreRange minScore, ScoreRange maxScore);
+
+    /**
+     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
+     * <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum lex to count from. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @param maxLex The maximum lex to count up to. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @return The number of members in the specified lex range.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>maxLex < minLex</code>, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zlexcount("my_sorted_set", new LexBoundary("c", true), InfLexBound.POSITIVE_INFINITY).get();
+     * assert num1 == 2L; // Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     *
+     * Long num2 = client.zlexcount("my_sorted_set", new ScoreBoundary("c", true), new ScoreBoundary("k", false)).get();
+     * assert num2 == 1L; // Indicates that there is one member with LexBoundary "c" <= score < "k" in the sorted set "my_sorted_set".
+     * }</pre>
+     */
+    CompletableFuture<Long> zlexcount(String key, LexRange minLex, LexRange maxLex);
 }

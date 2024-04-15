@@ -6,7 +6,9 @@ import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
@@ -236,8 +238,12 @@ public class TransactionTestUtilities {
                 .zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
                 .zscore(zSetKey1, "two")
                 .zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+                .zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
                 .zpopmin(zSetKey1)
                 .zpopmax(zSetKey1)
+                .zremrangebyrank(zSetKey1, 5, 10)
+                .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+                .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
                 .zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                 .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
                 .zdiff(new String[] {zSetKey2, zSetKey1})
@@ -254,8 +260,12 @@ public class TransactionTestUtilities {
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
             2.0, // zscore(zSetKey1, "two")
             2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+            2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
             Map.of("two", 2.0), // zpopmin(zSetKey1)
             Map.of("three", 3.0), // zpopmax(zSetKey1)
+            0L, // zremrangebyrank(zSetKey1, 5, 10)
+            0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+            0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
             0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
