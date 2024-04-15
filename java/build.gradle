@@ -17,9 +17,6 @@ subprojects {
     // minimal java compatibility level
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = "11"
-        dependencies {
-            testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
-        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()
