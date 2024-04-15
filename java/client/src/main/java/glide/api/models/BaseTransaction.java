@@ -23,6 +23,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -423,6 +424,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T setrange(@NonNull String key, int offset, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, Integer.toString(offset), value);
         protobufTransaction.addCommands(buildCommand(SetRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
+     * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
+     * order to provide an offset starting from the end of the string. So <code>-1</code> means the
+     * last character, <code>-2</code> the penultimate and so forth.
+     *
+     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - A substring extracted from the <code>key</code>.
+     */
+    public T getrange(@NonNull String key, int start, int end) {
+        ArgsArray commandArgs = buildArgs(key, Integer.toString(start), Integer.toString(end));
+        protobufTransaction.addCommands(buildCommand(GetRange, commandArgs));
         return getThis();
     }
 

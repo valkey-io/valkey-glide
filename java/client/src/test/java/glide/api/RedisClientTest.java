@@ -43,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -1030,6 +1031,32 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.setrange(key, offset, str);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getrange_returns_success() {
+        // setup
+        String key = "testKey";
+        int start = 42;
+        int end = 54;
+        String[] arguments = new String[] {key, Integer.toString(start), Integer.toString(end)};
+        String value = "pewpew";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(GetRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getrange(key, start, end);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

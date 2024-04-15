@@ -14,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -359,8 +360,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> setrange(@NonNull String key, int offset, @NonNull String value) {
-        return commandManager.submitNewCommand(
-                SetRange, new String[] {key, Integer.toString(offset), value}, this::handleLongResponse);
+        String[] arguments = new String[] {key, Integer.toString(offset), value};
+        return commandManager.submitNewCommand(SetRange, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getrange(@NonNull String key, int start, int end) {
+        String[] arguments = new String[] {key, Integer.toString(start), Integer.toString(end)};
+        return commandManager.submitNewCommand(GetRange, arguments, this::handleStringResponse);
     }
 
     @Override

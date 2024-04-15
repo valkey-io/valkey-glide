@@ -28,6 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -180,6 +181,9 @@ public class TransactionTests {
 
         transaction.setrange("key", 42, "str");
         results.add(Pair.of(SetRange, buildArgs("key", "42", "str")));
+
+        transaction.getrange("key", 42, 54);
+        results.add(Pair.of(GetRange, buildArgs("key", "42", "54")));
 
         transaction.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HashSet, buildArgs("key", "field", "value")));
