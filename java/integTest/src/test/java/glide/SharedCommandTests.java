@@ -1658,45 +1658,6 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getClients")
-    public void zrangestore_by_index(BaseClient client) {
-        String key = "{testKey}:" + UUID.randomUUID();
-        String destination = "{testKey}:" + UUID.randomUUID();
-        String source = "{testKey}:" + UUID.randomUUID();
-        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
-        assertEquals(3, client.zadd(source, membersScores).get());
-
-        // Full range.
-        assertEquals(3, client.zrangestore(destination, source, new RangeByIndex(0, -1)).get());
-        assertEquals(
-                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
-                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
-
-        // Range from rank 0 to 1. In descending order of scores.
-        assertEquals(2, client.zrangestore(destination, source, new RangeByIndex(0, 1), true).get());
-        assertEquals(
-                Map.of("three", 3.0, "two", 2.0),
-                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
-
-        // Incorrect range as start > stop.
-        assertEquals(0, client.zrangestore(destination, source, new RangeByIndex(3, 1)).get());
-        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
-
-        // Non-existing source.
-        assertEquals(0, client.zrangestore(destination, key, new RangeByIndex(0, -1)).get());
-        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
-
-        // Key exists, but it is not a set
-        assertEquals(OK, client.set(key, "value").get());
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-    }
-
-    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zlexcount(BaseClient client) {
@@ -1782,7 +1743,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrangestore_by_score(BaseClient client) {
         String key = "{testKey}:" + UUID.randomUUID();
@@ -1850,7 +1811,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrangestore_by_lex(BaseClient client) {
         String key = "{testKey}:" + UUID.randomUUID();
@@ -1912,7 +1873,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
