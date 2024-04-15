@@ -81,6 +81,8 @@ runs:
           shell: bash
           working-directory: ./node
           run: |
+              echo "---BEFORE BUILDING RUST---"
+              arch
               source "$HOME/.cargo/env"
               rustup target add stable-x86_64-unknown-linux-musl
               TARGET_FLAG=`if [ "${{ inputs.target }}" != ''  ]; then echo "--target ${{ inputs.target }}"; fi`
