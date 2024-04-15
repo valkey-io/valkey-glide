@@ -1530,30 +1530,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
-     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
-     * set is created; if it exists, it's overwritten.<br>
-     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
-     * score, or by lexicographical order.<br>
-     *
-     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
-     * @param destination The key for the destination sorted set.
-     * @param source The key of the source sorted set.
-     * @param rangeQuery The range query object representing the type of range query to perform.<br>
-     *     <ul>
-     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
-     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
-     *       <li>For range queries by score, use {@link RangeByScore}.
-     *     </ul>
-     *
-     * @return Command Response - The number of elements in the resulting sorted set.
-     */
-    public T zrangestore(
-            @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
-        return getThis().zrangestore(destination, source, rangeQuery, false);
-    }
-
-    /**
      * Returns the scores associated with the specified <code>members</code> in the sorted set stored
      * at <code>key</code>.
      *
@@ -1699,6 +1675,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse));
         protobufTransaction.addCommands(buildCommand(ZRangeStore, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
+     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.<br>
+     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
+     * score, or by lexicographical order.<br>
+     *
+     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @param destination The key for the destination sorted set.
+     * @param source The key of the source sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set.
+     */
+    public T zrangestore(
+            @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
+        return getThis().zrangestore(destination, source, rangeQuery, false);
     }
 
     /**

@@ -423,8 +423,6 @@ public interface SortedSetBaseCommands {
      * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
-     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
-     * score, or by lexicographical order.<br>
      *
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
@@ -442,7 +440,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * RangeByIndex query1 = new RangeByIndex(0, -1); // Query for all members.
-     * Long payload1 = client.zrange("destinationKey", "mySortedSet", query1, true).get();
+     * Long payload1 = client.zrangestore("destinationKey", "mySortedSet", query1, true).get();
      * assert payload1 == 7L;
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3)); // Query for members with scores within the range of negative infinity to 3.
@@ -457,8 +455,6 @@ public interface SortedSetBaseCommands {
      * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
-     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
-     * score, or by lexicographical order.<br>
      *
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
@@ -474,7 +470,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * RangeByIndex query1 = new RangeByIndex(0, -1); // Query for all members.
-     * Long payload1 = client.zrange("destinationKey", "mySortedSet", query1).get();
+     * Long payload1 = client.zrangestore("destinationKey", "mySortedSet", query1).get();
      * assert payload1 == 7L;
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3)); // Query for members with scores within the range of negative infinity to 3.
