@@ -1648,8 +1648,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
-     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
-     * score, or by lexicographical order.<br>
      *
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
@@ -1680,8 +1678,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
-     * <code>ZRANGESTORE</code> can perform different types of range queries: by index (rank), by the
-     * score, or by lexicographical order.<br>
      *
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
