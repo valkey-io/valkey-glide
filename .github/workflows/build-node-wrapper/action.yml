@@ -82,6 +82,7 @@ runs:
           working-directory: ./node
           run: |
               source "$HOME/.cargo/env"
+              rustup target add stable-x86_64-unknown-linux-musl
               TARGET_FLAG=`if [ "${{ inputs.target }}" != ''  ]; then echo "--target ${{ inputs.target }}"; fi`
               BUILD_FLAG=`if [ "${{ inputs.publish }}" == 'true' ]; then echo "build:release"; else echo "build"; fi`
               npm run $BUILD_FLAG --build-flags="$TARGET_FLAG"
