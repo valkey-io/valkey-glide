@@ -241,6 +241,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
+        }
     }
 }
 
