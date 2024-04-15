@@ -83,14 +83,14 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
-        return commandManager.submitNewCommand(
+        return commandManager.submitNewTransaction(
                 transaction, Optional.empty(), this::handleArrayOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> exec(
             @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
-        return commandManager.submitNewCommand(
+        return commandManager.submitNewTransaction(
                 transaction, Optional.of(route), this::handleArrayOrNullResponse);
     }
 

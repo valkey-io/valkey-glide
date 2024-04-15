@@ -168,7 +168,8 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(transaction), eq(Optional.empty()), any()))
+        when(commandManager.<Object[]>submitNewTransaction(
+                        eq(transaction), eq(Optional.empty()), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -192,7 +193,8 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(transaction), eq(Optional.of(route)), any()))
+        when(commandManager.<Object[]>submitNewTransaction(
+                        eq(transaction), eq(Optional.of(route)), any()))
                 .thenReturn(testResponse);
 
         // exercise

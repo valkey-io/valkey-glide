@@ -193,7 +193,7 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(transaction), any()))
+        when(commandManager.<Object[]>submitNewTransaction(eq(transaction), any()))
                 .thenReturn(testResponse);
 
         // exercise

@@ -57,7 +57,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
-        return commandManager.submitNewCommand(transaction, this::handleArrayOrNullResponse);
+        return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
     }
 
     @Override
