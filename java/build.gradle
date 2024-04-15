@@ -17,13 +17,6 @@ subprojects {
     // minimal java compatibility level
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = "11"
-        dependencies {
-            //lombok
-            compileOnly 'org.projectlombok:lombok:1.18.32'
-            annotationProcessor 'org.projectlombok:lombok:1.18.32'
-            testCompileOnly 'org.projectlombok:lombok:1.18.32'
-            testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
-        }
     }
     tasks.withType(Test) {
         useJUnitPlatform()

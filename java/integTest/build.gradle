@@ -24,6 +24,10 @@ dependencies {
 
     // semver4j for semantic versioning
     implementation 'com.vdurmont:semver4j:3.1.0'
+
+    //lombok
+    testCompileOnly 'org.projectlombok:lombok:1.18.32'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
 }
 
 def standaloneRedisPorts = []
