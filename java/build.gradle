@@ -31,10 +31,6 @@ subprojects {
     }
 }
 
-dependencies {
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.9.2'
-}
-
 // JaCoCo section (code coverage by unit tests)
 jacoco {
     toolVersion = "0.8.9"

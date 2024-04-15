@@ -101,7 +101,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void unlink_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
@@ -121,7 +121,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void unlink_non_existent_key(BaseClient client) {
         Long unlinkedKeysNum = client.unlink(new String[] {UUID.randomUUID().toString()}).get();
@@ -129,7 +129,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_and_get_without_options(BaseClient client) {
         String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
@@ -140,7 +140,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void get_missing_value(BaseClient client) {
         String data = client.get("invalid").get();
@@ -148,7 +148,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void del_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
@@ -168,7 +168,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void del_non_existent_key(BaseClient client) {
         Long deletedKeysNum = client.del(new String[] {UUID.randomUUID().toString()}).get();
@@ -176,7 +176,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_overwrite_value_and_returnOldValue_returns_string(BaseClient client) {
         String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
@@ -187,26 +187,26 @@ public class SharedCommandTests {
         assertEquals(INITIAL_VALUE, data);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_requires_a_value(BaseClient client) {
         assertThrows(NullPointerException.class, () -> client.set("SET", null));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_requires_a_key(BaseClient client) {
         assertThrows(NullPointerException.class, () -> client.set(null, INITIAL_VALUE));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void get_requires_a_key(BaseClient client) {
         assertThrows(NullPointerException.class, () -> client.get(null));
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_only_if_exists_overwrite(BaseClient client) {
         String key = "set_only_if_exists_overwrite";
@@ -218,7 +218,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_only_if_exists_missing_key(BaseClient client) {
         String key = "set_only_if_exists_missing_key";
@@ -229,7 +229,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_only_if_does_not_exists_missing_key(BaseClient client) {
         String key = "set_only_if_does_not_exists_missing_key";
@@ -240,7 +240,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_only_if_does_not_exists_existing_key(BaseClient client) {
         String key = "set_only_if_does_not_exists_existing_key";
@@ -252,7 +252,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_value_with_ttl_and_update_value_with_keeping_ttl(BaseClient client) {
         String key = "set_value_with_ttl_and_update_value_with_keeping_ttl";
@@ -273,7 +273,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_value_with_ttl_and_update_value_with_new_ttl(BaseClient client) {
         String key = "set_value_with_ttl_and_update_value_with_new_ttl";
@@ -294,7 +294,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_expired_value(BaseClient client) {
         String key = "set_expired_value";
@@ -309,7 +309,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void set_missing_value_and_returnOldValue_is_null(BaseClient client) {
         String ok = client.set(KEY_NAME, INITIAL_VALUE).get();
@@ -321,7 +321,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void mset_mget_existing_non_existing_key(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -338,7 +338,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void incr_commands_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -356,7 +356,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void incr_commands_non_existing_key(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -377,7 +377,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void test_incr_commands_type_error(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -397,7 +397,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void decr_and_decrBy_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -412,7 +412,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void decr_and_decrBy_non_existing_key(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -428,7 +428,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void strlen(BaseClient client) {
         String stringKey = UUID.randomUUID().toString();
@@ -447,7 +447,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void setrange(BaseClient client) {
         String stringKey = UUID.randomUUID().toString();
@@ -475,7 +475,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -491,7 +491,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hsetnx(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -510,7 +510,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hdel_multiple_existing_fields_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -527,7 +527,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hlen(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -551,7 +551,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hvals(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -577,7 +577,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hmget_multiple_existing_fields_non_existing_field_non_existing_key(
             BaseClient client) {
@@ -597,7 +597,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -612,7 +612,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hgetall_multiple_existing_fields_existing_key_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -627,7 +627,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hincrBy_hincrByFloat_commands_existing_key_existing_field(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -642,7 +642,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hincrBy_hincrByFloat_commands_non_existing_key_non_existing_field(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -660,7 +660,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void hincrBy_hincrByFloat_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -679,7 +679,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lpush_lpop_lrange_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -694,7 +694,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lpush_lpop_lrange_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -718,7 +718,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lindex(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -739,7 +739,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ltrim_existing_non_existing_key_and_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -761,7 +761,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void llen_existing_non_existing_key_and_type_error(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -780,7 +780,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lrem_existing_non_existing_key_and_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -804,7 +804,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void rpush_rpop_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -818,7 +818,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void rpush_rpop_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -834,7 +834,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sadd_srem_scard_smembers_existing_set(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -849,7 +849,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void srem_scard_smembers_non_existing_key(BaseClient client) {
         assertEquals(0, client.srem("nonExistingKey", new String[] {"member"}).get());
@@ -858,7 +858,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sadd_srem_scard_smembers_key_with_non_set_value(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -879,7 +879,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sismember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -898,7 +898,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
@@ -916,7 +916,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expire_pexpire_and_ttl_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -943,7 +943,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expireAt_pexpireAt_and_ttl_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -979,7 +979,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expire_pexpire_ttl_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -995,7 +995,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expireAt_pexpireAt_ttl_with_timestamp_in_the_past_or_negative_timeout(
             BaseClient client) {
@@ -1013,7 +1013,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expire_pexpire_and_ttl_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1025,7 +1025,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expireAt_pexpireAt_and_ttl_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1037,7 +1037,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void expire_pexpire_and_pttl_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1060,7 +1060,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void persist_on_existing_and_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1079,7 +1079,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void invokeScript_test(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1116,7 +1116,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zadd_and_zaddIncr(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1127,7 +1127,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zadd_and_zaddIncr_wrong_type(BaseClient client) {
         assertEquals(OK, client.set("foo", "bar").get());
@@ -1143,7 +1143,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zadd_and_zaddIncr_with_NX_XX(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1165,7 +1165,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zadd_and_zaddIncr_with_GT_LT(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1227,7 +1227,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrem(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1246,7 +1246,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zcard(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1266,7 +1266,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zpopmin(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1285,7 +1285,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zpopmax(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1304,7 +1304,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1324,7 +1324,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrank(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1348,7 +1348,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiff(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
@@ -1390,7 +1390,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zmscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1417,7 +1417,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiffstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
@@ -1459,7 +1459,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zcount(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1497,7 +1497,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zremrangebyrank(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1528,7 +1528,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zremrangebylex(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1567,7 +1567,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zremrangebyscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1611,7 +1611,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zlexcount(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1657,7 +1657,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1748,7 +1748,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void type(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
@@ -1776,7 +1776,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void linsert(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1799,7 +1799,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void brpop(BaseClient client) {
         String listKey1 = "{listKey}-1-" + UUID.randomUUID();
@@ -1826,7 +1826,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void rpushx(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1852,7 +1852,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blpop(BaseClient client) {
         String listKey1 = "{listKey}-1-" + UUID.randomUUID();
@@ -1879,7 +1879,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lpushx(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
@@ -1904,7 +1904,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrange_by_index(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1927,7 +1927,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrange_by_score(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1970,7 +1970,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrange_by_lex(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -2001,7 +2001,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zrange_with_different_types_of_keys(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -2027,7 +2027,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void pfadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -2044,7 +2044,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void pfcount(BaseClient client) {
         String key1 = "{test}-hll1-" + UUID.randomUUID();
@@ -2068,7 +2068,7 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void pfmerge(BaseClient client) {
         String key1 = "{test}-hll1-" + UUID.randomUUID();
