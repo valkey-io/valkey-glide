@@ -12,6 +12,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -728,4 +729,47 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zlexcount(String key, LexRange minLex, LexRange maxLex);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
+     * result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets.
+     * @param options Weight and Aggregate options.
+     * @return The number of elements in the resulting sorted set.
+     * @example
+     *     <pre>{@code
+     * WeightAggregateOptions options =
+     *     WeightAggregateOptions.builder()
+     *             .aggregate(Aggregate.MAX)
+     *             .weights(List.of(1.0, 2.0))
+     *             .build();
+     * Long payload = client.zunionstore("newSortedSet", new String[] {"mySortedSet1", "mySortedSet2"}, options).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            String destination, String[] keys, WeightAggregateOptions options);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
+     * result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a zunionstore operation while specifying custom weights and aggregation settings,
+     * use {@link #zunionstore(String, String[], WeightAggregateOptions)}
+     *
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets.
+     * @return The number of elements in the resulting sorted set.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.zunionstore("newSortedSet", new String[] {"mySortedSet1", "mySortedSet2"}).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(String destination, String[] keys);
 }

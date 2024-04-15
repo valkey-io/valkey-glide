@@ -87,6 +87,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -115,6 +116,7 @@ import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
@@ -1783,6 +1785,45 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
         protobufTransaction.addCommands(buildCommand(ZLexCount, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
+     * result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets.
+     * @param options Weight and Aggregate options.
+     * @return Command Response - The number of elements in the resulting sorted set.
+     */
+    public T zunionstore(
+            @NonNull String destination,
+            @NonNull String[] keys,
+            @NonNull WeightAggregateOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZUnionStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
+     * result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a zunionstore operation while specifying custom weights and aggregation settings,
+     * use {@link #zunionstore(String, String[], WeightAggregateOptions)}
+     *
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets.
+     * @return Command Response - The number of elements in the resulting sorted set.
+     */
+    public T zunionstore(@NonNull String destination, @NonNull String[] keys) {
+        return zunionstore(destination, keys, WeightAggregateOptions.builder().build());
     }
 
     /**

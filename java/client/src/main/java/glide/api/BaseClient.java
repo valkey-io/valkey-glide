@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -101,6 +102,7 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -834,6 +836,22 @@ public abstract class BaseClient
     public CompletableFuture<Long> zrangestore(
             @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
         return this.zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(
+            @NonNull String destination,
+            @NonNull String[] keys,
+            @NonNull WeightAggregateOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs());
+        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(@NonNull String destination, @NonNull String[] keys) {
+        return zunionstore(destination, keys, WeightAggregateOptions.builder().build());
     }
 
     @Override
