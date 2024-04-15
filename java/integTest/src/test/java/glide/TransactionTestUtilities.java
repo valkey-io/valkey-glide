@@ -104,7 +104,6 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
-        // TODO update after #203 merge & rebase
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
 
@@ -210,7 +209,6 @@ public class TransactionTestUtilities {
             1L,
             true, // sismember(key7, "baz")
             Set.of("baz"),
-            // TODO update after #203 merge & rebase
             2L, // sadd(setKey2, new String[] { "a", "b" })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
             3L,
