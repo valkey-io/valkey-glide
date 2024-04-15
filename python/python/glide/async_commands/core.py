@@ -787,7 +787,7 @@ class CoreCommands(Protocol):
 
     async def lpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+        If `key` is a list, inserts all the specified values at the head of the list. If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -949,7 +949,7 @@ class CoreCommands(Protocol):
 
     async def rpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+        If `key` is a list, inserts all the specified values at the tail of the list. If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/rpushx/ for more details.
 

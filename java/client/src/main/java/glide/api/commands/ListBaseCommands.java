@@ -325,8 +325,8 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> brpop(String[] keys, double timeout);
 
     /**
-     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * If <code>key</code> is a list, inserts all the specified values at the tail of the list. If
+     * <code>key</code> is not a list, this performs no operation.
      *
      * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -341,8 +341,8 @@ public interface ListBaseCommands {
     CompletableFuture<Long> rpushx(String key, String[] elements);
 
     /**
-     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * If <code>key</code> is a list, inserts all the specified values at the head of the list. If
+     * <code>key</code> is not a list, this performs no operation.
      *
      * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
      * @param key The key of the list.
