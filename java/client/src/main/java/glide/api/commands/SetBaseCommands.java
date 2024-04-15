@@ -102,7 +102,7 @@ public interface SetBaseCommands {
      *
      * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
-     * @param keys The keys of the sets.
+     * @param keys The keys of the sets to diff.
      * @return The number of elements in the resulting set.
      * @example
      *     <pre>{@code

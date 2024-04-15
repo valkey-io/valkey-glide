@@ -927,6 +927,15 @@ public class SharedCommandTests {
         assertEquals(3, client.sdiffstore(key1, new String[] {key1}).get());
         assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
 
+        // diff with empty set
+        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key5}).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
+
+        // diff empty with non-empty set
+        assertEquals(1, client.del(new String[] { key5 }).get());
+        assertEquals(0, client.sdiffstore(key3, new String[] {key5, key1}).get());
+        assertEquals(Set.of(), client.smembers(key3).get());
+
         // source key exists, but it is not a set
         assertEquals(OK, client.set(key5, "value").get());
         ExecutionException executionException =
