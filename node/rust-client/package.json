@@ -21,7 +21,8 @@
                 "aarch64-linux-android",
                 "x86_64-unknown-freebsd",
                 "aarch64-unknown-linux-musl",
-                "armv7-linux-androideabi"
+                "armv7-linux-androideabi",
+                "stable-x86_64-unknown-linux-musl"
             ]
         }
     },
