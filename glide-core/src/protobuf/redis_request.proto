@@ -151,6 +151,7 @@ enum RequestType {
     ZRemRangeByLex = 108;
     ZLexCount = 109;
     Append = 110;
+    SInterStore = 114;
 }
 
 message Command {
