@@ -102,6 +102,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -2577,6 +2578,93 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response =
                 service.zlexcount(key, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangestore_by_lex_returns_success() {
+        // setup
+        String source = "testSourceKey";
+        String destination = "testDestinationKey";
+        RangeByLex rangeByLex =
+                new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        String[] arguments =
+                new String[] {source, destination, rangeByLex.getStart(), rangeByLex.getEnd(), "BYLEX"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrangestore(source, destination, rangeByLex);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangestore_by_index_returns_success() {
+        // setup
+        String source = "testSourceKey";
+        String destination = "testDestinationKey";
+        RangeByIndex rangeByIndex = new RangeByIndex(0, 1);
+        String[] arguments =
+                new String[] {source, destination, rangeByIndex.getStart(), rangeByIndex.getEnd()};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrangestore(source, destination, rangeByIndex);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangestore_by_score_with_reverse_returns_success() {
+        // setup
+        String source = "testSourceKey";
+        String destination = "testDestinationKey";
+        RangeByScore rangeByScore =
+                new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        boolean reversed = true;
+        String[] arguments =
+                new String[] {
+                    source, destination, rangeByScore.getStart(), rangeByScore.getEnd(), "BYSCORE", "REV"
+                };
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zrangestore(source, destination, rangeByScore, reversed);
         Long payload = response.get();
 
         // verify

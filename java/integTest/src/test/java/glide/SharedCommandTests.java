@@ -1706,6 +1706,175 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrangestore_by_index(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Full range.
+        assertEquals(3, client.zrangestore(destination, source, new RangeByIndex(0, -1)).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from rank 0 to 1. In descending order of scores.
+        assertEquals(2, client.zrangestore(destination, source, new RangeByIndex(0, 1), true).get());
+        assertEquals(
+                Map.of("three", 3.0, "two", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        assertEquals(0, client.zrangestore(destination, source, new RangeByIndex(3, 1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existing source.
+        assertEquals(0, client.zrangestore(destination, key, new RangeByIndex(0, -1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_by_score(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to 3 (exclusive).
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from 1 (inclusive) to positive infinity.
+        query = new RangeByScore(new ScoreBoundary(1), InfScoreBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of("two", 2.0, "one", 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertEquals(0, client.zrangestore(destination, source, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_by_lex(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to "c" (exclusive).
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("a", 1.0, "b", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from "a" (inclusive) to positive infinity.
+        query = new RangeByLex(new LexBoundary("a"), InfLexBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("a", 1.0, "b", 2.0, "c", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("b", 2.0, "c", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of("b", 2.0, "a", 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
