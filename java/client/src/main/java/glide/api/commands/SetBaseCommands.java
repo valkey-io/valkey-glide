@@ -77,6 +77,27 @@ public interface SetBaseCommands {
     CompletableFuture<Long> scard(String key);
 
     /**
+     * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
+     * </code>, removing it from the source set. Creates a new destination set if needed. The
+     * operation is atomic.
+     *
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     *     same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @param source The key of the set to remove the element from.
+     * @param destination The key of the set to add the element to.
+     * @param member The set element to move.
+     * @return <code>true</code> on success, or <code>false</code> if the <code>source</code> set does
+     *     not exist or the element is not a member of the source set.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.smove("set1", "set2", "element").get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> smove(String source, String destination, String member);
+
+    /**
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
