@@ -273,11 +273,9 @@ mod tests {
         ));
 
         let redis_response = Value::Array(vec![Value::Int(0), Value::Int(1)]);
-        let converted_response = convert_to_expected_type(
-            redis_response,
-            Some(ExpectedReturnType::ArrayOfBools),
-        )
-        .unwrap();
+        let converted_response =
+            convert_to_expected_type(redis_response, Some(ExpectedReturnType::ArrayOfBools))
+                .unwrap();
         let expected_response = Value::Array(vec![Value::Boolean(false), Value::Boolean(true)]);
         assert_eq!(expected_response, converted_response);
     }
