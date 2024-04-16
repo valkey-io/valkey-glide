@@ -1789,7 +1789,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
@@ -1808,7 +1807,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.<br>
      * To perform a <code>zunion</code> operation while specifying custom weights and aggregation
      * settings, use {@link #zunion(String[], WeightAggregateOptions)}
@@ -1823,8 +1821,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.
+     * keys</code>.
      *
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keys The keys of sorted sets.
@@ -1846,7 +1843,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To perform a <code>zunionWithScores</code> operation while specifying custom weights and
      * aggregation settings, use {@link #zunionWithScores(String[], WeightAggregateOptions)}
      *

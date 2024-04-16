@@ -732,9 +732,10 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keys The keys of sorted sets.
      * @param options Weight and Aggregate options.
@@ -754,11 +755,12 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.<br>
      * To perform a <code>zunion</code> operation while specifying custom weights and aggregation
      * settings, use {@link #zunion(String[], WeightAggregateOptions)}
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keys The keys of sorted sets.
      * @return The resulting sorted set from the union.
@@ -772,9 +774,10 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.
+     * keys</code>.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keys The keys of sorted sets.
      * @param options Weight and Aggregate options.
@@ -796,10 +799,11 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keys</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To perform a <code>zunionWithScores</code> operation while specifying custom weights and
      * aggregation settings, use {@link #zunionWithScores(String[], WeightAggregateOptions)}
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keys The keys of sorted sets.
      * @return The resulting sorted set from the union with their scores.
