@@ -79,7 +79,7 @@ public interface SetBaseCommands {
     /**
      * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
      * </code>, removing it from the source set. Creates a new destination set if needed. The
-     * operation is atomic.<br>
+     * operation is atomic.
      *
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same <code>hash slot</code>.
