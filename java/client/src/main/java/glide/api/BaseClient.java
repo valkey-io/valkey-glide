@@ -57,6 +57,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -552,6 +553,13 @@ public abstract class BaseClient
     public CompletableFuture<Long> sdiffstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull String source, @NonNull String destination, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SMove, new String[] {source, destination, member}, this::handleBooleanResponse);
     }
 
     @Override
