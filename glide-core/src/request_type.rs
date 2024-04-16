@@ -118,6 +118,7 @@ pub enum RequestType {
     SetRange = 107,
     ZRemRangeByLex = 108,
     ZLexCount = 109,
+    Append = 110,
     SInterStore = 114,
 }
 
@@ -240,6 +241,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SetRange => RequestType::SetRange,
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
+            ProtobufRequestType::Append => RequestType::Append,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
         }
     }
@@ -358,6 +360,7 @@ impl RequestType {
             RequestType::SetRange => Some(cmd("SETRANGE")),
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
+            RequestType::Append => Some(cmd("APPEND")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
         }
     }
