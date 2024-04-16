@@ -118,7 +118,11 @@ pub enum RequestType {
     SetRange = 107,
     ZRemRangeByLex = 108,
     ZLexCount = 109,
+    Append = 110,
     SDiffStore = 112,
+    SInterStore = 114,
+    ZRangeStore = 115,
+    GetRange = 116,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -240,7 +244,11 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SetRange => RequestType::SetRange,
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
+            ProtobufRequestType::Append => RequestType::Append,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
+            ProtobufRequestType::SInterStore => RequestType::SInterStore,
+            ProtobufRequestType::ZRangeStore => RequestType::ZRangeStore,
+            ProtobufRequestType::GetRange => RequestType::GetRange,
         }
     }
 }
@@ -358,7 +366,11 @@ impl RequestType {
             RequestType::SetRange => Some(cmd("SETRANGE")),
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
+            RequestType::Append => Some(cmd("APPEND")),
             RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
+            RequestType::SInterStore => Some(cmd("SINTERSTORE")),
+            RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
+            RequestType::GetRange => Some(cmd("GETRANGE")),
         }
     }
 }

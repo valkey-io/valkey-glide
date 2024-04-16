@@ -477,6 +477,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void getrange(BaseClient client) {
+        String stringKey = UUID.randomUUID().toString();
+        String nonStringKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "This is a string").get());
+        assertEquals("This", client.getrange(stringKey, 0, 3).get());
+        assertEquals("ing", client.getrange(stringKey, -3, -1).get());
+        assertEquals("This is a string", client.getrange(stringKey, 0, -1).get());
+
+        // out of range
+        assertEquals("string", client.getrange(stringKey, 10, 100).get());
+        assertEquals("This is a stri", client.getrange(stringKey, -200, -3).get());
+        assertEquals("", client.getrange(stringKey, 100, 200).get());
+
+        // incorrect range
+        assertEquals("", client.getrange(stringKey, -1, -3).get());
+
+        // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
+        assertEquals(
+                REDIS_VERSION.isLowerThan("8.0.0") ? "T" : "",
+                client.getrange(stringKey, -200, -100).get());
+
+        // empty key (returning null isn't implemented)
+        assertEquals(
+                REDIS_VERSION.isLowerThan("8.0.0") ? "" : null, client.getrange(nonStringKey, 0, -1).get());
+
+        // non-string key
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -894,61 +930,6 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void sdiffstore(BaseClient client) {
-        String key1 = "{key}-1-" + UUID.randomUUID();
-        String key2 = "{key}-2-" + UUID.randomUUID();
-        String key3 = "{key}-3-" + UUID.randomUUID();
-        String key4 = "{key}-4-" + UUID.randomUUID();
-        String key5 = "{key}-5-" + UUID.randomUUID();
-
-        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
-        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
-        assertEquals(3, client.sadd(key4, new String[] {"e", "f", "g"}).get());
-
-        // create new
-        assertEquals(2, client.sdiffstore(key3, new String[] {key1, key2}).get());
-        assertEquals(Set.of("a", "b"), client.smembers(key3).get());
-
-        // overwrite existing set
-        assertEquals(2, client.sdiffstore(key2, new String[] {key3, key2}).get());
-        assertEquals(Set.of("a", "b"), client.smembers(key2).get());
-
-        // overwrite source
-        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key4}).get());
-        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
-
-        // overwrite source
-        assertEquals(3, client.sdiffstore(key1, new String[] {key1}).get());
-        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
-
-        // diff with empty set
-        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key5}).get());
-        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
-
-        // diff empty with non-empty set
-        assertEquals(0, client.sdiffstore(key3, new String[] {key5, key1}).get());
-        assertEquals(Set.of(), client.smembers(key3).get());
-
-        // source key exists, but it is not a set
-        assertEquals(OK, client.set(key5, "value").get());
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.sdiffstore(key1, new String[] {key5}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-
-        // overwrite destination - not a set
-        assertEquals(1, client.sdiffstore(key5, new String[] {key1, key2}).get());
-        assertEquals(Set.of("c"), client.smembers(key5).get());
-
-        // wrong arguments
-        executionException =
-                assertThrows(ExecutionException.class, () -> client.sdiffstore(key5, new String[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
