@@ -57,6 +57,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -553,6 +554,13 @@ public abstract class BaseClient
         String[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(
                 SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull String source, @NonNull String destination, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SMove, new String[] {source, destination, member}, this::handleBooleanResponse);
     }
 
     @Override
