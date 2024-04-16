@@ -65,9 +65,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
@@ -1926,21 +1926,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Gets the intersection of all the given sets.
-     *
-     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
-     * @param keys The keys of the sets.
-     * @return Command Response - A <code>Set</code> of members which are present in all given sets.
-     *     <br>
-     *     If one or more sets do not exist, an empty set will be returned.
-     */
-    public T sinter(@NonNull String[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-        protobufTransaction.addCommands(buildCommand(SInter, commandArgs));
         return getThis();
     }
 

@@ -1118,15 +1118,15 @@ public class SharedCommandTests {
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key3, "bar").get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
+                assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // same-slot requirement
         if (client instanceof RedisClusterClient) {
             executionException =
-                assertThrows(
-                    ExecutionException.class,
-                    () -> client.sinter(new String[] {"abc", "zxy", "lkn"}).get());
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sinter(new String[] {"abc", "zxy", "lkn"}).get());
             assertInstanceOf(RequestException.class, executionException.getCause());
             assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
         }
