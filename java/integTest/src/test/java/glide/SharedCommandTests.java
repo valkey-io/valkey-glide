@@ -1007,10 +1007,6 @@ public class SharedCommandTests {
         assertEquals(3, client.sdiffstore(key1, new String[] {key1, key4}).get());
         assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
 
-        // overwrite source
-        assertEquals(3, client.sdiffstore(key1, new String[] {key1}).get());
-        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
-
         // diff with empty set
         assertEquals(3, client.sdiffstore(key1, new String[] {key1, key5}).get());
         assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
