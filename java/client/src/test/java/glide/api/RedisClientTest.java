@@ -77,6 +77,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -1582,6 +1583,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.scard(key);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void smismember_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] members = {"1", "2"};
+        String[] arguments = {"testKey", "1", "2"};
+        Boolean[] value = {true, false};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(SMIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.smismember(key, members);
+        Boolean[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

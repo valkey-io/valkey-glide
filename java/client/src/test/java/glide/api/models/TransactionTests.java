@@ -56,6 +56,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -261,6 +262,11 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.smismember("key", new String[] {"1", "2"});
+        results.add(
+                Pair.of(
+                        SMIsMember, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));

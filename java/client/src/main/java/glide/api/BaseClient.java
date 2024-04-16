@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -501,6 +502,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(@NonNull String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> smismember(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override

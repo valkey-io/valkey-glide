@@ -367,6 +367,7 @@ fn get_command(request: &Command) -> Option<Cmd> {
         RequestType::RPushX => Some(cmd("RPUSHX")),
         RequestType::LPushX => Some(cmd("LPUSHX")),
         RequestType::Blpop => Some(cmd("BLPOP")),
+        RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
     }
 }
 
