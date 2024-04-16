@@ -82,16 +82,17 @@ public interface SetBaseCommands {
      * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
      * @param key The key of the set to check.
      * @param members A list of members to check for existence in the set.
-     * @return An array of boolean values, each indicating if the respective member exists in the set.
+     * @return An <code>array</code> of <code>boolean</code> values, each indicating if the respective
+     *     member exists in the set.
      * @example
      *     <pre>{@code
      * Boolean[] areMembers = client.smismembmer("my_set", new String[] { "a", "b", "c" }).get();
-     * assert areMembers[0] && areMembers[1] && !areMembers[2]; // Only first two elements are present in the set
+     * assert areMembers[0] && areMembers[1] && !areMembers[2]; // Only first two elements are present in the "my_set"
      * }</pre>
      */
     CompletableFuture<Boolean[]> smismember(String key, String[] members);
 
-  /**
+    /**
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.

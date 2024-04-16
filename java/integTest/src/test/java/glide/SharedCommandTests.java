@@ -15,6 +15,7 @@ import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -954,15 +955,17 @@ public class SharedCommandTests {
         assertEquals(2, client.sadd(key1, new String[] {"one", "two"}).get());
         assertArrayEquals(
                 new Boolean[] {true, false}, client.smismember(key1, new String[] {"one", "three"}).get());
+
         // empty set
         assertArrayEquals(
                 new Boolean[] {false, false}, client.smismember(key2, new String[] {"one", "three"}).get());
+
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.smismember(key2, new String[] {"_"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
