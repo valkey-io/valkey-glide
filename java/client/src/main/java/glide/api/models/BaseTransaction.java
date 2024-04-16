@@ -933,7 +933,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
      * @param key The key of the set to check.
      * @param members A list of members to check for existence in the set.
-     * @return Command response - An <code>array</code> of <code>boolean</code> values, each
+     * @return Command Response - An <code>array</code> of <code>Boolean</code> values, each
      *     indicating if the respective member exists in the set.
      */
     public T smismember(@NonNull String key, @NonNull String[] members) {
