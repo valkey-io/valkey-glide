@@ -109,8 +109,19 @@ pub enum RequestType {
     PfCount = 97,
     PfMerge = 98,
     Blpop = 100,
+    LInsert = 101,
     RPushX = 102,
     LPushX = 103,
+    ZMScore = 104,
+    ZDiff = 105,
+    ZDiffStore = 106,
+    SetRange = 107,
+    ZRemRangeByLex = 108,
+    ZLexCount = 109,
+    Append = 110,
+    SInterStore = 114,
+    ZRangeStore = 115,
+    GetRange = 116,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -224,7 +235,18 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RPushX => RequestType::RPushX,
             ProtobufRequestType::LPushX => RequestType::LPushX,
             ProtobufRequestType::Blpop => RequestType::Blpop,
+            ProtobufRequestType::LInsert => RequestType::LInsert,
             ProtobufRequestType::Spop => RequestType::Spop,
+            ProtobufRequestType::ZMScore => RequestType::ZMScore,
+            ProtobufRequestType::ZDiff => RequestType::ZDiff,
+            ProtobufRequestType::ZDiffStore => RequestType::ZDiffStore,
+            ProtobufRequestType::SetRange => RequestType::SetRange,
+            ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
+            ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
+            ProtobufRequestType::Append => RequestType::Append,
+            ProtobufRequestType::SInterStore => RequestType::SInterStore,
+            ProtobufRequestType::ZRangeStore => RequestType::ZRangeStore,
+            ProtobufRequestType::GetRange => RequestType::GetRange,
         }
     }
 }
@@ -334,7 +356,18 @@ impl RequestType {
             RequestType::RPushX => Some(cmd("RPUSHX")),
             RequestType::LPushX => Some(cmd("LPUSHX")),
             RequestType::Blpop => Some(cmd("BLPOP")),
+            RequestType::LInsert => Some(cmd("LINSERT")),
             RequestType::Spop => Some(cmd("SPOP")),
+            RequestType::ZMScore => Some(cmd("ZMSCORE")),
+            RequestType::ZDiff => Some(cmd("ZDIFF")),
+            RequestType::ZDiffStore => Some(cmd("ZDIFFSTORE")),
+            RequestType::SetRange => Some(cmd("SETRANGE")),
+            RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
+            RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
+            RequestType::Append => Some(cmd("APPEND")),
+            RequestType::SInterStore => Some(cmd("SINTERSTORE")),
+            RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
+            RequestType::GetRange => Some(cmd("GETRANGE")),
         }
     }
 }

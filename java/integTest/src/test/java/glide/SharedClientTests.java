@@ -52,7 +52,7 @@ public class SharedClientTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void send_and_receive_large_values(BaseClient client) {
         int length = 1 << 16;
@@ -66,7 +66,7 @@ public class SharedClientTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void send_and_receive_non_ascii_unicode(BaseClient client) {
         String key = "foo";
@@ -84,11 +84,12 @@ public class SharedClientTests {
                 Arguments.of(clusterClient, 1 << 16));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("clientAndDataSize")
     public void client_can_handle_concurrent_workload(BaseClient client, int valueSize) {
         ExecutorService executorService = Executors.newCachedThreadPool();
-        CompletableFuture[] futures = new CompletableFuture[100];
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void>[] futures = new CompletableFuture[100];
 
         for (int i = 0; i < 100; i++) {
             futures[i] =

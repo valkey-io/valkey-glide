@@ -31,6 +31,7 @@ async def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -49,16 +50,21 @@ async def transaction_test(
     args.append(value)
     transaction.strlen(key)
     args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
 
     transaction.persist(key)
     args.append(False)
 
-    transaction.exists([key])
+    transaction.rename(key, key2)
+    args.append(OK)
+
+    transaction.exists([key2])
     args.append(1)
 
-    transaction.delete([key])
+    transaction.delete([key2])
     args.append(1)
-    transaction.get(key)
+    transaction.get(key2)
     args.append(None)
 
     transaction.mset({key: value, key2: value2})
@@ -143,6 +149,11 @@ async def transaction_test(
     transaction.rpop_count(key6, 2)
     args.append([value2, value])
 
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
+
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
     transaction.srem(key7, ["foo"])
@@ -153,6 +164,12 @@ async def transaction_test(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    transaction.spop(key7)
+    args.append("bar")
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.spop_count(key7, 4)
+    args.append({"foo", "bar"})
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4)
