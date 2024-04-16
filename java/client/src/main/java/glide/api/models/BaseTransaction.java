@@ -1790,7 +1790,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
      * the result in <code>destination</code>. If <code>destination</code> already exists, it is
-     * overwritten. Otherwise, a new sorted set will be created.
+     * overwritten. Otherwise, a new sorted set will be created.<br>
+     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.
      *
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -1815,6 +1816,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
      * the result in <code>destination</code>. If <code>destination</code> already exists, it is
      * overwritten. Otherwise, a new sorted set will be created.<br>
+     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.<br>
      * To perform a <code>zinterstore</code> operation while specifying custom weights and aggregation
      * settings, use {@link #zinterstore(String, String[], WeightAggregateOptions)}
      *
