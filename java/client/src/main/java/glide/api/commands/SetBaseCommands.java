@@ -90,4 +90,40 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean[]> smismember(String key, String[] members);
+
+  /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return <code>true</code> if the member exists in the set, <code>false</code> otherwise. If
+     *     <code>key</code> doesn't exist, it is treated as an <code>empty set</code> and the command
+     *     returns <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean payload1 = client.sismember("mySet", "member1").get();
+     * assert payload1; // Indicates that "member1" exists in the set "mySet".
+     *
+     * Boolean payload2 = client.sismember("mySet", "nonExistingMember").get();
+     * assert !payload2; // Indicates that "nonExistingMember" does not exist in the set "mySet".
+     * }</pre>
+     */
+    CompletableFuture<Boolean> sismember(String key, String member);
+
+    /**
+     * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
+     * new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sinterstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sinterstore(String destination, String[] keys);
 }

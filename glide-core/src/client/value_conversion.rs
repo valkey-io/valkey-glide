@@ -250,6 +250,13 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZRANK" | b"ZREVRANK" => cmd
             .position(b"WITHSCORE")
             .map(|_| ExpectedReturnType::ZrankReturnType),
+        b"SPOP" => {
+            if cmd.arg_idx(2).is_some() {
+                Some(ExpectedReturnType::Set)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }
@@ -265,9 +272,9 @@ mod tests {
             Some(ExpectedReturnType::ArrayOfBools)
         ));
 
-        let redis_response = vec![Value::Int(0), Value::Int(1)];
+        let redis_response = Value::Array(vec![Value::Int(0), Value::Int(1)]);
         let converted_response = convert_to_expected_type(
-            Value::Array(redis_response),
+            redis_response,
             Some(ExpectedReturnType::ArrayOfBools),
         )
         .unwrap();
@@ -512,5 +519,14 @@ mod tests {
             Some(ExpectedReturnType::JsonToggleReturnType)
         )
         .is_err());
+    }
+
+    #[test]
+    fn test_convert_spop_to_set_for_spop_count() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SPOP").arg("key1").arg("3")),
+            Some(ExpectedReturnType::Set)
+        ));
+        assert!(expected_type_for_cmd(redis::cmd("SPOP").arg("key1")).is_none());
     }
 }

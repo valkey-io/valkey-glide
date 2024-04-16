@@ -31,6 +31,7 @@ async def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -47,16 +48,23 @@ async def transaction_test(
     args.append("string")
     transaction.echo(value)
     args.append(value)
+    transaction.strlen(key)
+    args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
 
     transaction.persist(key)
     args.append(False)
 
-    transaction.exists([key])
+    transaction.rename(key, key2)
+    args.append(OK)
+
+    transaction.exists([key2])
     args.append(1)
 
-    transaction.delete([key])
+    transaction.delete([key2])
     args.append(1)
-    transaction.get(key)
+    transaction.get(key2)
     args.append(None)
 
     transaction.mset({key: value, key2: value2})
@@ -141,6 +149,11 @@ async def transaction_test(
     transaction.rpop_count(key6, 2)
     args.append([value2, value])
 
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
+
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
     transaction.srem(key7, ["foo"])
@@ -151,9 +164,15 @@ async def transaction_test(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    transaction.spop(key7)
+    args.append("bar")
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.spop_count(key7, 4)
+    args.append({"foo", "bar"})
 
-    transaction.zadd(key8, {"one": 1, "two": 2, "three": 3})
-    args.append(3)
+    transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
+    args.append(4)
     transaction.zrank(key8, "one")
     args.append(0)
     if not await check_if_server_version_lt(redis_client, "7.2.0"):
@@ -164,19 +183,21 @@ async def transaction_test(
     transaction.zrem(key8, ["one"])
     args.append(1)
     transaction.zcard(key8)
-    args.append(2)
+    args.append(3)
     transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
-    args.append(2)
+    args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
     transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
-    args.append(["two", "three"])
+    args.append(["two", "three", "four"])
     transaction.zrange_withscores(key8, RangeByIndex(start=0, stop=-1))
-    args.append({"two": 2, "three": 3})
+    args.append({"two": 2, "three": 3, "four": 4})
     transaction.zpopmin(key8)
     args.append({"two": 2.0})
     transaction.zpopmax(key8)
-    args.append({"three": 3})
+    args.append({"four": 4})
+    transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(1)
     return args
 
 

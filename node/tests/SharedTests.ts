@@ -1122,6 +1122,29 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `spop and spopCount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const members = ["member1", "member2", "member3"];
+                expect(await client.sadd(key, members)).toEqual(3);
+
+                const result1 = await client.spop(key);
+                expect(members).toContain(result1);
+
+                const result2 = await client.spopCount(key, 2);
+                expect(members).toContain(result2?.[0]);
+                expect(members).toContain(result2?.[1]);
+                expect(result2).not.toContain(result1);
+
+                expect(await client.spop("nonExistingKey")).toEqual(null);
+                expect(await client.spopCount("nonExistingKey", 1)).toEqual([]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `exists with existing keys, an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1527,25 +1550,25 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        { bound: 1, isInclusive: false },
-                        { bound: 3, isInclusive: false },
+                        { value: 1, isInclusive: false },
+                        { value: 3, isInclusive: false },
                     ),
                 ).toEqual(1);
                 expect(
                     await client.zcount(
                         key1,
-                        { bound: 1, isInclusive: false },
-                        { bound: 3 },
+                        { value: 1, isInclusive: false },
+                        { value: 3 },
                     ),
                 ).toEqual(2);
                 expect(
                     await client.zcount(key1, "negativeInfinity", {
-                        bound: 3,
+                        value: 3,
                     }),
                 ).toEqual(3);
                 expect(
                     await client.zcount(key1, "positiveInfinity", {
-                        bound: 3,
+                        value: 3,
                     }),
                 ).toEqual(0);
                 expect(
@@ -1559,6 +1582,217 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
                     client.zcount(key2, "negativeInfinity", "positiveInfinity"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrange by index test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
+                    ["one", "two"],
+                );
+                expect(
+                    await client.zrangeWithScores(key, { start: 0, stop: -1 }),
+                ).toEqual({ one: 1.0, two: 2.0, three: 3.0 });
+                expect(
+                    await client.zrange(key, { start: 0, stop: 1 }, true),
+                ).toEqual(["three", "two"]);
+                expect(await client.zrange(key, { start: 3, stop: 1 })).toEqual(
+                    [],
+                );
+                expect(
+                    await client.zrangeWithScores(key, { start: 3, stop: 1 }),
+                ).toEqual({});
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrange by score test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "negativeInfinity",
+                        stop: { value: 3, isInclusive: false },
+                        type: "byScore",
+                    }),
+                ).toEqual(["one", "two"]);
+
+                expect(
+                    await client.zrangeWithScores(key, {
+                        start: "negativeInfinity",
+                        stop: "positiveInfinity",
+                        type: "byScore",
+                    }),
+                ).toEqual({ one: 1.0, two: 2.0, three: 3.0 });
+
+                expect(
+                    await client.zrange(
+                        key,
+                        {
+                            start: { value: 3, isInclusive: false },
+                            stop: "negativeInfinity",
+                            type: "byScore",
+                        },
+                        true,
+                    ),
+                ).toEqual(["two", "one"]);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "negativeInfinity",
+                        stop: "positiveInfinity",
+                        limit: { offset: 1, count: 2 },
+                        type: "byScore",
+                    }),
+                ).toEqual(["two", "three"]);
+
+                expect(
+                    await client.zrange(
+                        key,
+                        {
+                            start: "negativeInfinity",
+                            stop: { value: 3, isInclusive: false },
+                            type: "byScore",
+                        },
+                        true,
+                    ),
+                ).toEqual([]);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "positiveInfinity",
+                        stop: { value: 3, isInclusive: false },
+                        type: "byScore",
+                    }),
+                ).toEqual([]);
+
+                expect(
+                    await client.zrangeWithScores(
+                        key,
+                        {
+                            start: "negativeInfinity",
+                            stop: { value: 3, isInclusive: false },
+                            type: "byScore",
+                        },
+                        true,
+                    ),
+                ).toEqual({});
+
+                expect(
+                    await client.zrangeWithScores(key, {
+                        start: "positiveInfinity",
+                        stop: { value: 3, isInclusive: false },
+                        type: "byScore",
+                    }),
+                ).toEqual({});
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrange by lex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "negativeInfinity",
+                        stop: { value: "c", isInclusive: false },
+                        type: "byLex",
+                    }),
+                ).toEqual(["a", "b"]);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "negativeInfinity",
+                        stop: "positiveInfinity",
+                        limit: { offset: 1, count: 2 },
+                        type: "byLex",
+                    }),
+                ).toEqual(["b", "c"]);
+
+                expect(
+                    await client.zrange(
+                        key,
+                        {
+                            start: { value: "c", isInclusive: false },
+                            stop: "negativeInfinity",
+                            type: "byLex",
+                        },
+                        true,
+                    ),
+                ).toEqual(["b", "a"]);
+
+                expect(
+                    await client.zrange(
+                        key,
+                        {
+                            start: "negativeInfinity",
+                            stop: { value: "c", isInclusive: false },
+                            type: "byLex",
+                        },
+                        true,
+                    ),
+                ).toEqual([]);
+
+                expect(
+                    await client.zrange(key, {
+                        start: "positiveInfinity",
+                        stop: { value: "c", isInclusive: false },
+                        type: "byLex",
+                    }),
+                ).toEqual([]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrange different typesn of keys test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(
+                    await client.zrange("nonExistingKey", {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual([]);
+
+                expect(
+                    await client.zrangeWithScores("nonExistingKey", {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual({});
+
+                expect(await client.set(key, "value")).toEqual("OK");
+
+                await expect(
+                    client.zrange(key, { start: 0, stop: 1 }),
+                ).rejects.toThrow();
+
+                await expect(
+                    client.zrangeWithScores(key, { start: 0, stop: 1 }),
                 ).rejects.toThrow();
             }, protocol);
         },
@@ -1933,15 +2167,15 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zremRangeByScore(
                         key,
-                        { bound: 1, isInclusive: false },
-                        { bound: 2 },
+                        { value: 1, isInclusive: false },
+                        { value: 2 },
                     ),
                 ).toEqual(1);
 
                 expect(
                     await client.zremRangeByScore(
                         key,
-                        { bound: 1 },
+                        { value: 1 },
                         "negativeInfinity",
                     ),
                 ).toEqual(0);

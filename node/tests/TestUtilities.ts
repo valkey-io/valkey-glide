@@ -144,6 +144,10 @@ export async function transactionTest(
     args.push(true);
     baseTransaction.smembers(key7);
     args.push(["bar"]);
+    baseTransaction.spop(key7);
+    args.push("bar");
+    baseTransaction.scard(key7);
+    args.push(0);
     baseTransaction.zadd(key8, {
         member1: 1,
         member2: 2,
@@ -168,7 +172,11 @@ export async function transactionTest(
     args.push(4);
     baseTransaction.zscore(key8, "member2");
     args.push(3.0);
-    baseTransaction.zcount(key8, { bound: 2 }, "positiveInfinity");
+    baseTransaction.zrange(key8, { start: 0, stop: -1 });
+    args.push(["member2", "member3", "member4", "member5"]);
+    baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
+    args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
+    baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     args.push(4);
     baseTransaction.zpopmin(key8);
     args.push({ member2: 3.0 });
