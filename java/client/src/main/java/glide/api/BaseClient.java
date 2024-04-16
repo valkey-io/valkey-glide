@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -101,6 +102,7 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -848,6 +850,37 @@ public abstract class BaseClient
                 ArrayUtils.addAll(
                         ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
         return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zunion(
+            @NonNull String[] keys, @NonNull WeightAggregateOptions options) {
+        String[] arguments =
+                concatenateArrays(new String[] {Integer.toString(keys.length)}, keys, options.toArgs());
+        return commandManager.submitNewCommand(
+                ZUnion, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zunion(@NonNull String[] keys) {
+        return zunion(keys, WeightAggregateOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(
+            @NonNull String[] keys, @NonNull WeightAggregateOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Integer.toString(keys.length)},
+                        keys,
+                        options.toArgs(),
+                        new String[] {WITH_SCORES_REDIS_API});
+        return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(@NonNull String[] keys) {
+        return zunionWithScores(keys, WeightAggregateOptions.builder().build());
     }
 
     @Override

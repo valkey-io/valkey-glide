@@ -36,6 +36,8 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -1910,6 +1912,98 @@ public class SharedCommandTests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zunion(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Union results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new String[] {"one", "three", "two"}, client.zunion(new String[] {key1, key2}).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 5.5),
+                client.zunionWithScores(new String[] {key1, key2}).get());
+
+        // Union results are aggregated by the max score of elements
+        WeightAggregateOptions options =
+                WeightAggregateOptions.builder().aggregate(Aggregate.MAX).build();
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new String[] {key1, key2}, options).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 3.5),
+                client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Union results are aggregated by the min score of elements
+        options = WeightAggregateOptions.builder().aggregate(Aggregate.MIN).build();
+        assertArrayEquals(
+                new String[] {"one", "two", "three"},
+                client.zunion(new String[] {key1, key2}, options).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Union results are aggregated by the sum of the scores of elements
+        options = WeightAggregateOptions.builder().aggregate(Aggregate.SUM).build();
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new String[] {key1, key2}, options).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 5.5),
+                client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        options = WeightAggregateOptions.builder().weights(List.of(2.0, 2.0)).build();
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new String[] {key1, key2}, options).get());
+        assertEquals(
+                Map.of("one", 2.0, "three", 6.0, "two", 11.0),
+                client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
+        // for key2 by -2.0.
+        options =
+                WeightAggregateOptions.builder()
+                        .aggregate(Aggregate.MIN)
+                        .weights(List.of(1.0, -2.0))
+                        .build();
+        assertArrayEquals(
+                new String[] {"two", "three", "one"},
+                client.zunion(new String[] {key1, key2}, options).get());
+        assertEquals(
+                Map.of("two", -7.0, "three", -6.0, "one", 1.0),
+                client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zunion(new String[] {key3, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Keys.length != Weights.length
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zunion(
+                                                new String[] {key1, key2},
+                                                WeightAggregateOptions.builder().weights(List.of(2.0)).build())
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
     @MethodSource("getClients")
     public void xadd(BaseClient client) {
         String key = UUID.randomUUID().toString();
