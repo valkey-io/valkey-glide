@@ -735,6 +735,8 @@ public interface SortedSetBaseCommands {
      * result in <code>destination</code>. If <code>destination</code> already exists, it is
      * overwritten. Otherwise, a new sorted set will be created.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keys The keys of sorted sets.
@@ -761,6 +763,8 @@ public interface SortedSetBaseCommands {
      * To perform a zunionstore operation while specifying custom weights and aggregation settings,
      * use {@link #zunionstore(String, String[], WeightAggregateOptions)}
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keys The keys of sorted sets.
