@@ -1776,7 +1776,7 @@ public class SharedCommandTests {
                 Map.of("two", 2.0, "three", 3.0),
                 client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
 
-        // Range from positive to negative infinity with rev set to true.Limited to ranks 1 to 2.
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByScore(
                         InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
@@ -1843,7 +1843,7 @@ public class SharedCommandTests {
                 Map.of("b", 2.0, "c", 3.0),
                 client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
 
-        // Range from positive to negative infinity with rev set to true.Limited to ranks 1 to 2.
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByLex(
                         InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
