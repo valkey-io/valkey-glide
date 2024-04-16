@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -405,6 +406,9 @@ public class TransactionTests {
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
+
+        transaction.lastsave();
+        results.add(Pair.of(LastSave, buildArgs()));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));

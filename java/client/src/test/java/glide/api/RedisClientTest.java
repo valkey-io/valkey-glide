@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -2770,6 +2771,26 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lastsave_returns_success() {
+        // setup
+        Long value = 42L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LastSave), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lastsave();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 
     @SneakyThrows
