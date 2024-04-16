@@ -232,7 +232,7 @@ public interface StringBaseCommands {
      * @param key The key of the string.
      * @param start The starting offset.
      * @param end The ending offset.
-     * @return A substring extracted from the <code>key</code>.
+     * @return A substring extracted from the value stored at <code>key</code>..
      * @example
      *     <pre>{@code
      * client.set("mykey", "This is a string").get();

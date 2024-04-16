@@ -439,7 +439,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the string.
      * @param start The starting offset.
      * @param end The ending offset.
-     * @return Command Response - A substring extracted from the <code>key</code>.
+     * @return Command Response - A substring extracted from the value stored at <code>key</code>.
      */
     public T getrange(@NonNull String key, int start, int end) {
         ArgsArray commandArgs = buildArgs(key, Integer.toString(start), Integer.toString(end));
