@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -923,6 +924,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
+     * </code>, removing it from the source set. Creates a new destination set if needed. The
+     * operation is atomic.
+     *
+     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @param source The key of the set to remove the element from.
+     * @param destination The key of the set to add the element to.
+     * @param member The set element to move.
+     * @return Command response - <code>true</code> on success, or <code>false</code> if the <code>
+     *     source</code> set does not exist or the element is not a member of the source set.
+     */
+    public T smove(@NonNull String source, @NonNull String destination, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(source, destination, member);
+        protobufTransaction.addCommands(buildCommand(SMove, commandArgs));
         return getThis();
     }
 

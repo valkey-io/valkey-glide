@@ -122,6 +122,7 @@ pub enum RequestType {
     SInterStore = 114,
     ZRangeStore = 115,
     GetRange = 116,
+    SMove = 117,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -247,6 +248,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
             ProtobufRequestType::ZRangeStore => RequestType::ZRangeStore,
             ProtobufRequestType::GetRange => RequestType::GetRange,
+            ProtobufRequestType::SMove => RequestType::SMove,
         }
     }
 }
@@ -368,6 +370,7 @@ impl RequestType {
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
             RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
             RequestType::GetRange => Some(cmd("GETRANGE")),
+            RequestType::SMove => Some(cmd("SMOVE")),
         }
     }
 }

@@ -56,6 +56,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -545,6 +546,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(@NonNull String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull String source, @NonNull String destination, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SMove, new String[] {source, destination, member}, this::handleBooleanResponse);
     }
 
     @Override
