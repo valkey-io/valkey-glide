@@ -1918,7 +1918,6 @@ public class SharedCommandTests {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
-        RangeByIndex query = new RangeByIndex(0, -1);
         Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
         Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
 
@@ -1982,6 +1981,11 @@ public class SharedCommandTests {
         assertEquals(
                 Map.of("two", -7.0, "three", -6.0, "one", 1.0),
                 client.zunionWithScores(new String[] {key1, key2}, options).get());
+
+        // Non Existing Key
+        assertArrayEquals(new String[] {"one", "two"}, client.zunion(new String[] {key1, key3}).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0), client.zunionWithScores(new String[] {key1, key3}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key3, "value").get());
