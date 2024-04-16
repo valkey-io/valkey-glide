@@ -1990,9 +1990,9 @@ public class SharedCommandTests {
         // same-slot requirement
         if (client instanceof RedisClusterClient) {
             executionException =
-                assertThrows(
-                    ExecutionException.class,
-                    () -> client.zunionstore("foo", new String[] {"abc", "zxy", "lkn"}).get());
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.zunionstore("foo", new String[] {"abc", "zxy", "lkn"}).get());
             assertInstanceOf(RequestException.class, executionException.getCause());
             assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
         }
