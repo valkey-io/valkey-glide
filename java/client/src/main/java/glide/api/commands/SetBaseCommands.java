@@ -173,9 +173,10 @@ public interface SetBaseCommands {
 
     /**
      * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
-     * at <code>destination</code>.<br>
-     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.
+     * at <code>destination</code>.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys from which to retrieve the set members.
