@@ -747,7 +747,8 @@ public interface SortedSetBaseCommands {
      * WeightAggregateOptions options =
      *     WeightAggregateOptions.builder()
      *             .aggregate(Aggregate.MAX)
-     *             .weights(List.of(1.0, 2.0))
+     *             .weight(1.0)
+     *             .weight(2.0)
      *             .build();
      * Long payload = client.zinterstore("newSortedSet", new String[] {"mySortedSet1", "mySortedSet2"}, options).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the intersection of "mySortedSet1" and "mySortedSet2".
