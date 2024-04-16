@@ -121,6 +121,7 @@ pub enum RequestType {
     Append = 110,
     SInterStore = 114,
     ZRangeStore = 115,
+    GetRange = 116,
     SMIsMember = 118,
 }
 
@@ -246,6 +247,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Append => RequestType::Append,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
             ProtobufRequestType::ZRangeStore => RequestType::ZRangeStore,
+            ProtobufRequestType::GetRange => RequestType::GetRange,
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
         }
     }
@@ -367,6 +369,7 @@ impl RequestType {
             RequestType::Append => Some(cmd("APPEND")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
             RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
+            RequestType::GetRange => Some(cmd("GETRANGE")),
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
         }
     }
