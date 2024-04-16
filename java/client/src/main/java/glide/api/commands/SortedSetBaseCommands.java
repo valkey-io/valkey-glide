@@ -745,7 +745,8 @@ public interface SortedSetBaseCommands {
      * WeightAggregateOptions options =
      *     WeightAggregateOptions.builder()
      *             .aggregate(Aggregate.MAX)
-     *             .weights(List.of(1.0, 2.0))
+     *             .weight(1.0)
+     *             .weight(2.0)
      *             .build();
      * String[] payload = client.zunion(new String[] {"mySortedSet1", "mySortedSet2"}, options).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
@@ -787,7 +788,8 @@ public interface SortedSetBaseCommands {
      * WeightAggregateOptions options =
      *     WeightAggregateOptions.builder()
      *             .aggregate(Aggregate.MAX)
-     *             .weights(List.of(1.0, 2.0))
+     *             .weight(1.0)
+     *             .weight(2.0)
      *             .build();
      * Map<String, Double> payload = client.zunionWithScores(new String[] {"mySortedSet1", "mySortedSet2"}, options).get()
      * assert payload.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
