@@ -153,6 +153,7 @@ enum RequestType {
     Append = 110;
     SInterStore = 114;
     ZRangeStore = 115;
+    GetRange = 116;
 }
 
 message Command {
