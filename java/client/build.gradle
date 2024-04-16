@@ -27,8 +27,8 @@ dependencies {
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
-    testImplementation('org.junit.jupiter:junit-jupiter:5.6.2')
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 }
 
 ext {
@@ -58,6 +58,7 @@ tasks.register('protobuf', Exec) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
                 throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 26.1 or newer is required.");
             }
+            throw e
         }
 
         project.mkdir(Paths.get(project.projectDir.path, 'src/main/java/glide/models/protobuf').toString())

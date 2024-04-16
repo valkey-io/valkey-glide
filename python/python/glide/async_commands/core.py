@@ -275,6 +275,30 @@ class CoreCommands(Protocol):
             Optional[str], await self._execute_command(RequestType.GetString, [key])
         )
 
+    async def append(self, key: str, value: str) -> int:
+        """
+        Appends a value to a key.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
+
+        See https://redis.io/commands/append for more details.
+
+        Args:
+            key (str): The key to which the value will be appended.
+            value (str): The value to append.
+
+        Returns:
+            int: The length of the string after appending the value.
+
+        Examples:
+            >>> await client.append("key", "Hello")
+                5  # Indicates that "Hello" has been appended to the value of "key", which was initially empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+            >>> await client.append("key", " world")
+                11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
+            >>> await client.get("key")
+                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
+        """
+        return cast(int, await self._execute_command(RequestType.Append, [key, value]))
+
     async def strlen(self, key: str) -> int:
         """
         Get the length of the string value stored at `key`.
@@ -1092,6 +1116,53 @@ class CoreCommands(Protocol):
                 3
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
+
+    async def spop(self, key: str) -> Optional[str]:
+        """
+        Removes and returns one random member from the set stored at `key`.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop multiple members, see `spop_count`.
+
+        Args:
+            key (str): The key of the set.
+
+        Returns:
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
+
+        Examples:
+            >>> await client.spop("my_set")
+                "value1" # Removes and returns a random member from the set "my_set".
+            >>> await client.spop("non_exiting_key")
+                None
+        """
+        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+
+    async def spop_count(self, key: str, count: int) -> Set[str]:
+        """
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop a single member, see `spop`.
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Returns:
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.spop_count("my_set", 2)
+                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
+            >>> await client.spop_count("non_exiting_key", 2)
+                Set()
+        """
+        return cast(
+            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+        )
 
     async def sismember(
         self,

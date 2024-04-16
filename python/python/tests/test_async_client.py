@@ -967,6 +967,24 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_spop(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert await redis_client.sadd(key, [member]) == 1
+        assert await redis_client.spop(key) == member
+
+        member2 = get_random_string(5)
+        member3 = get_random_string(5)
+        assert await redis_client.sadd(key, [member, member2, member3]) == 3
+        assert await redis_client.spop_count(key, 4) == {member, member2, member3}
+
+        assert await redis_client.scard(key) == 0
+
+        assert await redis_client.spop("non_existing_key") == None
+        assert await redis_client.spop_count("non_existing_key", 3) == set()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1713,6 +1731,15 @@ class TestCommands:
         assert isinstance(result[1], str)
         assert int(result[0]) > current_time
         assert 0 < int(result[1]) < 1000000
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_append(self, redis_client: TRedisClient):
+        key, value = get_random_string(10), get_random_string(5)
+        assert await redis_client.append(key, value) == 5
+
+        assert await redis_client.append(key, value) == 10
+        assert await redis_client.get(key) == value * 2
 
 
 class TestCommandsUnitTests:

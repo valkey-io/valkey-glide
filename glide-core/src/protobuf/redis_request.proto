@@ -149,7 +149,12 @@ enum RequestType {
     ZDiffStore = 106;
     SetRange = 107;
     ZRemRangeByLex = 108;
-    SMove = 110;
+    ZLexCount = 109;
+    Append = 110;
+    SInterStore = 114;
+    ZRangeStore = 115;
+    GetRange = 116;
+    SMove = 117;
 }
 
 message Command {

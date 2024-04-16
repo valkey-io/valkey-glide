@@ -221,4 +221,26 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> setrange(String key, int offset, String value);
+
+    /**
+     * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
+     * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
+     * order to provide an offset starting from the end of the string. So <code>-1</code> means the
+     * last character, <code>-2</code> the penultimate and so forth.
+     *
+     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @return A substring extracted from the value stored at <code>key</code>..
+     * @example
+     *     <pre>{@code
+     * client.set("mykey", "This is a string").get();
+     * String substring = client.getrange("mykey", 0, 3).get();
+     * assert substring.equals("This");
+     * String substring = client.getrange("mykey", -3, -1).get();
+     * assert substring.equals("ing"); // extracted last 3 characters of a string
+     * }</pre>
+     */
+    CompletableFuture<String> getrange(String key, int start, int end);
 }

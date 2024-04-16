@@ -50,6 +50,8 @@ async def transaction_test(
     args.append(value)
     transaction.strlen(key)
     args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
 
     transaction.persist(key)
     args.append(False)
@@ -162,6 +164,12 @@ async def transaction_test(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    transaction.spop(key7)
+    args.append("bar")
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.spop_count(key7, 4)
+    args.append({"foo", "bar"})
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4)
