@@ -115,6 +115,7 @@ public class TransactionTestUtilities {
         baseTransaction.zmscore(key8, new String[] {"two", "three"});
         baseTransaction.zrange(key8, new RangeByIndex(0, 1));
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
+        baseTransaction.zrangestore(key8, key8, new RangeByIndex(0, -1));
         baseTransaction.zscore(key8, "two");
         baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
         baseTransaction.zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY);
@@ -219,6 +220,7 @@ public class TransactionTestUtilities {
             new Double[] {2.0, 3.0}, // zmscore(key8, new String[] {"two", "three"})
             new String[] {"two", "three"}, // zrange
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
+            2L, // zrangestore(key8, key8, new RangeByIndex(0, -1))
             2.0, // zscore(key8, "two")
             2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
             2L, // zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)

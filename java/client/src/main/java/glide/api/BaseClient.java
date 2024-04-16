@@ -69,6 +69,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -811,6 +812,24 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zrangestore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull RangeQuery rangeQuery,
+            boolean reverse) {
+        String[] arguments =
+                RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse);
+
+        return commandManager.submitNewCommand(ZRangeStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(
+            @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
+        return this.zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
     public CompletableFuture<String> xadd(@NonNull String key, @NonNull Map<String, String> values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
@@ -879,7 +898,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> zrange(
             @NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
-        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, false);
+        String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, false);
 
         return commandManager.submitNewCommand(
                 Zrange,
@@ -895,7 +914,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
-        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, true);
+        String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, true);
 
         return commandManager.submitNewCommand(Zrange, arguments, this::handleMapResponse);
     }
