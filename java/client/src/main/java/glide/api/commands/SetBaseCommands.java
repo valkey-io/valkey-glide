@@ -100,8 +100,8 @@ public interface SetBaseCommands {
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
-     * @apiNote In cluster mode, <code>destination</code> and all <code>keys</code> should be mapped
-     *     to the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys of the sets to diff.
