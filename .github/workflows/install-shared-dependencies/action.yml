@@ -33,7 +33,7 @@ runs:
           run: |
               brew update
               brew upgrade || true
-              brew install git gcc pkgconfig openssl redis coreutils
+              brew install git gcc pkgconfig openssl coreutils
 
         - name: Install software dependencies for Ubuntu
           shell: bash
@@ -46,7 +46,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl redis6 gettext --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext wget jemalloc-devel lua-devel make gcc tar gzip --allowerasing
 
         - name: Install Rust toolchain
           uses: dtolnay/rust-toolchain@stable

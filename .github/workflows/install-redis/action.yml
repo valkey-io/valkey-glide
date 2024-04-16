@@ -28,20 +28,16 @@ runs:
                   ~/redis-binaries/${{ inputs.redis-version }}/redis-server
               key: ${{ runner.os }}-${{ inputs.redis-version }}-install-redis
 
-        - name: Install redis
+        - name: Build redis
           shell: bash
           if: steps.cache-redis.outputs.cache-hit != 'true'
           run: |
-              sudo apt-get update
               wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
               tar -xzvf ${{ inputs.redis-version }}.tar.gz;
-              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && sudo mv src/redis-server src/redis-cli ~/redis-binaries/${{ inputs.redis-version }} && popd;
-        
-        - name: Remove the source package
-          shell: bash
-          if: steps.cache-redis.outputs.cache-hit != 'true'
-          run: sudo rm -r redis-${{ inputs.redis-version }}
+              mkdir -p ~/redis-binaries/${{ inputs.redis-version }}
+              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && mv src/redis-server src/redis-cli ~/redis-binaries/${{ inputs.redis-version }} && popd;
 
-        - name: Copy executable to place
+        - name: Install
           shell: bash
-          run: sudo cp ~/redis-binaries/${{ inputs.redis-version }}/redis-server ~/redis-binaries/${{ inputs.redis-version }}/redis-cli /usr/bin/
+          run: |
+            echo $HOME/redis-binaries/${{ inputs.redis-version }} >> $GITHUB_PATH
