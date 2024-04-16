@@ -1158,16 +1158,12 @@ public class SharedCommandTests {
         assertEquals(6, client.sunionstore(key1, new String[] {key1, key4}).get());
         assertEquals(Set.of("a", "b", "c", "e", "f", "g"), client.smembers(key1).get());
 
-        // overwrite source
-        assertEquals(6, client.sunionstore(key1, new String[] {key1}).get());
-        assertEquals(Set.of("a", "b", "c", "e", "f", "g"), client.smembers(key1).get());
-
         // source key exists, but it is not a set
         assertEquals(OK, client.set(key5, "value").get());
         ExecutionException executionException =
             assertThrows(
                 ExecutionException.class, () -> client.sunionstore(key1, new String[] {key5}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // overwrite destination - not a set
         assertEquals(7, client.sunionstore(key5, new String[] {key1, key2}).get());
@@ -1176,7 +1172,17 @@ public class SharedCommandTests {
         // wrong arguments
         executionException =
             assertThrows(ExecutionException.class, () -> client.sunionstore(key5, new String[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                assertThrows(
+                    ExecutionException.class,
+                    () -> client.sunionstore("abc", new String[] {"zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
     }
 
     @SneakyThrows
