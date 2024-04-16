@@ -66,6 +66,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
@@ -101,6 +102,7 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -834,6 +836,22 @@ public abstract class BaseClient
     public CompletableFuture<Long> zrangestore(
             @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
         return this.zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(
+            @NonNull String destination,
+            @NonNull String[] keys,
+            @NonNull WeightAggregateOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs());
+        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(@NonNull String destination, @NonNull String[] keys) {
+        return zinterstore(destination, keys, WeightAggregateOptions.builder().build());
     }
 
     @Override
