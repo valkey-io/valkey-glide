@@ -79,7 +79,9 @@ public interface SetBaseCommands {
     /**
      * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
      * </code>, removing it from the source set. Creates a new destination set if needed. The
-     * operation is atomic.
+     * operation is atomic.<br>
+     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the same
+     * <code>hash slot</code>.
      *
      * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
      * @param source The key of the set to remove the element from.
@@ -89,7 +91,7 @@ public interface SetBaseCommands {
      *     not exist or the element is not a member of the source set.
      * @example
      *     <pre>{@code
-     * boolean moved = client.smove("set1", "set2", "element").get();
+     * Boolean moved = client.smove("set1", "set2", "element").get();
      * assert moved;
      * }</pre>
      */
