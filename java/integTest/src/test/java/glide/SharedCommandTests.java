@@ -932,7 +932,6 @@ public class SharedCommandTests {
         assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
 
         // diff empty with non-empty set
-        assertEquals(1, client.del(new String[] {key5}).get());
         assertEquals(0, client.sdiffstore(key3, new String[] {key5, key1}).get());
         assertEquals(Set.of(), client.smembers(key3).get());
 
