@@ -105,8 +105,10 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
+
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zrank(key8, "one");
@@ -214,6 +216,7 @@ public class TransactionTestUtilities {
             Set.of("baz"),
             2L, // sadd(setKey2, new String[] { "a", "b" })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")
             4.0,
