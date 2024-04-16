@@ -420,6 +420,67 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery);
 
     /**
+     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
+     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.<br>
+     *
+     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @param destination The key for the destination sorted set.
+     * @param source The key of the source sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @param reverse If <code>true</code>, reverses the sorted set, with index <code>0</code> as the
+     *     element with the highest score.
+     * @return The number of elements in the resulting sorted set.
+     * @example
+     *     <pre>{@code
+     * RangeByIndex query1 = new RangeByIndex(0, -1); // Query for all members.
+     * Long payload1 = client.zrangestore("destinationKey", "mySortedSet", query1, true).get();
+     * assert payload1 == 7L;
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3)); // Query for members with scores within the range of negative infinity to 3.
+     * Long payload2 = client.zrangestore("destinationKey", "mySortedSet", query2, false).get();
+     * assert payload2 == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zrangestore(
+            String destination, String source, RangeQuery rangeQuery, boolean reverse);
+
+    /**
+     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
+     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.<br>
+     *
+     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @param destination The key for the destination sorted set.
+     * @param source The key of the source sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @return The number of elements in the resulting sorted set.
+     * @example
+     *     <pre>{@code
+     * RangeByIndex query1 = new RangeByIndex(0, -1); // Query for all members.
+     * Long payload1 = client.zrangestore("destinationKey", "mySortedSet", query1).get();
+     * assert payload1 == 7L;
+     *
+     * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3)); // Query for members with scores within the range of negative infinity to 3.
+     * Long payload2 = client.zrangestore("destinationKey", "mySortedSet", query2).get();
+     * assert payload2 == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zrangestore(String destination, String source, RangeQuery rangeQuery);
+
+    /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
      * scores ordered from low to high.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.

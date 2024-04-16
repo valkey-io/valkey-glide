@@ -27,8 +27,8 @@ dependencies {
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
-    testImplementation('org.junit.jupiter:junit-jupiter:5.6.2')
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 }
 
 ext {
