@@ -3,7 +3,7 @@ package glide.api.models;
 
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
-import static glide.api.models.commands.RangeOptions.createZrangeArgs;
+import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -81,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -96,6 +97,7 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -1643,6 +1645,58 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
+     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.<br>
+     *
+     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @param destination The key for the destination sorted set.
+     * @param source The key of the source sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @param reverse If <code>true</code>, reverses the sorted set, with index <code>0</code> as the
+     *     element with the highest score.
+     * @return Command Response - The number of elements in the resulting sorted set.
+     */
+    public T zrangestore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull RangeQuery rangeQuery,
+            boolean reverse) {
+        ArgsArray commandArgs =
+                buildArgs(RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse));
+        protobufTransaction.addCommands(buildCommand(ZRangeStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at <code>source</code>, into a new
+     * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.<br>
+     *
+     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @param destination The key for the destination sorted set.
+     * @param source The key of the source sorted set.
+     * @param rangeQuery The range query object representing the type of range query to perform.<br>
+     *     <ul>
+     *       <li>For range queries by index (rank), use {@link RangeByIndex}.
+     *       <li>For range queries by lexicographical order, use {@link RangeByLex}.
+     *       <li>For range queries by score, use {@link RangeByScore}.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set.
+     */
+    public T zrangestore(
+            @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
+        return getThis().zrangestore(destination, source, rangeQuery, false);
+    }
+
+    /**
      * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
      * between <code>minLex</code> and <code>maxLex</code>.
      *
@@ -1927,7 +1981,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     array.
      */
     public T zrange(@NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
-        ArgsArray commandArgs = buildArgs(createZrangeArgs(key, rangeQuery, reverse, false));
+        ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, false));
         protobufTransaction.addCommands(buildCommand(Zrange, commandArgs));
         return getThis();
     }
@@ -1975,7 +2029,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
-        ArgsArray commandArgs = buildArgs(createZrangeArgs(key, rangeQuery, reverse, true));
+        ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, true));
         protobufTransaction.addCommands(buildCommand(Zrange, commandArgs));
         return getThis();
     }

@@ -13,14 +13,15 @@ import lombok.RequiredArgsConstructor;
  * Arguments for {@link SortedSetBaseCommands#zcount}, {@link
  * SortedSetBaseCommands#zremrangebyrank}, {@link SortedSetBaseCommands#zremrangebylex(String,
  * LexRange, LexRange)}, {@link SortedSetBaseCommands#zremrangebyscore}, {@link
- * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangeWithScores}, and {@link
- * SortedSetBaseCommands#zlexcount}
+ * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangestore}, {@link
+ * SortedSetBaseCommands#zrangeWithScores}, and {@link SortedSetBaseCommands#zlexcount}
  *
  * @see <a href="https://redis.io/commands/zcount/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a>
  * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a>
  * @see <a href="https://redis.io/commands/zrange/">redis.io</a>
+ * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a>
  * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a>
  */
 public class RangeOptions {
@@ -298,9 +299,25 @@ public class RangeOptions {
         }
     }
 
-    public static String[] createZrangeArgs(
+    public static String[] createZRangeArgs(
             String key, RangeQuery rangeQuery, boolean reverse, boolean withScores) {
-        String[] arguments = new String[] {key, rangeQuery.getStart(), rangeQuery.getEnd()};
+        String[] arguments =
+                concatenateArrays(new String[] {key}, createZRangeBaseArgs(rangeQuery, reverse));
+        if (withScores) {
+            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
+        }
+
+        return arguments;
+    }
+
+    public static String[] createZRangeStoreArgs(
+            String destination, String source, RangeQuery rangeQuery, boolean reverse) {
+        return concatenateArrays(
+                new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse));
+    }
+
+    private static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
+        String[] arguments = new String[] {rangeQuery.getStart(), rangeQuery.getEnd()};
 
         if (rangeQuery instanceof RangeByScore) {
             arguments = concatenateArrays(arguments, new String[] {"BYSCORE"});
@@ -321,10 +338,6 @@ public class RangeOptions {
                                 Long.toString(rangeQuery.getLimit().getOffset()),
                                 Long.toString(rangeQuery.getLimit().getCount())
                             });
-        }
-
-        if (withScores) {
-            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
         }
 
         return arguments;
