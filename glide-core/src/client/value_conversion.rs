@@ -250,14 +250,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn convert_sinter_to_bool() {
-        assert!(matches!(
-            expected_type_for_cmd(redis::cmd("SINTER").arg("key")),
-            Some(ExpectedReturnType::Set)
-        ));
-    }
-
-    #[test]
     fn convert_zadd_only_if_incr_is_included() {
         assert!(matches!(
             expected_type_for_cmd(

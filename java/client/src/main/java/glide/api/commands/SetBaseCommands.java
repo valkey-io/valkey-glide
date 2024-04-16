@@ -136,7 +136,8 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sdiffstore(String destination, String[] keys);
 
     /**
-     * Gets the intersection of all the given sets.
+     * Gets the intersection of all the given sets.<br>
+     * In cluster mode, all <code>keys</code> should be mapped to the same <code>hash slot</code>.
      *
      * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
      * @param keys The keys of the sets.
