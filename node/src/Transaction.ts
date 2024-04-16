@@ -5,7 +5,10 @@
 import {
     ExpireOptions,
     InfoOptions,
-    ScoreLimit,
+    RangeByIndex,
+    RangeByLex,
+    RangeByScore,
+    ScoreBoundary,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -62,6 +65,7 @@ import {
     createSAdd,
     createSCard,
     createSMembers,
+    createSPop,
     createSRem,
     createSelect,
     createSet,
@@ -79,6 +83,8 @@ import {
     createZcount,
     createZpopmax,
     createZpopmin,
+    createZrange,
+    createZrangeWithScores,
     createZrank,
     createZrem,
     createZremRangeByRank,
@@ -677,6 +683,32 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSismember(key, member));
     }
 
+    /** Removes and returns one random member from the set value store at `key`.
+     * See https://redis.io/commands/spop/ for details.
+     * To pop multiple members, see `spopCount`.
+     *
+     * @param key - The key of the set.
+     *
+     * Command Response - the value of the popped member.
+     * If `key` does not exist, null will be returned.
+     */
+    public spop(key: string): T {
+        return this.addAndReturn(createSPop(key));
+    }
+
+    /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
+     * See https://redis.io/commands/spop/ for details.
+     *
+     * @param key - The key of the set.
+     * @param count - The count of the elements to pop from the set.
+     *
+     * Command Response - A list of popped elements will be returned depending on the set's length.
+     * If `key` does not exist, empty list will be returned.
+     */
+    public spopCount(key: string, count: number): T {
+        return this.addAndReturn(createSPop(key, count));
+    }
+
     /** Returns the number of keys in `keys` that exist in the database.
      * See https://redis.io/commands/exists/ for details.
      *
@@ -898,8 +930,60 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minScore` is greater than `maxScore`, 0 is returned.
      */
-    public zcount(key: string, minScore: ScoreLimit, maxScore: ScoreLimit): T {
+    public zcount(
+        key: string,
+        minScore: ScoreBoundary<number>,
+        maxScore: ScoreBoundary<number>,
+    ): T {
         return this.addAndReturn(createZcount(key, minScore, maxScore));
+    }
+
+    /** Returns the specified range of elements in the sorted set stored at `key`.
+     * ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+     *
+     * See https://redis.io/commands/zrange/ for more details.
+     * To get the elements with their scores, see `zrangeWithScores`.
+     *
+     * @param key - The key of the sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * For range queries by index (rank), use RangeByIndex.
+     * For range queries by lexicographical order, use RangeByLex.
+     * For range queries by score, use RangeByScore.
+     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     *
+     * Command Response - A list of elements within the specified range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+     */
+    public zrange(
+        key: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): T {
+        return this.addAndReturn(createZrange(key, rangeQuery, reverse));
+    }
+
+    /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
+     * Similar to ZRANGE but with a WITHSCORE flag.
+     * See https://redis.io/commands/zrange/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * For range queries by index (rank), use RangeByIndex.
+     * For range queries by lexicographical order, use RangeByLex.
+     * For range queries by score, use RangeByScore.
+     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     *
+     * Command Response - A map of elements and their scores within the specified range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+     */
+    public zrangeWithScores(
+        key: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): T {
+        return this.addAndReturn(
+            createZrangeWithScores(key, rangeQuery, reverse),
+        );
     }
 
     /** Returns the string representation of the type of the value stored at `key`.
@@ -1010,8 +1094,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByScore(
         key: string,
-        minScore: ScoreLimit,
-        maxScore: ScoreLimit,
+        minScore: ScoreBoundary<number>,
+        maxScore: ScoreBoundary<number>,
     ): T {
         return this.addAndReturn(
             createZremRangeByScore(key, minScore, maxScore),
@@ -1090,7 +1174,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
      * See https://redis.io/commands/xadd/ for more details.
      *
      * @param key - The key of the stream.
@@ -1106,12 +1190,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Trims the stream by evicting older entries.
+     * Trims the stream stored at `key` by evicting older entries.
      * See https://redis.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream.
+     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXtrim(key, options));

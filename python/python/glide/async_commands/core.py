@@ -294,6 +294,25 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Strlen, [key]))
 
+    async def rename(self, key: str, new_key: str) -> TOK:
+        """
+        Renames `key` to `new_key`.
+        If `newkey` already exists it is overwritten.
+        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+        See https://redis.io/commands/rename/ for more details.
+
+        Args:
+            key (str) : The key to rename.
+            new_key (str) : The new name of the key.
+
+        Returns:
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.Rename, [key, new_key])
+        )
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -766,6 +785,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
+    async def lpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.lpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.lpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.LPushX, [key] + elements)
+        )
+
     async def lpop(self, key: str) -> Optional[str]:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -905,6 +947,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.RPush, [key] + elements)
         )
 
+    async def rpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.rpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.rpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPushX, [key] + elements)
+        )
+
     async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
         """
         Removes and returns the last elements of the list stored at `key`.
@@ -1027,6 +1092,53 @@ class CoreCommands(Protocol):
                 3
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
+
+    async def spop(self, key: str) -> Optional[str]:
+        """
+        Removes and returns one random member from the set stored at `key`.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop multiple members, see `spop_count`.
+
+        Args:
+            key (str): The key of the set.
+
+        Returns:
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
+
+        Examples:
+            >>> await client.spop("my_set")
+                "value1" # Removes and returns a random member from the set "my_set".
+            >>> await client.spop("non_exiting_key")
+                None
+        """
+        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+
+    async def spop_count(self, key: str, count: int) -> Set[str]:
+        """
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop a single member, see `spop`.
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Returns:
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.spop_count("my_set", 2)
+                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
+            >>> await client.spop_count("non_exiting_key", 2)
+                Set()
+        """
+        return cast(
+            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+        )
 
     async def sismember(
         self,
@@ -1702,7 +1814,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
                 {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
-           >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
                 {'member4': -2.0, 'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
@@ -1800,6 +1912,54 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.Zrem, [key] + members),
+        )
+
+    async def zremrangebyscore(
+        self,
+        key: str,
+        min_score: Union[InfBound, ScoreBoundary],
+        max_score: Union[InfBound, ScoreBoundary],
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
+
+        See https://redis.io/commands/zremrangebyscore/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_score (Union[InfBound, ScoreBoundary]): The minimum score to remove from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreBoundary representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreBoundary]): The maximum score to remove up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreBoundary representing a specific score and inclusivity.
+        Returns:
+            int: The number of members that were removed from the sorted set.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `min_score` is greater than `max_score`, 0 is returned.
+
+        Examples:
+            >>> await client.zremrangebyscore("my_sorted_set",  ScoreBoundary(5.0 , is_inclusive=true) , InfBound.POS_INF)
+                2  # Indicates that  2 members with scores between 5.0 (not exclusive) and +inf have been removed from the sorted set "my_sorted_set".
+            >>> await client.zremrangebyscore("non_existing_sorted_set", ScoreBoundary(5.0 , is_inclusive=true) , ScoreBoundary(10.0 , is_inclusive=false))
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        score_min = (
+            min_score.value["score_arg"]
+            if type(min_score) == InfBound
+            else min_score.value
+        )
+        score_max = (
+            max_score.value["score_arg"]
+            if type(max_score) == InfBound
+            else max_score.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByScore, [key, score_min, score_max]
+            ),
         )
 
     async def zscore(self, key: str, member: str) -> Optional[float]:

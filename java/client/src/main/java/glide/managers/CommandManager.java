@@ -6,7 +6,8 @@ import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
-import glide.api.models.configuration.RequestRoutingConfiguration.SimpleRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
@@ -183,11 +184,7 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
-
-        RedisRequest.Builder builder =
-                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
-
-        return builder;
+        return RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
     }
 
     /**
@@ -201,16 +198,13 @@ public class CommandManager {
      */
     protected RedisRequest.Builder prepareRedisRequest(
             Script script, List<String> keys, List<String> args) {
-        RedisRequest.Builder builder =
-                RedisRequest.newBuilder()
-                        .setScriptInvocation(
-                                ScriptInvocation.newBuilder()
-                                        .setHash(script.getHash())
-                                        .addAllKeys(keys)
-                                        .addAllArgs(args)
-                                        .build());
-
-        return builder;
+        return RedisRequest.newBuilder()
+                .setScriptInvocation(
+                        ScriptInvocation.newBuilder()
+                                .setHash(script.getHash())
+                                .addAllKeys(keys)
+                                .addAllArgs(args)
+                                .build());
     }
 
     /**
@@ -244,23 +238,25 @@ public class CommandManager {
             commandArgs.addArgs(arg);
         }
 
-        var builder =
-                RedisRequest.newBuilder()
-                        .setSingleCommand(
-                                Command.newBuilder()
-                                        .setRequestType(requestType)
-                                        .setArgsArray(commandArgs.build())
-                                        .build());
-
-        return builder;
+        return RedisRequest.newBuilder()
+                .setSingleCommand(
+                        Command.newBuilder()
+                                .setRequestType(requestType)
+                                .setArgsArray(commandArgs.build())
+                                .build());
     }
 
     private RedisRequest.Builder prepareRedisRequestRoute(RedisRequest.Builder builder, Route route) {
 
-        if (route instanceof SimpleRoute) {
+        if (route instanceof SimpleMultiNodeRoute) {
             builder.setRoute(
                     Routes.newBuilder()
-                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleRoute) route).ordinal()))
+                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleMultiNodeRoute) route).getOrdinal()))
+                            .build());
+        } else if (route instanceof SimpleSingleNodeRoute) {
+            builder.setRoute(
+                    Routes.newBuilder()
+                            .setSimpleRoutes(SimpleRoutes.forNumber(((SimpleSingleNodeRoute) route).getOrdinal()))
                             .build());
         } else if (route instanceof SlotIdRoute) {
             builder.setRoute(
@@ -286,7 +282,8 @@ public class CommandManager {
                                             .setHost(((ByAddressRoute) route).getHost())
                                             .setPort(((ByAddressRoute) route).getPort())));
         } else {
-            throw new RequestException("Unknown type of route");
+            throw new RequestException(
+                    String.format("Unknown type of route: %s", route.getClass().getSimpleName()));
         }
         return builder;
     }

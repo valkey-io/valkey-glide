@@ -128,6 +128,23 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Strlen, [key])
 
+    def rename(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key`.
+        If `newkey` already exists it is overwritten.
+        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+        See https://redis.io/commands/rename/ for more details.
+
+        Args:
+            key (str) : The key to rename.
+            new_key (str) : The new name of the key.
+
+        Command response:
+            OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
+        """
+        return self.append_command(RequestType.Rename, [key, new_key])
+
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.
@@ -587,6 +604,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LPush, [key] + elements)
 
+    def lpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.LPushX, [key] + elements)
+
     def lpop(self: TTransaction, key: str) -> TTransaction:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -678,6 +710,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RPush, [key] + elements)
 
+    def rpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Command response:
+            int: The length of the list after the push operation.
+        """
+        return self.append_command(RequestType.RPushX, [key] + elements)
+
     def rpop(self: TTransaction, key: str, count: Optional[int] = None) -> TTransaction:
         """
         Removes and returns the last elements of the list stored at `key`.
@@ -766,6 +813,39 @@ class BaseTransaction:
             int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
         """
         return self.append_command(RequestType.SCard, [key])
+
+    def spop(self: TTransaction, key: str) -> TTransaction:
+        """
+        Removes and returns one random member from the set stored at `key`.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop multiple members, see `spop_count`.
+
+        Args:
+            key (str): The key of the set.
+
+        Commands response:
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
+        """
+        return self.append_command(RequestType.Spop, [key])
+
+    def spop_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop a single member, see `spop`.
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Commands response:
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, an empty set will be returned.
+        """
+        return self.append_command(RequestType.Spop, [key, str(count)])
 
     def sismember(
         self: TTransaction,
@@ -1388,6 +1468,45 @@ class BaseTransaction:
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
         """
         return self.append_command(RequestType.Zrem, [key] + members)
+
+    def zremrangebyscore(
+        self: TTransaction,
+        key: str,
+        min_score: Union[InfBound, ScoreBoundary],
+        max_score: Union[InfBound, ScoreBoundary],
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
+
+        See https://redis.io/commands/zremrangebyscore/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_score (Union[InfBound, ScoreBoundary]): The minimum score to remove from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreBoundary representing a specific score and inclusivity.
+            max_score (Union[InfBound, ScoreBoundary]): The maximum score to remove up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or ScoreBoundary representing a specific score and inclusivity.
+
+        Commands response:
+            int: The number of members that were removed from the sorted set.
+            If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+            If `min_score` is greater than `max_score`, 0 is returned.
+        """
+        score_min = (
+            min_score.value["score_arg"]
+            if type(min_score) == InfBound
+            else min_score.value
+        )
+        score_max = (
+            max_score.value["score_arg"]
+            if type(max_score) == InfBound
+            else max_score.value
+        )
+        return self.append_command(
+            RequestType.ZRemRangeByScore, [key, score_min, score_max]
+        )
 
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:
         """

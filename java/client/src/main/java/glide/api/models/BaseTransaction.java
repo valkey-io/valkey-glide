@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZrangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -38,6 +39,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
@@ -45,6 +47,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -60,9 +63,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -70,11 +75,19 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
@@ -82,15 +95,23 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.RangeQuery;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import lombok.Getter;
@@ -136,7 +157,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * }</pre>
      */
     public T customCommand(String[] args) {
-
         ArgsArray commandArgs = buildArgs(args);
         protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));
         return getThis();
@@ -175,7 +195,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T ping(@NonNull String msg) {
         ArgsArray commandArgs = buildArgs(msg);
-
         protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
         return getThis();
     }
@@ -202,7 +221,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T info(@NonNull InfoOptions options) {
         ArgsArray commandArgs = buildArgs(options.toArgs());
-
         protobufTransaction.addCommands(buildCommand(Info, commandArgs));
         return getThis();
     }
@@ -217,7 +235,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T del(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Del, commandArgs));
         return getThis();
     }
@@ -232,7 +249,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
         return getThis();
     }
@@ -247,7 +263,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T set(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
-
         protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
         return getThis();
     }
@@ -285,7 +300,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T mget(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
         return getThis();
     }
@@ -315,7 +329,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
         return getThis();
     }
@@ -331,7 +344,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
         return getThis();
     }
@@ -349,7 +361,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T incrByFloat(@NonNull String key, double amount) {
         ArgsArray commandArgs = buildArgs(key, Double.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
         return getThis();
     }
@@ -364,7 +375,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T decr(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Decr, commandArgs));
         return getThis();
     }
@@ -380,7 +390,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T decrBy(@NonNull String key, long amount) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
         return getThis();
     }
@@ -401,6 +410,26 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
+     * offset</code>, for the entire length of <code>value</code>.<br>
+     * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
+     * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
+     * </code> if it doesn't exist.
+     *
+     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @param key The key of the string to update.
+     * @param offset The position in the string where <code>value</code> should be written.
+     * @param value The string written with <code>offset</code>.
+     * @return Command Response - The length of the string stored at <code>key</code> after it was
+     *     modified.
+     */
+    public T setrange(@NonNull String key, int offset, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, Integer.toString(offset), value);
+        protobufTransaction.addCommands(buildCommand(SetRange, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
@@ -411,7 +440,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hget(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-
         protobufTransaction.addCommands(buildCommand(HashGet, commandArgs));
         return getThis();
     }
@@ -448,7 +476,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hsetnx(@NonNull String key, @NonNull String field, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, field, value);
-
         protobufTransaction.addCommands(buildCommand(HSetNX, commandArgs));
         return getThis();
     }
@@ -466,7 +493,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hdel(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-
         protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
         return getThis();
     }
@@ -482,7 +508,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hlen(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(HLen, commandArgs));
         return getThis();
     }
@@ -497,7 +522,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hvals(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(Hvals, commandArgs));
         return getThis();
     }
@@ -516,7 +540,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hmget(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-
         protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
         return getThis();
     }
@@ -533,7 +556,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hexists(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-
         protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
         return getThis();
     }
@@ -549,7 +571,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hgetall(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
         return getThis();
     }
@@ -571,7 +592,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
         ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
         return getThis();
     }
@@ -594,7 +614,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
-
         protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
         return getThis();
     }
@@ -612,7 +631,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpush(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-
         protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
         return getThis();
     }
@@ -628,7 +646,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
         return getThis();
     }
@@ -646,7 +663,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lpopCount(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
         return getThis();
     }
@@ -672,8 +688,29 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lrange(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-
         protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return Command Response - The element at <code>index</code> in the list stored at <code>key
+     *     </code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     */
+    public T lindex(@NonNull String key, long index) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index));
+
+        protobufTransaction.addCommands(buildCommand(Lindex, commandArgs));
         return getThis();
     }
 
@@ -697,7 +734,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T ltrim(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-
         protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
         return getThis();
     }
@@ -737,7 +773,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lrem(@NonNull String key, long count, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count), element);
-
         protobufTransaction.addCommands(buildCommand(LRem, commandArgs));
         return getThis();
     }
@@ -755,7 +790,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpush(@NonNull String key, @NonNull String[] elements) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-
         protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
         return getThis();
     }
@@ -771,7 +805,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
         return getThis();
     }
@@ -788,7 +821,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T rpopCount(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-
         protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
         return getThis();
     }
@@ -807,7 +839,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T sadd(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-
         protobufTransaction.addCommands(buildCommand(SAdd, commandArgs));
         return getThis();
     }
@@ -824,7 +855,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T sismember(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(key, member);
-
         protobufTransaction.addCommands(buildCommand(SIsMember, commandArgs));
         return getThis();
     }
@@ -843,7 +873,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T srem(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-
         protobufTransaction.addCommands(buildCommand(SRem, commandArgs));
         return getThis();
     }
@@ -858,7 +887,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T smembers(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(SMembers, commandArgs));
         return getThis();
     }
@@ -873,8 +901,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
+     * new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sinterstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SInterStore, commandArgs));
         return getThis();
     }
 
@@ -889,7 +931,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T configGet(@NonNull String[] parameters) {
         ArgsArray commandArgs = buildArgs(parameters);
-
         protobufTransaction.addCommands(buildCommand(ConfigGet, commandArgs));
         return getThis();
     }
@@ -905,7 +946,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T configSet(@NonNull Map<String, String> parameters) {
         ArgsArray commandArgs = buildArgs(convertMapToKeyValueStringArray(parameters));
-
         protobufTransaction.addCommands(buildCommand(ConfigSet, commandArgs));
         return getThis();
     }
@@ -920,7 +960,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T exists(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Exists, commandArgs));
         return getThis();
     }
@@ -937,7 +976,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T unlink(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);
-
         protobufTransaction.addCommands(buildCommand(Unlink, commandArgs));
         return getThis();
     }
@@ -960,7 +998,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T expire(@NonNull String key, long seconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(seconds));
-
         protobufTransaction.addCommands(buildCommand(Expire, commandArgs));
         return getThis();
     }
@@ -1010,7 +1047,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T expireAt(@NonNull String key, long unixSeconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(unixSeconds));
-
         protobufTransaction.addCommands(buildCommand(ExpireAt, commandArgs));
         return getThis();
     }
@@ -1061,7 +1097,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T pexpire(@NonNull String key, long milliseconds) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(milliseconds));
-
         protobufTransaction.addCommands(buildCommand(PExpire, commandArgs));
         return getThis();
     }
@@ -1253,7 +1288,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
             @NonNull ZaddOptions options) {
-        return getThis().zadd(key, membersScoresMap, options, false);
+        return zadd(key, membersScoresMap, options, false);
     }
 
     /**
@@ -1270,7 +1305,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
-        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
     }
 
     /**
@@ -1283,7 +1318,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements added to the sorted set.
      */
     public T zadd(@NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
-        return getThis().zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
     }
 
     /**
@@ -1331,7 +1366,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The score of the member.
      */
     public T zaddIncr(@NonNull String key, @NonNull String member, double increment) {
-        return getThis().zaddIncr(key, member, increment, ZaddOptions.builder().build());
+        return zaddIncr(key, member, increment, ZaddOptions.builder().build());
     }
 
     /**
@@ -1362,7 +1397,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     return <code>0</code>.
      */
     public T zcard(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Zcard, commandArgs));
         return getThis();
     }
@@ -1382,7 +1417,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmin(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, Long.toString(count)});
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(ZPopMin, commandArgs));
         return getThis();
     }
@@ -1398,7 +1433,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmin(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ZPopMin, commandArgs));
         return getThis();
     }
@@ -1418,7 +1453,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmax(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, Long.toString(count)});
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(ZPopMax, commandArgs));
         return getThis();
     }
@@ -1434,7 +1469,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zpopmax(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ZPopMax, commandArgs));
         return getThis();
     }
@@ -1450,7 +1485,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, <code>null</code> is returned.
      */
     public T zscore(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member});
+        ArgsArray commandArgs = buildArgs(key, member);
         protobufTransaction.addCommands(buildCommand(ZScore, commandArgs));
         return getThis();
     }
@@ -1458,7 +1493,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
      * scores ordered from low to high.<br>
-     * To get the rank of <code>member</code> with it's score, see <code>zrankWithScore</code>.
+     * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1468,13 +1503,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>null</code> will be returned.
      */
     public T zrank(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member});
+        ArgsArray commandArgs = buildArgs(key, member);
         protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
         return getThis();
     }
 
     /**
-     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with it's
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -1486,13 +1521,200 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>null</code> will be returned.
      */
     public T zrankWithScore(@NonNull String key, @NonNull String member) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, member, WITH_SCORE_REDIS_API});
+        ArgsArray commandArgs = buildArgs(key, member, WITH_SCORE_REDIS_API);
         protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
         return getThis();
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Returns the scores associated with the specified <code>members</code> in the sorted set stored
+     * at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members in the sorted set.
+     * @return Command Response - An <code>Array</code> of scores of the <code>members</code>.<br>
+     *     If a <code>member</code> does not exist, the corresponding value in the <code>Array</code>
+     *     will be <code>null</code>.
+     */
+    public T zmscore(@NonNull String key, @NonNull String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+        protobufTransaction.addCommands(buildCommand(ZMScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.<br>
+     * To get the elements with their scores, see {@link #zdiffWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return Command Response - An <code>array</code> of elements representing the difference
+     *     between the sorted sets. <br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>array</code>.
+     */
+    public T zdiff(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, Long.toString(keys.length)));
+        protobufTransaction.addCommands(buildCommand(ZDiff, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     *
+     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return Command Response - A <code>Map</code> of elements and their scores representing the
+     *     difference between the sorted sets.<br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty sorted set, and the
+     *     command returns an empty <code>Map</code>.
+     */
+    public T zdiffWithScores(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
+        arguments = ArrayUtils.add(arguments, WITH_SCORES_REDIS_API);
+        ArgsArray commandArgs = buildArgs(arguments);
+        protobufTransaction.addCommands(buildCommand(ZDiff, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets at
+     * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
+     * overwriting it if it already exists. Non-existent keys are treated as empty sets.
+     *
+     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @param destination The key for the resulting sorted set.
+     * @param keys The keys of the sorted sets to compare.
+     * @return Command Response - The number of members in the resulting sorted set stored at <code>
+     *     destination</code>.
+     */
+    public T zdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addAll(new String[] {destination, Long.toString(keys.length)}, keys));
+        protobufTransaction.addCommands(buildCommand(ZDiffStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
+     * <code>minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zcount/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to count from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to count up to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return Command Response - The number of members in the specified score range.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>maxScore < minScore</code>, <code>0</code> is returned.
+     */
+    public T zcount(@NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
+        protobufTransaction.addCommands(buildCommand(Zcount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with rank between <code>start
+     * </code> and <code>end</code>. Both <code>start</code> and <code>end</code> are zero-based
+     * indexes with <code>0</code> being the element with the lowest score. These indexes can be
+     * negative numbers, where they indicate offsets starting at the element with the highest score.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Command Response - The number of elements removed.<br>
+     *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
+     *     greater than <code>end</code>, <code>0</code> returned.<br>
+     *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the
+     *     actual end of the sorted set.<br>
+     *     If <code>key</code> does not exist <code>0</code> will be returned.
+     */
+    public T zremrangebyrank(@NonNull String key, long start, long end) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByRank, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
+     * between <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @param maxLex The maximum bound of the lexicographical range. Can be an implementation of
+     *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
+     *     representing a specific lex and inclusivity.
+     * @return Command Response - The number of members removed from the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minLex</code> is greater than <code>maxLex</code>, <code>0</code> is returned.
+     */
+    public T zremrangebylex(@NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByLex, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
+     * minScore</code> and <code>maxScore</code>.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minScore The minimum score to remove from. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @param maxScore The maximum score to remove to. Can be an implementation of {@link
+     *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
+     *     representing a specific score and inclusivity.
+     * @return Command Response - The number of members removed.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>minScore</code> is greater than <code>maxScore</code>, <code>0</code> is returned.
+     */
+    public T zremrangebyscore(
+            @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZRemRangeByScore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
+     * <code>minLex</code> and <code>maxLex</code>.
+     *
+     * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param minLex The minimum lex to count from. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @param maxLex The maximum lex to count up to. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @return Command Response - The number of members in the specified lex range.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and the command
+     *     returns <code>0</code>.<br>
+     *     If <code>maxLex < minLex</code>, <code>0</code> is returned.
+     */
+    public T zlexcount(@NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZLexCount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
@@ -1500,20 +1722,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The id of the added entry.
      */
     public T xadd(@NonNull String key, @NonNull Map<String, String> values) {
-        this.xadd(key, values, StreamAddOptions.builder().build());
-        return getThis();
+        return xadd(key, values, StreamAddOptions.builder().build());
     }
 
     /**
-     * Adds an entry to the specified stream.
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
      *
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
-     *     StreamAddOptions#makeStream} is set to <code>false</code> and no stream with the matching
-     *     <code>key</code> exists.
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
      */
     public T xadd(
             @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
@@ -1535,7 +1757,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T pttl(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-
         protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
         return getThis();
     }
@@ -1551,7 +1772,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     have an associated timeout, <code>true</code> if the timeout has been removed.
      */
     public T persist(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(new String[] {key});
+        ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Persist, commandArgs));
         return getThis();
     }
@@ -1581,6 +1802,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
+     * pivot</code>.
+     *
+     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
+     * @param pivot An element of the list.
+     * @param element The new element to insert.
+     * @return Command Response - The list length after a successful insert operation.<br>
+     *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
+     *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
+     */
+    public T linsert(
+            @NonNull String key,
+            @NonNull InsertPosition position,
+            @NonNull String pivot,
+            @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
+        protobufTransaction.addCommands(buildCommand(LInsert, commandArgs));
         return getThis();
     }
 
