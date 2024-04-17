@@ -1186,18 +1186,21 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns All members of the set.
-     * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     * @returns A set containing all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns an empty set.
      *
      * @example
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: ["member1", "member2", "member3"]
+     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<string[]> {
-        return this.createWritePromise(createSMembers(key));
+    public async smembers(key: string): Promise<Set<string>> {
+        const result = (await this.createWritePromise(
+            createSMembers(key),
+        )) as string[];
+        return new Set(result);
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -1274,25 +1277,28 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
-     * @returns A list of popped elements will be returned depending on the set's length.
-     * If `key` does not exist, empty list will be returned.
+     * @returns A set containing the popped elements, depending on the set's length.
+     * If `key` does not exist, an empty set will be returned.
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: []
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public spopCount(key: string, count: number): Promise<string[]> {
-        return this.createWritePromise(createSPop(key, count));
+    public async spopCount(key: string, count: number): Promise<Set<string>> {
+        const result = (await this.createWritePromise(
+            createSPop(key, count),
+        )) as string[];
+        return new Set(result);
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
