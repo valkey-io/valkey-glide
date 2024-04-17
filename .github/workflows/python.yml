@@ -180,8 +180,8 @@ jobs:
               run: |
                   yum install -y python3
 
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
               with:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
@@ -191,13 +191,6 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: 6.2.14
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility with pytest
               working-directory: ./python

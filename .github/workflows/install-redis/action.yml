@@ -35,7 +35,7 @@ runs:
               wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
               tar -xzvf ${{ inputs.redis-version }}.tar.gz;
               mkdir -p $HOME/redis-binaries/${{ inputs.redis-version }}
-              pushd redis-${{ inputs.redis-version }}
+              cd redis-${{ inputs.redis-version }}
               BUILD_TLS=yes make
               mv src/redis-server src/redis-cli $HOME/redis-binaries/${{ inputs.redis-version }}
 
