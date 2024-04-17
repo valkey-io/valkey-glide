@@ -204,6 +204,7 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
+                  platforms: linux/arm64
                   os: "ubuntu-latest-musl"
                   target: "aarch64-unknown-linux-musl"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
