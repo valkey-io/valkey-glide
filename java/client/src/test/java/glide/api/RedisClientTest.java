@@ -85,11 +85,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -1736,6 +1740,58 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void smismember_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] members = {"1", "2"};
+        String[] arguments = {"testKey", "1", "2"};
+        Boolean[] value = {true, false};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(SMIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.smismember(key, members);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sdiffstore_returns_success() {
+        // setup
+        String destination = "dest";
+        String[] keys = new String[] {"set1", "set2"};
+        String[] arguments = {"dest", "set1", "set2"};
+
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SDiffStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sdiffstore(destination, keys);
+
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void smove_returns_success() {
         // setup
         String source = "src";
@@ -1760,6 +1816,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sinter_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        Set<String> value = Set.of("1", "2");
+
+        CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<String>>submitNewCommand(eq(SInter), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<String>> response = service.sinter(keys);
+        Set<String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sinterstore_returns_success() {
         // setup
         String destination = "key";
@@ -1776,6 +1855,31 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.sinterstore(destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunionstore_returns_success() {
+        // setup
+        String destination = "key";
+        String[] keys = new String[] {"set1", "set2"};
+        String[] args = new String[] {"key", "set1", "set2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SUnionStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sunionstore(destination, keys);
         Long payload = response.get();
 
         // verify
@@ -2926,11 +3030,9 @@ public class RedisClientTest {
         CompletableFuture<String[]> testResponse = new CompletableFuture<>();
         String[] payload = new String[] {"UnixTime", "ms"};
         testResponse.complete(payload);
-
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Time), eq(new String[0]), any()))
                 .thenReturn(testResponse);
-
         // exercise
         CompletableFuture<String[]> response = service.time();
 

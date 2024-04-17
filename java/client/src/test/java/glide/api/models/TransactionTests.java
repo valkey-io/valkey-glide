@@ -70,11 +70,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -278,8 +282,20 @@ public class TransactionTests {
         transaction.smove("key1", "key2", "elem");
         results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
 
+        transaction.sinter(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInter, buildArgs("key1", "key2")));
+
         transaction.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
+
+        transaction.smismember("key", new String[] {"1", "2"});
+        results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
+
+        transaction.sunionstore("key", new String[] {"set1", "set2"});
+        results.add(
+                Pair.of(
+                        SUnionStore,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("set1").addArgs("set2").build()));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
@@ -485,6 +501,12 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+
+        transaction.sdiffstore("key1", new String[] {"key2", "key3"});
+        results.add(
+                Pair.of(
+                        SDiffStore,
+                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
