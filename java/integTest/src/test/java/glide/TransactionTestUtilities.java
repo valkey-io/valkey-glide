@@ -108,6 +108,7 @@ public class TransactionTestUtilities {
         baseTransaction.smismember(key7, new String[] {"baz", "foo"});
 
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
+        baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.smove(key7, setKey2, "baz");
 
@@ -217,6 +218,7 @@ public class TransactionTestUtilities {
             Set.of("baz"),
             new Boolean[] {true, false}, // smismembmer(key7, new String[] {"baz", "foo"})
             2L, // sadd(setKey2, new String[] { "a", "b" })
+            2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
             true, // smove(key7, setKey2, "baz")
             3L,
