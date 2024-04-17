@@ -183,7 +183,7 @@ jobs:
     build-linux-musl-latest:
         runs-on: ubuntu-latest
         container:
-            image: node:18.19.0-alpine
+            image: arm64v8/node:18.19.0-alpine
         timeout-minutes: 15
         steps:
             - name: Install bash
@@ -204,7 +204,6 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  platforms: linux/arm64
                   os: "ubuntu-latest-musl"
                   target: "aarch64-unknown-linux-musl"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
