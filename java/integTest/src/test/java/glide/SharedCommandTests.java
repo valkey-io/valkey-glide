@@ -1161,8 +1161,8 @@ public class SharedCommandTests {
         // source key exists, but it is not a set
         assertEquals(OK, client.set(key5, "value").get());
         ExecutionException executionException =
-            assertThrows(
-                ExecutionException.class, () -> client.sunionstore(key1, new String[] {key5}).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.sunionstore(key1, new String[] {key5}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // overwrite destination - not a set
@@ -1171,15 +1171,15 @@ public class SharedCommandTests {
 
         // wrong arguments
         executionException =
-            assertThrows(ExecutionException.class, () -> client.sunionstore(key5, new String[0]).get());
+                assertThrows(ExecutionException.class, () -> client.sunionstore(key5, new String[0]).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // same-slot requirement
         if (client instanceof RedisClusterClient) {
             executionException =
-                assertThrows(
-                    ExecutionException.class,
-                    () -> client.sunionstore("abc", new String[] {"zxy", "lkn"}).get());
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sunionstore("abc", new String[] {"zxy", "lkn"}).get());
             assertInstanceOf(RequestException.class, executionException.getCause());
             assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
         }
