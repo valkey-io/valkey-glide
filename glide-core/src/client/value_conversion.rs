@@ -16,6 +16,7 @@ pub(crate) enum ExpectedReturnType {
     DoubleOrNull,
     ZrankReturnType,
     JsonToggleReturnType,
+    ArrayOfBools,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -159,6 +160,21 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        ExpectedReturnType::ArrayOfBools => match value {
+            Value::Array(array) => {
+                let array_of_bools = array
+                    .iter()
+                    .map(|v| Value::Boolean(from_owned_redis_value::<bool>(v.clone()).unwrap()))
+                    .collect();
+                Ok(Value::Array(array_of_bools))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of boolean",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -221,6 +237,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
         | b"SISMEMBER" | b"PERSIST" | b"SMOVE" => Some(ExpectedReturnType::Boolean),
+        b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
         b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -248,6 +265,21 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn convert_smismember() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SMISMEMBER").arg("key").arg("elem")),
+            Some(ExpectedReturnType::ArrayOfBools)
+        ));
+
+        let redis_response = Value::Array(vec![Value::Int(0), Value::Int(1)]);
+        let converted_response =
+            convert_to_expected_type(redis_response, Some(ExpectedReturnType::ArrayOfBools))
+                .unwrap();
+        let expected_response = Value::Array(vec![Value::Boolean(false), Value::Boolean(true)]);
+        assert_eq!(expected_response, converted_response);
+    }
 
     #[test]
     fn convert_zadd_only_if_incr_is_included() {
