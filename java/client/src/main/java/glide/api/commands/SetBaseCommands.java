@@ -118,6 +118,24 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean> sismember(String key, String member);
 
     /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets to diff.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sdiffstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sdiffstore(String destination, String[] keys);
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
