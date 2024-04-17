@@ -15,6 +15,8 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -109,5 +111,14 @@ public class TransactionTests {
 
         Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        var response = client.exec(new Transaction().lastsave()).get();
+        assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 }

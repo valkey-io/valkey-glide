@@ -127,6 +127,7 @@ pub enum RequestType {
     GetRange = 116,
     SMove = 117,
     SMIsMember = 118,
+    LastSave = 120,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -257,6 +258,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetRange => RequestType::GetRange,
             ProtobufRequestType::SMove => RequestType::SMove,
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
+            ProtobufRequestType::LastSave => RequestType::LastSave,
         }
     }
 }
@@ -383,6 +385,7 @@ impl RequestType {
             RequestType::GetRange => Some(cmd("GETRANGE")),
             RequestType::SMove => Some(cmd("SMOVE")),
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
+            RequestType::LastSave => Some(cmd("LASTSAVE")),
         }
     }
 }

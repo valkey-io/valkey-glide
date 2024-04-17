@@ -25,6 +25,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -265,5 +266,13 @@ public class CommandTests {
                 Long.parseLong(result[0]) > now,
                 "Time() result (" + result[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong(result[1]) < 1000000);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        long result = regularClient.lastsave().get();
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
     }
 }

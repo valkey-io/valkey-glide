@@ -159,6 +159,7 @@ enum RequestType {
     GetRange = 116;
     SMove = 117;
     SMIsMember = 118;
+    LastSave = 120;
 }
 
 message Command {

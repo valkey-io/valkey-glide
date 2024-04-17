@@ -21,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
@@ -770,5 +771,46 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(payload, response.get().getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lastsave_returns_success() {
+        // setup
+        Long value = 42L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LastSave), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lastsave();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lastsave_returns_with_route_success() {
+        // setup
+        Long value = 42L;
+        CompletableFuture<ClusterValue<Long>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Long>>submitNewCommand(
+                        eq(LastSave), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Long>> response = service.lastsave(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get().getSingleValue());
     }
 }

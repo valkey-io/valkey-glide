@@ -15,6 +15,8 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -81,5 +83,13 @@ public class ClusterTransactionTests {
 
         Object[] results = clusterClient.exec(transaction, RANDOM).get();
         assertArrayEquals(expectedResult, results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
+        assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 }
