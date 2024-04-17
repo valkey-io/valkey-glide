@@ -105,6 +105,7 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
+        baseTransaction.smismember(key7, new String[] {"baz", "foo"});
         baseTransaction.sinter(new String[] {key7, key7});
 
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
@@ -217,6 +218,7 @@ public class TransactionTestUtilities {
             1L,
             true, // sismember(key7, "baz")
             Set.of("baz"), // smembers(key7)
+            new Boolean[] {true, false}, // smismembmer(key7, new String[] {"baz", "foo"})
             Set.of("baz"), // sinter(new String[] { key7, key7 })
             2L, // sadd(setKey2, new String[] { "a", "b" })
             3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
