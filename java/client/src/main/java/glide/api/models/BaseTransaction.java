@@ -1889,7 +1889,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * was made since then.
      *
      * @see <a href="https://redis.io/commands/lastsave/">redis.io</a> for details.
-     * @return Command Response - <code>Unix time</code> of the last DB save executed with success.
+     * @return Command Response - <code>UNIX TIME</code> of the last DB save executed with success.
      */
     public T lastsave() {
         protobufTransaction.addCommands(buildCommand(LastSave));

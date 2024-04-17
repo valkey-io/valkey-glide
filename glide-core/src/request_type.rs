@@ -373,7 +373,7 @@ impl RequestType {
             RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
             RequestType::GetRange => Some(cmd("GETRANGE")),
             RequestType::SMove => Some(cmd("SMOVE")),
-            RequestType::LastSave => Some(cmd("LastSave")),
+            RequestType::LastSave => Some(cmd("LASTSAVE")),
         }
     }
 }
