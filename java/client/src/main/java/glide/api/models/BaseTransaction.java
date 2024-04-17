@@ -71,6 +71,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -989,6 +990,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T sinterstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
         protobufTransaction.addCommands(buildCommand(SInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sunionstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SUnionStore, commandArgs));
         return getThis();
     }
 
