@@ -152,6 +152,7 @@ enum RequestType {
     ZLexCount = 109;
     Append = 110;
     SDiffStore = 112;
+    SInter = 113;
     SInterStore = 114;
     ZRangeStore = 115;
     GetRange = 116;
