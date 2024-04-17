@@ -2970,7 +2970,6 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
-
     @SneakyThrows
     @Test
     public void time_returns_success() {
@@ -2980,7 +2979,7 @@ public class RedisClientTest {
         testResponse.complete(payload);
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(Time), eq(new String[0]), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
         // exercise
         CompletableFuture<String[]> response = service.time();
 
