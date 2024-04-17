@@ -73,6 +73,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
@@ -285,6 +286,9 @@ public class TransactionTests {
 
         transaction.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
+
+        transaction.smismember("key", new String[] {"1", "2"});
+        results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
 
         transaction.sunionstore("key", new String[] {"set1", "set2"});
         results.add(
