@@ -133,16 +133,9 @@ jobs:
                   target: "x86_64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: 6.2.14
-
             - name: Test compatibility
+              run: npm test -- -t "set and get flow works"
               working-directory: ./node
-              run: |
-                npm install --save-dev jest
-                npm test -- -t "set and get flow works"
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
@@ -168,18 +161,6 @@ jobs:
               run: |
                   yum install -y nodejs
 
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: 6.2.14
-
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
@@ -188,7 +169,5 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility
+              run: npm test -- -t "set and get flow works"
               working-directory: ./node
-              run: |
-                npm install --save-dev jest
-                npm test -- -t "set and get flow works"
