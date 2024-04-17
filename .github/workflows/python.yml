@@ -138,8 +138,8 @@ jobs:
             - name: Set up Homebrew
               uses: Homebrew/actions/setup-homebrew@master
 
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
               with:
                   os: "macos-latest"
                   target: "x86_64-apple-darwin"
@@ -149,13 +149,6 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: 6.2.14
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "macos-latest"
-                  target: "x86_64-apple-darwin"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility with pytest
               working-directory: ./python

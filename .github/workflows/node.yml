@@ -125,18 +125,6 @@ jobs:
               run: |
                   npm i -g npm@8
 
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: "macos-latest"
-                  target: "x86_64-apple-darwin"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: 6.2.14
-
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
@@ -144,6 +132,11 @@ jobs:
                   named_os: "darwin"
                   target: "x86_64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install redis
+              uses: ./.github/workflows/install-redis
+              with:
+                  redis-version: 6.2.14
 
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"

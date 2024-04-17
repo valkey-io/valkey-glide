@@ -34,10 +34,12 @@ runs:
           run: |
               wget https://github.com/redis/redis/archive/${{ inputs.redis-version }}.tar.gz;
               tar -xzvf ${{ inputs.redis-version }}.tar.gz;
-              mkdir -p ~/redis-binaries/${{ inputs.redis-version }}
-              pushd redis-${{ inputs.redis-version }} && BUILD_TLS=yes make && mv src/redis-server src/redis-cli ~/redis-binaries/${{ inputs.redis-version }} && popd;
+              mkdir -p $HOME/redis-binaries/${{ inputs.redis-version }}
+              pushd redis-${{ inputs.redis-version }}
+              BUILD_TLS=yes make
+              mv src/redis-server src/redis-cli $HOME/redis-binaries/${{ inputs.redis-version }}
 
-        - name: Install
+        - name: Install redis
           shell: bash
           run: |
             echo $HOME/redis-binaries/${{ inputs.redis-version }} >> $GITHUB_PATH

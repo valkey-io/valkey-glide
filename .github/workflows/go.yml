@@ -58,7 +58,6 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install redis
-              if: ${{ matrix.os == 'ubuntu-latest' }}
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
@@ -84,7 +83,7 @@ jobs:
               run: make test
 
     build-amazonlinux-latest:
-#        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'aws'
         strategy:
             # Run all jobs
             fail-fast: false
