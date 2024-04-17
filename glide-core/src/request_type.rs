@@ -124,7 +124,7 @@ pub enum RequestType {
     ZRangeStore = 115,
     GetRange = 116,
     SMove = 117,
-    SInter = 119,
+    SInter = 113,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {

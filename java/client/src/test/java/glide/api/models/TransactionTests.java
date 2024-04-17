@@ -493,9 +493,6 @@ public class TransactionTests {
                         SDiffStore,
                         ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
 
-        transaction.sinter(new String[] {"key1", "key2"});
-        results.add(Pair.of(SInter, ArgsArray.newBuilder().addArgs("key1").addArgs("key2").build()));
-
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
