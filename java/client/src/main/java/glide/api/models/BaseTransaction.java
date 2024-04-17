@@ -65,12 +65,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -978,6 +980,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Gets the intersection of all the given sets.
+     *
+     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - A <code>Set</code> of members which are present in all given sets.
+     *     <br>
+     *     Missing or empty input sets cause an empty response.
+     */
+    public T sinter(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(SInter, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
@@ -989,6 +1006,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T sinterstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
         protobufTransaction.addCommands(buildCommand(SInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sunionstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SUnionStore, commandArgs));
         return getThis();
     }
 

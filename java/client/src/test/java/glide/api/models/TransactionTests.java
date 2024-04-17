@@ -70,12 +70,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -279,13 +281,20 @@ public class TransactionTests {
         transaction.smove("key1", "key2", "elem");
         results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
 
+        transaction.sinter(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInter, buildArgs("key1", "key2")));
+
         transaction.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
 
         transaction.smismember("key", new String[] {"1", "2"});
+        results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
+
+        transaction.sunionstore("key", new String[] {"set1", "set2"});
         results.add(
                 Pair.of(
-                        SMIsMember, ArgsArray.newBuilder().addArgs("key").addArgs("1").addArgs("2").build()));
+                        SUnionStore,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("set1").addArgs("set2").build()));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
