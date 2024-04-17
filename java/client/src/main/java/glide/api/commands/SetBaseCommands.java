@@ -136,6 +136,26 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sdiffstore(String destination, String[] keys);
 
     /**
+     * Gets the intersection of all the given sets.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
+     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return A <code>Set</code> of members which are present in all given sets.<br>
+     *     If one or more sets do not exist, an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * Set<String> values = client.sinter(new String[] {"set1", "set2"}).get();
+     * assert values.contains("element"); // Indicates that these sets have a common element
+     *
+     * Set<String> values = client.sinter(new String[] {"set1", "nonExistingSet"}).get();
+     * assert values.size() == 0;
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> sinter(String[] keys);
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
