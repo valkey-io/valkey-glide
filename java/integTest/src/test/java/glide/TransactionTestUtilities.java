@@ -105,6 +105,7 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
+        baseTransaction.sinter(new String[] {key7, key7});
 
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
         baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
@@ -214,7 +215,8 @@ public class TransactionTestUtilities {
             1L,
             1L,
             true, // sismember(key7, "baz")
-            Set.of("baz"),
+            Set.of("baz"), // smembers(key7)
+            Set.of("baz"), // sinter(new String[] { key7, key7 })
             2L, // sadd(setKey2, new String[] { "a", "b" })
             2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
