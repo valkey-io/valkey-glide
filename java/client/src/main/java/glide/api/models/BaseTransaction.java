@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -1788,6 +1789,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T time() {
         protobufTransaction.addCommands(buildCommand(Time));
+        return getThis();
+    }
+
+    /**
+     * Synchronously saves the DataBase.<br>
+     * This command is not available in transaction starting from Redis version 7.
+     *
+     * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code>
+     */
+    public T save() {
+        protobufTransaction.addCommands(buildCommand(Save));
         return getThis();
     }
 

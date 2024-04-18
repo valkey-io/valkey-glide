@@ -13,6 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
@@ -131,5 +132,10 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
                 Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> save() {
+        return commandManager.submitNewCommand(Save, new String[0], this::handleStringResponse);
     }
 }

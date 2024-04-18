@@ -133,4 +133,17 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String[]> time();
+
+    /**
+     * Synchronously saves the DataBase.
+     *
+     * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
+     * @return <code>OK</code>
+     * @example
+     *     <pre>{@code
+     * String response = client.save().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> save();
 }

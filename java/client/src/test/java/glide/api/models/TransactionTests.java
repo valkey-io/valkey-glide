@@ -72,6 +72,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -409,6 +410,9 @@ public class TransactionTests {
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
+
+        transaction.save();
+        results.add(Pair.of(Save, buildArgs()));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));

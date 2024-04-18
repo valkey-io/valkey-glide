@@ -9,11 +9,17 @@ import glide.api.models.ClusterValue;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.exceptions.RequestException;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
+import org.apache.commons.lang3.tuple.Pair;
 
 @UtilityClass
 public class TestUtilities {
@@ -75,5 +81,28 @@ public class TestUtilities {
             commonClusterClientConfig() {
         return RedisClusterClientConfiguration.builder()
                 .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
+    }
+
+    /**
+     * Run a command and expect a response or a given error. Both cases are OK.
+     *
+     * @param lambda Client command wrapped by a lambda to execute.
+     * @param error An error to expect. Any other error is rethrown.
+     * @return Pair of response + null if command succeeded; or null + error if got the expected
+     *     error.
+     * @param <T> Command return type.
+     */
+    @SneakyThrows
+    public static <T> Pair<T, String> tryCommandWithExpectedError(
+            Supplier<CompletableFuture<T>> lambda, String error) {
+        try {
+            return Pair.of(lambda.get().get(), null);
+        } catch (ExecutionException ee) {
+            // Check for specific error
+            if (ee.getCause() instanceof RequestException && ee.getCause().getMessage().contains(error)) {
+                return Pair.of(null, ee.getCause().getMessage());
+            }
+            throw ee;
+        }
     }
 }

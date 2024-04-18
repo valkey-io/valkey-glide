@@ -282,4 +282,35 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<String[]>> time(Route route);
+
+    /**
+     * Synchronously saves the DataBase.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
+     * @return <code>OK</code>
+     * @example
+     *     <pre>{@code
+     * String response = client.save().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> save();
+
+    /**
+     * Synchronously saves the DataBase.
+     *
+     * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.save(ALL_NODES).get();
+     * for (String nodeResponse : response.getMultiValue().values()) {
+     *     assert nodeResponse.equals("OK");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> save(Route route);
 }

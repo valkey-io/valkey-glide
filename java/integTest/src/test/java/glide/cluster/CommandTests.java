@@ -5,6 +5,7 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.tryCommandWithExpectedError;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -104,7 +105,7 @@ public class CommandTests {
                 RedisClusterClient.CreateClient(
                                 RedisClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
-                                        .requestTimeout(5000)
+                                        .requestTimeout(10000)
                                         .build())
                         .get();
     }
@@ -555,5 +556,17 @@ public class CommandTests {
                 Long.parseLong((String) serverTime[0]) > now,
                 "Time() result (" + serverTime[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong((String) serverTime[1]) < 1000000);
+    }
+
+    @Test
+    @SneakyThrows
+    public void save() {
+        String error = "Background save already in progress";
+        var response = tryCommandWithExpectedError(() -> clusterClient.save(), error);
+        assertTrue(response.getValue() != null || response.getKey().equals(OK));
+
+        var routedResponse = tryCommandWithExpectedError(() -> clusterClient.save(RANDOM), error);
+        assertTrue(
+                routedResponse.getValue() != null || routedResponse.getKey().getSingleValue().equals(OK));
     }
 }

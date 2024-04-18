@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.tryCommandWithExpectedError;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
@@ -48,6 +49,7 @@ public class CommandTests {
                 RedisClient.CreateClient(
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
+                                        .requestTimeout(10000)
                                         .build())
                         .get();
     }
@@ -265,5 +267,13 @@ public class CommandTests {
                 Long.parseLong(result[0]) > now,
                 "Time() result (" + result[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong(result[1]) < 1000000);
+    }
+
+    @Test
+    @SneakyThrows
+    public void save() {
+        String error = "Background save already in progress";
+        var response = tryCommandWithExpectedError(() -> regularClient.save(), error);
+        assertTrue(response.getValue() != null || response.getKey().equals(OK));
     }
 }

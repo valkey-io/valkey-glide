@@ -119,6 +119,7 @@ pub enum RequestType {
     ZRemRangeByLex = 108,
     ZLexCount = 109,
     SInterStore = 114,
+    Save = 119,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -241,6 +242,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
+            ProtobufRequestType::Save => RequestType::Save,
         }
     }
 }
@@ -359,6 +361,7 @@ impl RequestType {
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
+            RequestType::Save => Some(cmd("SAVE")),
         }
     }
 }

@@ -14,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
@@ -278,5 +279,22 @@ public class RedisClusterClient extends BaseClient
                                 ? ClusterValue.ofSingleValue(castArray(handleArrayResponse(response), String.class))
                                 : ClusterValue.ofMultiValue(
                                         castMapOfArrays(handleMapResponse(response), String.class)));
+    }
+
+    @Override
+    public CompletableFuture<String> save() {
+        return commandManager.submitNewCommand(Save, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> save(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Save,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
 }
