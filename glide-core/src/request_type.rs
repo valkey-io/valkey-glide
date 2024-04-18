@@ -129,6 +129,7 @@ pub enum RequestType {
     SMIsMember = 118,
     LastSave = 120,
     GeoAdd = 121,
+    GeoHash = 122,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -261,6 +262,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
             ProtobufRequestType::LastSave => RequestType::LastSave,
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
+            ProtobufRequestType::GeoHash => RequestType::GeoHash,
         }
     }
 }
@@ -389,6 +391,7 @@ impl RequestType {
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
             RequestType::LastSave => Some(cmd("LASTSAVE")),
             RequestType::GeoAdd => Some(cmd("GEOADD")),
+            RequestType::GeoHash => Some(cmd("GEOHASH")),
         }
     }
 }
