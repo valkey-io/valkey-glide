@@ -1474,7 +1474,9 @@ class TestCommands:
         assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0}
 
         assert (
-            await redis_client.zremrangebylex("non_existing_key", InfBound.NEG_INF, InfBound.POS_INF)
+            await redis_client.zremrangebylex(
+                "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
+            )
             == 0
         )
 
