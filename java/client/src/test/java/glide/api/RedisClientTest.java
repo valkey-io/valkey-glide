@@ -3006,6 +3006,8 @@ public class RedisClientTest {
         String encoding = "testEncoding";
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(encoding);
+
+        // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(ObjectEncoding), eq(new String[] {key}), any()))
                 .thenReturn(testResponse);
 
