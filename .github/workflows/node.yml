@@ -188,13 +188,13 @@ jobs:
             # image: node:18.19.0-alpine
         timeout-minutes: 15
         steps:
-            # - name: Install bash
-            #   run: |
-            #     apk add bash
-            #     apk add gettext
+            - name: Install bash
+              run: |
+                apk add bash
+                apk add gettext
 
-            # - name: Install git
-            #   run: apk add git
+            - name: Install git
+              run: apk add git
 
             - uses: actions/checkout@v4
 
