@@ -6,7 +6,12 @@ from typing import List, Union
 import pytest
 from glide import RequestError
 from glide.async_commands.core import GeospatialData
-from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    RangeByIndex,
+    ScoreBoundary,
+)
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -186,6 +191,8 @@ async def transaction_test(
     transaction.zcard(key8)
     args.append(3)
     transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
+    args.append(3)
+    transaction.zlexcount(key8, LexBoundary("a", is_inclusive=True), InfBound.POS_INF)
     args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
