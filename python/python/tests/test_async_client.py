@@ -8,7 +8,7 @@ import random
 import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Tuple, TypeVar, Union, cast
+from typing import Dict, List, TypeVar, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script, TimeoutError
