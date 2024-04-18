@@ -1610,14 +1610,14 @@ class BaseTransaction:
                 If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
                 If `max_lex < min_lex`, `0` is returned.
         """
-        lex_min = (
+        min_lex_str = (
             min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
         )
-        lex_max = (
+        max_lex_str = (
             max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
         )
 
-        return self.append_command(RequestType.ZLexCount, [key, lex_min, lex_max])
+        return self.append_command(RequestType.ZLexCount, [key, min_lex_str, max_lex_str])
 
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:
         """

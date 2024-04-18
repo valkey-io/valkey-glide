@@ -2111,16 +2111,16 @@ class CoreCommands(Protocol):
             >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
                 1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
         """
-        lex_min = (
+        min_lex_str = (
             min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
         )
-        lex_max = (
+        max_lex_str = (
             max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
         )
 
         return cast(
             int,
-            await self._execute_command(RequestType.ZLexCount, [key, lex_min, lex_max]),
+            await self._execute_command(RequestType.ZLexCount, [key, min_lex_str, max_lex_str]),
         )
 
     async def zscore(self, key: str, member: str) -> Optional[float]:
