@@ -1585,6 +1585,41 @@ class BaseTransaction:
             RequestType.ZRemRangeByScore, [key, score_min, score_max]
         )
 
+    def zremrangebylex(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Command response:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+        """
+        lex_min = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        lex_max = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(RequestType.ZRemRangeByLex, [key, lex_min, lex_max])
+
     def zlexcount(
         self: TTransaction,
         key: str,
