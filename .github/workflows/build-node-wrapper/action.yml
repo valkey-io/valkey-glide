@@ -58,6 +58,7 @@ runs:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
+              platforms: linux/arm64
 
         - name: Create package.json file
           uses: ./.github/workflows/node-create-package-file
