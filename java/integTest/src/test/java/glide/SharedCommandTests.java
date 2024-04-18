@@ -2189,29 +2189,17 @@ public class SharedCommandTests {
         assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
         assertNull(client.objectEncoding(nonExistingKey).get());
-        assertTrue("raw".equalsIgnoreCase(client.objectEncoding(stringRawKey).get()));
-        assertTrue("int".equalsIgnoreCase(client.objectEncoding(stringIntKey).get()));
-        assertTrue("embstr".equalsIgnoreCase(client.objectEncoding(stringEmbstrKey).get()));
-        assertTrue(
-                REDIS_VERSION.isLowerThan("7.0.0")
-                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(listListpackKey).get())
-                        : "listpack".equalsIgnoreCase(client.objectEncoding(listListpackKey).get()));
-        assertTrue("hashtable".equalsIgnoreCase(client.objectEncoding(setHashtableKey).get()));
-        assertTrue("intset".equalsIgnoreCase(client.objectEncoding(setIntsetKey).get()));
-        assertTrue(
-                REDIS_VERSION.isLowerThan("7.2.0")
-                        ? "hashtable".equalsIgnoreCase(client.objectEncoding(setListpackKey).get())
-                        : "listpack".equalsIgnoreCase(client.objectEncoding(setListpackKey).get()));
-        assertTrue("hashtable".equalsIgnoreCase(client.objectEncoding(hashHashtableKey).get()));
-        assertTrue(
-                REDIS_VERSION.isLowerThan("7.0.0")
-                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get())
-                        : "listpack".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get()));
-        assertTrue("skiplist".equalsIgnoreCase(client.objectEncoding(zsetSkiplistKey).get()));
-        assertTrue(
-                REDIS_VERSION.isLowerThan("7.0.0")
-                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(zsetListpackKey).get())
-                        : "listpack".equalsIgnoreCase(client.objectEncoding(zsetListpackKey).get()));
-        assertTrue("stream".equalsIgnoreCase(client.objectEncoding(streamKey).get()));
+        assertEquals("raw", client.objectEncoding(stringRawKey).get());
+        assertEquals("int", client.objectEncoding(stringIntKey).get());
+        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+        assertEquals(REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack", client.objectEncoding(listListpackKey).get());
+        assertEquals("hashtable", client.objectEncoding(setHashtableKey).get());
+        assertEquals("intset", client.objectEncoding(setIntsetKey).get());
+        assertEquals(REDIS_VERSION.isLowerThan("7.2.0") ? "hashtable" : "listpack", client.objectEncoding(setListpackKey).get());
+        assertEquals("hashtable", client.objectEncoding(hashHashtableKey).get());
+        assertEquals(REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack", client.objectEncoding(hashListpackKey).get());
+        assertEquals("skiplist", client.objectEncoding(zsetSkiplistKey).get());
+        assertEquals(REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack", client.objectEncoding(zsetListpackKey).get());
+        assertEquals("stream", client.objectEncoding(streamKey).get());
     }
 }
