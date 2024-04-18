@@ -1617,7 +1617,9 @@ class BaseTransaction:
             max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
         )
 
-        return self.append_command(RequestType.ZLexCount, [key, min_lex_str, max_lex_str])
+        return self.append_command(
+            RequestType.ZLexCount, [key, min_lex_str, max_lex_str]
+        )
 
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:
         """

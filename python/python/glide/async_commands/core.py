@@ -2120,7 +2120,9 @@ class CoreCommands(Protocol):
 
         return cast(
             int,
-            await self._execute_command(RequestType.ZLexCount, [key, min_lex_str, max_lex_str]),
+            await self._execute_command(
+                RequestType.ZLexCount, [key, min_lex_str, max_lex_str]
+            ),
         )
 
     async def zscore(self, key: str, member: str) -> Optional[float]:
