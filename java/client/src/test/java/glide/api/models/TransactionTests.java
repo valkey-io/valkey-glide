@@ -28,6 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -52,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -68,10 +70,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
@@ -87,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -104,6 +112,7 @@ import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.Limit;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
@@ -185,6 +194,9 @@ public class TransactionTests {
 
         transaction.setrange("key", 42, "str");
         results.add(Pair.of(SetRange, buildArgs("key", "42", "str")));
+
+        transaction.getrange("key", 42, 54);
+        results.add(Pair.of(GetRange, buildArgs("key", "42", "54")));
 
         transaction.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HashSet, buildArgs("key", "field", "value")));
@@ -268,8 +280,23 @@ public class TransactionTests {
         transaction.scard("key");
         results.add(Pair.of(SCard, buildArgs("key")));
 
+        transaction.smove("key1", "key2", "elem");
+        results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
+
+        transaction.sinter(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInter, buildArgs("key1", "key2")));
+
         transaction.sinterstore("key", new String[] {"set1", "set2"});
         results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
+
+        transaction.smismember("key", new String[] {"1", "2"});
+        results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
+
+        transaction.sunionstore("key", new String[] {"set1", "set2"});
+        results.add(
+                Pair.of(
+                        SUnionStore,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("set1").addArgs("set2").build()));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
@@ -402,6 +429,21 @@ public class TransactionTests {
         transaction.zlexcount("key", new LexBoundary("c", false), InfLexBound.POSITIVE_INFINITY);
         results.add(Pair.of(ZLexCount, buildArgs("key", "(c", "+")));
 
+        transaction.zrangestore(
+                "destination",
+                "source",
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
+                true);
+        results.add(
+                Pair.of(
+                        ZRangeStore,
+                        buildArgs(
+                                "destination", "source", "-inf", "(3.0", "BYSCORE", "REV", "LIMIT", "1", "2")));
+
+        transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
+        results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
+
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
 
@@ -413,6 +455,9 @@ public class TransactionTests {
 
         transaction.save();
         results.add(Pair.of(Save, buildArgs()));
+
+        transaction.lastsave();
+        results.add(Pair.of(LastSave, buildArgs()));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
@@ -460,6 +505,12 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+
+        transaction.sdiffstore("key1", new String[] {"key2", "key3"});
+        results.add(
+                Pair.of(
+                        SDiffStore,
+                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

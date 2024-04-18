@@ -118,8 +118,19 @@ pub enum RequestType {
     SetRange = 107,
     ZRemRangeByLex = 108,
     ZLexCount = 109,
+    Append = 110,
+    SUnionStore = 111,
+    SDiffStore = 112,
+    SInter = 113,
     SInterStore = 114,
+    ZRangeStore = 115,
+    GetRange = 116,
+    SMove = 117,
+    SMIsMember = 118,
     Save = 119,
+    LastSave = 120,
+    GeoAdd = 121,
+    GeoHash = 122,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -241,8 +252,19 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SetRange => RequestType::SetRange,
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
+            ProtobufRequestType::Append => RequestType::Append,
+            ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
+            ProtobufRequestType::SInter => RequestType::SInter,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
+            ProtobufRequestType::SUnionStore => RequestType::SUnionStore,
+            ProtobufRequestType::ZRangeStore => RequestType::ZRangeStore,
+            ProtobufRequestType::GetRange => RequestType::GetRange,
+            ProtobufRequestType::SMove => RequestType::SMove,
+            ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
             ProtobufRequestType::Save => RequestType::Save,
+            ProtobufRequestType::LastSave => RequestType::LastSave,
+            ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
+            ProtobufRequestType::GeoHash => RequestType::GeoHash,
         }
     }
 }
@@ -360,8 +382,19 @@ impl RequestType {
             RequestType::SetRange => Some(cmd("SETRANGE")),
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
+            RequestType::Append => Some(cmd("APPEND")),
+            RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
+            RequestType::SInter => Some(cmd("SINTER")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
+            RequestType::SUnionStore => Some(cmd("SUNIONSTORE")),
+            RequestType::ZRangeStore => Some(cmd("ZRANGESTORE")),
+            RequestType::GetRange => Some(cmd("GETRANGE")),
+            RequestType::SMove => Some(cmd("SMOVE")),
+            RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
             RequestType::Save => Some(cmd("SAVE")),
+            RequestType::LastSave => Some(cmd("LASTSAVE")),
+            RequestType::GeoAdd => Some(cmd("GEOADD")),
+            RequestType::GeoHash => Some(cmd("GEOHASH")),
         }
     }
 }

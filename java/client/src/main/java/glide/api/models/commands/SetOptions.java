@@ -108,7 +108,7 @@ public final class SetOptions {
          * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
          * EXAT</code> in the Redis API.
          *
-         * @param unixSeconds unix time to expire, in seconds
+         * @param unixSeconds <code>UNIX TIME</code> to expire, in seconds.
          * @return Expiry
          */
         public static Expiry UnixSeconds(Long unixSeconds) {
@@ -119,7 +119,7 @@ public final class SetOptions {
          * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to
          * <code>PXAT</code> in the Redis API.
          *
-         * @param unixMilliseconds unix time to expire, in milliseconds
+         * @param unixMilliseconds <code>UNIX TIME</code> to expire, in milliseconds.
          * @return Expiry
          */
         public static Expiry UnixMilliseconds(Long unixMilliseconds) {

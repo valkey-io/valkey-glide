@@ -26,6 +26,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -275,5 +276,13 @@ public class CommandTests {
         String error = "Background save already in progress";
         var response = tryCommandWithExpectedError(() -> regularClient.save(), error);
         assertTrue(response.getValue() != null || response.getKey().equals(OK));
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        long result = regularClient.lastsave().get();
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
     }
 }

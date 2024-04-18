@@ -150,8 +150,19 @@ enum RequestType {
     SetRange = 107;
     ZRemRangeByLex = 108;
     ZLexCount = 109;
+    Append = 110;
+    SUnionStore = 111;
+    SDiffStore = 112;
+    SInter = 113;
     SInterStore = 114;
+    ZRangeStore = 115;
+    GetRange = 116;
+    SMove = 117;
+    SMIsMember = 118;
     Save = 119;
+    LastSave = 120;
+    GeoAdd = 121;
+    GeoHash = 122;
 }
 
 message Command {

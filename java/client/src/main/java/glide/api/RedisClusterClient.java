@@ -13,6 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -296,5 +297,22 @@ public class RedisClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleStringResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> lastsave() {
+        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> lastsave(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LastSave,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleLongResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 }

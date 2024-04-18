@@ -37,6 +37,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -568,5 +569,19 @@ public class CommandTests {
         var routedResponse = tryCommandWithExpectedError(() -> clusterClient.save(RANDOM), error);
         assertTrue(
                 routedResponse.getValue() != null || routedResponse.getKey().getSingleValue().equals(OK));
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        long result = clusterClient.lastsave().get();
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+
+        ClusterValue<Long> data = clusterClient.lastsave(ALL_NODES).get();
+        for (var value : data.getMultiValue().values()) {
+            assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
+        }
     }
 }

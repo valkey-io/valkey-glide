@@ -12,6 +12,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Save;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -137,5 +138,10 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<String> save() {
         return commandManager.submitNewCommand(Save, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lastsave() {
+        return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
     }
 }

@@ -7,6 +7,7 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
+    GeospatialData,
     InfoSection,
     UpdateOptions,
 )
@@ -161,6 +162,22 @@ class BaseTransaction:
             TResult: The returning value depends on the executed command.
         """
         return self.append_command(RequestType.CustomCommand, command_args)
+
+    def append(self: TTransaction, key: str, value: str) -> TTransaction:
+        """
+        Appends a value to a key.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to SET in this special case.
+
+        See https://redis.io/commands/append for more details.
+
+        Args:
+            key (str): The key to which the value will be appended.
+            value (str): The value to append.
+
+        Commands response:
+            int: The length of the string after appending the value.
+        """
+        return self.append_command(RequestType.Append, [key, value])
 
     def info(
         self: TTransaction,
@@ -1147,6 +1164,65 @@ class BaseTransaction:
             Otherwise, a "none" string is returned.
         """
         return self.append_command(RequestType.Type, [key])
+
+    def geoadd(
+        self: TTransaction,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> TTransaction:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Commands response:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return self.append_command(RequestType.GeoAdd, args)
+
+    def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Commands response:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+        """
+        return self.append_command(RequestType.GeoHash, [key] + members)
 
     def zadd(
         self: TTransaction,

@@ -33,7 +33,7 @@ from ..glide import Script
 
 class ConditionalChange(Enum):
     """
-    A condition to the "SET" and "ZADD" commands.
+    A condition to the `SET`, `ZADD` and `GEOADD` commands.
     - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
     - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
@@ -129,6 +129,23 @@ class UpdateOptions(Enum):
 
     LESS_THAN = "LT"
     GREATER_THAN = "GT"
+
+
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
 
 
 class ExpirySet:
@@ -274,6 +291,30 @@ class CoreCommands(Protocol):
         return cast(
             Optional[str], await self._execute_command(RequestType.GetString, [key])
         )
+
+    async def append(self, key: str, value: str) -> int:
+        """
+        Appends a value to a key.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
+
+        See https://redis.io/commands/append for more details.
+
+        Args:
+            key (str): The key to which the value will be appended.
+            value (str): The value to append.
+
+        Returns:
+            int: The length of the string after appending the value.
+
+        Examples:
+            >>> await client.append("key", "Hello")
+                5  # Indicates that "Hello" has been appended to the value of "key", which was initially empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+            >>> await client.append("key", " world")
+                11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
+            >>> await client.get("key")
+                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
+        """
+        return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
     async def strlen(self, key: str) -> int:
         """
@@ -1497,6 +1538,82 @@ class CoreCommands(Protocol):
                 'list'
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
+
+    async def geoadd(
+        self,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+                2  # Indicates that two elements have been added to the sorted set "my_sorted_set".
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(14.361389, 38.115556)}, existing_options=ConditionalChange.XX, changed=True)
+                1  # Updates the position of an existing member in the sorted set "my_sorted_set".
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoAdd, args),
+        )
+
+    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Returns:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
 
     async def zadd(
         self,

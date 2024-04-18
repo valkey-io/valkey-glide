@@ -72,6 +72,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.unlink(new String[] {key3});
         baseTransaction.setrange(key3, 0, "GLIDE");
+        baseTransaction.getrange(key3, 0, 5);
 
         baseTransaction.hset(key4, Map.of(field1, value1, field2, value2));
         baseTransaction.hget(key4, field1);
@@ -104,8 +105,14 @@ public class TransactionTestUtilities {
         baseTransaction.scard(key7);
         baseTransaction.sismember(key7, "baz");
         baseTransaction.smembers(key7);
+        baseTransaction.smismember(key7, new String[] {"baz", "foo"});
+        baseTransaction.sinter(new String[] {key7, key7});
+
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
+        baseTransaction.sunionstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zrank(key8, "one");
@@ -115,6 +122,7 @@ public class TransactionTestUtilities {
         baseTransaction.zmscore(key8, new String[] {"two", "three"});
         baseTransaction.zrange(key8, new RangeByIndex(0, 1));
         baseTransaction.zrangeWithScores(key8, new RangeByIndex(0, 1));
+        baseTransaction.zrangestore(key8, key8, new RangeByIndex(0, -1));
         baseTransaction.zscore(key8, "two");
         baseTransaction.zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY);
         baseTransaction.zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY);
@@ -182,6 +190,7 @@ public class TransactionTestUtilities {
             0.5,
             1L,
             5L, // setrange(key3, 0, "GLIDE")
+            "GLIDE", // getrange(key3, 0, 5)
             2L,
             value1,
             2L, // hlen(key4)
@@ -208,9 +217,14 @@ public class TransactionTestUtilities {
             1L,
             1L,
             true, // sismember(key7, "baz")
-            Set.of("baz"),
+            Set.of("baz"), // smembers(key7)
+            new Boolean[] {true, false}, // smismembmer(key7, new String[] {"baz", "foo"})
+            Set.of("baz"), // sinter(new String[] { key7, key7 })
             2L, // sadd(setKey2, new String[] { "a", "b" })
+            3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
+            2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")
             4.0,
@@ -219,6 +233,7 @@ public class TransactionTestUtilities {
             new Double[] {2.0, 3.0}, // zmscore(key8, new String[] {"two", "three"})
             new String[] {"two", "three"}, // zrange
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores
+            2L, // zrangestore(key8, key8, new RangeByIndex(0, -1))
             2.0, // zscore(key8, "two")
             2L, // zcount(key8, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
             2L, // zlexcount(key8, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)

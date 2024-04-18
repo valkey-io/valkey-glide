@@ -20,6 +20,8 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -108,5 +110,13 @@ public class ClusterTransactionTests {
             assertTrue(
                     transactionResponse.getValue() != null || transactionResponse.getKey()[0].equals(OK));
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
+        assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 }

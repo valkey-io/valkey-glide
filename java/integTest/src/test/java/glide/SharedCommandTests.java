@@ -15,6 +15,7 @@ import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -477,6 +478,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void getrange(BaseClient client) {
+        String stringKey = UUID.randomUUID().toString();
+        String nonStringKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, "This is a string").get());
+        assertEquals("This", client.getrange(stringKey, 0, 3).get());
+        assertEquals("ing", client.getrange(stringKey, -3, -1).get());
+        assertEquals("This is a string", client.getrange(stringKey, 0, -1).get());
+
+        // out of range
+        assertEquals("string", client.getrange(stringKey, 10, 100).get());
+        assertEquals("This is a stri", client.getrange(stringKey, -200, -3).get());
+        assertEquals("", client.getrange(stringKey, 100, 200).get());
+
+        // incorrect range
+        assertEquals("", client.getrange(stringKey, -1, -3).get());
+
+        // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
+        assertEquals(
+                REDIS_VERSION.isLowerThan("8.0.0") ? "T" : "",
+                client.getrange(stringKey, -200, -100).get());
+
+        // empty key (returning null isn't implemented)
+        assertEquals(
+                REDIS_VERSION.isLowerThan("8.0.0") ? "" : null, client.getrange(nonStringKey, 0, -1).get());
+
+        // non-string key
+        assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hset_hget_existing_fields_non_existing_fields(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -881,6 +918,66 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smove(BaseClient client) {
+        String setKey1 = "{key}" + UUID.randomUUID();
+        String setKey2 = "{key}" + UUID.randomUUID();
+        String setKey3 = "{key}" + UUID.randomUUID();
+        String nonSetKey = "{key}" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(setKey1, new String[] {"1", "2", "3"}).get());
+        assertEquals(2, client.sadd(setKey2, new String[] {"2", "3"}).get());
+
+        // move an elem
+        assertTrue(client.smove(setKey1, setKey2, "1").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "2", "3"), client.smembers(setKey2).get());
+
+        // move an elem which preset at destination
+        assertTrue(client.smove(setKey2, setKey1, "2").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "3"), client.smembers(setKey2).get());
+
+        // move from missing key
+        assertFalse(client.smove(setKey3, setKey1, "4").get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+
+        // move to a new set
+        assertTrue(client.smove(setKey1, setKey3, "2").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+
+        // move missing element
+        assertFalse(client.smove(setKey1, setKey3, "42").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+
+        // move missing element to missing key
+        assertFalse(client.smove(setKey1, nonSetKey, "42").get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals("none", client.type(nonSetKey).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonSetKey, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(nonSetKey, setKey1, "_").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(ExecutionException.class, () -> client.smove("abc", "zxy", "lkn").get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sismember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -942,6 +1039,173 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.sinterstore(key5, new String[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void smismember(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertEquals(2, client.sadd(key1, new String[] {"one", "two"}).get());
+        assertArrayEquals(
+                new Boolean[] {true, false}, client.smismember(key1, new String[] {"one", "three"}).get());
+
+        // empty set
+        assertArrayEquals(
+                new Boolean[] {false, false}, client.smismember(key2, new String[] {"one", "three"}).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.smismember(key2, new String[] {"_"}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sdiffstore(BaseClient client) {
+        String key1 = "{key}-1-" + UUID.randomUUID();
+        String key2 = "{key}-2-" + UUID.randomUUID();
+        String key3 = "{key}-3-" + UUID.randomUUID();
+        String key4 = "{key}-4-" + UUID.randomUUID();
+        String key5 = "{key}-5-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+        assertEquals(3, client.sadd(key4, new String[] {"e", "f", "g"}).get());
+
+        // create new
+        assertEquals(2, client.sdiffstore(key3, new String[] {key1, key2}).get());
+        assertEquals(Set.of("a", "b"), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(2, client.sdiffstore(key2, new String[] {key3, key2}).get());
+        assertEquals(Set.of("a", "b"), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key4}).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
+
+        // diff with empty set
+        assertEquals(3, client.sdiffstore(key1, new String[] {key1, key5}).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key1).get());
+
+        // diff empty with non-empty set
+        assertEquals(0, client.sdiffstore(key3, new String[] {key5, key1}).get());
+        assertEquals(Set.of(), client.smembers(key3).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sdiffstore(key1, new String[] {key5}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // overwrite destination - not a set
+        assertEquals(1, client.sdiffstore(key5, new String[] {key1, key2}).get());
+        assertEquals(Set.of("c"), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.sdiffstore(key5, new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sdiffstore("abc", new String[] {"zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sinter(BaseClient client) {
+        String key1 = "{sinter}-" + UUID.randomUUID();
+        String key2 = "{sinter}-" + UUID.randomUUID();
+        String key3 = "{sinter}-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+        assertEquals(Set.of("c"), client.sinter(new String[] {key1, key2}).get());
+        assertEquals(0, client.sinter(new String[] {key1, key3}).get().size());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sinter(new String[] {"abc", "zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sunionstore(BaseClient client) {
+        String key1 = "{key}-1-" + UUID.randomUUID();
+        String key2 = "{key}-2-" + UUID.randomUUID();
+        String key3 = "{key}-3-" + UUID.randomUUID();
+        String key4 = "{key}-4-" + UUID.randomUUID();
+        String key5 = "{key}-5-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+        assertEquals(3, client.sadd(key4, new String[] {"e", "f", "g"}).get());
+
+        // create new
+        assertEquals(5, client.sunionstore(key3, new String[] {key1, key2}).get());
+        assertEquals(Set.of("a", "b", "c", "d", "e"), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(5, client.sunionstore(key2, new String[] {key3, key2}).get());
+        assertEquals(Set.of("a", "b", "c", "d", "e"), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(6, client.sunionstore(key1, new String[] {key1, key4}).get());
+        assertEquals(Set.of("a", "b", "c", "e", "f", "g"), client.smembers(key1).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sunionstore(key1, new String[] {key5}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // overwrite destination - not a set
+        assertEquals(7, client.sunionstore(key5, new String[] {key1, key2}).get());
+        assertEquals(Set.of("a", "b", "c", "d", "e", "f", "g"), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.sunionstore(key5, new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sunionstore("abc", new String[] {"zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
     }
 
     @SneakyThrows
@@ -1699,6 +1963,175 @@ public class SharedCommandTests {
                         () ->
                                 client
                                         .zlexcount(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_by_index(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Full range.
+        assertEquals(3, client.zrangestore(destination, source, new RangeByIndex(0, -1)).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from rank 0 to 1. In descending order of scores.
+        assertEquals(2, client.zrangestore(destination, source, new RangeByIndex(0, 1), true).get());
+        assertEquals(
+                Map.of("three", 3.0, "two", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        assertEquals(0, client.zrangestore(destination, source, new RangeByIndex(3, 1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existing source.
+        assertEquals(0, client.zrangestore(destination, key, new RangeByIndex(0, -1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_by_score(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to 3 (exclusive).
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from 1 (inclusive) to positive infinity.
+        query = new RangeByScore(new ScoreBoundary(1), InfScoreBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("two", 2.0, "three", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of("two", 2.0, "one", 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertEquals(0, client.zrangestore(destination, source, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_by_lex(BaseClient client) {
+        String key = "{testKey}:" + UUID.randomUUID();
+        String destination = "{testKey}:" + UUID.randomUUID();
+        String source = "{testKey}:" + UUID.randomUUID();
+        Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to "c" (exclusive).
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("a", 1.0, "b", 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from "a" (inclusive) to positive infinity.
+        query = new RangeByLex(new LexBoundary("a"), InfLexBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("a", 1.0, "b", 2.0, "c", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of("b", 2.0, "c", 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of("b", 2.0, "a", 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
