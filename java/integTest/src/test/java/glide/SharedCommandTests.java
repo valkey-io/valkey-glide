@@ -1813,15 +1813,12 @@ public class SharedCommandTests {
 
         // nothing popped out
         assertNull(
-                client
-                        .brpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
-                        .get());
+                client.brpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.5).get());
 
         // Key exists, but it is not a list
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.brpop(new String[] {"foo"}, .0001).get());
+                assertThrows(ExecutionException.class, () -> client.brpop(new String[] {"foo"}, 0.5).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -1866,15 +1863,12 @@ public class SharedCommandTests {
 
         // nothing popped out
         assertNull(
-                client
-                        .blpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
-                        .get());
+                client.blpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.5).get());
 
         // Key exists, but it is not a list
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.blpop(new String[] {"foo"}, .0001).get());
+                assertThrows(ExecutionException.class, () -> client.blpop(new String[] {"foo"}, 0.5).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
