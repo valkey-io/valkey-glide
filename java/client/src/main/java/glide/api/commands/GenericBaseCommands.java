@@ -381,8 +381,8 @@ public interface GenericBaseCommands {
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
-     * String encoding = client.objectEncoding("key").get();
-     * assert encoding.equals("encoding");
+     * String encoding = client.objectEncoding("my_hash").get();
+     * assert encoding.equals("listpack");
      *
      * String encoding = client.objectEncoding("non_existing_key").get();
      * assert encoding.equals(null);
