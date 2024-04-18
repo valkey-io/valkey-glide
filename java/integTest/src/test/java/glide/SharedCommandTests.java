@@ -2143,4 +2143,57 @@ public class SharedCommandTests {
                         ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        String stringRawKey = UUID.randomUUID().toString();
+        String stringIntKey = UUID.randomUUID().toString();
+        String stringEmbstrKey = UUID.randomUUID().toString();
+        String listListpackKey = UUID.randomUUID().toString();
+        String setIntsetKey = UUID.randomUUID().toString();
+        String setListpackKey = UUID.randomUUID().toString();
+        String hashListpackKey = UUID.randomUUID().toString();
+        String zsetListpackKey = UUID.randomUUID().toString();
+        String streamKey = UUID.randomUUID().toString();
+
+        assertEquals(
+                OK,
+                client
+                        .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
+                        .get());
+        assertEquals(OK, client.set(stringIntKey, "2").get());
+        assertEquals(OK, client.set(stringEmbstrKey, "value").get());
+        assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
+        assertEquals(1, client.sadd(setIntsetKey, new String[] {"1"}).get());
+        assertEquals(1, client.sadd(setListpackKey, new String[] {"foo"}).get());
+        assertEquals(1, client.hset(hashListpackKey, Map.of("1", "2")).get());
+        assertEquals(1, client.zadd(zsetListpackKey, Map.of("1", 2d)).get());
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
+
+        assertNull(client.objectEncoding(nonExistingKey).get());
+        assertTrue("raw".equalsIgnoreCase(client.objectEncoding(stringRawKey).get()));
+        assertTrue("int".equalsIgnoreCase(client.objectEncoding(stringIntKey).get()));
+        assertTrue("embstr".equalsIgnoreCase(client.objectEncoding(stringEmbstrKey).get()));
+        assertTrue(
+                REDIS_VERSION.isLowerThan("7.0.0")
+                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(listListpackKey).get())
+                        : "listpack".equalsIgnoreCase(client.objectEncoding(listListpackKey).get()));
+        assertTrue("intset".equalsIgnoreCase(client.objectEncoding(setIntsetKey).get()));
+        assertTrue(
+                REDIS_VERSION.isLowerThan("7.2.0")
+                        ? "hashtable".equalsIgnoreCase(client.objectEncoding(setListpackKey).get())
+                        : "listpack".equalsIgnoreCase(client.objectEncoding(setListpackKey).get()));
+        assertTrue(
+                REDIS_VERSION.isLowerThan("7.0.0")
+                        ? "hashtable".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get())
+                        : "listpack".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get()));
+        assertTrue(
+                REDIS_VERSION.isLowerThan("7.0.0")
+                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(zsetListpackKey).get())
+                        : "listpack".equalsIgnoreCase(client.objectEncoding(zsetListpackKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.objectEncoding(streamKey).get()));
+    }
 }
