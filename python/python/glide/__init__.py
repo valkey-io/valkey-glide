@@ -5,6 +5,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    GeospatialData,
     InfoSection,
     UpdateOptions,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "RedisClientConfiguration",
     "ScoreBoundary",
     "ConditionalChange",
+    "GeospatialData",
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
