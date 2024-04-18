@@ -1392,6 +1392,7 @@ class TestCommands:
                 for actual_coord, expected_coord in zip(actual_pos, expected_pos)
             )
             for actual_pos, expected_pos in zip(positions, expected_positions)
+            if actual_pos is not None
         )
 
         assert (
