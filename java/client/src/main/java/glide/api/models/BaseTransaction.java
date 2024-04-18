@@ -1950,11 +1950,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Synchronously saves the DataBase.<br>
+     * Synchronously saves the database(s) to disk.<br>
      * This command is not available in transaction starting from Redis version 7.
      *
      * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
-     * @return Command Response - <code>OK</code>
+     * @return Command Response - <code>OK</code> to confirm the snapshot is successfully saved.
      */
     public T save() {
         protobufTransaction.addCommands(buildCommand(Save));

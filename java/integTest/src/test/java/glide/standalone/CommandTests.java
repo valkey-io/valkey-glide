@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.createDefaultStandaloneClient;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.tryCommandWithExpectedError;
 import static glide.api.BaseClient.OK;
@@ -274,8 +275,11 @@ public class CommandTests {
     @SneakyThrows
     public void save() {
         String error = "Background save already in progress";
-        var response = tryCommandWithExpectedError(() -> regularClient.save(), error);
-        assertTrue(response.getValue() != null || response.getKey().equals(OK));
+        // use another client, because it could be blocked
+        try (var testClient = createDefaultStandaloneClient()) {
+            var response = tryCommandWithExpectedError(testClient::save, error);
+            assertTrue(response.getValue() != null || response.getKey().equals(OK));
+        }
     }
 
     @Test

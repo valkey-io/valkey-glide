@@ -2,6 +2,7 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.createDefaultStandaloneClient;
 import static glide.TestUtilities.tryCommandWithExpectedError;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
@@ -13,12 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import glide.TestConfiguration;
 import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -37,15 +35,8 @@ public class TransactionTests {
     private static RedisClient client = null;
 
     @BeforeAll
-    @SneakyThrows
     public static void init() {
-        client =
-                RedisClient.CreateClient(
-                                RedisClientConfiguration.builder()
-                                        .address(
-                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
-                                        .build())
-                        .get();
+        client = createDefaultStandaloneClient();
     }
 
     @AfterAll
@@ -123,17 +114,21 @@ public class TransactionTests {
     @SneakyThrows
     public void save() {
         String error = "Background save already in progress";
+        // use another client, because it could be blocked
+        try (var testClient = createDefaultStandaloneClient()) {
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            Exception ex =
-                    assertThrows(ExecutionException.class, () -> client.exec(new Transaction().save()).get());
-            assertInstanceOf(RequestException.class, ex.getCause());
-            assertTrue(ex.getCause().getMessage().contains("Command not allowed inside a transaction"));
-        } else {
-            var transactionResponse =
-                    tryCommandWithExpectedError(() -> client.exec(new Transaction().save()), error);
-            assertTrue(
-                    transactionResponse.getValue() != null || transactionResponse.getKey()[0].equals(OK));
+            if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+                Exception ex =
+                        assertThrows(
+                                ExecutionException.class, () -> testClient.exec(new Transaction().save()).get());
+                assertInstanceOf(RequestException.class, ex.getCause());
+                assertTrue(ex.getCause().getMessage().contains("Command not allowed inside a transaction"));
+            } else {
+                var transactionResponse =
+                        tryCommandWithExpectedError(() -> testClient.exec(new Transaction().save()), error);
+                assertTrue(
+                        transactionResponse.getValue() != null || transactionResponse.getKey()[0].equals(OK));
+            }
         }
     }
 

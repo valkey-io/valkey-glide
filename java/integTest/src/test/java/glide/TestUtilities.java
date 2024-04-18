@@ -5,6 +5,8 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import glide.api.RedisClient;
+import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -83,8 +85,19 @@ public class TestUtilities {
                 .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
     }
 
+    @SneakyThrows
+    public static RedisClient createDefaultStandaloneClient() {
+        return RedisClient.CreateClient(commonClientConfig().build()).get();
+    }
+
+    @SneakyThrows
+    public static RedisClusterClient createDefaultClusterClient() {
+        return RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(5000).build())
+                .get();
+    }
+
     /**
-     * Run a command and expect a response or a given error. Both cases are OK.
+     * Run a command and expect a response or a request error.
      *
      * @param lambda Client command wrapped by a lambda to execute.
      * @param error An error to expect. Any other error is rethrown.

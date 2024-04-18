@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.createDefaultClusterClient;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.tryCommandWithExpectedError;
@@ -563,12 +564,16 @@ public class CommandTests {
     @SneakyThrows
     public void save() {
         String error = "Background save already in progress";
-        var response = tryCommandWithExpectedError(() -> clusterClient.save(), error);
-        assertTrue(response.getValue() != null || response.getKey().equals(OK));
+        // use another client, because it could be blocked
+        try (var testClient = createDefaultClusterClient()) {
 
-        var routedResponse = tryCommandWithExpectedError(() -> clusterClient.save(RANDOM), error);
-        assertTrue(
-                routedResponse.getValue() != null || routedResponse.getKey().getSingleValue().equals(OK));
+            var response = tryCommandWithExpectedError(testClient::save, error);
+            assertTrue(response.getValue() != null || response.getKey().equals(OK));
+
+            var routedResponse = tryCommandWithExpectedError(() -> testClient.save(RANDOM), error);
+            assertTrue(
+                    routedResponse.getValue() != null || routedResponse.getKey().getSingleValue().equals(OK));
+        }
     }
 
     @Test
