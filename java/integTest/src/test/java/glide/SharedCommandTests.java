@@ -2154,8 +2154,11 @@ public class SharedCommandTests {
         String stringEmbstrKey = UUID.randomUUID().toString();
         String listListpackKey = UUID.randomUUID().toString();
         String setIntsetKey = UUID.randomUUID().toString();
+        String setHashtableKey = UUID.randomUUID().toString();
         String setListpackKey = UUID.randomUUID().toString();
+        String hashHashtableKey = UUID.randomUUID().toString();
         String hashListpackKey = UUID.randomUUID().toString();
+        String zsetSkiplistKey = UUID.randomUUID().toString();
         String zsetListpackKey = UUID.randomUUID().toString();
         String streamKey = UUID.randomUUID().toString();
 
@@ -2167,9 +2170,21 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(stringIntKey, "2").get());
         assertEquals(OK, client.set(stringEmbstrKey, "value").get());
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
+        // The default value of set-max-intset-entries is 512
+        for (Integer i = 0; i <= 512; i++) {
+            assertEquals(1, client.sadd(setHashtableKey, new String[] {i.toString()}).get());
+        }
         assertEquals(1, client.sadd(setIntsetKey, new String[] {"1"}).get());
         assertEquals(1, client.sadd(setListpackKey, new String[] {"foo"}).get());
+        // The default value of hash-max-listpack-entries is 512
+        for (Integer i = 0; i <= 512; i++) {
+            assertEquals(1, client.hset(hashHashtableKey, Map.of(i.toString(), "2")).get());
+        }
         assertEquals(1, client.hset(hashListpackKey, Map.of("1", "2")).get());
+        // The default value of zset-max-listpack-entries is 128
+        for (Integer i = 0; i <= 128; i++) {
+            assertEquals(1, client.zadd(zsetSkiplistKey, Map.of(i.toString(), 2d)).get());
+        }
         assertEquals(1, client.zadd(zsetListpackKey, Map.of("1", 2d)).get());
         assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
@@ -2181,15 +2196,18 @@ public class SharedCommandTests {
                 REDIS_VERSION.isLowerThan("7.0.0")
                         ? "ziplist".equalsIgnoreCase(client.objectEncoding(listListpackKey).get())
                         : "listpack".equalsIgnoreCase(client.objectEncoding(listListpackKey).get()));
+        assertTrue("hashtable".equalsIgnoreCase(client.objectEncoding(setHashtableKey).get()));
         assertTrue("intset".equalsIgnoreCase(client.objectEncoding(setIntsetKey).get()));
         assertTrue(
                 REDIS_VERSION.isLowerThan("7.2.0")
                         ? "hashtable".equalsIgnoreCase(client.objectEncoding(setListpackKey).get())
                         : "listpack".equalsIgnoreCase(client.objectEncoding(setListpackKey).get()));
+        assertTrue("hashtable".equalsIgnoreCase(client.objectEncoding(hashHashtableKey).get()));
         assertTrue(
                 REDIS_VERSION.isLowerThan("7.0.0")
-                        ? "hashtable".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get())
+                        ? "ziplist".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get())
                         : "listpack".equalsIgnoreCase(client.objectEncoding(hashListpackKey).get()));
+        assertTrue("skiplist".equalsIgnoreCase(client.objectEncoding(zsetSkiplistKey).get()));
         assertTrue(
                 REDIS_VERSION.isLowerThan("7.0.0")
                         ? "ziplist".equalsIgnoreCase(client.objectEncoding(zsetListpackKey).get())
