@@ -21,6 +21,30 @@ pub(crate) mod shared_client_tests {
         client: Client,
     }
 
+    async fn create_client(server: &BackingServer, configuration: TestConfiguration) -> Client {
+        match server {
+            BackingServer::Standalone(server) => {
+                let connection_addr = server
+                    .as_ref()
+                    .map(|server| server.get_client_addr())
+                    .unwrap_or(get_shared_server_address(configuration.use_tls));
+
+                // TODO - this is a patch, handling the situation where the new server
+                // still isn't available to connection. This should be fixed in [RedisServer].
+                repeat_try_create(|| async {
+                    Client::new(
+                        create_connection_request(&[connection_addr.clone()], &configuration)
+                            .into(),
+                    )
+                    .await
+                    .ok()
+                })
+                .await
+            }
+            BackingServer::Cluster(cluster) => create_cluster_client(cluster, configuration).await,
+        }
+    }
+
     async fn setup_test_basics(use_cluster: bool, configuration: TestConfiguration) -> TestBasics {
         if use_cluster {
             let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
@@ -30,28 +54,9 @@ pub(crate) mod shared_client_tests {
             }
         } else {
             let test_basics = utilities::setup_test_basics_internal(&configuration).await;
-
-            let connection_addr = test_basics
-                .server
-                .as_ref()
-                .map(|server| server.get_client_addr())
-                .unwrap_or(get_shared_server_address(configuration.use_tls));
-
-            // TODO - this is a patch, handling the situation where the new server
-            // still isn't available to connection. This should be fixed in [RedisServer].
-            let client = repeat_try_create(|| async {
-                Client::new(
-                    create_connection_request(&[connection_addr.clone()], &configuration).into(),
-                )
-                .await
-                .ok()
-            })
-            .await;
-
-            TestBasics {
-                server: BackingServer::Standalone(test_basics.server),
-                client,
-            }
+            let server = BackingServer::Standalone(test_basics.server);
+            let client = create_client(&server, configuration).await;
+            TestBasics { server, client }
         }
     }
 

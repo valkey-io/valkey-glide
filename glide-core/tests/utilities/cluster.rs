@@ -229,18 +229,10 @@ async fn setup_acl_for_cluster(
     join_all(ops).await;
 }
 
-pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) -> ClusterTestBasics {
-    let cluster = if !configuration.shared_server {
-        Some(RedisCluster::new(
-            configuration.use_tls,
-            &configuration.connection_info,
-            None,
-            None,
-        ))
-    } else {
-        None
-    };
-
+pub async fn create_cluster_client(
+    cluster: &Option<RedisCluster>,
+    mut configuration: TestConfiguration,
+) -> Client {
     let addresses = if !configuration.shared_server {
         cluster.as_ref().unwrap().get_server_addresses()
     } else {
@@ -257,7 +249,21 @@ pub async fn setup_test_basics_internal(mut configuration: TestConfiguration) ->
     configuration.request_timeout = configuration.request_timeout.or(Some(10000));
     let connection_request = create_connection_request(&addresses, &configuration);
 
-    let client = Client::new(connection_request.into()).await.unwrap();
+    Client::new(connection_request.into()).await.unwrap()
+}
+
+pub async fn setup_test_basics_internal(configuration: TestConfiguration) -> ClusterTestBasics {
+    let cluster = if !configuration.shared_server {
+        Some(RedisCluster::new(
+            configuration.use_tls,
+            &configuration.connection_info,
+            None,
+            None,
+        ))
+    } else {
+        None
+    };
+    let client = create_cluster_client(&cluster, configuration).await;
     ClusterTestBasics { cluster, client }
 }
 
