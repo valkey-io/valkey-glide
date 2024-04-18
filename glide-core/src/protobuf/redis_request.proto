@@ -161,6 +161,7 @@ enum RequestType {
     SMIsMember = 118;
     LastSave = 120;
     GeoAdd = 121;
+    GeoHash = 122;
 }
 
 message Command {

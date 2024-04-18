@@ -1277,6 +1277,37 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geohash(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 2
+        assert await redis_client.geohash(key, ["Palermo", "Catania", "Place"]) == [
+            "sqc8b49rny0",
+            "sqdtr74hyu0",
+            None,
+        ]
+
+        assert (
+            await redis_client.geohash(
+                "non_existing_key", ["Palermo", "Catania", "Place"]
+            )
+            == [None] * 3
+        )
+
+        # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
+        # But when running the command with key only (and no members) the returned value will always be an empty list
+        # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
+        assert await redis_client.geohash(key, []) == []
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geohash(key, ["Palermo", "Catania"])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_zaddincr(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
