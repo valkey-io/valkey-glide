@@ -2112,17 +2112,17 @@ class CoreCommands(Protocol):
             >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
                 0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
         """
-        lex_min = (
+        min_lex_str = (
             min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
         )
-        lex_max = (
+        max_lex_str = (
             max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
         )
 
         return cast(
             int,
             await self._execute_command(
-                RequestType.ZRemRangeByLex, [key, lex_min, lex_max]
+                RequestType.ZRemRangeByLex, [key, min_lex_str, max_lex_str]
             ),
         )
 
