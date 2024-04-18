@@ -928,7 +928,9 @@ class TestCommands:
         ]
 
         assert (
-            await redis_client.linsert("non_existing_key", InsertPosition.BEFORE, "pivot", "elem")
+            await redis_client.linsert(
+                "non_existing_key", InsertPosition.BEFORE, "pivot", "elem"
+            )
             == 0
         )
         assert await redis_client.linsert(key1, InsertPosition.AFTER, "5", "6") == -1
