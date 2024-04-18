@@ -2,7 +2,6 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.createDefaultStandaloneClient;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.tryCommandWithExpectedError;
@@ -23,8 +22,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -47,13 +44,7 @@ public class CommandTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        regularClient =
-                RedisClient.CreateClient(
-                                RedisClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
-                                        .requestTimeout(10000)
-                                        .build())
-                        .get();
+        regularClient = createDefaultStandaloneClient();
     }
 
     @AfterAll

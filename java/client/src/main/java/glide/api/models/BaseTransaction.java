@@ -1950,8 +1950,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Synchronously saves the database(s) to disk.<br>
-     * This command is not available in transaction starting from Redis version 7.
+     * Synchronously saves the dataset producing a point in time snapshot of all the data.<br>
+     * This command is no longer available in transactions starting from Redis version 7.
      *
      * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
      * @return Command Response - <code>OK</code> to confirm the snapshot is successfully saved.

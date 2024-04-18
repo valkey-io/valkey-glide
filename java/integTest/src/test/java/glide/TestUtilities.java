@@ -85,11 +85,13 @@ public class TestUtilities {
                 .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
     }
 
+    /** Create and connect a standalone client with default config. */
     @SneakyThrows
     public static RedisClient createDefaultStandaloneClient() {
         return RedisClient.CreateClient(commonClientConfig().build()).get();
     }
 
+    /** Create and connect a cluster client with default config. */
     @SneakyThrows
     public static RedisClusterClient createDefaultClusterClient() {
         return RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(5000).build())

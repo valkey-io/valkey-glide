@@ -135,7 +135,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String[]> time();
 
     /**
-     * Synchronously saves the database(s) to disk.
+     * Synchronously saves the dataset producing a point in time snapshot of all the data.
      *
      * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
      * @return <code>OK</code> to confirm the snapshot is successfully saved.

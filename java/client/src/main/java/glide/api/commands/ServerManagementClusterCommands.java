@@ -284,7 +284,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String[]>> time(Route route);
 
     /**
-     * Synchronously saves the database(s) to disk.<br>
+     * Synchronously saves the dataset producing a point in time snapshot of all the data.<br>
      * The command will be routed to a random node.
      *
      * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
@@ -298,7 +298,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> save();
 
     /**
-     * Synchronously saves the database(s) to disk.
+     * Synchronously saves the dataset producing a point in time snapshot of all the data.
      *
      * @see <a href="https://redis.io/commands/save/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the

@@ -1,7 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.createDefaultClusterClient;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
@@ -32,8 +31,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
@@ -103,13 +100,7 @@ public class CommandTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clusterClient =
-                RedisClusterClient.CreateClient(
-                                RedisClusterClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
-                                        .requestTimeout(10000)
-                                        .build())
-                        .get();
+        clusterClient = createDefaultClusterClient();
     }
 
     @AfterAll
