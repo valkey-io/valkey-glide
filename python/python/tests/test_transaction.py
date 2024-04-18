@@ -148,11 +148,8 @@ async def transaction_test(
     args.append([value2, value])
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
-
-    transaction.lpush(key10, [value, value2])
-    args.append(2)
-    transaction.linsert(key10, InsertPosition.BEFORE, value2, value)
-    args.append(3)
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
+    args.append(0)
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
