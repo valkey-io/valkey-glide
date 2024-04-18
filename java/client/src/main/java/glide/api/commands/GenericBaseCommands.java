@@ -384,7 +384,7 @@ public interface GenericBaseCommands {
      * String encoding = client.objectEncoding("my_hash").get();
      * assert encoding.equals("listpack");
      *
-     * String encoding = client.objectEncoding("non_existing_key").get();
+     * encoding = client.objectEncoding("non_existing_key").get();
      * assert encoding.equals(null);
      * }</pre>
      */
