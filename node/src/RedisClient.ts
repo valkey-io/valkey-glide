@@ -101,16 +101,24 @@ export class RedisClient extends BaseClient {
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public async exec(transaction: Transaction): Promise<ReturnType[] | null> {
-        const result = (await this.createWritePromise(
-            transaction.commands,
-        )) as ReturnType[];
+    public exec(transaction: Transaction): Promise<ReturnType[] | null> {
+        return this.createWritePromise(transaction.commands).then(
+            (result: unknown) => {
+                if (result === null) {
+                    return null;
+                }
 
-        for (const index of transaction.set_commands_indexes) {
-            result[index] = new Set(result[index] as string[]);
-        }
+                const modifiedResult: ReturnType[] = result as ReturnType[];
 
-        return result;
+                for (const index of transaction.set_commands_indexes) {
+                    modifiedResult[index] = new Set(
+                        modifiedResult[index] as string[],
+                    );
+                }
+
+                return modifiedResult;
+            },
+        );
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

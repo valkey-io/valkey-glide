@@ -1196,11 +1196,15 @@ export class BaseClient {
      * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public async smembers(key: string): Promise<Set<string>> {
-        const result = (await this.createWritePromise(
-            createSMembers(key),
-        )) as string[];
-        return new Set(result);
+    public smembers(key: string): Promise<Set<string>> {
+        return this.createWritePromise(createSMembers(key)).then(
+            (result: unknown) => {
+                const resultSet: Set<string> = new Set<string>(
+                    result as string[],
+                );
+                return resultSet;
+            },
+        );
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.

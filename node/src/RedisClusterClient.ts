@@ -286,20 +286,28 @@ export class RedisClusterClient extends BaseClient {
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public async exec(
+    public exec(
         transaction: ClusterTransaction,
         route?: SingleNodeRoute,
     ): Promise<ReturnType[] | null> {
-        const result = (await this.createWritePromise(
+        return this.createWritePromise(
             transaction.commands,
             toProtobufRoute(route),
-        )) as ReturnType[];
+        ).then((result: unknown) => {
+            if (result === null) {
+                return null;
+            }
 
-        for (const index of transaction.set_commands_indexes) {
-            result[index] = new Set(result[index] as string[]);
-        }
+            const modifiedResult: ReturnType[] = result as ReturnType[];
 
-        return result;
+            for (const index of transaction.set_commands_indexes) {
+                modifiedResult[index] = new Set(
+                    modifiedResult[index] as string[],
+                );
+            }
+
+            return modifiedResult;
+        });
     }
 
     /** Ping the Redis server.
