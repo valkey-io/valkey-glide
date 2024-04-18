@@ -18,16 +18,16 @@ dependencies {
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
 
-    // lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.30'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
-
     // junit
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 
     // semver4j for semantic versioning
     implementation 'com.vdurmont:semver4j:3.1.0'
+
+    //lombok
+    testCompileOnly 'org.projectlombok:lombok:1.18.32'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
 }
 
 def standaloneRedisPorts = []
