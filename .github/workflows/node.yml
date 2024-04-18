@@ -187,20 +187,20 @@ jobs:
             # image: node:18.19.0-alpine
         timeout-minutes: 15
         steps:
-            - name: Install bash
-              run: |
-                apk add bash
-                apk add gettext
+            # - name: Install bash
+            #   run: |
+            #     apk add bash
+            #     apk add gettext
 
-            - name: Install git
-              run: apk add git
+            # - name: Install git
+            #   run: apk add git
 
-            - uses: actions/checkout@v4
+            # - uses: actions/checkout@v4
 
-            - name: Checkout submodules
-              run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
+            # - name: Checkout submodules
+            #   run: |
+            #       git config --global --add safe.directory "$GITHUB_WORKSPACE"
+            #       git submodule update --init --recursive
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
