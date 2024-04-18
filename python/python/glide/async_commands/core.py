@@ -1590,6 +1590,31 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GeoAdd, args),
         )
 
+    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Returns:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
+
     async def zadd(
         self,
         key: str,

@@ -208,6 +208,8 @@ async def transaction_test(
         },
     )
     args.append(2)
+    transaction.geohash(key9, ["Palermo", "Catania", "Place"])
+    args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
     return args
 
 

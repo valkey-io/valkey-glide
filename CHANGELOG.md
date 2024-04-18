@@ -9,6 +9,7 @@
 * Python: Added RENAME command ([#1252](https://github.com/aws/glide-for-redis/pull/1252))
 * Python: Added APPEND command ([#1152](https://github.com/aws/glide-for-redis/pull/1152))
 * Python: Added GEOADD command ([#1259](https://github.com/aws/glide-for-redis/pull/1259))
+* Python: Added GEOHASH command ([#1281](https://github.com/aws/glide-for-redis/pull/1281))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

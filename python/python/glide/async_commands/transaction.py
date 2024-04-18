@@ -1207,6 +1207,23 @@ class BaseTransaction:
 
         return self.append_command(RequestType.GeoAdd, args)
 
+    def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Commands response:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+        """
+        return self.append_command(RequestType.GeoHash, [key] + members)
+
     def zadd(
         self: TTransaction,
         key: str,
