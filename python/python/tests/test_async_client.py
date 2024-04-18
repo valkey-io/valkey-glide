@@ -16,6 +16,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    GeospatialData,
     InfBound,
     InfoSection,
     UpdateOptions,
@@ -1212,6 +1213,67 @@ class TestCommands:
 
         assert await redis_client.expire(key, 10)
         assert await redis_client.persist(key)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geoadd(self, redis_client: TRedisClient):
+        key, key2 = get_random_string(10), get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 2
+        members_coordinates["Catania"].latitude = 39
+        assert (
+            await redis_client.geoadd(
+                key,
+                members_coordinates,
+                existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+            )
+            == 0
+        )
+        assert (
+            await redis_client.geoadd(
+                key,
+                members_coordinates,
+                existing_options=ConditionalChange.ONLY_IF_EXISTS,
+            )
+            == 0
+        )
+        members_coordinates["Catania"].latitude = 40
+        members_coordinates.update({"Tel-Aviv": GeospatialData(32.0853, 34.7818)})
+        assert (
+            await redis_client.geoadd(
+                key,
+                members_coordinates,
+                changed=True,
+            )
+            == 2
+        )
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key2, members_coordinates)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geoadd_invalid_args(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key, {})
+
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key, {"Place": GeospatialData(-181, 0)})
+
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key, {"Place": GeospatialData(181, 0)})
+
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key, {"Place": GeospatialData(0, 86)})
+
+        with pytest.raises(RequestError):
+            await redis_client.geoadd(key, {"Place": GeospatialData(0, -86)})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
