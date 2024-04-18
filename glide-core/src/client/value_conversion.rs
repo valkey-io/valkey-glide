@@ -18,6 +18,7 @@ pub(crate) enum ExpectedReturnType {
     JsonToggleReturnType,
     ArrayOfBools,
     Lolwut,
+    ArrayOfArraysOfDoubleOrNull,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -236,6 +237,51 @@ fn convert_lolwut_string(data: &str) -> String {
             .replace("\x1b[0;30;40m \x1b[0m", " ")
     } else {
         data.to_owned()
+        ExpectedReturnType::ArrayOfArraysOfDoubleOrNull => match value {
+            // This is used for GEOPOS command.
+            Value::Array(array) => {
+                let converted_array: RedisResult<Vec<_>> = array
+                    .clone()
+                    .into_iter()
+                    .map(|item| match item {
+                        Value::Nil => Ok(Value::Nil),
+                        Value::Array(mut inner_array) => {
+                            if inner_array.len() != 2 {
+                                return Err((
+                                    ErrorKind::TypeError,
+                                    "Inner Array must contain exactly two elements",
+                                )
+                                    .into());
+                            }
+                            inner_array[0] = convert_to_expected_type(
+                                inner_array[0].clone(),
+                                Some(ExpectedReturnType::Double),
+                            )?;
+                            inner_array[1] = convert_to_expected_type(
+                                inner_array[1].clone(),
+                                Some(ExpectedReturnType::Double),
+                            )?;
+
+                            Ok(Value::Array(inner_array))
+                        }
+                        _ => Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted to an array of array of double or null. Inner value of Array must be Array or Null",
+                            format!("(Inner value was {:?})", item),
+                        )
+                            .into()),
+                    })
+                    .collect();
+
+                converted_array.map(Value::Array)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of array of double or null",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -303,6 +349,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
+        b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
