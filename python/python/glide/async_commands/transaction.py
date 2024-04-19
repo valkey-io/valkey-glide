@@ -7,11 +7,14 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
+    GeospatialData,
     InfoSection,
+    InsertPosition,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -771,6 +774,30 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
 
+    def linsert(
+        self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> TTransaction:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Command response:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+        """
+        return self.append_command(
+            RequestType.LInsert, [key, position.value, pivot, element]
+        )
+
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:
         """
         Add specified members to the set stored at `key`.
@@ -1164,6 +1191,65 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Type, [key])
 
+    def geoadd(
+        self: TTransaction,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> TTransaction:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Commands response:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return self.append_command(RequestType.GeoAdd, args)
+
+    def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Commands response:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+        """
+        return self.append_command(RequestType.GeoHash, [key] + members)
+
     def zadd(
         self: TTransaction,
         key: str,
@@ -1522,6 +1608,79 @@ class BaseTransaction:
         )
         return self.append_command(
             RequestType.ZRemRangeByScore, [key, score_min, score_max]
+        )
+
+    def zremrangebylex(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Command response:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(
+            RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+        )
+
+    def zlexcount(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical value to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Command response:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(
+            RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
         )
 
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:

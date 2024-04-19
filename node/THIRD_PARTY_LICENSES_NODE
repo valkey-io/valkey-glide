@@ -5487,7 +5487,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ctor:0.2.7
+Package: ctor:0.2.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14139,7 +14139,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi:2.16.2
+Package: napi:2.16.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14189,7 +14189,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi-derive:2.16.2
+Package: napi-derive:2.16.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14214,7 +14214,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: napi-derive-backend:1.0.64
+Package: napi-derive-backend:1.0.65
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18665,7 +18665,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.80
+Package: proc-macro2:1.0.81
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23008,7 +23008,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.197
+Package: serde:1.0.198
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23237,7 +23237,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.197
+Package: serde_derive:1.0.198
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24290,7 +24290,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.59
+Package: syn:2.0.60
 
 The following copyrights and licenses were found in the source code of this package:
 
