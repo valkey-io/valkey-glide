@@ -1,9 +1,9 @@
-/**
+/*
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 // TODO: Investigate using uniffi bindings for Go instead of cbindgen
-// TODO: uncomment
+// TODO: Uncomment this line after Rust code is finalized. It is uncommented to avoid compilation errors about unsafe usage.
 // #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
@@ -70,8 +70,7 @@ fn create_client_internal(
 ) -> Result<ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
-    // TODO: optimize this (e.g. by pinning each go thread to a rust thread)
-    // TODO: This should be new_current_thread
+    // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .worker_threads(1)
@@ -377,26 +376,26 @@ pub unsafe fn convert_double_pointer_to_vec(
 
 #[no_mangle]
 pub unsafe extern "C" fn command(
-    client_ptr: *const c_void,
+    client_adapter_ptr: *const c_void,
     channel: usize,
     command_type: RequestType,
     arg_count: usize,
     args: *const *const c_char,
 ) {
-let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
+    let client_adapter = unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
-    let ptr_address = client_ptr as usize;
+    let ptr_address = client_adapter_ptr as usize;
 
     let arg_vec = unsafe { convert_double_pointer_to_vec(args, arg_count) }.unwrap(); // TODO check
 
-    let mut client_clone = client.client.clone();
-    client.runtime.spawn(async move {
+    let mut client_clone = client_adapter.client.clone();
+    client_adapter.runtime.spawn(async move {
         let mut cmd = get_command(command_type).unwrap(); // TODO check cmd
                                                           //print!("{:?}", cmd.args);
         cmd.arg(arg_vec);
 
         let result = client_clone.send_command(&cmd, None).await;
-        let client = unsafe { Box::leak(Box::from_raw(ptr_address as *mut Client)) };
+        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
             Err(err) => {
@@ -406,7 +405,7 @@ let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
                 let error_type = errors::error_type(&redis_error);
 
                 let c_err_str = CString::into_raw(CString::new(message).unwrap());
-                unsafe { (client.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -426,19 +425,19 @@ let client = unsafe { Box::leak(Box::from_raw(client_ptr as *mut Client)) };
             _ => todo!(),
         };
 
-        //print!(" === result2 {:?}\n", result);
+        //print!(" === result {:?}\n", result);
 
         unsafe {
             match result {
-                Ok(None) => (client.success_callback)(channel, std::ptr::null()),
-                Ok(Some(c_str)) => (client.success_callback)(channel, c_str.as_ptr()),
+                Ok(None) => (client_adapter.success_callback)(channel, std::ptr::null()),
+                Ok(Some(c_str)) => (client_adapter.success_callback)(channel, c_str.as_ptr()),
                 Err(err) => {
                     let redis_error = err.into();
                     let message = errors::error_message(&redis_error);
                     let error_type = errors::error_type(&redis_error);
 
                     let c_err_str = CString::into_raw(CString::new(message).unwrap());
-                    (client.failure_callback)(channel, c_err_str, error_type);
+                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }

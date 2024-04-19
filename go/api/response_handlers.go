@@ -28,7 +28,7 @@ func handleRedisResponse[T redisResponse](t reflect.Type, isNilable bool, respon
 		responseTypeName = reflect.TypeOf(response).Name()
 	}
 
-	return reflect.Zero(t).Interface().(T), &RedisError{
+	return reflect.Zero(t).Interface().(T), &RequestError{
 		fmt.Sprintf("Unexpected return type from Redis: got %s, expected %s", responseTypeName, t),
 	}
 }

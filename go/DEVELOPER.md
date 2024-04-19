@@ -121,9 +121,11 @@ Before starting this step, make sure you've installed all software requirements.
         go test -race ./...
         ```
 6. Install Go development tools with:
-
     ```bash
+    # For go1.22:
     make install-dev-tools
+    # For go1.18:
+    make install-dev-tools-go1.18
     ```
 
 ### Test
@@ -187,7 +189,11 @@ Run from the main `/go` folder
 
 1. Go
     ```bash
+    # For go1.22:
     make install-dev-tools
+    # For go1.18:
+    make install-dev-tools-go1.18
+   
     make lint
     ```
 2. Rust
@@ -205,6 +211,18 @@ Run from the main `/go` folder
 
 ```bash
 make format
+```
+
+### Benchmarks
+
+To run the benchmarks, ensure you have followed the [build and installation steps](#building-and-installation-steps) (the tests do not have to be run). Then execute the following:
+
+```bash
+cd go/benchmarks
+# To see a list of available options and their defaults:
+go run . -help
+# An example command setting various options:
+go run . -resultsFile gobenchmarks.json -dataSize "100 1000" -concurrentTasks "10 100" -clients all -host localhost -port 6379 -clientCount "1 5" -tls
 ```
 
 ### Recommended extensions for VS Code

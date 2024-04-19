@@ -8,12 +8,20 @@ on:
             - submodules/**
             - go/**
             - .github/workflows/go.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
     pull_request:
         paths:
             - glide-core/src/**
             - submodules/**
             - go/**
             - .github/workflows/go.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
 
 concurrency:
     group: go-${{ github.head_ref || github.ref }}
@@ -84,14 +92,19 @@ jobs:
               working-directory: ./go
               run: make test
 
-            - name: Upload cluster manager logs
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -go
+
+            - name: Upload logs and reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: cluster-manager-logs-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  name: reports-go-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
                   path: |
                       utils/clusters/**
+                      benchmarks/results/**
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
