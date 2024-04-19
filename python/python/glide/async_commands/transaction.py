@@ -13,6 +13,7 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -1582,6 +1583,42 @@ class BaseTransaction:
         )
         return self.append_command(
             RequestType.ZRemRangeByScore, [key, score_min, score_max]
+        )
+
+    def zlexcount(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical value to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Command response:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+        """
+        min_lex_str = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_str = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(
+            RequestType.ZLexCount, [key, min_lex_str, max_lex_str]
         )
 
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:
