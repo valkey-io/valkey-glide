@@ -206,6 +206,8 @@ async def transaction_test(
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+    transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(0)
 
     transaction.geoadd(
         key9,
