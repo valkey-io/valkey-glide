@@ -378,7 +378,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
      * @param key The <code>key</code> of the object to get the internal encoding of.
      * @return If <code>key</code> exists, returns the internal encoding of the object stored at
-     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     *     <code>key</code> as a <code>String</code>. Otherwise, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * String encoding = client.objectEncoding("my_hash").get();
