@@ -2192,7 +2192,8 @@ public class SharedCommandTests {
         assertEquals("raw", client.objectEncoding(stringRawKey).get());
         assertEquals("int", client.objectEncoding(stringIntKey).get());
         assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
-        assertEquals(REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack", client.objectEncoding(listListpackKey).get());
+        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but actual behavior returns a quicklist.
+        assertEquals(REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack", client.objectEncoding(listListpackKey).get());
         assertEquals("hashtable", client.objectEncoding(setHashtableKey).get());
         assertEquals("intset", client.objectEncoding(setIntsetKey).get());
         assertEquals(REDIS_VERSION.isLowerThan("7.2.0") ? "hashtable" : "listpack", client.objectEncoding(setListpackKey).get());
