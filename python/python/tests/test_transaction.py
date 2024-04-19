@@ -5,7 +5,13 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
-from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
+from glide.async_commands.core import GeospatialData, InsertPosition
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    RangeByIndex,
+    ScoreBoundary,
+)
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -32,7 +38,7 @@ async def transaction_test(
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -142,6 +148,8 @@ async def transaction_test(
     args.append([value2, value])
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
+    args.append(0)
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -187,6 +195,8 @@ async def transaction_test(
     args.append(3)
     transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
     args.append(3)
+    transaction.zlexcount(key8, LexBoundary("a", is_inclusive=True), InfBound.POS_INF)
+    args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
     transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
@@ -199,10 +209,22 @@ async def transaction_test(
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+    transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(0)
 
-    transaction.pfadd(key11, ["a", "b", "c"])
+    transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
 
+    transaction.geoadd(
+        key9,
+        {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        },
+    )
+    args.append(2)
+    transaction.geohash(key9, ["Palermo", "Catania", "Place"])
+    args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
     return args
 
 

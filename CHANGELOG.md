@@ -8,7 +8,12 @@
 * Node: Added ZRANGE command ([#1115](https://github.com/aws/glide-for-redis/pull/1115))
 * Python: Added RENAME command ([#1252](https://github.com/aws/glide-for-redis/pull/1252))
 * Python: Added APPEND command ([#1152](https://github.com/aws/glide-for-redis/pull/1152))
-* Python: Added PFADD command (TODO PR #)
+* Python: Added GEOADD command ([#1259](https://github.com/aws/glide-for-redis/pull/1259))
+* Python: Added GEOHASH command ([#1281](https://github.com/aws/glide-for-redis/pull/1281))
+* Python: Added ZLEXCOUNT command ([#1305](https://github.com/aws/glide-for-redis/pull/1305))
+* Python: Added ZREMRANGEBYLEX command ([#1306](https://github.com/aws/glide-for-redis/pull/1306))
+* Python: Added LINSERT command ([#1304](https://github.com/aws/glide-for-redis/pull/1304))
+* Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

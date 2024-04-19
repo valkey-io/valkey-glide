@@ -18,6 +18,7 @@ from typing import (
 
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -33,7 +34,7 @@ from ..glide import Script
 
 class ConditionalChange(Enum):
     """
-    A condition to the "SET" and "ZADD" commands.
+    A condition to the `SET`, `ZADD` and `GEOADD` commands.
     - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
     - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
@@ -131,6 +132,23 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -182,6 +200,11 @@ class ExpirySet:
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class InsertPosition(Enum):
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
 
 
 class CoreCommands(Protocol):
@@ -1042,6 +1065,37 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
+    async def linsert(
+        self, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> int:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Returns:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+
+        Examples:
+            >>> await client.linsert("my_list", InsertPosition.BEFORE, "World", "There")
+                3 # "There" was inserted before "World", and the new length of the list is 3.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.LInsert, [key, position.value, pivot, element]
+            ),
+        )
+
     async def sadd(self, key: str, members: List[str]) -> int:
         """
         Add specified members to the set stored at `key`.
@@ -1522,6 +1576,82 @@ class CoreCommands(Protocol):
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
 
+    async def geoadd(
+        self,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+                2  # Indicates that two elements have been added to the sorted set "my_sorted_set".
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(14.361389, 38.115556)}, existing_options=ConditionalChange.XX, changed=True)
+                1  # Updates the position of an existing member in the sorted set "my_sorted_set".
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoAdd, args),
+        )
+
+    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Returns:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
+
     async def zadd(
         self,
         key: str,
@@ -1983,6 +2113,97 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.ZRemRangeByScore, [key, score_min, score_max]
+            ),
+        )
+
+    async def zremrangebylex(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Returns:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebylex("my_sorted_set",  LexBoundary("a", is_inclusive=False), LexBoundary("e"))
+                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
+    async def zlexcount(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Returns:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zlexcount("my_sorted_set",  LexBoundary("c" , is_inclusive=True), InfBound.POS_INF)
+                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+            >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
+                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
             ),
         )
 
