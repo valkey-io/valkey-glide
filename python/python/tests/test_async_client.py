@@ -19,6 +19,7 @@ from glide.async_commands.core import (
     GeospatialData,
     InfBound,
     InfoSection,
+    InsertPosition,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -907,6 +908,37 @@ class TestCommands:
         # incorrect arguments
         with pytest.raises(RequestError):
             await redis_client.rpushx(key2, [])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_linsert(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        assert await redis_client.lpush(key1, ["4", "3", "2", "1"]) == 4
+        assert await redis_client.linsert(key1, InsertPosition.BEFORE, "2", "1.5") == 5
+        assert await redis_client.linsert(key1, InsertPosition.AFTER, "3", "3.5") == 6
+        assert await redis_client.lrange(key1, 0, -1) == [
+            "1",
+            "1.5",
+            "2",
+            "3",
+            "3.5",
+            "4",
+        ]
+
+        assert (
+            await redis_client.linsert(
+                "non_existing_key", InsertPosition.BEFORE, "pivot", "elem"
+            )
+            == 0
+        )
+        assert await redis_client.linsert(key1, InsertPosition.AFTER, "5", "6") == -1
+
+        # key exists, but it is not a list
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.linsert(key2, InsertPosition.AFTER, "p", "e")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
