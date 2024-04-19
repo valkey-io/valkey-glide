@@ -57,6 +57,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -507,6 +508,9 @@ public class TransactionTests {
                 Pair.of(
                         SDiffStore,
                         ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
+
+        transaction.objectEncoding("key");
+        results.add(Pair.of(ObjectEncoding, buildArgs("key")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
