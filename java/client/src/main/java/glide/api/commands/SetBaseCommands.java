@@ -134,7 +134,7 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean> sismember(String key, String member);
 
     /**
-     * Gets the difference between the first set and all the successive sets in <code>keys</code>.
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
      *     </code>.

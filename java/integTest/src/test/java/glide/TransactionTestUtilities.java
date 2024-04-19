@@ -107,12 +107,12 @@ public class TransactionTestUtilities {
         baseTransaction.smembers(key7);
         baseTransaction.smismember(key7, new String[] {"baz", "foo"});
         baseTransaction.sinter(new String[] {key7, key7});
-        baseTransaction.sdiff(new String[] {key7, key7});
 
         baseTransaction.sadd(setKey2, new String[] {"a", "b"});
         baseTransaction.sunionstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.sdiff(new String[] {setKey2, setKey3});
         baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -221,11 +221,11 @@ public class TransactionTestUtilities {
             Set.of("baz"), // smembers(key7)
             new Boolean[] {true, false}, // smismembmer(key7, new String[] {"baz", "foo"})
             Set.of("baz"), // sinter(new String[] { key7, key7 })
-            Set.of(), // sdiff(new String[] {key7, key7})
             2L, // sadd(setKey2, new String[] { "a", "b" })
             3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
             2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")

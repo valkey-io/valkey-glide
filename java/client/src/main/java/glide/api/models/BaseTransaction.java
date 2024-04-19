@@ -934,7 +934,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets the difference between the first set and all the successive sets in <code>keys</code>.
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
      * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
      * @param keys The keys of the sets to diff.
