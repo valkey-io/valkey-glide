@@ -2080,6 +2080,52 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zremrangebylex(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Returns:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebylex("my_sorted_set",  LexBoundary("a", is_inclusive=False), LexBoundary("e"))
+                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
     async def zlexcount(
         self,
         key: str,
@@ -2111,17 +2157,17 @@ class CoreCommands(Protocol):
             >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
                 1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
         """
-        min_lex_str = (
+        min_lex_arg = (
             min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
         )
-        max_lex_str = (
+        max_lex_arg = (
             max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
         )
 
         return cast(
             int,
             await self._execute_command(
-                RequestType.ZLexCount, [key, min_lex_str, max_lex_str]
+                RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
             ),
         )
 
