@@ -70,6 +70,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -2995,5 +2996,27 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void objectEncoding_returns_success() {
+        // setup
+        String key = "testKey";
+        String encoding = "testEncoding";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(encoding);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ObjectEncoding), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.objectEncoding(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(encoding, payload);
     }
 }

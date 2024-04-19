@@ -50,6 +50,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -2052,6 +2053,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T pfmerge(@NonNull String destination, @NonNull String[] sourceKeys) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destination));
         protobufTransaction.addCommands(buildCommand(PfMerge, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the internal encoding of.
+     * @return Command response - If <code>key</code> exists, returns the internal encoding of the
+     *     object stored at <code>key</code> as a <code>String</code>. Otherwise, return <code>null
+     *     </code>.
+     */
+    public T objectEncoding(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
         return getThis();
     }
 

@@ -120,6 +120,7 @@ pub enum RequestType {
     ZLexCount = 109,
     Append = 110,
     SInterStore = 114,
+    ObjectEncoding = 115,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -243,6 +244,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::Append => RequestType::Append,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
+            ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
         }
     }
 }
@@ -362,6 +364,7 @@ impl RequestType {
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::Append => Some(cmd("APPEND")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),
+            RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
         }
     }
 }
