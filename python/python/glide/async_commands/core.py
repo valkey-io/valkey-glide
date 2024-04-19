@@ -18,6 +18,7 @@ from typing import (
 
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -2076,6 +2077,51 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.ZRemRangeByScore, [key, score_min, score_max]
+            ),
+        )
+
+    async def zlexcount(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Returns:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zlexcount("my_sorted_set",  LexBoundary("c" , is_inclusive=True), InfBound.POS_INF)
+                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+            >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
+                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
+        """
+        min_lex_str = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_str = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZLexCount, [key, min_lex_str, max_lex_str]
             ),
         )
 
