@@ -1044,6 +1044,43 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sdiff(BaseClient client) {
+        String key1 = "{key}-1-" + UUID.randomUUID();
+        String key2 = "{key}-2-" + UUID.randomUUID();
+        String key3 = "{key}-3-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+
+        assertEquals(Set.of("a", "b"), client.sdiff(new String[] {key1, key2}).get());
+        assertEquals(Set.of("d", "e"), client.sdiff(new String[] {key2, key1}).get());
+
+        // second set is empty
+        assertEquals(Set.of("a", "b", "c"), client.sdiff(new String[] {key1, key3}).get());
+
+        // first set is empty
+        assertEquals(Set.of(), client.sdiff(new String[] {key3, key1}).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sdiff(new String[] {key1, key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sdiff(new String[] {"abc", "zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiffstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();

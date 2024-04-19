@@ -69,6 +69,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
@@ -486,6 +487,9 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+
+        transaction.sdiff(new String[] {"key1", "key2"});
+        results.add(Pair.of(SDiff, buildArgs("key1", "key2")));
 
         transaction.sdiffstore("key1", new String[] {"key2", "key3"});
         results.add(

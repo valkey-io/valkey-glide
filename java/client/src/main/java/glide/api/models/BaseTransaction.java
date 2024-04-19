@@ -64,6 +64,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
@@ -926,6 +927,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return Command Response - A <code>Set</code> of elements representing the difference between
+     *     the sets.<br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty set, and the
+     *     command returns an empty <code>Set</code>.
+     */
+    public T sdiff(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(SDiff, commandArgs));
         return getThis();
     }
 

@@ -84,6 +84,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
@@ -1729,6 +1730,29 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.scard(key);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sdiff_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        Set<String> value = Set.of("1", "2");
+
+        CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<String>>submitNewCommand(eq(SDiff), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<String>> response = service.sdiff(keys);
+        Set<String> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

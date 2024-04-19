@@ -157,6 +157,7 @@ enum RequestType {
     ZRangeStore = 115;
     GetRange = 116;
     SMove = 117;
+    SDiff = 122;
 }
 
 message Command {

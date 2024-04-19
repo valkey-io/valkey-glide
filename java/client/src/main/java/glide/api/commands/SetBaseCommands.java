@@ -118,6 +118,24 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean> sismember(String key, String member);
 
     /**
+     * Gets the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return A <code>Set</code> of elements representing the difference between the sets.<br>
+     *     If the first <code>key</code> does not exist, it is treated as an empty set, and the
+     *     command returns an empty <code>Set</code>.
+     * @example
+     *     <pre>{@code
+     * Set<String> values = client.sdiff(new String[] {"set1", "set2"}).get();
+     * assert values.contains("element"); // Indicates that "element" is present in "set1", but missing in "set2"
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> sdiff(String[] keys);
+
+    /**
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
