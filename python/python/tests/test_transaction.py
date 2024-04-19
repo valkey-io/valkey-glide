@@ -32,6 +32,7 @@ async def transaction_test(
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -198,6 +199,10 @@ async def transaction_test(
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+
+    transaction.pfadd(key11, ["a", "b", "c"])
+    args.append(1)
+
     return args
 
 

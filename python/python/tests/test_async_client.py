@@ -1741,6 +1741,19 @@ class TestCommands:
         assert await redis_client.append(key, value) == 10
         assert await redis_client.get(key) == value * 2
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pfadd(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        assert await redis_client.pfadd(key, []) == 1
+        assert await redis_client.pfadd(key, ["one", "two"]) == 1
+        assert await redis_client.pfadd(key, ["two"]) == 0
+        assert await redis_client.pfadd(key, []) == 0
+
+        assert await redis_client.set("foo", "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.pfadd("foo", [])
+
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):

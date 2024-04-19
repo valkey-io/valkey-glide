@@ -8,6 +8,7 @@
 * Node: Added ZRANGE command ([#1115](https://github.com/aws/glide-for-redis/pull/1115))
 * Python: Added RENAME command ([#1252](https://github.com/aws/glide-for-redis/pull/1252))
 * Python: Added APPEND command ([#1152](https://github.com/aws/glide-for-redis/pull/1152))
+* Python: Added PFADD command (TODO PR #)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
