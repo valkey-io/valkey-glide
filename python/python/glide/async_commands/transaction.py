@@ -9,6 +9,7 @@ from glide.async_commands.core import (
     ExpirySet,
     GeospatialData,
     InfoSection,
+    InsertPosition,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -772,6 +773,30 @@ class BaseTransaction:
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
+
+    def linsert(
+        self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> TTransaction:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Command response:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+        """
+        return self.append_command(
+            RequestType.LInsert, [key, position.value, pivot, element]
+        )
 
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:
         """
