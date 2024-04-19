@@ -202,6 +202,11 @@ class ExpirySet:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
 
 
+class InsertPosition(Enum):
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
+
+
 class CoreCommands(Protocol):
     async def _execute_command(
         self,
@@ -1058,6 +1063,37 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.RPop, [key, str(count)]),
+        )
+
+    async def linsert(
+        self, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> int:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Returns:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+
+        Examples:
+            >>> await client.linsert("my_list", InsertPosition.BEFORE, "World", "There")
+                3 # "There" was inserted before "World", and the new length of the list is 3.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.LInsert, [key, position.value, pivot, element]
+            ),
         )
 
     async def sadd(self, key: str, members: List[str]) -> int:
