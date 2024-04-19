@@ -12,6 +12,7 @@
 * Python: Added GEOHASH command ([#1281](https://github.com/aws/glide-for-redis/pull/1281))
 * Python: Added ZLEXCOUNT command ([#1305](https://github.com/aws/glide-for-redis/pull/1305))
 * Python: Added ZREMRANGEBYLEX command ([#1306](https://github.com/aws/glide-for-redis/pull/1306))
+* Python: Added LINSERT command ([#1304](https://github.com/aws/glide-for-redis/pull/1304))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
