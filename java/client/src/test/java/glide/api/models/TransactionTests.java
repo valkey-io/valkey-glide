@@ -502,13 +502,13 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
-      
+
         transaction.sdiffstore("key1", new String[] {"key2", "key3"});
         results.add(
                 Pair.of(
                         SDiffStore,
                         ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
-      
+
         transaction.objectEncoding("key");
         results.add(Pair.of(ObjectEncoding, buildArgs("key")));
 
