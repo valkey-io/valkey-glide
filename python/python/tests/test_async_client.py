@@ -1445,6 +1445,50 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zlexcount(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+
+        assert await redis_client.zadd(key1, members_scores) == 3
+        assert (
+            await redis_client.zlexcount(key1, InfBound.NEG_INF, InfBound.POS_INF) == 3
+        )
+        assert (
+            await redis_client.zlexcount(
+                key1,
+                LexBoundary("a", is_inclusive=False),
+                LexBoundary("c", is_inclusive=True),
+            )
+            == 2
+        )
+        assert (
+            await redis_client.zlexcount(
+                key1, InfBound.NEG_INF, LexBoundary("c", is_inclusive=True)
+            )
+            == 3
+        )
+        # Incorrect range; start > end
+        assert (
+            await redis_client.zlexcount(
+                key1, InfBound.POS_INF, LexBoundary("c", is_inclusive=True)
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zlexcount(
+                "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
+            )
+            == 0
+        )
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zlexcount(key2, InfBound.NEG_INF, InfBound.POS_INF)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zcard(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
