@@ -57,6 +57,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPersist,
+    createPfAdd,
     createPing,
     createPttl,
     createRPop,
@@ -1257,6 +1258,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public brpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBrpop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no `elements` are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     * If `key` does not exist, then the HyperLogLog structure is created.
+     *
+     * See https://redis.io/commands/pfadd/ for more details.
+     *
+     * @param key - The `key` of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     */
+    public pfadd(key: string, elements: string[]): T {
+        return this.addAndReturn(createPfAdd(key, elements));
     }
 }
 
