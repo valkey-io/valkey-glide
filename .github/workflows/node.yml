@@ -168,6 +168,12 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Create a symbolic Link for redis6 binaries
+              working-directory: ./node
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"
               working-directory: ./node

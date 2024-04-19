@@ -182,6 +182,12 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Create a symbolic Link for redis6 binaries
+              working-directory: ./python
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
             - name: Test compatibility with pytest
               working-directory: ./python
               run: |
