@@ -14,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -53,10 +54,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
@@ -70,6 +76,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -369,8 +376,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> setrange(@NonNull String key, int offset, @NonNull String value) {
-        return commandManager.submitNewCommand(
-                SetRange, new String[] {key, Integer.toString(offset), value}, this::handleLongResponse);
+        String[] arguments = new String[] {key, Integer.toString(offset), value};
+        return commandManager.submitNewCommand(SetRange, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getrange(@NonNull String key, int start, int end) {
+        String[] arguments = new String[] {key, Integer.toString(start), Integer.toString(end)};
+        return commandManager.submitNewCommand(GetRange, arguments, this::handleStringResponse);
     }
 
     @Override
@@ -547,9 +560,40 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean[]> smismember(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> sdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull String source, @NonNull String destination, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                SMove, new String[] {source, destination, member}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> sinterstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sinter(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SInter, keys, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sunionstore(@NonNull String destination, @NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SUnionStore, arguments, this::handleLongResponse);
     }
 
     @Override
@@ -818,6 +862,24 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zrangestore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull RangeQuery rangeQuery,
+            boolean reverse) {
+        String[] arguments =
+                RangeOptions.createZRangeStoreArgs(destination, source, rangeQuery, reverse);
+
+        return commandManager.submitNewCommand(ZRangeStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(
+            @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
+        return this.zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
     public CompletableFuture<String> xadd(@NonNull String key, @NonNull Map<String, String> values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
@@ -886,7 +948,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> zrange(
             @NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
-        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, false);
+        String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, false);
 
         return commandManager.submitNewCommand(
                 Zrange,
@@ -902,7 +964,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
-        String[] arguments = RangeOptions.createZrangeArgs(key, rangeQuery, reverse, true);
+        String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, true);
 
         return commandManager.submitNewCommand(Zrange, arguments, this::handleMapResponse);
     }
