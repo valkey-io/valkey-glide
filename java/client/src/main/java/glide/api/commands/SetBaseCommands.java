@@ -77,6 +77,22 @@ public interface SetBaseCommands {
     CompletableFuture<Long> scard(String key);
 
     /**
+     * Checks whether each member is contained in the members of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
+     * @param key The key of the set to check.
+     * @param members A list of members to check for existence in the set.
+     * @return An <code>array</code> of <code>Boolean</code> values, each indicating if the respective
+     *     member exists in the set.
+     * @example
+     *     <pre>{@code
+     * Boolean[] areMembers = client.smismembmer("my_set", new String[] { "a", "b", "c" }).get();
+     * assert areMembers[0] && areMembers[1] && !areMembers[2]; // Only first two elements are present in "my_set"
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> smismember(String key, String[] members);
+
+    /**
      * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
@@ -188,4 +204,22 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sinterstore(String destination, String[] keys);
+
+    /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sunionstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sunionstore(String destination, String[] keys);
 }
