@@ -41,6 +41,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -332,6 +333,12 @@ public abstract class BaseClient
     public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectFreq(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
