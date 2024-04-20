@@ -4,7 +4,6 @@ package glide.cluster;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,14 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.TestConfiguration;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
-import glide.api.models.Transaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
-import java.util.UUID;
-
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -98,18 +93,17 @@ public class ClusterTransactionTests {
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
-    /* TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
-    @Test
-    @SneakyThrows
-    public void objectFreq() {
-        String objectFreqKey = "key";
-        ClusterTransaction transaction = new ClusterTransaction();
-        clusterClient.configSet(Map.of("maxmemory-policy", "allkeys-lfu"), ALL_NODES).get();
-        transaction.set(objectFreqKey, "");
-        transaction.objectFreq(objectFreqKey);
-        var response = clusterClient.exec(transaction).get();
-        assertEquals(OK, response[0]);
-        assertTrue((long) response[1] >= 0L);
-    }
-    */
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
+    // public void objectFreq() {
+    //    String objectFreqKey = "key";
+    //    ClusterTransaction transaction = new ClusterTransaction();
+    //    clusterClient.configSet(Map.of("maxmemory-policy", "allkeys-lfu"), ALL_NODES).get();
+    //    transaction.set(objectFreqKey, "");
+    //    transaction.objectFreq(objectFreqKey);
+    //    var response = clusterClient.exec(transaction).get();
+    //    assertEquals(OK, response[0]);
+    //    assertTrue((long) response[1] >= 0L);
+    // }
 }
