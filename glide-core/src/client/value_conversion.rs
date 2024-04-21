@@ -164,7 +164,10 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(array) => {
                 let array_of_bools = array
                     .iter()
-                    .map(|v| Value::Boolean(from_owned_redis_value::<bool>(v.clone()).unwrap()))
+                    .map(|v| {
+                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Boolean))
+                            .unwrap()
+                    })
                     .collect();
                 Ok(Value::Array(array_of_bools))
             }
