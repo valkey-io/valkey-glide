@@ -107,7 +107,7 @@ async fn run_with_timeout<T>(
     }
 }
 
-// Extension to the request timeout for blocking commands to ensure we won't return with timeout error before the server responded
+/// Extension to the request timeout for blocking commands to ensure we won't return with timeout error before the server responded
 const BLOCKING_CMD_TIMEOUT_EXTENSION: f64 = 0.5; // seconds
 
 enum TimeUnit {
@@ -115,7 +115,7 @@ enum TimeUnit {
     Seconds = 1,
 }
 
-// Enumeration representing different request timeout options.
+/// Enumeration representing different request timeout options.
 #[derive(Default, PartialEq, Debug)]
 enum RequestTimeoutOption {
     // Indicates no timeout should be set for the request.
@@ -127,14 +127,9 @@ enum RequestTimeoutOption {
     BlockingCommand(Duration),
 }
 
-// Attempts to get the timeout duration from the command argument at `timeout_idx`.
-// If the argument can be parsed into a duration, it returns the duration in seconds with BlockingCmdTimeout.
-// If the timeout argument value is zero, NoTimeout will be returned. Otherwise, ClientConfigTimeout is returned.
-fn get_timeout_from_cmd_arg(
-    cmd: &Cmd,
-    timeout_idx: usize,
-    time_unit: TimeUnit,
-) -> RedisResult<RequestTimeoutOption> {
+/// Helper function for parsing a timeout argument to f64.
+/// Attempts to parse the argument found at `timeout_idx` from bytes into an f64.
+fn parse_timeout_to_f64(cmd: &Cmd, timeout_idx: usize) -> RedisResult<f64> {
     let create_err = |err_msg| {
         RedisError::from((
             ErrorKind::ResponseError,
@@ -147,46 +142,52 @@ fn get_timeout_from_cmd_arg(
             ),
         ))
     };
-    cmd.arg_idx(timeout_idx)
-        .ok_or(create_err("Couldn't find timeout index"))
-        .and_then(|timeout_bytes| {
-            let timeout_str = std::str::from_utf8(timeout_bytes)
-                .map_err(|_| create_err("Failed to parse the timeout argument to string"))?;
-            timeout_str
-                .parse::<f64>()
-                .map_err(|_| create_err("Failed to parse the timeout argument to f64"))
-                .and_then(|timeout| {
-                    let timeout_secs = timeout / ((time_unit as i32) as f64);
-                    if timeout_secs < 0.0 {
-                        // Timeout cannot be negative, return the client's configured request timeout
-                        Err(RedisError::from((
-                            ErrorKind::ResponseError,
-                            "Timeout cannot be negative",
-                            format!("Recieved timeout={:?}", timeout_str),
-                        )))
-                    } else if timeout_secs == 0.0 {
-                        // `0` means we should set no timeout
-                        Ok(RequestTimeoutOption::NoTimeout)
-                    } else {
-                        // We limit the maximum timeout due to restrictions imposed by Redis and the Duration crate
-                        if timeout_secs > u32::MAX as f64 {
-                            Err(RedisError::from((
-                                ErrorKind::ResponseError,
-                                "Timeout is out of range, max timeout is 2^32 - 1 (u32::MAX)",
-                                format!("Recieved timeout={:?}", timeout_secs),
-                            )))
-                        } else {
-                            // Extend the request timeout to ensure we don't timeout before receiving a response from the server.
-                            Ok(RequestTimeoutOption::BlockingCommand(
-                                Duration::from_secs_f64(
-                                    (timeout_secs + BLOCKING_CMD_TIMEOUT_EXTENSION)
-                                        .min(u32::MAX as f64),
-                                ),
-                            ))
-                        }
-                    }
-                })
-        })
+    let timeout_bytes = cmd
+        .arg_idx(timeout_idx)
+        .ok_or(create_err("Couldn't find timeout index"))?;
+    let timeout_str = std::str::from_utf8(timeout_bytes)
+        .map_err(|_| create_err("Failed to parse the timeout argument to string"))?;
+    timeout_str
+        .parse::<f64>()
+        .map_err(|_| create_err("Failed to parse the timeout argument to f64"))
+}
+
+/// Attempts to get the timeout duration from the command argument at `timeout_idx`.
+/// If the argument can be parsed into a duration, it returns the duration in seconds with BlockingCmdTimeout.
+/// If the timeout argument value is zero, NoTimeout will be returned. Otherwise, ClientConfigTimeout is returned.
+fn get_timeout_from_cmd_arg(
+    cmd: &Cmd,
+    timeout_idx: usize,
+    time_unit: TimeUnit,
+) -> RedisResult<RequestTimeoutOption> {
+    let timeout_secs = parse_timeout_to_f64(cmd, timeout_idx)? / ((time_unit as i32) as f64);
+    if timeout_secs < 0.0 {
+        // Timeout cannot be negative, return the client's configured request timeout
+        Err(RedisError::from((
+            ErrorKind::ResponseError,
+            "Timeout cannot be negative",
+            format!("Recieved timeout={:?}", timeout_secs),
+        )))
+    } else if timeout_secs == 0.0 {
+        // `0` means we should set no timeout
+        Ok(RequestTimeoutOption::NoTimeout)
+    } else {
+        // We limit the maximum timeout due to restrictions imposed by Redis and the Duration crate
+        if timeout_secs > u32::MAX as f64 {
+            Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "Timeout is out of range, max timeout is 2^32 - 1 (u32::MAX)",
+                format!("Recieved timeout={:?}", timeout_secs),
+            )))
+        } else {
+            // Extend the request timeout to ensure we don't timeout before receiving a response from the server.
+            Ok(RequestTimeoutOption::BlockingCommand(
+                Duration::from_secs_f64(
+                    (timeout_secs + BLOCKING_CMD_TIMEOUT_EXTENSION).min(u32::MAX as f64),
+                ),
+            ))
+        }
+    }
 }
 
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
@@ -220,7 +221,7 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         let expected_type = expected_type_for_cmd(cmd);
         let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
-            Ok(requet_timeout) => requet_timeout,
+            Ok(request_timeout) => request_timeout,
             Err(err) => {
                 return async { Err(err) }.boxed();
             }
