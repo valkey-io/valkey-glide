@@ -1,5 +1,5 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
-
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -147,6 +147,125 @@ class GeospatialData:
         """
         self.longitude = longitude
         self.latitude = latitude
+
+
+class StreamTrimOptions(ABC):
+    """
+    Abstract base class for stream trim options.
+    """
+
+    @abstractmethod
+    def __init__(
+        self,
+        exact: bool,
+        threshold: Union[str, int],
+        method: str,
+        limit: Optional[int] = None,
+    ):
+        """
+        Initialize stream trim options.
+
+        Args:
+            exact (bool): If True, trim exactly, else trim near-exactly.
+            threshold (Union[str, int]): Threshold for trimming.
+            method (str): Method for trimming (e.g., MINID, MAXLEN).
+            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+        """
+        self.exact = exact
+        self.threshold = threshold
+        self.method = method
+        self.limit = limit
+
+    @abstractmethod
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = [
+            self.method,
+            "=" if self.exact else "~",
+            str(self.threshold),
+        ]
+        if self.limit is not None:
+            option_args.extend(["LIMIT", str(self.limit)])
+        return option_args
+
+
+class TrimByMinId(StreamTrimOptions):
+    """
+    Stream trim option to trim by minimum ID.
+    """
+
+    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
+        """
+        Initialize trim option by minimum ID.
+
+        Args:
+            exact (bool): If True, trim exactly, else trim near-exactly.
+            threshold (str): Threshold for trimming by minimum ID.
+            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+        """
+        super().__init__(exact, threshold, "MINID", limit)
+
+
+class TrimByMaxLen(StreamTrimOptions):
+    """
+    Stream trim option to trim by maximum length.
+    """
+
+    def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
+        """
+        Initialize trim option by maximum length.
+
+        Args:
+            exact (bool): If True, trim exactly, else trim near-exactly.
+            threshold (int): Threshold for trimming by maximum length.
+            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+        """
+        super().__init__(exact, threshold, "MAXLEN", limit)
+
+
+class StreamAddOptions:
+    """
+    Options for adding entries to a stream.
+    """
+
+    def __init__(
+        self,
+        id: Optional[str] = None,
+        make_stream: bool = True,
+        trim: Optional[StreamTrimOptions] = None,
+    ):
+        """
+        Initialize stream add options.
+
+        Args:
+            id (Optional[str]): ID for the new entry. If not specified, '*' is used.
+            make_stream (bool, optional): If True, create a new stream if it doesn't exist. Defaults to True.
+            trim (Optional[StreamTrimOptions], optional): Trim options for the stream. Defaults to None. See `StreamTrimOptions`.
+        """
+        self.id = id
+        self.make_stream = make_stream
+        self.trim = trim
+
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = []
+        if not self.make_stream:
+            option_args.append("NOMKSTREAM")
+        if self.trim:
+            option_args.extend(self.trim.to_args())
+        option_args.append(self.id if self.id else "*")
+
+        return option_args
 
 
 class GeoUnit(Enum):
@@ -1674,6 +1793,36 @@ class CoreCommands(Protocol):
                 'list'
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
+
+    async def xadd(
+        self,
+        key: str,
+        values: List[Tuple[str, str]],
+        options: Optional[StreamAddOptions] = None,
+    ):
+        """
+        Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+
+        See https://valkey.io/commands/xadd for more details.
+
+        Args:
+            key (str): The key of the stream.
+            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Defaults to None.
+
+        Returns:
+            str: The id of the added entry, or None if `options.make_stream` is set to `False` and no stream with the matching `key` exists.
+
+        Example:
+            >>> await client.xadd("mystream", [("field1", "value1"), ("field2", "value2")])
+                "1615957011958-0"  # Example stream entry ID.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+        args.extend([field for pair in values for field in pair])
+
+        return await self._execute_command(RequestType.XAdd, args)
 
     async def geoadd(
         self,

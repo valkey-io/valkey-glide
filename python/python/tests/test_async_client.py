@@ -2122,6 +2122,11 @@ class TestCommands:
 
         assert await redis_client.append(key, value) == 10
         assert await redis_client.get(key) == value * 2
+    
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xadd(self, redis_client: TRedisClient):
+        key = get_random_string(10)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
