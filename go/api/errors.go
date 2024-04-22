@@ -6,7 +6,8 @@ package api
 // #include "../lib.h"
 import "C"
 
-// ConnectionError is a Redis client error that occurs when there is an error while connecting or when a connection disconnects.
+// ConnectionError is a Redis client error that occurs when there is an error while connecting or when a connection
+// disconnects.
 type ConnectionError struct {
 	msg string
 }
