@@ -53,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -2237,6 +2238,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectEncoding(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the idle time of.
+     * @return Command response - If <code>key</code> exists, returns the idle time in seconds of the
+     *     object at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null</code>.
+     */
+    public T objectIdletime(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectIdletime, commandArgs));
         return getThis();
     }
 

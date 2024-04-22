@@ -42,6 +42,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -339,6 +340,12 @@ public abstract class BaseClient
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectIdletime(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
