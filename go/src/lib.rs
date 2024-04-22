@@ -3,7 +3,7 @@
  */
 
 // TODO: Investigate using uniffi bindings for Go instead of cbindgen
-// TODO: Uncomment this line after Rust code is finalized. It is uncommented to avoid compilation errors about unsafe usage.
+// TODO: Uncomment this line after Rust code is finalized. It is commented out to avoid compilation errors about unsafe usage.
 // #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;

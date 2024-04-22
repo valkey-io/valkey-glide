@@ -2,6 +2,11 @@
 
 package api
 
+// StringCommands defines an interface for the "String Commands" group of Redis commands for standalone and cluster clients.
+//
+// See [redis.io] for details.
+//
+// [redis.io]: https://redis.io/commands/?group=string
 type StringCommands interface {
 	// Set the given key with the given value. The return value is a response from Redis containing the string "OK".
 	//
