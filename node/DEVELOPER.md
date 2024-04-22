@@ -30,7 +30,12 @@ sudo apt update -y
 sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check the installed node version
+node -v
+# If the installed node version is below 16, see the instructions below
 ```
+
+> If node -v return version bellow 16 refer to [Installing specific node version](https://www.linode.com/docs/guides/install-nodejs-on-ubuntu-22-04/#installing-a-specific-version) or to [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script) in order to fix it.
 
 **Dependencies installation for CentOS**
 
