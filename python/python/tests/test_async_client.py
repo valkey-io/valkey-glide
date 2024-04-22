@@ -2067,7 +2067,7 @@ class TestCommands:
         assert (await redis_client.type(key)).lower() == "hash"
         assert await redis_client.delete([key]) == 1
 
-        await redis_client.custom_command(["XADD", key, "*", "field", "value"])
+        await redis_client.xadd(key, [("field", "value")])
         assert await redis_client.type(key) == "stream"
         assert await redis_client.delete([key]) == 1
 
