@@ -52,11 +52,6 @@ jobs:
               with:
                   submodules: "true"
                   ref: ${{ env.BASE_BRANCH }}
-            # This is a temporary fix, till ORT will fix thire issue with newer v of Cargo - https://github.com/oss-review-toolkit/ort/issues/8480 
-            - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.76 
-              with:
-                targets: ${{ inputs.target }}
 
             - name: Set up JDK 11 for the ORT package
               uses: actions/setup-java@v4
