@@ -387,7 +387,7 @@ public interface GenericBaseCommands {
      * assert frequency == 2L;
      *
      * frequency = client.objectFreq("non_existing_key").get();
-     * assert frequency.equals(null);
+     * assert frequency == null;
      * }</pre>
      */
     CompletableFuture<Long> objectFreq(String key);
