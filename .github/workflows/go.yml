@@ -147,6 +147,9 @@ jobs:
               working-directory: ./go
               run: make install-tools-go${{ matrix.go }}
 
+            - name: Set LD_LIBRARY_PATH
+              run: echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/" >> $GITHUB_ENV
+
             - name: Build client
               working-directory: ./go
               run: make build
