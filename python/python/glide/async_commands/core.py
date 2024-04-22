@@ -166,7 +166,8 @@ class StreamTrimOptions(ABC):
         Initialize stream trim options.
 
         Args:
-            exact (bool): If True, trim exactly, else trim near-exactly.
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (Union[str, int]): Threshold for trimming.
             method (str): Method for trimming (e.g., MINID, MAXLEN).
             limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
@@ -176,7 +177,6 @@ class StreamTrimOptions(ABC):
         self.method = method
         self.limit = limit
 
-    @abstractmethod
     def to_args(self) -> List[str]:
         """
         Convert options to arguments for Redis command.
@@ -204,7 +204,8 @@ class TrimByMinId(StreamTrimOptions):
         Initialize trim option by minimum ID.
 
         Args:
-            exact (bool): If True, trim exactly, else trim near-exactly.
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (str): Threshold for trimming by minimum ID.
             limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
         """
@@ -221,7 +222,8 @@ class TrimByMaxLen(StreamTrimOptions):
         Initialize trim option by maximum length.
 
         Args:
-            exact (bool): If True, trim exactly, else trim near-exactly.
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (int): Threshold for trimming by maximum length.
             limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
         """
@@ -243,9 +245,9 @@ class StreamAddOptions:
         Initialize stream add options.
 
         Args:
-            id (Optional[str]): ID for the new entry. If not specified, '*' is used.
-            make_stream (bool, optional): If True, create a new stream if it doesn't exist. Defaults to True.
-            trim (Optional[StreamTrimOptions], optional): Trim options for the stream. Defaults to None. See `StreamTrimOptions`.
+            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
+            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
         """
         self.id = id
         self.make_stream = make_stream
@@ -1798,8 +1800,8 @@ class CoreCommands(Protocol):
         self,
         key: str,
         values: List[Tuple[str, str]],
-        options: Optional[StreamAddOptions] = None,
-    ):
+        options: StreamAddOptions = StreamAddOptions(),
+    ) -> Optional[str]:
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 
@@ -1808,21 +1810,53 @@ class CoreCommands(Protocol):
         Args:
             key (str): The key of the stream.
             values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
-            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Defaults to None.
+            options (StreamAddOptions, optional): Additional options for adding entries to the stream. See `StreamAddOptions`.
 
         Returns:
-            str: The id of the added entry, or None if `options.make_stream` is set to `False` and no stream with the matching `key` exists.
+            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
 
         Example:
-            >>> await client.xadd("mystream", [("field1", "value1"), ("field2", "value2")])
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")])
                 "1615957011958-0"  # Example stream entry ID.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1", make_stream=False))
+                None  # The key doesn't exist, therefore, None is returned.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1"))
+                "0-1"  # Returns the stream id.
         """
         args = [key]
         if options:
             args.extend(options.to_args())
         args.extend([field for pair in values for field in pair])
 
-        return await self._execute_command(RequestType.XAdd, args)
+        return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
+
+    async def xtrim(
+        self,
+        key: str,
+        options: StreamTrimOptions,
+    ) -> int:
+        """
+        Trims the stream stored at `key` by evicting older entries.
+
+        See https://valkey.io/commands/xtrim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
+
+        Returns:
+            int: TThe number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+
+        Example:
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")], StreamAddOptions(id="0-1"))
+            >>> await client.xtrim("mystream", TrimByMinId(exact=True, threshold="0-2")))
+                1 # One entry was deleted from the stream.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+
+        return cast(int, await self._execute_command(RequestType.XTrim, args))
 
     async def geoadd(
         self,
