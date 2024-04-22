@@ -57,6 +57,9 @@ format:
 test:
 	go test -v -race ./...
 
+# Note: this task is no longer run by CI because:
+# - build failures that occur while running the task can be hidden by the task; CI still reports success in these scenarios.
+# - there is not a good way to both generate a test report and log the test outcomes to GH actions.
 test-and-report:
 	mkdir -p reports
 	go test -v -race ./... -json | go-test-report -o reports/test-report.html

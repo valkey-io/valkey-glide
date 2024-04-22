@@ -147,7 +147,7 @@ pub unsafe extern "C" fn create_client(
 // TODO: Ensure safety when command has not completed yet
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
-    assert!(client_adapter_ptr.is_null());
+    assert!(!client_adapter_ptr.is_null());
     drop(unsafe { Box::from_raw(client_adapter_ptr as *mut ClientAdapter) });
 }
 
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
 pub unsafe extern "C" fn free_connection_response(
     connection_response_ptr: *mut ConnectionResponse,
 ) {
-    assert!(connection_response_ptr.is_null());
+    assert!(!connection_response_ptr.is_null());
     let connection_response = unsafe { Box::from_raw(connection_response_ptr) };
     let connection_error_message = connection_response.connection_error_message;
     drop(connection_response);
