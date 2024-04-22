@@ -160,6 +160,7 @@ enum RequestType {
     SMove = 117;
     SMIsMember = 118;
     LastSave = 120;
+    LOLWUT = 100500;
 }
 
 message Command {
