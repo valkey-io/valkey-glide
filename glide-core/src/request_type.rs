@@ -128,6 +128,9 @@ pub enum RequestType {
     SMove = 117,
     SMIsMember = 118,
     LastSave = 120,
+    GeoAdd = 121,
+    GeoHash = 122,
+    ObjectEncoding = 123,
     LOLWUT = 100500,
 }
 
@@ -260,6 +263,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SMove => RequestType::SMove,
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
             ProtobufRequestType::LastSave => RequestType::LastSave,
+            ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
+            ProtobufRequestType::GeoHash => RequestType::GeoHash,
+            ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
             ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
         }
     }
@@ -388,6 +394,9 @@ impl RequestType {
             RequestType::SMove => Some(cmd("SMOVE")),
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
             RequestType::LastSave => Some(cmd("LASTSAVE")),
+            RequestType::GeoAdd => Some(cmd("GEOADD")),
+            RequestType::GeoHash => Some(cmd("GEOHASH")),
+            RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
             RequestType::LOLWUT => Some(cmd("LOLWUT")),
         }
     }
