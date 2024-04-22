@@ -73,6 +73,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -3281,5 +3282,27 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(encoding, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void objectIdletime_returns_success() {
+        // setup
+        String key = "testKey";
+        Long idletime = 0L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(idletime);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ObjectIdletime), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.objectIdletime(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(idletime, payload);
     }
 }
