@@ -2588,7 +2588,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void objectEncoding(BaseClient client) {
+    public void objectFreq(BaseClient client) {
         String key = UUID.randomUUID().toString();
         if (client instanceof RedisClient) {
             assertEquals(
