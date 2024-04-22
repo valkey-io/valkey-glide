@@ -92,4 +92,18 @@ public class ClusterTransactionTests {
         var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
+
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
+    // public void objectFreq() {
+    //    String objectFreqKey = "key";
+    //    ClusterTransaction transaction = new ClusterTransaction();
+    //    clusterClient.configSet(Map.of("maxmemory-policy", "allkeys-lfu"), ALL_NODES).get();
+    //    transaction.set(objectFreqKey, "");
+    //    transaction.objectFreq(objectFreqKey);
+    //    var response = clusterClient.exec(transaction).get();
+    //    assertEquals(OK, response[0]);
+    //    assertTrue((long) response[1] >= 0L);
+    // }
 }

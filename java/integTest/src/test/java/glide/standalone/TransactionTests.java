@@ -17,6 +17,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -120,5 +121,19 @@ public class TransactionTests {
 
         var response = client.exec(new Transaction().lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String objectFreqKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.configSet(Map.of("maxmemory-policy", "allkeys-lfu"));
+        transaction.set(objectFreqKey, "");
+        transaction.objectFreq(objectFreqKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertEquals(OK, response[1]);
+        assertTrue((long) response[2] >= 0L);
     }
 }

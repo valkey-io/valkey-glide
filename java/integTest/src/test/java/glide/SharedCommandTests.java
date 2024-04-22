@@ -2576,4 +2576,29 @@ public class SharedCommandTests {
                         ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectFreq_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectFreq(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectFreq(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        if (client instanceof RedisClient) {
+            assertEquals(
+                    OK, ((RedisClient) client).configSet(Map.of("maxmemory-policy", "allkeys-lfu")).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                    OK,
+                    ((RedisClusterClient) client).configSet(Map.of("maxmemory-policy", "allkeys-lfu")).get());
+        }
+        assertEquals(OK, client.set(key, "").get());
+        assertTrue(client.objectFreq(key).get() >= 0L);
+    }
 }
