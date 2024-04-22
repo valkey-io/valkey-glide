@@ -140,8 +140,7 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 	}
 }
 
-// RedisClientConfiguration represents the configuration settings for a Standalone Redis client. baseClientConfiguration is an
-// embedded struct that contains shared settings for standalone and cluster clients.
+// RedisClientConfiguration represents the configuration settings for a Standalone Redis client.
 type RedisClientConfiguration struct {
 	baseClientConfiguration
 	reconnectStrategy *BackoffStrategy
