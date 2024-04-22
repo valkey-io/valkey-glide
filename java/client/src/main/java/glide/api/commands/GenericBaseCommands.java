@@ -383,7 +383,7 @@ public interface GenericBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * String frequency = client.objectFreq("my_hash").get();
+     * Long frequency = client.objectFreq("my_hash").get();
      * assert frequency == 2L;
      *
      * frequency = client.objectFreq("non_existing_key").get();
