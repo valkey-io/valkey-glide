@@ -5,6 +5,7 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -13,6 +14,7 @@ import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
+import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
@@ -368,10 +370,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        // The setup for the Integration Tests server does not include a configuration file for Redis.
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        var info = clusterClient.info(InfoOptions.builder().section(SERVER).build(), RANDOM).get();
+        var configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
+
+        if (configFile.isEmpty()) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            assertEquals(OK, clusterClient.configRewrite().get());
+        }
     }
 
     // returns the line that contains the word "myself", up to that point. This is done because the
