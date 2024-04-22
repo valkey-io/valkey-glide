@@ -273,7 +273,7 @@ async def strlen(
     Args:
         client (TRedisClient): The Redis client to execute the command.
         key (str): The key of the JSON document.
-        path (Optional[str]): The JSONPath to specify. Default is root `$`. // TODO check (since when sending strlen "non_exiting" and strlen "non_exiting" . -> behaves the same)
+        path (Optional[str]): The JSONPath to specify. If not passed, a default value will be used.
 
     Returns:
         TJsonResponse[Optional[int]]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path,
