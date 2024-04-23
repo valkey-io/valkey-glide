@@ -3,11 +3,12 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
+	"math/big"
 	"os"
 	"sort"
 	"strings"
@@ -247,14 +248,22 @@ const (
 )
 
 func keyFromExistingKeyspace() string {
-	localRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprint(math.Floor(localRand.Float64()*float64(sizeExistingKeyspace)) + 1)
+	randNum, err := rand.Int(rand.Reader, big.NewInt(sizeExistingKeyspace))
+	if err != nil {
+		log.Fatal("Error while generating random number for existing keyspace: ", err)
+	}
+
+	return fmt.Sprint(randNum.Int64() + 1)
 }
 
 func keyFromNewKeyspace() string {
-	localRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	totalRange := sizeNewKeyspace - sizeExistingKeyspace
-	return fmt.Sprint(math.Floor(localRand.Float64()*float64(totalRange) + sizeExistingKeyspace + 1))
+	var totalRange int64 = sizeNewKeyspace - sizeExistingKeyspace
+	randNum, err := rand.Int(rand.Reader, big.NewInt(totalRange))
+	if err != nil {
+		log.Fatal("Error while generating random number for existing keyspace: ", err)
+	}
+
+	return fmt.Sprint(randNum.Int64() + sizeExistingKeyspace + 1)
 }
 
 type actionLatency struct {
@@ -304,7 +313,7 @@ func measureOperation(operation operations, client benchmarkClient) time.Duratio
 	_, err := operation(client)
 	duration := time.Since(start)
 	if err != nil {
-		log.Print("Error while executing operation: ", err)
+		log.Print("error while executing operation: ", err)
 	}
 
 	return duration
@@ -315,13 +324,22 @@ const (
 	probGetExistingKey = 0.8
 )
 
+// randFloat generates a random float64 in the range [0.0, 1.0)
+func randFloat() float64 {
+	// 1 << 53 is used because a float64 value contains 53 bits for the mantissa and 11 other bits.
+	randInt, err := rand.Int(rand.Reader, big.NewInt(1<<53))
+	if err != nil {
+		log.Fatal("Error creating random float64: ", err)
+	}
+	return float64(randInt.Int64()) / (1 << 53)
+}
+
 func randomAction() string {
-	localRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	if localRand.Float64() > probGet {
+	if randFloat() > probGet {
 		return set
 	}
 
-	if localRand.Float64() > probGetExistingKey {
+	if randFloat() > probGetExistingKey {
 		return getNonExisting
 	}
 

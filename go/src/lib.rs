@@ -179,6 +179,9 @@ pub unsafe extern "C" fn free_connection_response(
     }
 }
 
+// TODO: The Rust code below is not polished - some work is required to get it up to the desired standards to be merged into main.
+// The code below simply exists to get commands working for now.
+
 // Cannot use glide_core::redis_request::RequestType, because it is not FFI safe
 #[repr(u32)]
 pub enum RequestType {
@@ -382,7 +385,8 @@ pub unsafe extern "C" fn command(
     arg_count: usize,
     args: *const *const c_char,
 ) {
-    let client_adapter = unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
+    let client_adapter =
+        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
     // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
     let ptr_address = client_adapter_ptr as usize;
 
