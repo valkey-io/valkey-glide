@@ -42,6 +42,13 @@ type DisconnectError struct {
 
 func (e *DisconnectError) Error() string { return e.msg }
 
+// ClosingError is a Redis client error that indicates that the client has closed and is no longer usable.
+type ClosingError struct {
+	msg string
+}
+
+func (e *ClosingError) Error() string { return e.msg }
+
 func goError(cErrorType C.RequestErrorType, cErrorMessage *C.char) error {
 	msg := C.GoString(cErrorMessage)
 	switch cErrorType {

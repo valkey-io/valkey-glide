@@ -170,7 +170,9 @@ func (config *RedisClientConfiguration) toProtobuf() *protobuf.ConnectionRequest
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be
 // called multiple times to add multiple addresses to the list. If the server is in cluster mode the list can be partial, as
 // the client will attempt to map out the cluster and find all nodes. If the server is in standalone mode, only nodes whose
-// addresses were provided will be used by the client. For example:
+// addresses were provided will be used by the client.
+//
+// For example:
 //
 //	config := NewRedisClientConfiguration().
 //	    WithAddress(&NodeAddress{
@@ -256,7 +258,9 @@ func (config *RedisClusterClientConfiguration) toProtobuf() *protobuf.Connection
 // WithAddress adds an address for a known node in the cluster to this configuration's list of addresses. WithAddress can be
 // called multiple times to add multiple addresses to the list. If the server is in cluster mode the list can be partial, as
 // the client will attempt to map out the cluster and find all nodes. If the server is in standalone mode, only nodes whose
-// addresses were provided will be used by the client. For example:
+// addresses were provided will be used by the client.
+//
+// For example:
 //
 //	config := NewRedisClusterClientConfiguration().
 //	    WithAddress(&NodeAddress{
