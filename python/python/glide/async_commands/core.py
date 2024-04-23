@@ -2268,23 +2268,23 @@ class CoreCommands(Protocol):
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
         Creates a new structure if the `key` does not exist.
 
-        When no `elements` are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+        When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
         If `key` does not exist, then the HyperLogLog structure is created.
 
         See https://redis.io/commands/pfadd/ for more details.
 
         Args:
-            key (str): The `key` of the HyperLogLog data structure to add elements into.
+            key (str): The key of the HyperLogLog data structure to add elements into.
             elements (List[str]): An list of members to add to the HyperLogLog stored at `key`.
 
         Returns:
             int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-            altered, then returns `1`. Otherwise, returns `0`.
+            altered, then returns 1. Otherwise, returns 0.
 
         Examples:
-            >>> client.pfadd("hll_1", ["a", "b", "c" ])
+            >>> await client.pfadd("hll_1", ["a", "b", "c" ])
                 1 # A data structure was created or modified
-            >>> client.pfadd("hll_2", [])
+            >>> await client.pfadd("hll_2", [])
                 1 # A new empty data structure was created
         """
         return cast(
