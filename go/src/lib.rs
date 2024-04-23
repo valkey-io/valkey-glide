@@ -367,6 +367,12 @@ fn get_two_word_command(first: &str, second: &str) -> Cmd {
 use std::slice::from_raw_parts;
 use std::str::Utf8Error;
 
+// TODO: Finish documentation
+/// Converts a double pointer to a vec.
+///
+/// # Safety
+///
+/// * TODO: finish safety section.
 pub unsafe fn convert_double_pointer_to_vec(
     data: *const *const c_char,
     len: usize,
@@ -377,6 +383,12 @@ pub unsafe fn convert_double_pointer_to_vec(
         .collect()
 }
 
+// TODO: Finish documentation
+/// Executes a command.
+///
+/// # Safety
+///
+/// * TODO: finish safety section.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
@@ -403,10 +415,9 @@ pub unsafe extern "C" fn command(
         let value = match result {
             Ok(value) => value,
             Err(err) => {
-                print!(" === err {:?}\n", err);
-                let redis_error = err.into();
-                let message = errors::error_message(&redis_error);
-                let error_type = errors::error_type(&redis_error);
+                println!(" === err {:?}", err);
+                let message = errors::error_message(&err);
+                let error_type = errors::error_type(&err);
 
                 let c_err_str = CString::into_raw(CString::new(message).unwrap());
                 unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
@@ -436,9 +447,8 @@ pub unsafe extern "C" fn command(
                 Ok(None) => (client_adapter.success_callback)(channel, std::ptr::null()),
                 Ok(Some(c_str)) => (client_adapter.success_callback)(channel, c_str.as_ptr()),
                 Err(err) => {
-                    let redis_error = err.into();
-                    let message = errors::error_message(&redis_error);
-                    let error_type = errors::error_type(&redis_error);
+                    let message = errors::error_message(&err);
+                    let error_type = errors::error_type(&err);
 
                     let c_err_str = CString::into_raw(CString::new(message).unwrap());
                     (client_adapter.failure_callback)(channel, c_err_str, error_type);
