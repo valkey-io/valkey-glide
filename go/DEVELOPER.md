@@ -110,17 +110,23 @@ Before starting this step, make sure you've installed all software requirements.
     cd go
     make install-build-tools
     ```
-4. Build the Go wrapper:
+4. If on CentOS or Ubuntu, add the glide-rs library to LD_LIBRARY_PATH:
+    ```bash
+    # Replace "<path to glide-for-redis>" with the path to the glide-for-redis root, eg "$HOME/Projects/glide-for-redis"
+    GLIDE_ROOT_FOLDER_PATH=<path to glide-for-redis>
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GLIDE_ROOT_FOLDER_PATH/go/target/release/deps/
+    ```
+5. Build the Go wrapper:
     ```bash
     make build
     ```
-5. Run tests:
+6. Run tests:
     1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
     2. Execute the following command from the go folder:
         ```bash
         go test -race ./...
         ```
-6. Install Go development tools with:
+7. Install Go development tools with:
     ```bash
     # For go1.22:
     make install-dev-tools
@@ -193,7 +199,7 @@ Run from the main `/go` folder
     make install-dev-tools
     # For go1.18:
     make install-dev-tools-go1.18
-   
+
     make lint
     ```
 2. Rust
