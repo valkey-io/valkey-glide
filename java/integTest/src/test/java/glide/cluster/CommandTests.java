@@ -589,7 +589,7 @@ public class CommandTests {
         assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
 
         response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
-        System.out.printf("%nLOLWUT cluster client ver 6 response with params 30 4 4%n%s%n", response);
+        System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
         assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
 
         var clusterResponse = clusterClient.lolwut(ALL_NODES).get();

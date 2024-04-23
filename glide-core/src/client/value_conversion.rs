@@ -181,7 +181,7 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::Lolwut => {
             match value {
-                // cluster (multi-node) response
+                // cluster (multi-node) response - go recursive
                 Value::Map(map) => {
                     let result = map
                         .into_iter()
@@ -216,7 +216,7 @@ pub(crate) fn convert_to_expected_type(
                 }
                 _ => Err((
                     ErrorKind::TypeError,
-                    "Response couldn't be processed",
+                    "LOLWUT response couldn't be converted to a user-friendly format",
                     (&format!("(response was {:?}...)", value)[..100]).into(),
                 )
                     .into()),
@@ -327,6 +327,71 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn convert_lolwut() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
+            Some(ExpectedReturnType::Lolwut)
+        ));
+
+        let redis_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
+        let expected: String = "\u{2591}--\u{2592}--\u{2593}-- ".into();
+
+        let converted_1 = convert_to_expected_type(
+            Value::BulkString(redis_string.clone().into_bytes()),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::BulkString(expected.clone().into_bytes()),
+            converted_1.unwrap()
+        );
+
+        let converted_2 = convert_to_expected_type(
+            Value::VerbatimString {
+                format: redis::VerbatimFormat::Text,
+                text: redis_string.clone(),
+            },
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::BulkString(expected.clone().into_bytes()),
+            converted_2.unwrap()
+        );
+
+        let converted_3 = convert_to_expected_type(
+            Value::Map(vec![
+                (
+                    Value::SimpleString("node 1".into()),
+                    Value::BulkString(redis_string.clone().into_bytes()),
+                ),
+                (
+                    Value::SimpleString("node 2".into()),
+                    Value::BulkString(redis_string.clone().into_bytes()),
+                ),
+            ]),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::Map(vec![
+                (
+                    Value::BulkString("node 1".into()),
+                    Value::BulkString(expected.clone().into_bytes())
+                ),
+                (
+                    Value::BulkString("node 2".into()),
+                    Value::BulkString(expected.clone().into_bytes())
+                ),
+            ]),
+            converted_3.unwrap()
+        );
+
+        let converted_4 = convert_to_expected_type(
+            Value::SimpleString(redis_string.clone()),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert!(converted_4.is_err());
+    }
 
     #[test]
     fn convert_smismember() {

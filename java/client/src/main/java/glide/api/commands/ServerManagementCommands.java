@@ -169,7 +169,14 @@ public interface ServerManagementCommands {
      * Displays a piece of generative computer art and the Redis version.
      *
      * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
-     * @param parameters Additional set of arguments in order to change the output.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
      * @return A piece of generative computer art along with the current Redis version.
      * @example
      *     <pre>{@code
