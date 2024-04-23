@@ -5,3 +5,6 @@ reports
 
 # cbindgen generated header file
 lib.h
+
+# benchmarking results
+benchmarks/results/**

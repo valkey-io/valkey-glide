@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/aws/glide-for-redis/go/glide/api"
@@ -20,7 +21,23 @@ func main() {
 		log.Fatal("error connecting to database: ", err)
 	}
 
-	// TODO: Add example commands as they are implemented
+	res, err := client.CustomCommand([]string{"PING"})
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("PING:", res)
+
+	res, err = client.Set("apples", "oranges")
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("SET(apples, oranges):", res)
+
+	res, err = client.Get("apples")
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("GET(apples):", res)
 
 	client.Close()
 }
