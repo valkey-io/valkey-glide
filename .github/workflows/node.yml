@@ -179,45 +179,82 @@ jobs:
               run: npm test -- -t "set and get flow works"
               working-directory: ./node
 
-
     build-linux-musl-latest:
-        runs-on: ubuntu-latest
-        container:
-          image:  --platform=arm64 arm64v8/node:18.19.0-alpine
-                  # image: arm64v8/node:18.19.0-alpine
-            # image: node:18.19.0-alpine
+        runs-on: ubuntu-23.10
+        name: build linux musl
         timeout-minutes: 15
         steps:
-            - name: Install bash
+          - uses: uraimo/run-on-arch-action@v2
+          - uses: actions/checkout@v4
+            name: Install all
+            id: installall
+            with:
+              arch: aarm64
+              distro: alpine-standard-3.19.1
               run: |
                 apk add bash
                 apk add gettext
+                apk add git
+                git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                git submodule update --init --recursive
 
-            - name: Install git
-              run: apk add git
+          - name: Build Node wrapper
+            uses: ./.github/workflows/build-node-wrapper
+            with:
+                os: "ubuntu-latest-musl"
+                target: "aarch64-unknown-linux-musl"
+                github-token: ${{ secrets.GITHUB_TOKEN }}
+                arch: "arm64"
+                named_os: "linux"
 
-            - uses: actions/checkout@v4
+          - name: Create a symbolic Link for redis6 binaries
+            working-directory: ./node
+            run: |
+                ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
 
-            - name: Checkout submodules
-              run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
+          - name: Test compatibility
+            run: npm test -- -t "set and get flow works"
+            working-directory: ./node
+            
+    # build-linux-musl-latest:
+    #     runs-on: ubuntu-latest
+    #     container:
+    #       image:  --platform=arm64 arm64v8/node:18.19.0-alpine
+    #               # image: arm64v8/node:18.19.0-alpine
+    #         # image: node:18.19.0-alpine
+    #     timeout-minutes: 15
+    #     steps:
+    #         - name: Install bash
+    #           run: |
+    #             apk add bash
+    #             apk add gettext
 
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: "ubuntu-latest-musl"
-                  target: "aarch64-unknown-linux-musl"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  arch: "arm64"
-                  named_os: "linux"
+    #         - name: Install git
+    #           run: apk add git
 
-            - name: Create a symbolic Link for redis6 binaries
-              working-directory: ./node
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+    #         - uses: actions/checkout@v4
 
-            - name: Test compatibility
-              run: npm test -- -t "set and get flow works"
-              working-directory: ./node
+    #         - name: Checkout submodules
+    #           run: |
+    #               git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    #               git submodule update --init --recursive
+
+    #         - name: Build Node wrapper
+    #           uses: ./.github/workflows/build-node-wrapper
+    #           with:
+    #               os: "ubuntu-latest-musl"
+    #               target: "aarch64-unknown-linux-musl"
+    #               github-token: ${{ secrets.GITHUB_TOKEN }}
+    #               arch: "arm64"
+    #               named_os: "linux"
+
+    #         - name: Create a symbolic Link for redis6 binaries
+    #           working-directory: ./node
+    #           run: |
+    #               ln -s /usr/bin/redis6-server /usr/bin/redis-server
+    #               ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
+    #         - name: Test compatibility
+    #           run: npm test -- -t "set and get flow works"
+    #           working-directory: ./node
