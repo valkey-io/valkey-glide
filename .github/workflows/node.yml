@@ -183,7 +183,7 @@ jobs:
     build-linux-musl-latest:
         runs-on: ubuntu-latest
         container:
-          image:  --platform=linux/arm64 arm64v8/node:18.19.0-alpine
+          image:  --platform=arm64 arm64v8/node:18.19.0-alpine
                   # image: arm64v8/node:18.19.0-alpine
             # image: node:18.19.0-alpine
         timeout-minutes: 15
