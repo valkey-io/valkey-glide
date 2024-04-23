@@ -130,7 +130,8 @@ pub enum RequestType {
     LastSave = 120,
     GeoAdd = 121,
     GeoHash = 122,
-    SDiff = 123,
+    ObjectEncoding = 123,
+    SDiff = 124,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -264,6 +265,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LastSave => RequestType::LastSave,
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
+            ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
             ProtobufRequestType::SDiff => RequestType::SDiff,
         }
     }
@@ -394,6 +396,7 @@ impl RequestType {
             RequestType::LastSave => Some(cmd("LASTSAVE")),
             RequestType::GeoAdd => Some(cmd("GEOADD")),
             RequestType::GeoHash => Some(cmd("GEOHASH")),
+            RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
             RequestType::SDiff => Some(cmd("SDIFF")),
         }
     }

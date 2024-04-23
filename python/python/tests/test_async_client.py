@@ -19,6 +19,7 @@ from glide.async_commands.core import (
     GeospatialData,
     InfBound,
     InfoSection,
+    InsertPosition,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -910,6 +911,37 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_linsert(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        assert await redis_client.lpush(key1, ["4", "3", "2", "1"]) == 4
+        assert await redis_client.linsert(key1, InsertPosition.BEFORE, "2", "1.5") == 5
+        assert await redis_client.linsert(key1, InsertPosition.AFTER, "3", "3.5") == 6
+        assert await redis_client.lrange(key1, 0, -1) == [
+            "1",
+            "1.5",
+            "2",
+            "3",
+            "3.5",
+            "4",
+        ]
+
+        assert (
+            await redis_client.linsert(
+                "non_existing_key", InsertPosition.BEFORE, "pivot", "elem"
+            )
+            == 0
+        )
+        assert await redis_client.linsert(key1, InsertPosition.AFTER, "5", "6") == -1
+
+        # key exists, but it is not a list
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.linsert(key2, InsertPosition.AFTER, "p", "e")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["member1", "member2", "member3", "member4"]
@@ -1442,6 +1474,50 @@ class TestCommands:
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zremrangebyscore(key, InfBound.NEG_INF, InfBound.POS_INF)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zremrangebylex(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        range = RangeByIndex(0, -1)
+        members_scores = {"a": 1, "b": 2, "c": 3, "d": 4}
+        assert await redis_client.zadd(key1, members_scores) == 4
+
+        assert (
+            await redis_client.zremrangebylex(
+                key1, LexBoundary("a", False), LexBoundary("c")
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0, "d": 4.0}
+
+        assert (
+            await redis_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
+            == 1
+        )
+        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0}
+
+        # min_lex > max_lex
+        assert (
+            await redis_client.zremrangebylex(key1, LexBoundary("a"), InfBound.NEG_INF)
+            == 0
+        )
+        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0}
+
+        assert (
+            await redis_client.zremrangebylex(
+                "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
+            )
+            == 0
+        )
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zremrangebylex(
+                key2, LexBoundary("a", False), LexBoundary("c")
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
