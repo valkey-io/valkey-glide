@@ -1714,9 +1714,7 @@ class BaseTransaction:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
         Creates a new structure if the `key` does not exist.
-
         When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
-        If `key` does not exist, then the HyperLogLog structure is created.
 
         See https://redis.io/commands/pfadd/ for more details.
 
