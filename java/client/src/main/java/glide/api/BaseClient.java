@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
@@ -784,6 +785,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zpopmax(@NonNull String key) {
         return commandManager.submitNewCommand(ZPopMax, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzpopmax(@NonNull String[] keys, double timeout) {
+        String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
+        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override

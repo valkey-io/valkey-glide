@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -2293,6 +2294,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Double>> response = service.zpopmax(key);
         Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bzpopmax_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        double timeout = .5;
+        String[] arguments = new String[] {"key1", "key2", "0.5"};
+        Object[] value = new Object[] {"key1", "elem", 42.};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzpopmax(keys, timeout);
+        Object[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
