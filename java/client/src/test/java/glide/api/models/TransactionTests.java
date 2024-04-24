@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
@@ -47,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -456,6 +458,12 @@ public class TransactionTests {
 
         transaction.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
+
+        transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
+        results.add(Pair.of(LOLWUT, buildArgs()));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(LOLWUT, buildArgs("1", "2")));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "6", "42")));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
