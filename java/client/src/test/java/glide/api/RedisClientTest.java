@@ -84,6 +84,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
@@ -3022,6 +3023,29 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void renamenx_returns_success() {
+        // setup
+        String key = "key1";
+        String newKey = "key2";
+        String[] arguments = new String[] {key, newKey};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(RenameNx), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.renamenx(key, newKey);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(response.get());
     }
 
     @SneakyThrows

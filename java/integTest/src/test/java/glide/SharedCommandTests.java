@@ -978,6 +978,48 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void renamenx(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+        String key3 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, client.set(key3, "key3").get());
+
+        // rename missing key
+        var executionException =
+                assertThrows(ExecutionException.class, () -> client.renamenx(key1, key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().toLowerCase().contains("no such key"));
+
+        // rename a string
+        assertEquals(OK, client.set(key1, "key1").get());
+        assertTrue(client.renamenx(key1, key2).get());
+        assertFalse(client.renamenx(key2, key3).get());
+        assertEquals("key1", client.get(key2).get());
+        assertEquals(1, client.del(new String[] {key1, key2}).get());
+
+        // rename a set
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertTrue(client.renamenx(key1, key2).get());
+        assertFalse(client.renamenx(key2, key3).get());
+        assertEquals(Set.of("a", "b", "c"), client.smembers(key2).get());
+        assertEquals("none", client.type(key1).get());
+
+        // this one remains unchanged
+        assertEquals("key3", client.get(key3).get());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(ExecutionException.class, () -> client.renamenx("abc", "zxy").get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sismember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();

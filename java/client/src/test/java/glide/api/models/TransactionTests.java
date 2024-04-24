@@ -69,6 +69,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
@@ -461,6 +462,9 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
+
+        transaction.renamenx("key", "newKey");
+        results.add(Pair.of(RenameNx, buildArgs("key", "newKey")));
 
         transaction.linsert("key", AFTER, "pivot", "elem");
         results.add(Pair.of(LInsert, buildArgs("key", "AFTER", "pivot", "elem")));

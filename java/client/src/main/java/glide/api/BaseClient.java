@@ -52,6 +52,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
@@ -339,6 +340,12 @@ public abstract class BaseClient
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> renamenx(@NonNull String key, @NonNull String newKey) {
+        return commandManager.submitNewCommand(
+                RenameNx, new String[] {key, newKey}, this::handleBooleanResponse);
     }
 
     @Override

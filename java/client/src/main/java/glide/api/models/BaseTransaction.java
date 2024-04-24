@@ -64,6 +64,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
@@ -1972,6 +1973,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return Command Response - <code>true</code> if <code>key</code> was renamed to <code>newKey
+     *     </code>, <code>false</code> if <code>newKey</code> already exists.
+     */
+    public T renamenx(@NonNull String key, @NonNull String newKey) {
+        ArgsArray commandArgs = buildArgs(key, newKey);
+        protobufTransaction.addCommands(buildCommand(RenameNx, commandArgs));
         return getThis();
     }
 

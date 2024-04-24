@@ -50,6 +50,7 @@ public class TransactionTestUtilities {
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
+        baseTransaction.renamenx(key1, key2);
 
         baseTransaction.exists(new String[] {key1});
         baseTransaction.persist(key1);
@@ -177,6 +178,7 @@ public class TransactionTestUtilities {
             null,
             (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
+            false, // renamenx(key1, key2)
             1L,
             Boolean.FALSE, // persist(key1)
             1L,
