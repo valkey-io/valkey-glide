@@ -391,7 +391,7 @@ public interface ServerManagementClusterCommands {
      * String data = client.lolwut(6, new int[] { 40, 20 }).get();
      * System.out.println(data);
      * assert data.contains("Redis ver. 7.2.3");
-     * String data = client.lolwut(5, new int[] { 30, 5, 5 }).get();
+     * data = client.lolwut(5, new int[] { 30, 5, 5 }).get();
      * System.out.println(data);
      * assert data.contains("Redis ver. 7.2.3");
      *
@@ -486,7 +486,7 @@ public interface ServerManagementClusterCommands {
      *     System.out.println(data);
      *     assert data.contains("Redis ver. 7.2.3");
      * }
-     * String data = client.lolwut(5, new int[] { 30, 5, 5 }, ALL_NODES).get();
+     * data = client.lolwut(5, new int[] { 30, 5, 5 }, ALL_NODES).get();
      * for (String data : response.getMultiValue().values()) {
      *     System.out.println(data);
      *     assert data.contains("Redis ver. 7.2.3");

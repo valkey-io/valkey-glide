@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface ServerManagementCommands {
 
-    /** A keyword for {@link #lolwut(int)}. */
+    /** A keyword for {@link #lolwut(int)} and {@link #lolwut(int, int[])}. */
     String VERSION_REDIS_API = "VERSION";
 
     /**
@@ -222,10 +222,9 @@ public interface ServerManagementCommands {
      * String data = client.lolwut(6, new int[] { 40, 20 }).get();
      * System.out.println(data);
      * assert data.contains("Redis ver. 7.2.3");
-     * String data = client.lolwut(5, new int[] { 30, 5, 5 }).get();
+     * data = client.lolwut(5, new int[] { 30, 5, 5 }).get();
      * System.out.println(data);
      * assert data.contains("Redis ver. 7.2.3");
-     *
      * }</pre>
      */
     CompletableFuture<String> lolwut(int version, int[] parameters);

@@ -115,7 +115,7 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String>> configGet(@NonNull String @NonNull [] parameters) {
+    public CompletableFuture<Map<String, String>> configGet(@NonNull String[] parameters) {
         return commandManager.submitNewCommand(ConfigGet, parameters, this::handleMapResponse);
     }
 
@@ -148,7 +148,7 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> lolwut(int[] parameters) {
+    public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
         return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
