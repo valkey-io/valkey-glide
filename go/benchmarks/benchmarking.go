@@ -72,15 +72,13 @@ func executeBenchmarks(runConfig *runConfiguration, connectionSettings *connecti
 				}
 			}
 		}
+	}
 
-		for _, config := range benchmarkConfigs {
-			err := runSingleBenchmark(&config)
-			if err != nil {
-				return err
-			}
+	for _, config := range benchmarkConfigs {
+		err := runSingleBenchmark(&config)
+		if err != nil {
+			return err
 		}
-
-		fmt.Println()
 	}
 
 	return nil
@@ -107,6 +105,7 @@ func runSingleBenchmark(config *benchmarkConfig) error {
 	}
 
 	printResults(benchmarkResult)
+	fmt.Println()
 	return closeClients(clients)
 }
 
