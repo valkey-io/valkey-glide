@@ -132,6 +132,8 @@ pub enum RequestType {
     GeoHash = 122,
     ObjectEncoding = 123,
     SDiff = 124,
+    ObjectRefcount = 126,
+    LOLWUT = 100500,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -267,6 +269,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
             ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
             ProtobufRequestType::SDiff => RequestType::SDiff,
+            ProtobufRequestType::ObjectRefcount => RequestType::ObjectRefcount,
+            ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
         }
     }
 }
@@ -398,6 +402,8 @@ impl RequestType {
             RequestType::GeoHash => Some(cmd("GEOHASH")),
             RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
             RequestType::SDiff => Some(cmd("SDIFF")),
+            RequestType::ObjectRefcount => Some(get_two_word_command("OBJECT", "REFCOUNT")),
+            RequestType::LOLWUT => Some(cmd("LOLWUT")),
         }
     }
 }

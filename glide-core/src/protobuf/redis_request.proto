@@ -164,6 +164,8 @@ enum RequestType {
     GeoHash = 122;
     ObjectEncoding = 123;
     SDiff = 124;
+    ObjectRefcount = 126;
+    LOLWUT = 100500;
 }
 
 message Command {
