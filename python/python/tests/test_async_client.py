@@ -2156,18 +2156,8 @@ class TestClusterRoutes:
     async def test_cluster_fail_routing_by_address_if_no_port_is_provided(
         self, redis_client: RedisClusterClient
     ):
-        with pytest.raises(RequestError) as e:
+        with pytest.raises(RequestError):
             await redis_client.info(route=ByAddressRoute("foo"))
-
-
-@pytest.mark.asyncio
-class TestExceptions:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_timeout_exception_with_blpop(self, redis_client: TRedisClient):
-        key = get_random_string(10)
-        with pytest.raises(TimeoutError):
-            await redis_client.custom_command(["BLPOP", key, "1"])
 
 
 @pytest.mark.asyncio

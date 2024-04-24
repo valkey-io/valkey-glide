@@ -48,7 +48,7 @@ pub(super) struct ReconnectingConnection {
 
 async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
     run_with_timeout(
-        DEFAULT_CONNECTION_ATTEMPT_TIMEOUT,
+        Some(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT),
         client.get_multiplexed_async_connection(),
     )
     .await
