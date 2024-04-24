@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 import string
 import time
@@ -1365,6 +1366,50 @@ class TestCommands:
         assert await redis_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.geodist(key2, "Palmero", "Catania")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geopos(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 2
+
+        # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
+        # No worries, Python can handle it, therefore, this shouldn't fail
+        positions = await redis_client.geopos(key, ["Palermo", "Catania", "Place"])
+        expected_positions = [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+        ]
+        assert len(positions) == 3 and positions[2] is None
+
+        assert all(
+            all(
+                math.isclose(actual_coord, expected_coord)
+                for actual_coord, expected_coord in zip(actual_pos, expected_pos)
+            )
+            for actual_pos, expected_pos in zip(positions, expected_positions)
+            if actual_pos is not None
+        )
+
+        assert (
+            await redis_client.geopos(
+                "non_existing_key", ["Palermo", "Catania", "Place"]
+            )
+            == [None] * 3
+        )
+
+        # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
+        # But when running the command with key only (and no members) the returned value will always be an empty list
+        # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
+        assert await redis_client.geohash(key, []) == []
+
+        assert await redis_client.set(key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geopos(key, ["Palermo", "Catania"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
