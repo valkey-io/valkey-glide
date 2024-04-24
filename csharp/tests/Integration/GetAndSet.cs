@@ -92,7 +92,7 @@ public class GetAndSet : IClassFixture<IntegrationTestBase>
         // TODO investigate and fix
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            Assert.Ignore("Flaky on MacOS");
+            return;
         }
 
         using AsyncClient client = new("localhost", TestConfiguration.STANDALONE_PORTS[0], false);
