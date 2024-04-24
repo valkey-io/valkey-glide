@@ -315,4 +315,183 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Long>> lastsave(Route route);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut().get();
+     * System.out.println(data);
+     * assert data.contains("Redis ver. 7.2.3");
+     * }</pre>
+     */
+    CompletableFuture<String> lolwut();
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.<br>
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut(new int[] { 40, 20 }).get();
+     * System.out.println(data);
+     * assert data.contains("Redis ver. 7.2.3");
+     * }</pre>
+     */
+    CompletableFuture<String> lolwut(int[] parameters);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.<br>
+     * The command will be routed to a random node.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut(6).get();
+     * System.out.println(data);
+     * assert data.contains("Redis ver. 7.2.3");
+     * }</pre>
+     */
+    CompletableFuture<String> lolwut(int version);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.<br>
+     * The command will be routed to a random node.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>For version <code>5</code>, those are length of the line, number of squares per row,
+     *           and number of squares per column.
+     *       <li>For version <code>6</code>, those are number of columns and number of lines.
+     *     </ul>
+     *
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut(6, new int[] { 40, 20 }).get();
+     * System.out.println(data);
+     * assert data.contains("Redis ver. 7.2.3");
+     * data = client.lolwut(5, new int[] { 30, 5, 5 }).get();
+     * System.out.println(data);
+     * assert data.contains("Redis ver. 7.2.3");
+     *
+     * }</pre>
+     */
+    CompletableFuture<String> lolwut(int version, int[] parameters);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.lolwut(ALL_NODES).get();
+     * for (String data : response.getMultiValue().values()) {
+     *     System.out.println(data);
+     *     assert data.contains("Redis ver. 7.2.3");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> lolwut(Route route);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut(new int[] { 40, 20 }, ALL_NODES).get();
+     * for (String data : response.getMultiValue().values()) {
+     *     System.out.println(data);
+     *     assert data.contains("Redis ver. 7.2.3");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> lolwut(int[] parameters, Route route);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> response = client.lolwut(6, ALL_NODES).get();
+     * for (String data : response.getMultiValue().values()) {
+     *     System.out.println(data);
+     *     assert data.contains("Redis ver. 7.2.3");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> lolwut(int version, Route route);
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>For version <code>5</code>, those are length of the line, number of squares per row,
+     *           and number of squares per column.
+     *       <li>For version <code>6</code>, those are number of columns and number of lines.
+     *     </ul>
+     *
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A piece of generative computer art along with the current Redis version.
+     * @example
+     *     <pre>{@code
+     * String data = client.lolwut(6, new int[] { 40, 20 }, ALL_NODES).get();
+     * for (String data : response.getMultiValue().values()) {
+     *     System.out.println(data);
+     *     assert data.contains("Redis ver. 7.2.3");
+     * }
+     * data = client.lolwut(5, new int[] { 30, 5, 5 }, ALL_NODES).get();
+     * for (String data : response.getMultiValue().values()) {
+     *     System.out.println(data);
+     *     assert data.contains("Redis ver. 7.2.3");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> lolwut(int version, int[] parameters, Route route);
 }

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -42,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -124,6 +126,7 @@ import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.ZaddOptions;
+import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -1959,6 +1962,80 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lastsave() {
         protobufTransaction.addCommands(buildCommand(LastSave));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut() {
+        protobufTransaction.addCommands(buildCommand(LOLWUT));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int @NonNull [] parameters) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version) {
+        ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>For version <code>5</code>, those are length of the line, number of squares per row,
+     *           and number of squares per column.
+     *       <li>For version <code>6</code>, those are number of columns and number of lines.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version, int @NonNull [] parameters) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
         return getThis();
     }
 
