@@ -941,8 +941,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys The keys of the sets to diff.
      * @return Command Response - A <code>Set</code> of elements representing the difference between
      *     the sets.<br>
-     *     If the first <code>key</code> does not exist, it is treated as an empty set, and the
-     *     command returns an empty <code>Set</code>.
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
      */
     public T sdiff(@NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(keys);

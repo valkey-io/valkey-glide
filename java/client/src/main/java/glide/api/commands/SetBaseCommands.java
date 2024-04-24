@@ -141,8 +141,7 @@ public interface SetBaseCommands {
      * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
      * @param keys The keys of the sets to diff.
      * @return A <code>Set</code> of elements representing the difference between the sets.<br>
-     *     If the first <code>key</code> does not exist, it is treated as an empty set, and the
-     *     command returns an empty <code>Set</code>.
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
      * @example
      *     <pre>{@code
      * Set<String> values = client.sdiff(new String[] {"set1", "set2"}).get();
