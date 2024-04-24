@@ -114,6 +114,7 @@ public class TransactionTestUtilities {
         baseTransaction.sunionstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.sdiff(new String[] {setKey2, setKey3});
         baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -229,6 +230,7 @@ public class TransactionTestUtilities {
             3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
             2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")

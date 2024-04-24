@@ -163,6 +163,7 @@ enum RequestType {
     GeoAdd = 121;
     GeoHash = 122;
     ObjectEncoding = 123;
+    SDiff = 124;
     ObjectRefcount = 126;
     LOLWUT = 100500;
 }
