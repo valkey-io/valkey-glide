@@ -15,6 +15,8 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -147,6 +149,10 @@ public class TransactionTestUtilities {
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
+        baseTransaction.zunion(new KeyArray(new String[] {zSetKey2, key8}));
+        baseTransaction.zunion(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
+        baseTransaction.zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}));
+        baseTransaction.zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
         baseTransaction.zinterstore(key8, new String[] {zSetKey2, key8});
         baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
 
@@ -276,7 +282,15 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
-            0L, // zinterstore(key8, new String[] {zSetKey2, key8})
+            new String[] {"one", "two"}, // zunion(new KeyArray(new String[] {zSetKey2, key8}))
+            new String[] {
+                "one", "two"
+            }, // zunion(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
+            Map.of(
+                "one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}));
+            Map.of(
+                "one", 1.0, "two",
+                2.0), // zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);0L, // zinterstore(key8, new String[] {zSetKey2, key8})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
