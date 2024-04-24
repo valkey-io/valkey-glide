@@ -382,17 +382,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? redis_request.RedisRequest.create({
-                  callbackIdx,
-                  transaction: redis_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: redis_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof redis_request.Command
-              ? redis_request.RedisRequest.create({
+                ? redis_request.RedisRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : redis_request.RedisRequest.create({
+                : redis_request.RedisRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -2103,9 +2103,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -2207,7 +2207,6 @@ export class BaseClient {
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
      * Creates a new structure if the `key` does not exist.
      * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
-     * If `key` does not exist, then the HyperLogLog structure is created.
      *
      * See https://redis.io/commands/pfadd/ for more details.
      *
@@ -2238,11 +2237,11 @@ export class BaseClient {
             : undefined;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
