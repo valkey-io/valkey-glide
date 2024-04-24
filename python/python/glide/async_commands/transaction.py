@@ -8,6 +8,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     GeospatialData,
+    GeoUnit,
     InfoSection,
     InsertPosition,
     UpdateOptions,
@@ -1232,6 +1233,35 @@ class BaseTransaction:
         args += members_geospatialdata_list
 
         return self.append_command(RequestType.GeoAdd, args)
+
+    def geodist(
+        self: TTransaction,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> TTransaction:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is meters.
+
+        Commands response:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return self.append_command(RequestType.GeoDist, args)
 
     def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
         """
