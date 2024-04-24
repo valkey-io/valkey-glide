@@ -129,7 +129,7 @@ public class TransactionTests {
         String objectFreqKey = "key";
         String maxmemoryPolicy = "maxmemory-policy";
 
-        String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        String oldPolicy = client.configGet(new String[]{maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
             Transaction transaction = new Transaction();
             transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
@@ -142,5 +142,17 @@ public class TransactionTests {
         } finally {
             client.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectRefcount() {
+        String objectRefcountKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.set(objectRefcountKey, "");
+        transaction.objectRefcount(objectRefcountKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
     }
 }

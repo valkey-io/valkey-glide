@@ -149,6 +149,29 @@ class GeospatialData:
         self.latitude = latitude
 
 
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -200,6 +223,11 @@ class ExpirySet:
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class InsertPosition(Enum):
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
 
 
 class CoreCommands(Protocol):
@@ -1060,6 +1088,37 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
+    async def linsert(
+        self, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> int:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Returns:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+
+        Examples:
+            >>> await client.linsert("my_list", InsertPosition.BEFORE, "World", "There")
+                3 # "There" was inserted before "World", and the new length of the list is 3.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.LInsert, [key, position.value, pivot, element]
+            ),
+        )
+
     async def sadd(self, key: str, members: List[str]) -> int:
         """
         Add specified members to the set stored at `key`.
@@ -1591,6 +1650,47 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GeoAdd, args),
         )
 
+    async def geodist(
+        self,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> Optional[float]:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is `METERS`.
+
+        Returns:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+
+        Examples:
+            >>> await client.geoadd("my_geo_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geodist("my_geo_set", "Palermo", "Catania")
+                166274.1516  # Indicates the distance between "Palermo" and "Catania" in meters.
+            >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
+                166.2742  # Indicates the distance between "Palermo" and "Palermo" in kilometers.
+            >>> await client.geodist("my_geo_set", "non-existing", "Palermo", unit=GeoUnit.KILOMETERS)
+                None  # Returns None for non-existing member.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.GeoDist, args),
+        )
+
     async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
         """
         Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
@@ -1614,6 +1714,35 @@ class CoreCommands(Protocol):
         return cast(
             List[Optional[str]],
             await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
+
+    async def geopos(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[List[float]]]:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Returns:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+
+        Example:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geopos("my_geo_sorted_set", ["Palermo", "Catania", "NonExisting"])
+                [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], None]
+        """
+        return cast(
+            List[Optional[List[float]]],
+            await self._execute_command(RequestType.GeoPos, [key] + members),
         )
 
     async def zadd(

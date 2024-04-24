@@ -5,7 +5,7 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
-from glide.async_commands.core import GeospatialData
+from glide.async_commands.core import GeospatialData, InsertPosition
 from glide.async_commands.sorted_set import (
     InfBound,
     LexBoundary,
@@ -38,6 +38,7 @@ async def transaction_test(
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -147,6 +148,8 @@ async def transaction_test(
     args.append([value2, value])
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
+    args.append(0)
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -217,8 +220,21 @@ async def transaction_test(
         },
     )
     args.append(2)
+    transaction.geodist(key9, "Palermo", "Catania")
+    args.append(166274.1516)
     transaction.geohash(key9, ["Palermo", "Catania", "Place"])
     args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
+    transaction.geopos(key9, ["Palermo", "Catania", "Place"])
+    # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
+    # No worries, Python can handle it, therefore, this shouldn't fail
+    args.append(
+        [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+            None,
+        ]
+    )
+
     return args
 
 
