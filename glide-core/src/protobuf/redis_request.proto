@@ -167,6 +167,7 @@ enum RequestType {
     ObjectRefcount = 126;
     LOLWUT = 100500;
     GeoDist = 127;
+    GeoPos = 128;
 }
 
 message Command {
