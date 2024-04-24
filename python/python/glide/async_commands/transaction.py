@@ -1253,7 +1253,7 @@ class BaseTransaction:
             unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
                 If not specified, the default unit is meters.
 
-        Returns:
+        Commands response:
             Optional[float]: The distance between `member1` and `member2`.
             If one or both members do not exist, or if the key does not exist, returns None.
         """

@@ -1680,7 +1680,7 @@ class CoreCommands(Protocol):
             >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
                 166.2742  # Indicates the distance between "Palermo" and "Palermo" in kilometers.
             >>> await client.geodist("my_geo_set", "non-existing", "Palermo", unit=GeoUnit.KILOMETERS)
-                None  # Returns None for non-existing memeber.
+                None  # Returns None for non-existing member.
         """
         args = [key, member1, member2]
         if unit:
