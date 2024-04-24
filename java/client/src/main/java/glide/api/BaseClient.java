@@ -42,6 +42,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -54,6 +55,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
@@ -342,6 +344,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> objectRefcount(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectRefcount, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> incr(@NonNull String key) {
         return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
     }
@@ -557,6 +565,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(@NonNull String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sdiff(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SDiff, keys, this::handleSetResponse);
     }
 
     @Override

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -42,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -53,6 +55,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -66,6 +69,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
@@ -123,6 +127,7 @@ import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.ZaddOptions;
+import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -930,6 +935,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T scard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(SCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return Command Response - A <code>Set</code> of elements representing the difference between
+     *     the sets.<br>
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
+     */
+    public T sdiff(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(SDiff, commandArgs));
         return getThis();
     }
 
@@ -1962,6 +1982,80 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut() {
+        protobufTransaction.addCommands(buildCommand(LOLWUT));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int @NonNull [] parameters) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version) {
+        ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>For version <code>5</code>, those are length of the line, number of squares per row,
+     *           and number of squares per column.
+     *       <li>For version <code>6</code>, those are number of columns and number of lines.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version, int @NonNull [] parameters) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        return getThis();
+    }
+
+    /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
@@ -2009,10 +2103,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
-     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
+     *     from which the element was popped and the <code>value</code> of the popped element,
+     *     formatted as <code>
      *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
      *     null</code>.
      */
@@ -2062,10 +2157,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
-     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
+     *     from which the element was popped and the <code>value</code> of the popped element,
+     *     formatted as <code>
      *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
      *     null</code>.
      */
@@ -2237,6 +2333,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectEncoding(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the reference count of the object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the reference count of.
+     * @return Command response - If <code>key</code> exists, returns the reference count of the
+     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
+     *     </code>.
+     */
+    public T objectRefcount(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectRefcount, commandArgs));
         return getThis();
     }
 
