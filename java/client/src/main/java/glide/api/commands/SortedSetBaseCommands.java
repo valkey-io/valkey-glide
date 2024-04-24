@@ -550,6 +550,52 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Object[]> zrankWithScore(String key, String member);
 
     /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
+     * scores are ordered from the highest to lowest.<br>
+     * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
+     *
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of <code>member</code> in the sorted set, where ranks are ordered from high to
+     *     low based on scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrevrank("mySortedSet", "member2").get();
+     * assert num1 == 3L; // Indicates that "member2" has the second-highest score in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zcard("mySortedSet", "nonExistingMember").get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zrevrank(String key, String member);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
+     * score, where scores are ordered from the highest to lowest.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
+     *     of <code>member</code> in the sorted set, where ranks are ordered from high to low based on
+     *     scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Object[] result1 = client.zrevrankWithScore("mySortedSet", "member2").get();
+     * assert ((Long)result1[0]) == 1L && ((Double)result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "mySortedSet".
+     *
+     * Object[] result2 = client.zrevrankWithScore("mySortedSet", "nonExistingMember").get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zrevrankWithScore(String key, String member);
+
+    /**
      * Returns the scores associated with the specified <code>members</code> in the sorted set stored
      * at <code>key</code>.
      *

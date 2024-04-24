@@ -120,6 +120,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zrank(key8, "one");
+        baseTransaction.zrevrank(key8, "one");
         baseTransaction.zaddIncr(key8, "one", 3);
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
@@ -237,6 +238,7 @@ public class TransactionTestUtilities {
             true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")
+            2L, // zrevrank(key8, "one")
             4.0,
             1L,
             2L,
