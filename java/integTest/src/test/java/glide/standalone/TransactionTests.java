@@ -127,13 +127,20 @@ public class TransactionTests {
     @SneakyThrows
     public void objectFreq() {
         String objectFreqKey = "key";
-        Transaction transaction = new Transaction();
-        transaction.configSet(Map.of("maxmemory-policy", "allkeys-lfu"));
-        transaction.set(objectFreqKey, "");
-        transaction.objectFreq(objectFreqKey);
-        var response = client.exec(transaction).get();
-        assertEquals(OK, response[0]);
-        assertEquals(OK, response[1]);
-        assertTrue((long) response[2] >= 0L);
+        String maxmemoryPolicy = "maxmemory-policy";
+
+        String oldPolicy = client.configGet(new String[] { maxmemoryPolicy }).get().get(maxmemoryPolicy);
+        try {
+            Transaction transaction = new Transaction();
+            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            transaction.set(objectFreqKey, "");
+            transaction.objectFreq(objectFreqKey);
+            var response = client.exec(transaction).get();
+            assertEquals(OK, response[0]);
+            assertEquals(OK, response[1]);
+            assertTrue((long) response[2] >= 0L);
+        } finally {
+            client.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
     }
 }
