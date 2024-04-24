@@ -149,6 +149,29 @@ class GeospatialData:
         self.latitude = latitude
 
 
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -1625,6 +1648,47 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.GeoAdd, args),
+        )
+
+    async def geodist(
+        self,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> Optional[float]:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is `METERS`.
+
+        Returns:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+
+        Examples:
+            >>> await client.geoadd("my_geo_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geodist("my_geo_set", "Palermo", "Catania")
+                166274.1516  # Indicates the distance between "Palermo" and "Catania" in meters.
+            >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
+                166.2742  # Indicates the distance between "Palermo" and "Palermo" in kilometers.
+            >>> await client.geodist("my_geo_set", "non-existing", "Palermo", unit=GeoUnit.KILOMETERS)
+                None  # Returns None for non-existing member.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.GeoDist, args),
         )
 
     async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:

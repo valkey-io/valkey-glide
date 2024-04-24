@@ -17,6 +17,7 @@ from glide.async_commands.core import (
     ExpirySet,
     ExpiryType,
     GeospatialData,
+    GeoUnit,
     InfBound,
     InfoSection,
     InsertPosition,
@@ -1337,6 +1338,33 @@ class TestCommands:
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.geohash(key, ["Palermo", "Catania"])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geodist(self, redis_client: TRedisClient):
+        key, key2 = get_random_string(10), get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 2
+
+        assert await redis_client.geodist(key, "Palermo", "Catania") == 166274.1516
+        assert (
+            await redis_client.geodist(key, "Palermo", "Catania", GeoUnit.KILOMETERS)
+            == 166.2742
+        )
+        assert await redis_client.geodist(key, "Palermo", "Palermo", GeoUnit.MILES) == 0
+        assert (
+            await redis_client.geodist(
+                key, "Palermo", "non-existing-member", GeoUnit.FEET
+            )
+            == None
+        )
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geodist(key2, "Palmero", "Catania")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
