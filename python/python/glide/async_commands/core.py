@@ -2275,7 +2275,7 @@ class CoreCommands(Protocol):
 
         Args:
             key (str): The key of the HyperLogLog data structure to add elements into.
-            elements (List[str]): An list of members to add to the HyperLogLog stored at `key`.
+            elements (List[str]): A list of members to add to the HyperLogLog stored at `key`.
 
         Returns:
             int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
