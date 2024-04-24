@@ -14,6 +14,7 @@ import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFI
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -384,6 +385,9 @@ public class TransactionTests {
 
         transaction.zpopmax("key");
         results.add(Pair.of(ZPopMax, buildArgs("key")));
+
+        transaction.bzpopmax(new String[] {"key1", "key2"}, .5);
+        results.add(Pair.of(BZPopMax, buildArgs("key1", "key2", "0.5")));
 
         transaction.zpopmax("key", 2);
         results.add(Pair.of(ZPopMax, buildArgs("key", "2")));

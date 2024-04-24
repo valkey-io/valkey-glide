@@ -279,6 +279,31 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Map<String, Double>> zpopmax(String key);
 
     /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * sorted sets stored at the specified <code>keys</code>. The sorted sets are checked in the order
+     * they are provided.<br>
+     * <code>BZPOPMAX</code> is the blocking variant of {@link #zpopmax(String)}.<br>
+     *
+     * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
+     * @apiNote <code>BZPOPMAX</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the key where the member was popped out, the member
+     *     itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[] data = client.bzpopmax(new String[] {"zset1", "zset2"}, 0.5).get();
+     * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout);
+
+    /**
      * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
