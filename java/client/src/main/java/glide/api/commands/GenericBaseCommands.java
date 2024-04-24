@@ -391,6 +391,26 @@ public interface GenericBaseCommands {
     CompletableFuture<String> objectEncoding(String key);
 
     /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
+     *     of.
+     * @return If <code>key</code> exists, returns the logarithmic access frequency counter of the
+     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Long frequency = client.objectFreq("my_hash").get();
+     * assert frequency == 2L;
+     *
+     * frequency = client.objectFreq("non_existing_key").get();
+     * assert frequency == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectFreq(String key);
+
+    /**
      * Returns the reference count of the object stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
@@ -407,24 +427,4 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> objectRefcount(String key);
-
-    /**
-     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
-        *
-        * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
-     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
-     *     of.
-     * @return If <code>key</code> exists, returns the logarithmic access frequency counter of the
-     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
-        *     </code>.
-        * @example
-     *     <pre>{@code
-     * Long frequency = client.objectFreq("my_hash").get();
-     * assert frequency == 2L;
-     *
-     * frequency = client.objectFreq("non_existing_key").get();
-     * assert frequency == null;
-     * }</pre>
-        */
-    CompletableFuture<Long> objectFreq(String key);
 }

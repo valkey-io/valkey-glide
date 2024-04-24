@@ -129,7 +129,7 @@ public class TransactionTests {
         String objectFreqKey = "key";
         String maxmemoryPolicy = "maxmemory-policy";
 
-        String oldPolicy = client.configGet(new String[]{maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
             Transaction transaction = new Transaction();
             transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));

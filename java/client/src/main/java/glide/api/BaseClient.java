@@ -341,19 +341,19 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
         return commandManager.submitNewCommand(
-            ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+                ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectFreq(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
         return commandManager.submitNewCommand(
-            ObjectRefcount, new String[]{key}, this::handleLongOrNullResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> objectFreq(@NonNull String key){
-        return commandManager.submitNewCommand(
-            ObjectFreq, new String[]{key}, this::handleLongOrNullResponse);
+                ObjectRefcount, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override

@@ -526,11 +526,11 @@ public class TransactionTests {
         transaction.objectEncoding("key");
         results.add(Pair.of(ObjectEncoding, buildArgs("key")));
 
-        transaction.objectRefcount("key");
-        results.add(Pair.of(ObjectRefcount, buildArgs("key")));
-
         transaction.objectFreq("key");
         results.add(Pair.of(ObjectFreq, buildArgs("key")));
+
+        transaction.objectRefcount("key");
+        results.add(Pair.of(ObjectRefcount, buildArgs("key")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
