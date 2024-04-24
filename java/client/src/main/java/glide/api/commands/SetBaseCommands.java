@@ -77,6 +77,43 @@ public interface SetBaseCommands {
     CompletableFuture<Long> scard(String key);
 
     /**
+     * Checks whether each member is contained in the members of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
+     * @param key The key of the set to check.
+     * @param members A list of members to check for existence in the set.
+     * @return An <code>array</code> of <code>Boolean</code> values, each indicating if the respective
+     *     member exists in the set.
+     * @example
+     *     <pre>{@code
+     * Boolean[] areMembers = client.smismembmer("my_set", new String[] { "a", "b", "c" }).get();
+     * assert areMembers[0] && areMembers[1] && !areMembers[2]; // Only first two elements are present in "my_set"
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> smismember(String key, String[] members);
+
+    /**
+     * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
+     * </code>, removing it from the source set. Creates a new destination set if needed. The
+     * operation is atomic.
+     *
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     *     same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @param source The key of the set to remove the element from.
+     * @param destination The key of the set to add the element to.
+     * @param member The set element to move.
+     * @return <code>true</code> on success, or <code>false</code> if the <code>source</code> set does
+     *     not exist or the element is not a member of the source set.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.smove("set1", "set2", "element").get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> smove(String source, String destination, String member);
+
+    /**
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
@@ -95,4 +132,93 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> sismember(String key, String member);
+
+    /**
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return A <code>Set</code> of elements representing the difference between the sets.<br>
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
+     * @example
+     *     <pre>{@code
+     * Set<String> values = client.sdiff(new String[] {"set1", "set2"}).get();
+     * assert values.contains("element"); // Indicates that "element" is present in "set1", but missing in "set2"
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> sdiff(String[] keys);
+
+    /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets to diff.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sdiffstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sdiffstore(String destination, String[] keys);
+
+    /**
+     * Gets the intersection of all the given sets.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
+     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return A <code>Set</code> of members which are present in all given sets.<br>
+     *     If one or more sets do not exist, an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * Set<String> values = client.sinter(new String[] {"set1", "set2"}).get();
+     * assert values.contains("element"); // Indicates that these sets have a common element
+     *
+     * Set<String> values = client.sinter(new String[] {"set1", "nonExistingSet"}).get();
+     * assert values.size() == 0;
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> sinter(String[] keys);
+
+    /**
+     * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
+     * new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sinterstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sinterstore(String destination, String[] keys);
+
+    /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sunionstore("mySet", new String[] { "set1", "set2" }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sunionstore(String destination, String[] keys);
 }

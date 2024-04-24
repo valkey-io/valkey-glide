@@ -2,13 +2,23 @@
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
+* Python: Added RPUSHX and LPUSHX commands ([#1239](https://github.com/aws/glide-for-redis/pull/1239))
 * Python: Added ZREMRANGEBYSCORE command ([#1151](https://github.com/aws/glide-for-redis/pull/1151))
-* Node: Added SPOP, SPOPCOUNT commands. ([#1117](https://github.com/aws/glide-for-redis/pull/1117))
+* Node, Python: Added SPOP, SPOPCOUNT commands. ([#1117](https://github.com/aws/glide-for-redis/pull/1117), [#1261](https://github.com/aws/glide-for-redis/pull/1261))
 * Node: Added ZRANGE command ([#1115](https://github.com/aws/glide-for-redis/pull/1115))
 * Python: Added RENAME command ([#1252](https://github.com/aws/glide-for-redis/pull/1252))
+* Python: Added APPEND command ([#1152](https://github.com/aws/glide-for-redis/pull/1152))
+* Python: Added GEOADD command ([#1259](https://github.com/aws/glide-for-redis/pull/1259))
+* Python: Added GEODIST command ([#1260](https://github.com/aws/glide-for-redis/pull/1260))
+* Python: Added GEOHASH command ([#1281](https://github.com/aws/glide-for-redis/pull/1281))
+* Python: Added ZLEXCOUNT command ([#1305](https://github.com/aws/glide-for-redis/pull/1305))
+* Python: Added ZREMRANGEBYLEX command ([#1306](https://github.com/aws/glide-for-redis/pull/1306))
+* Python: Added LINSERT command ([#1304](https://github.com/aws/glide-for-redis/pull/1304))
+* Python: Added GEOPOS command ([#1301](https://github.com/aws/glide-for-redis/pull/1301))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
+* Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/aws/glide-for-redis/pull/1283))
 
 ## 0.3.3 (2024-03-28)
 

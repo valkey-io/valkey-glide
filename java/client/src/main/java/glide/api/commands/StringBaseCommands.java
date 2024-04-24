@@ -199,4 +199,48 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> strlen(String key);
+
+    /**
+     * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
+     * offset</code>, for the entire length of <code>value</code>.<br>
+     * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
+     * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
+     * </code> if it doesn't exist.
+     *
+     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @param key The key of the string to update.
+     * @param offset The position in the string where <code>value</code> should be written.
+     * @param value The string written with <code>offset</code>.
+     * @return The length of the string stored at <code>key</code> after it was modified.
+     * @example
+     *     <pre>{@code
+     * Long len = client.setrange("key", 6, "GLIDE").get();
+     * assert len == 11L; // New key was created with length of 11 symbols
+     * String value = client.get("key").get();
+     * assert value.equals("\0\0\0\0\0\0GLIDE"); // The string was padded with zero bytes
+     * }</pre>
+     */
+    CompletableFuture<Long> setrange(String key, int offset, String value);
+
+    /**
+     * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
+     * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
+     * order to provide an offset starting from the end of the string. So <code>-1</code> means the
+     * last character, <code>-2</code> the penultimate and so forth.
+     *
+     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @return A substring extracted from the value stored at <code>key</code>..
+     * @example
+     *     <pre>{@code
+     * client.set("mykey", "This is a string").get();
+     * String substring = client.getrange("mykey", 0, 3).get();
+     * assert substring.equals("This");
+     * String substring = client.getrange("mykey", -3, -1).get();
+     * assert substring.equals("ing"); // extracted last 3 characters of a string
+     * }</pre>
+     */
+    CompletableFuture<String> getrange(String key, int start, int end);
 }

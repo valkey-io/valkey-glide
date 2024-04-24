@@ -4,11 +4,13 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
+import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
@@ -25,6 +27,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -184,10 +187,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        // The setup for the Integration Tests server does not include a configuration file for Redis.
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        var info = regularClient.info(InfoOptions.builder().section(SERVER).build()).get();
+        var configFile = parseInfoResponseToMap(info).get("config_file");
+
+        if (configFile.isEmpty()) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            assertEquals(OK, regularClient.configRewrite().get());
+        }
     }
 
     @Test
@@ -265,5 +274,35 @@ public class CommandTests {
                 Long.parseLong(result[0]) > now,
                 "Time() result (" + result[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong(result[1]) < 1000000);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        long result = regularClient.lastsave().get();
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @Test
+    @SneakyThrows
+    public void lolwut_lolwut() {
+        var response = regularClient.lolwut().get();
+        System.out.printf("%nLOLWUT standalone client standard response%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = regularClient.lolwut(new int[] {30, 4, 4}).get();
+        System.out.printf(
+                "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = regularClient.lolwut(5).get();
+        System.out.printf("%nLOLWUT standalone client ver 5 response%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = regularClient.lolwut(6, new int[] {50, 20}).get();
+        System.out.printf(
+                "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
     }
 }

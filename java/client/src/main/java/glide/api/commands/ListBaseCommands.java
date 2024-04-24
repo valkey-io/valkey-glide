@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.LInsertOptions.InsertPosition;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -254,6 +255,28 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> rpopCount(String key, long count);
 
     /**
+     * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
+     * pivot</code>.
+     *
+     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
+     * @param pivot An element of the list.
+     * @param element The new element to insert.
+     * @return The list length after a successful insert operation.<br>
+     *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
+     *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long length = client.linsert("my_list", BEFORE, "World", "There").get();
+     * assert length > 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> linsert(
+            String key, InsertPosition position, String pivot, String element);
+
+    /**
      * Pops an element from the head of the first list that is non-empty, with the given keys being
      * checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
@@ -263,11 +286,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.blpop(["list1", "list2"], 0.5).get();
@@ -287,11 +311,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.brpop(["list1", "list2"], 0.5).get();

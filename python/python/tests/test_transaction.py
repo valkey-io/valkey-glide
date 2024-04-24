@@ -5,7 +5,13 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
-from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
+from glide.async_commands.core import GeospatialData, InsertPosition
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    RangeByIndex,
+    ScoreBoundary,
+)
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -31,6 +37,8 @@ async def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -49,6 +57,8 @@ async def transaction_test(
     args.append(value)
     transaction.strlen(key)
     args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
 
     transaction.persist(key)
     args.append(False)
@@ -138,6 +148,8 @@ async def transaction_test(
     args.append([value2, value])
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
+    args.append(0)
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -145,6 +157,11 @@ async def transaction_test(
     args.append(value2)
     transaction.rpop_count(key6, 2)
     args.append([value2, value])
+
+    transaction.rpushx(key9, ["_"])
+    args.append(0)
+    transaction.lpushx(key9, ["_"])
+    args.append(0)
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
@@ -156,6 +173,12 @@ async def transaction_test(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
+    transaction.spop(key7)
+    args.append("bar")
+    transaction.sadd(key7, ["foo", "bar"])
+    args.append(2)
+    transaction.spop_count(key7, 4)
+    args.append({"foo", "bar"})
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4)
@@ -172,6 +195,8 @@ async def transaction_test(
     args.append(3)
     transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
     args.append(3)
+    transaction.zlexcount(key8, LexBoundary("a", is_inclusive=True), InfBound.POS_INF)
+    args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
     transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
@@ -184,6 +209,32 @@ async def transaction_test(
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+    transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(0)
+
+    transaction.geoadd(
+        key9,
+        {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        },
+    )
+    args.append(2)
+    transaction.geodist(key9, "Palermo", "Catania")
+    args.append(166274.1516)
+    transaction.geohash(key9, ["Palermo", "Catania", "Place"])
+    args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
+    transaction.geopos(key9, ["Palermo", "Catania", "Place"])
+    # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
+    # No worries, Python can handle it, therefore, this shouldn't fail
+    args.append(
+        [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+            None,
+        ]
+    )
+
     return args
 
 

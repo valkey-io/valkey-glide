@@ -1,12 +1,14 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
+import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFINITY;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -28,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
@@ -44,16 +47,21 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -67,9 +75,17 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
+import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -77,18 +93,31 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
+import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.InfScoreBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.Limit;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
@@ -167,6 +196,12 @@ public class TransactionTests {
 
         transaction.strlen("key");
         results.add(Pair.of(Strlen, buildArgs("key")));
+
+        transaction.setrange("key", 42, "str");
+        results.add(Pair.of(SetRange, buildArgs("key", "42", "str")));
+
+        transaction.getrange("key", 42, 54);
+        results.add(Pair.of(GetRange, buildArgs("key", "42", "54")));
 
         transaction.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HashSet, buildArgs("key", "field", "value")));
@@ -249,6 +284,24 @@ public class TransactionTests {
 
         transaction.scard("key");
         results.add(Pair.of(SCard, buildArgs("key")));
+
+        transaction.smove("key1", "key2", "elem");
+        results.add(Pair.of(SMove, buildArgs("key1", "key2", "elem")));
+
+        transaction.sinter(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInter, buildArgs("key1", "key2")));
+
+        transaction.sinterstore("key", new String[] {"set1", "set2"});
+        results.add(Pair.of(SInterStore, buildArgs("key", "set1", "set2")));
+
+        transaction.smismember("key", new String[] {"1", "2"});
+        results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
+
+        transaction.sunionstore("key", new String[] {"set1", "set2"});
+        results.add(
+                Pair.of(
+                        SUnionStore,
+                        ArgsArray.newBuilder().addArgs("key").addArgs("set1").addArgs("set2").build()));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
@@ -349,10 +402,55 @@ public class TransactionTests {
         results.add(Pair.of(Zrank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
+        results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
+
+        transaction.zdiff(new String[] {"key1", "key2"});
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
+
+        transaction.zdiffWithScores(new String[] {"key1", "key2"});
         results.add(
                 Pair.of(
-                        ZMScore,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("member1").addArgs("member2").build()));
+                        ZDiff,
+                        ArgsArray.newBuilder()
+                                .addArgs("2")
+                                .addArgs("key1")
+                                .addArgs("key2")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
+
+        transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
+        results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
+
+        transaction.zcount("key", new ScoreBoundary(5, false), InfScoreBound.POSITIVE_INFINITY);
+        results.add(Pair.of(Zcount, buildArgs("key", "(5.0", "+inf")));
+
+        transaction.zremrangebyrank("key", 0, -1);
+        results.add(Pair.of(ZRemRangeByRank, buildArgs("key", "0", "-1")));
+
+        transaction.zremrangebylex("key", new LexBoundary("a", false), InfLexBound.POSITIVE_INFINITY);
+        results.add(Pair.of(ZRemRangeByLex, buildArgs("key", "(a", "+")));
+
+        transaction.zremrangebyscore(
+                "key", new ScoreBoundary(5, false), RangeOptions.InfScoreBound.POSITIVE_INFINITY);
+        results.add(Pair.of(ZRemRangeByScore, buildArgs("key", "(5.0", "+inf")));
+
+        transaction.zlexcount("key", new LexBoundary("c", false), InfLexBound.POSITIVE_INFINITY);
+        results.add(Pair.of(ZLexCount, buildArgs("key", "(c", "+")));
+
+        transaction.zrangestore(
+                "destination",
+                "source",
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false), new Limit(1, 2)),
+                true);
+        results.add(
+                Pair.of(
+                        ZRangeStore,
+                        buildArgs(
+                                "destination", "source", "-inf", "(3.0", "BYSCORE", "REV", "LIMIT", "1", "2")));
+
+        transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
+        results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
@@ -363,11 +461,23 @@ public class TransactionTests {
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
 
+        transaction.lastsave();
+        results.add(Pair.of(LastSave, buildArgs()));
+
+        transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
+        results.add(Pair.of(LOLWUT, buildArgs()));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(LOLWUT, buildArgs("1", "2")));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "6", "42")));
+
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
+
+        transaction.linsert("key", AFTER, "pivot", "elem");
+        results.add(Pair.of(LInsert, buildArgs("key", "AFTER", "pivot", "elem")));
 
         transaction.brpop(new String[] {"key1", "key2"}, 0.5);
         results.add(Pair.of(Brpop, buildArgs("key1", "key2", "0.5")));
@@ -406,6 +516,21 @@ public class TransactionTests {
                 Pair.of(
                         PfMerge,
                         ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+
+        transaction.sdiff(new String[] {"key1", "key2"});
+        results.add(Pair.of(SDiff, buildArgs("key1", "key2")));
+
+        transaction.sdiffstore("key1", new String[] {"key2", "key3"});
+        results.add(
+                Pair.of(
+                        SDiffStore,
+                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
+
+        transaction.objectEncoding("key");
+        results.add(Pair.of(ObjectEncoding, buildArgs("key")));
+
+        transaction.objectRefcount("key");
+        results.add(Pair.of(ObjectRefcount, buildArgs("key")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

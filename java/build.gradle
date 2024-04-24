@@ -1,9 +1,9 @@
 plugins {
     id 'java'
     id 'java-library'
-    id 'io.freefair.lombok' version '6.4.0'
+    id 'io.freefair.lombok' version '8.6'
     id 'jacoco'
-    id 'com.diffplug.spotless' version '6.19.0'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 repositories {
@@ -29,10 +29,6 @@ subprojects {
         // TODO: add jacoco with code coverage
         // finalizedBy jacocoTestReport, jacocoTestCoverageVerification
     }
-}
-
-dependencies {
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.9.2'
 }
 
 // JaCoCo section (code coverage by unit tests)
@@ -88,7 +84,7 @@ spotless {
         removeUnusedImports()
         trimTrailingWhitespace()
         endWithNewline()
-        googleJavaFormat('1.17.0').reflowLongStrings().groupArtifact('com.google.googlejavaformat:google-java-format')
+        googleJavaFormat('1.22.0').reflowLongStrings().groupArtifact('com.google.googlejavaformat:google-java-format')
         indentWithTabs(2)
         indentWithSpaces(4)
     }

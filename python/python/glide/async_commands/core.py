@@ -18,6 +18,7 @@ from typing import (
 
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -33,7 +34,7 @@ from ..glide import Script
 
 class ConditionalChange(Enum):
     """
-    A condition to the "SET" and "ZADD" commands.
+    A condition to the `SET`, `ZADD` and `GEOADD` commands.
     - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
     - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
@@ -131,6 +132,46 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
+
+
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -182,6 +223,11 @@ class ExpirySet:
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class InsertPosition(Enum):
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
 
 
 class CoreCommands(Protocol):
@@ -274,6 +320,30 @@ class CoreCommands(Protocol):
         return cast(
             Optional[str], await self._execute_command(RequestType.GetString, [key])
         )
+
+    async def append(self, key: str, value: str) -> int:
+        """
+        Appends a value to a key.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
+
+        See https://redis.io/commands/append for more details.
+
+        Args:
+            key (str): The key to which the value will be appended.
+            value (str): The value to append.
+
+        Returns:
+            int: The length of the string after appending the value.
+
+        Examples:
+            >>> await client.append("key", "Hello")
+                5  # Indicates that "Hello" has been appended to the value of "key", which was initially empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+            >>> await client.append("key", " world")
+                11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
+            >>> await client.get("key")
+                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
+        """
+        return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
     async def strlen(self, key: str) -> int:
         """
@@ -785,6 +855,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
+    async def lpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/lpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.lpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.lpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.LPushX, [key] + elements)
+        )
+
     async def lpop(self, key: str) -> Optional[str]:
         """
         Remove and return the first elements of the list stored at `key`.
@@ -924,6 +1017,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.RPush, [key] + elements)
         )
 
+    async def rpushx(self, key: str, elements: List[str]) -> int:
+        """
+        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+
+        See https://redis.io/commands/rpushx/ for more details.
+
+        Args:
+            key (str): The key of the list.
+            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+
+        Returns:
+            int: The length of the list after the push operation.
+
+        Examples:
+            >>> await client.rpushx("my_list", ["value1", "value2"])
+                3 # Indicates that 2 elements we're added to the list "my_list", and the new length of the list is 3.
+            >>> await client.rpushx("nonexistent_list", ["new_value"])
+                0 # Indicates that the list "nonexistent_list" does not exist, so "new_value" could not be pushed.
+        """
+        return cast(
+            int, await self._execute_command(RequestType.RPushX, [key] + elements)
+        )
+
     async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
         """
         Removes and returns the last elements of the list stored at `key`.
@@ -970,6 +1086,37 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.RPop, [key, str(count)]),
+        )
+
+    async def linsert(
+        self, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> int:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Returns:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+
+        Examples:
+            >>> await client.linsert("my_list", InsertPosition.BEFORE, "World", "There")
+                3 # "There" was inserted before "World", and the new length of the list is 3.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.LInsert, [key, position.value, pivot, element]
+            ),
         )
 
     async def sadd(self, key: str, members: List[str]) -> int:
@@ -1046,6 +1193,53 @@ class CoreCommands(Protocol):
                 3
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
+
+    async def spop(self, key: str) -> Optional[str]:
+        """
+        Removes and returns one random member from the set stored at `key`.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop multiple members, see `spop_count`.
+
+        Args:
+            key (str): The key of the set.
+
+        Returns:
+            Optional[str]: The value of the popped member.
+            If `key` does not exist, None will be returned.
+
+        Examples:
+            >>> await client.spop("my_set")
+                "value1" # Removes and returns a random member from the set "my_set".
+            >>> await client.spop("non_exiting_key")
+                None
+        """
+        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+
+    async def spop_count(self, key: str, count: int) -> Set[str]:
+        """
+        Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
+
+        See https://valkey-io.github.io/commands/spop/ for more details.
+        To pop a single member, see `spop`.
+
+        Args:
+            key (str): The key of the set.
+            count (int): The count of the elements to pop from the set.
+
+        Returns:
+            Set[str]: A set of popped elements will be returned depending on the set's length.
+                  If `key` does not exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.spop_count("my_set", 2)
+                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
+            >>> await client.spop_count("non_exiting_key", 2)
+                Set()
+        """
+        return cast(
+            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+        )
 
     async def sismember(
         self,
@@ -1404,6 +1598,152 @@ class CoreCommands(Protocol):
                 'list'
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
+
+    async def geoadd(
+        self,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+                2  # Indicates that two elements have been added to the sorted set "my_sorted_set".
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(14.361389, 38.115556)}, existing_options=ConditionalChange.XX, changed=True)
+                1  # Updates the position of an existing member in the sorted set "my_sorted_set".
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoAdd, args),
+        )
+
+    async def geodist(
+        self,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> Optional[float]:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is `METERS`.
+
+        Returns:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+
+        Examples:
+            >>> await client.geoadd("my_geo_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geodist("my_geo_set", "Palermo", "Catania")
+                166274.1516  # Indicates the distance between "Palermo" and "Catania" in meters.
+            >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
+                166.2742  # Indicates the distance between "Palermo" and "Palermo" in kilometers.
+            >>> await client.geodist("my_geo_set", "non-existing", "Palermo", unit=GeoUnit.KILOMETERS)
+                None  # Returns None for non-existing member.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.GeoDist, args),
+        )
+
+    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Returns:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
+
+    async def geopos(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[List[float]]]:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Returns:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+
+        Example:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geopos("my_geo_sorted_set", ["Palermo", "Catania", "NonExisting"])
+                [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], None]
+        """
+        return cast(
+            List[Optional[List[float]]],
+            await self._execute_command(RequestType.GeoPos, [key] + members),
+        )
 
     async def zadd(
         self,
@@ -1866,6 +2206,97 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.ZRemRangeByScore, [key, score_min, score_max]
+            ),
+        )
+
+    async def zremrangebylex(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Returns:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebylex("my_sorted_set",  LexBoundary("a", is_inclusive=False), LexBoundary("e"))
+                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
+    async def zlexcount(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Returns:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zlexcount("my_sorted_set",  LexBoundary("c" , is_inclusive=True), InfBound.POS_INF)
+                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+            >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
+                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
             ),
         )
 

@@ -1,25 +1,40 @@
-﻿/**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
- */
+﻿// Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Diagnostics;
 
-// Note: All IT should be in the same namespace
-namespace tests.Integration;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 
-[SetUpFixture]
-public class IntegrationTestBase
+// Note: All IT should be in the same namespace
+namespace Tests.Integration;
+
+public class IntegrationTestBase : IDisposable
 {
     internal class TestConfiguration
     {
-        public static List<uint> STANDALONE_PORTS { get; internal set; } = new();
-        public static List<uint> CLUSTER_PORTS { get; internal set; } = new();
+        public static List<uint> STANDALONE_PORTS { get; internal set; } = [];
+        public static List<uint> CLUSTER_PORTS { get; internal set; } = [];
         public static Version REDIS_VERSION { get; internal set; } = new();
     }
 
-    [OneTimeSetUp]
-    public void SetUp()
+    private readonly IMessageSink _diagnosticMessageSink;
+
+    public IntegrationTestBase(IMessageSink diagnosticMessageSink)
     {
+        _diagnosticMessageSink = diagnosticMessageSink;
+        string? projectDir = Directory.GetCurrentDirectory();
+        while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
+        {
+            projectDir = Path.GetDirectoryName(projectDir);
+        }
+
+        if (projectDir == null)
+        {
+            throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
+        }
+
+        _scriptDir = Path.Combine(projectDir, "..", "utils");
+
         // Stop all if weren't stopped on previous test run
         StopRedis(false);
 
@@ -33,32 +48,19 @@ public class IntegrationTestBase
         // Get redis version
         TestConfiguration.REDIS_VERSION = GetRedisVersion();
 
-        TestContext.Progress.WriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
-        TestContext.Progress.WriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
-        TestContext.Progress.WriteLine($"Redis version = {TestConfiguration.REDIS_VERSION}");
+        TestConsoleWriteLine($"Cluster ports = {string.Join(',', TestConfiguration.CLUSTER_PORTS)}");
+        TestConsoleWriteLine($"Standalone ports = {string.Join(',', TestConfiguration.STANDALONE_PORTS)}");
+        TestConsoleWriteLine($"Redis version = {TestConfiguration.REDIS_VERSION}");
     }
 
-    [OneTimeTearDown]
-    public void TearDown()
-    {
+    public void Dispose() =>
         // Stop all
         StopRedis(true);
-    }
 
     private readonly string _scriptDir;
 
-    // Nunit requires a public default constructor. These variables would be set in SetUp method.
-    public IntegrationTestBase()
-    {
-        string? projectDir = Directory.GetCurrentDirectory();
-        while (!(Path.GetFileName(projectDir) == "csharp" || projectDir == null))
-            projectDir = Path.GetDirectoryName(projectDir);
-
-        if (projectDir == null)
-            throw new FileNotFoundException("Can't detect the project dir. Are you running tests from `csharp` directory?");
-
-        _scriptDir = Path.Combine(projectDir, "..", "utils");
-    }
+    private void TestConsoleWriteLine(string message) =>
+        _ = _diagnosticMessageSink.OnMessage(new DiagnosticMessage(message));
 
     internal List<uint> StartRedis(bool cluster, bool tls = false, string? name = null)
     {
@@ -72,7 +74,7 @@ public class IntegrationTestBase
     internal void StopRedis(bool keepLogs, string? name = null)
     {
         string cmd = $"stop --prefix {name ?? "redis-cluster"} {(keepLogs ? "--keep-folder" : "")}";
-        RunClusterManager(cmd, true);
+        _ = RunClusterManager(cmd, true);
     }
 
     private string RunClusterManager(string cmd, bool ignoreExitCode)
@@ -92,25 +94,28 @@ public class IntegrationTestBase
         string? output = script?.StandardOutput.ReadToEnd();
         int? exit_code = script?.ExitCode;
 
-        TestContext.Progress.WriteLine($"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
+        TestConsoleWriteLine($"cluster_manager.py stdout\n====\n{output}\n====\ncluster_manager.py stderr\n====\n{error}\n====\n");
 
-        if (!ignoreExitCode && exit_code != 0)
-            throw new ApplicationException($"cluster_manager.py script failed: exit code {exit_code}.");
-
-        return output ?? "";
+        return !ignoreExitCode && exit_code != 0
+            ? throw new ApplicationException($"cluster_manager.py script failed: exit code {exit_code}.")
+            : output ?? "";
     }
 
     private static List<uint> ParsePortsFromOutput(string output)
     {
-        List<uint> ports = new();
+        List<uint> ports = [];
         foreach (string line in output.Split("\n"))
         {
             if (!line.StartsWith("CLUSTER_NODES="))
+            {
                 continue;
+            }
 
             string[] addresses = line.Split("=")[1].Split(",");
             foreach (string address in addresses)
+            {
                 ports.Add(uint.Parse(address.Split(":")[1]));
+            }
         }
         return ports;
     }
