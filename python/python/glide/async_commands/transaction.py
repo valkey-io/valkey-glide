@@ -1280,6 +1280,27 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.GeoHash, [key] + members)
 
+    def geopos(
+        self: TTransaction,
+        key: str,
+        members: List[str],
+    ) -> TTransaction:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Commands response:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+        """
+        return self.append_command(RequestType.GeoPos, [key] + members)
+
     def zadd(
         self: TTransaction,
         key: str,

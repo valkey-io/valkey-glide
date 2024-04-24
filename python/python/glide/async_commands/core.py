@@ -1716,6 +1716,35 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GeoHash, [key] + members),
         )
 
+    async def geopos(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[List[float]]]:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Returns:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+
+        Example:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geopos("my_geo_sorted_set", ["Palermo", "Catania", "NonExisting"])
+                [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], None]
+        """
+        return cast(
+            List[Optional[List[float]]],
+            await self._execute_command(RequestType.GeoPos, [key] + members),
+        )
+
     async def zadd(
         self,
         key: str,
