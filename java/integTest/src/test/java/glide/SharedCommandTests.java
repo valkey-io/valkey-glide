@@ -2595,10 +2595,10 @@ public class SharedCommandTests {
 
         if (client instanceof RedisClient) {
             RedisClient redisClient = (RedisClient) client;
-            String oldPolicy = redisClient.configGet(new String[] { maxmemoryPolicy }).get().get(maxmemoryPolicy);
+            String oldPolicy =
+                    redisClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
             try {
-                assertEquals(
-                    OK, redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
+                assertEquals(OK, redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
                 assertEquals(OK, redisClient.set(key, "").get());
                 assertTrue(redisClient.objectFreq(key).get() >= 0L);
             } finally {
@@ -2606,11 +2606,10 @@ public class SharedCommandTests {
             }
         } else if (client instanceof RedisClusterClient) {
             RedisClusterClient redisClient = (RedisClusterClient) client;
-            String oldPolicy = redisClient.configGet(new String[] { maxmemoryPolicy }).get().get(maxmemoryPolicy);
+            String oldPolicy =
+                    redisClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
             try {
-                assertEquals(
-                    OK,
-                    redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
+                assertEquals(OK, redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
                 assertEquals(OK, redisClient.set(key, "").get());
                 assertTrue(redisClient.objectFreq(key).get() >= 0L);
             } finally {

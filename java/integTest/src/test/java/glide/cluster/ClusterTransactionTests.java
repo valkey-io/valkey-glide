@@ -94,12 +94,13 @@ public class ClusterTransactionTests {
     }
 
     // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
-    //@Test
-    //@SneakyThrows
-    //public void objectFreq() {
+    // @Test
+    // @SneakyThrows
+    // public void objectFreq() {
     //    String objectFreqKey = "key";
     //    String maxmemoryPolicy = "maxmemory-policy";
-    //    String oldPolicy = clusterClient.configGet(new String[] { maxmemoryPolicy }).get().get(maxmemoryPolicy);
+    //    String oldPolicy = clusterClient.configGet(new String[] { maxmemoryPolicy
+    // }).get().get(maxmemoryPolicy);
     //    try {
     //        ClusterTransaction transaction = new ClusterTransaction();
     //        transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"), ALL_NODES).get();
@@ -112,5 +113,5 @@ public class ClusterTransactionTests {
     //    } finally {
     //        clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy));
     //    }
-    //}
+    // }
 }
