@@ -2376,6 +2376,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectFreq(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectFreq, commandArgs));
+        return getThis();
     }
 
     /**
