@@ -1,8 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -13,6 +15,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -28,6 +31,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -296,5 +300,90 @@ public class RedisClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleLongResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut() {
+        return commandManager.submitNewCommand(LOLWUT, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int version) {
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> lolwut(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> lolwut(
+            int @NonNull [] parameters, @NonNull Route route) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> lolwut(int version, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> lolwut(
+            int version, int @NonNull [] parameters, @NonNull Route route) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                arguments,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
 }

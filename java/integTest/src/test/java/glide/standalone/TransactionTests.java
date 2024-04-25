@@ -133,4 +133,16 @@ public class TransactionTests {
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
+
+    @Test
+    @SneakyThrows
+    public void objectRefcount() {
+        String objectRefcountKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.set(objectRefcountKey, "");
+        transaction.objectRefcount(objectRefcountKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
+    }
 }
