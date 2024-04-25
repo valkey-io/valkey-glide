@@ -1654,6 +1654,37 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void bzpopmax(BaseClient client) {
+        String key1 = "{test}-1-" + UUID.randomUUID();
+        String key2 = "{test}-2-" + UUID.randomUUID();
+        String key3 = "{test}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
+        assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
+        assertArrayEquals(
+                new Object[] {key1, "b", 1.5}, client.bzpopmax(new String[] {key1, key2}, .5).get());
+
+        // nothing popped out - key does not exist
+        assertNull(
+                client
+                        .bzpopmax(new String[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // pops from the second key
+        assertArrayEquals(
+                new Object[] {key2, "c", 2.0}, client.bzpopmax(new String[] {key3, key2}, .5).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzpopmax(new String[] {key3}, .5).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();

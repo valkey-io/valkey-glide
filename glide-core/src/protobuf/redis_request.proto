@@ -168,7 +168,8 @@ enum RequestType {
     LOLWUT = 100500;
     GeoDist = 127;
     GeoPos = 128;
-    ObjectFreq = 129;
+    BZPopMax = 129;
+    ObjectFreq = 130;
 }
 
 message Command {
