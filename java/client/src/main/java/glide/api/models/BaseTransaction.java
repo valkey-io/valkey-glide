@@ -1648,7 +1648,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
-     * scores ordered from low to high.<br>
+     * scores ordered from low to high, starting from 0.<br><br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -1666,7 +1666,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the lowest to highest.
+     * score, where scores are ordered from the lowest to highest, starting from 0.<br>
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1684,7 +1684,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
-     * scores are ordered from the highest to lowest.<br>
+     * scores are ordered from the highest to lowest, starting from 0.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
@@ -1703,9 +1703,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the highest to lowest.
+     * score, where scores are ordered from the highest to lowest, starting from 0.
      *
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return Command Response - An array containing the rank (as <code>Long</code>) and score (as
