@@ -63,7 +63,7 @@ public interface StreamBaseCommands {
      * @return The number of entries deleted from the stream.
      * @example
      *     <pre>{@code
-     * // A nearly exact trimming of the stream to at least a length of 10, limited to 10 entries
+     * // A nearly exact trimming of the stream to at least a length of 10
      * Long trimmed = client.xtrim("key", new MaxLen(false, 10L)).get();
      * System.out.println("Number of trimmed entries from stream: " + trimmed);
      *
