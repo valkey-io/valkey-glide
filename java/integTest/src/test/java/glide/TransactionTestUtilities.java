@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
@@ -114,6 +115,7 @@ public class TransactionTestUtilities {
         baseTransaction.sunionstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.sdiff(new String[] {setKey2, setKey3});
         baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -138,6 +140,7 @@ public class TransactionTestUtilities {
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
+        baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -152,6 +155,8 @@ public class TransactionTestUtilities {
         baseTransaction.configResetStat();
 
         baseTransaction.echo("GLIDE");
+
+        baseTransaction.lolwut(1);
 
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
         baseTransaction
@@ -228,6 +233,7 @@ public class TransactionTestUtilities {
             3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
             2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")
@@ -250,6 +256,7 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
+            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
             "0-1", // xadd(key9, Map.of("field1", "value1"),
             // StreamAddOptions.builder().id("0-1").build());
             "0-2", // xadd(key9, Map.of("field2", "value2"),
@@ -260,6 +267,7 @@ public class TransactionTestUtilities {
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
             3L, // lpush(listKey3, new String[] { value1, value2, value3})
