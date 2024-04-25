@@ -394,8 +394,7 @@ public interface GenericBaseCommands {
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
-     *     same <code>hash slot
-     *     </code>.
+     *     same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
      * @param key The key to rename.
      * @param newKey The new key name.
