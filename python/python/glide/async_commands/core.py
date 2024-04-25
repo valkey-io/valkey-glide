@@ -2355,3 +2355,30 @@ class CoreCommands(Protocol):
                 ["foo", "bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
+
+    async def pfadd(self, key: str, elements: List[str]) -> int:
+        """
+        Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+        Creates a new structure if the `key` does not exist.
+        When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+
+        See https://redis.io/commands/pfadd/ for more details.
+
+        Args:
+            key (str): The key of the HyperLogLog data structure to add elements into.
+            elements (List[str]): A list of members to add to the HyperLogLog stored at `key`.
+
+        Returns:
+            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns 1. Otherwise, returns 0.
+
+        Examples:
+            >>> await client.pfadd("hll_1", ["a", "b", "c" ])
+                1 # A data structure was created or modified
+            >>> await client.pfadd("hll_2", [])
+                1 # A new empty data structure was created
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfAdd, [key] + elements),
+        )

@@ -44,6 +44,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
@@ -349,6 +350,12 @@ public abstract class BaseClient
     public CompletableFuture<Long> objectFreq(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectIdletime(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
