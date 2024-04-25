@@ -1,8 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.StreamAddOptions;
-import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.StreamOptions.StreamAddOptions;
+import glide.api.models.commands.StreamOptions.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.StreamOptions.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -52,4 +53,24 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> xadd(String key, Map<String, String> values, StreamAddOptions options);
+
+    /**
+     * Trims the stream by evicting older entries.
+     *
+     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param options Stream trim options.
+     * @return The number of entries deleted from the stream.
+     * @example
+     *     <pre>{@code
+     * // A nearly exact trimming of the stream to at least a length of 10
+     * Long trimmed = client.xtrim("key", new MaxLen(false, 10L)).get();
+     * System.out.println("Number of trimmed entries from stream: " + trimmed);
+     *
+     * // An exact trimming of the stream by minimum id of "0-3", limit of 10 entries
+     * Long trimmed = client.xtrim("key", new MinId(true, "0-3", 10L)).get();
+     * System.out.println("Number of trimmed entries from stream: " + trimmed);
+     * }</pre>
+     */
+    CompletableFuture<Long> xtrim(String key, StreamTrimOptions options);
 }

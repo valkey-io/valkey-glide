@@ -90,6 +90,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
@@ -127,8 +128,9 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
-import glide.api.models.commands.StreamAddOptions;
-import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.StreamOptions.StreamAddOptions;
+import glide.api.models.commands.StreamOptions.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.StreamOptions.StreamTrimOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Arrays;
 import java.util.Map;
@@ -1949,6 +1951,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
         ArgsArray commandArgs = buildArgs(arguments);
         protobufTransaction.addCommands(buildCommand(XAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Trims the stream by evicting older entries.
+     *
+     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param options Stream trim options.
+     * @return Command Response - The number of entries deleted from the stream.
+     */
+    public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
+        protobufTransaction.addCommands(buildCommand(XTrim, commandArgs));
         return getThis();
     }
 
