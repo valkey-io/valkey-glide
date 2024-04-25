@@ -305,4 +305,20 @@ public class CommandTests {
                 "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
         assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
     }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String key = UUID.randomUUID().toString();
+        String maxmemoryPolicy = "maxmemory-policy";
+        String oldPolicy =
+                regularClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            assertEquals(OK, regularClient.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu")).get());
+            assertEquals(OK, regularClient.set(key, "").get());
+            assertTrue(regularClient.objectFreq(key).get() >= 0L);
+        } finally {
+            regularClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
+    }
 }

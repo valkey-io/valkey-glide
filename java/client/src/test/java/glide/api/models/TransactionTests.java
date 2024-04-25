@@ -61,6 +61,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -529,6 +530,9 @@ public class TransactionTests {
 
         transaction.objectEncoding("key");
         results.add(Pair.of(ObjectEncoding, buildArgs("key")));
+
+        transaction.objectFreq("key");
+        results.add(Pair.of(ObjectFreq, buildArgs("key")));
 
         transaction.objectIdletime("key");
         results.add(Pair.of(ObjectIdletime, buildArgs("key")));
