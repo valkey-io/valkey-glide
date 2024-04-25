@@ -2078,6 +2078,19 @@ export function runBaseTests<Context>(config: {
                 } catch (e) {
                     expect(e as RequestError);
                 }
+
+                // Same-slot requirement
+                if (client instanceof RedisClusterClient) {
+                    try {
+                        expect(
+                            await client.blpop(["abc", "zxy", "lkn"], 0.1),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message.toLowerCase()).toMatch(
+                            "crossslot",
+                        );
+                    }
+                }
             }, protocol);
         },
         config.timeout,

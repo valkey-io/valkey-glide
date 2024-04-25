@@ -824,7 +824,13 @@ export type ScoreBoundary<T> =
      *  Represents a specific numeric score boundary in a sorted set.
      */
     | {
-          bound: number;
+          /**
+           * The score value.
+           */
+          value: T;
+          /**
+           * Whether the score value is inclusive. Defaults to True.
+           */
           isInclusive?: boolean;
       };
 
