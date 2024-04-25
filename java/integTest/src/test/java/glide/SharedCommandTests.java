@@ -2764,39 +2764,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void objectFreq(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        String maxmemoryPolicy = "maxmemory-policy";
-        String allkeysLfu = "allkeys-lfu";
-
-        if (client instanceof RedisClient) {
-            RedisClient redisClient = (RedisClient) client;
-            String oldPolicy =
-                    redisClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
-            try {
-                assertEquals(OK, redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
-                assertEquals(OK, redisClient.set(key, "").get());
-                assertTrue(redisClient.objectFreq(key).get() >= 0L);
-            } finally {
-                redisClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
-            }
-        } else if (client instanceof RedisClusterClient) {
-            RedisClusterClient redisClient = (RedisClusterClient) client;
-            String oldPolicy =
-                    redisClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
-            try {
-                assertEquals(OK, redisClient.configSet(Map.of(maxmemoryPolicy, allkeysLfu)).get());
-                assertEquals(OK, redisClient.set(key, "").get());
-                assertTrue(redisClient.objectFreq(key).get() >= 0L);
-            } finally {
-                redisClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
-            }
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
     public void objectRefcount_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectRefcount(nonExistingKey).get());

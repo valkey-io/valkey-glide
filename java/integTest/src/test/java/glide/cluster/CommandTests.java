@@ -42,6 +42,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -615,5 +616,21 @@ public class CommandTests {
 
         clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
         assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + REDIS_VERSION));
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String key = UUID.randomUUID().toString();
+        String maxmemoryPolicy = "maxmemory-policy";
+        String oldPolicy =
+                clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            assertEquals(OK, clusterClient.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu")).get());
+            assertEquals(OK, clusterClient.set(key, "").get());
+            assertTrue(clusterClient.objectFreq(key).get() >= 0L);
+        } finally {
+            clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
     }
 }
