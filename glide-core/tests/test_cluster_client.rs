@@ -215,4 +215,64 @@ mod cluster_client_tests {
             assert_eq!(replicas, 1);
         });
     }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_multi_node_routing_with_key_based_command_returns_error_all_nodes() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            let mut cmd = redis::cmd("SET");
+            cmd.arg("key");
+            let res = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.kind() == redis::ErrorKind::ClientError, "{err}");
+            assert!(err.to_string().contains("Key-based"));
+        });
+    }
+
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_send_multi_node_routing_with_key_based_command_returns_error_all_primaries() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            let mut cmd = redis::cmd("SMEMBERS");
+            cmd.arg("key");
+            let res = test_basics
+                .client
+                .send_command(
+                    &cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllMasters,
+                        None,
+                    ))),
+                )
+                .await;
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.kind() == redis::ErrorKind::ClientError, "{err}");
+            assert!(err.to_string().contains("Key-based"));
+        });
+    }
 }
