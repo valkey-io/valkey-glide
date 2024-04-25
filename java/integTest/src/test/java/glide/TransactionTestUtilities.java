@@ -87,6 +87,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
+        baseTransaction.hkeys(key4);
 
         baseTransaction.lpush(key5, new String[] {value1, value1, value2, value3, value3});
         baseTransaction.llen(key5);
@@ -204,6 +205,7 @@ public class TransactionTestUtilities {
             new String[] {value2}, // hvals(key4)
             5L,
             10.5,
+            new String[] {field2, field3}, // hkeys(key4)
             5L,
             5L,
             value3, // lindex(key5, 0)

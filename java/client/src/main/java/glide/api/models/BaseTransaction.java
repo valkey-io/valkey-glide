@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
 import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -643,6 +644,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
         protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all field names in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hkeys/">redis.io</a> for details
+     * @param key The key of the hash.
+     * @return Command Response - An array of field names for the hash, empty when the key does not
+     *     exist.
+     */
+    public T hkeys(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(Hkeys, buildArgs(key)));
         return getThis();
     }
 

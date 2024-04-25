@@ -26,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
 import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -456,6 +457,14 @@ public abstract class BaseClient
                 HashIncrByFloat,
                 new String[] {key, field, Double.toString(amount)},
                 this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hkeys(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                Hkeys,
+                new String[] {key},
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
