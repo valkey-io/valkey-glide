@@ -1044,6 +1044,43 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sdiff(BaseClient client) {
+        String key1 = "{key}-1-" + UUID.randomUUID();
+        String key2 = "{key}-2-" + UUID.randomUUID();
+        String key3 = "{key}-3-" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
+        assertEquals(3, client.sadd(key2, new String[] {"c", "d", "e"}).get());
+
+        assertEquals(Set.of("a", "b"), client.sdiff(new String[] {key1, key2}).get());
+        assertEquals(Set.of("d", "e"), client.sdiff(new String[] {key2, key1}).get());
+
+        // second set is empty
+        assertEquals(Set.of("a", "b", "c"), client.sdiff(new String[] {key1, key3}).get());
+
+        // first set is empty
+        assertEquals(Set.of(), client.sdiff(new String[] {key3, key1}).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sdiff(new String[] {key1, key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.sdiff(new String[] {"abc", "zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void smismember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -1611,6 +1648,37 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzpopmax(BaseClient client) {
+        String key1 = "{test}-1-" + UUID.randomUUID();
+        String key2 = "{test}-2-" + UUID.randomUUID();
+        String key3 = "{test}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
+        assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
+        assertArrayEquals(
+                new Object[] {key1, "b", 1.5}, client.bzpopmax(new String[] {key1, key2}, .5).get());
+
+        // nothing popped out - key does not exist
+        assertNull(
+                client
+                        .bzpopmax(new String[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // pops from the second key
+        assertArrayEquals(
+                new Object[] {key2, "c", 2.0}, client.bzpopmax(new String[] {key3, key2}, .5).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzpopmax(new String[] {key3}, .5).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -2575,5 +2643,161 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectEncoding(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_string_raw(BaseClient client) {
+        String stringRawKey = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                client
+                        .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
+                        .get());
+        assertEquals("raw", client.objectEncoding(stringRawKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_string_int(BaseClient client) {
+        String stringIntKey = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(stringIntKey, "2").get());
+        assertEquals("int", client.objectEncoding(stringIntKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_string_embstr(BaseClient client) {
+        String stringEmbstrKey = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(stringEmbstrKey, "value").get());
+        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_list_listpack(BaseClient client) {
+        String listListpackKey = UUID.randomUUID().toString();
+        assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
+        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // actual behavior returns a quicklist.
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                client.objectEncoding(listListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_set_hashtable(BaseClient client) {
+        String setHashtableKey = UUID.randomUUID().toString();
+        // The default value of set-max-intset-entries is 512
+        for (Integer i = 0; i <= 512; i++) {
+            assertEquals(1, client.sadd(setHashtableKey, new String[] {i.toString()}).get());
+        }
+        assertEquals("hashtable", client.objectEncoding(setHashtableKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_set_intset(BaseClient client) {
+        String setIntsetKey = UUID.randomUUID().toString();
+        assertEquals(1, client.sadd(setIntsetKey, new String[] {"1"}).get());
+        assertEquals("intset", client.objectEncoding(setIntsetKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_set_listpack(BaseClient client) {
+        String setListpackKey = UUID.randomUUID().toString();
+        assertEquals(1, client.sadd(setListpackKey, new String[] {"foo"}).get());
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.2.0") ? "hashtable" : "listpack",
+                client.objectEncoding(setListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_hash_hashtable(BaseClient client) {
+        String hashHashtableKey = UUID.randomUUID().toString();
+        // The default value of hash-max-listpack-entries is 512
+        for (Integer i = 0; i <= 512; i++) {
+            assertEquals(1, client.hset(hashHashtableKey, Map.of(i.toString(), "2")).get());
+        }
+        assertEquals("hashtable", client.objectEncoding(hashHashtableKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_hash_listpack(BaseClient client) {
+        String hashListpackKey = UUID.randomUUID().toString();
+        assertEquals(1, client.hset(hashListpackKey, Map.of("1", "2")).get());
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
+                client.objectEncoding(hashListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_zset_skiplist(BaseClient client) {
+        String zsetSkiplistKey = UUID.randomUUID().toString();
+        // The default value of zset-max-listpack-entries is 128
+        for (Integer i = 0; i <= 128; i++) {
+            assertEquals(1, client.zadd(zsetSkiplistKey, Map.of(i.toString(), 2d)).get());
+        }
+        assertEquals("skiplist", client.objectEncoding(zsetSkiplistKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_zset_listpack(BaseClient client) {
+        String zsetListpackKey = UUID.randomUUID().toString();
+        assertEquals(1, client.zadd(zsetListpackKey, Map.of("1", 2d)).get());
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
+                client.objectEncoding(zsetListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_returns_stream(BaseClient client) {
+        String streamKey = UUID.randomUUID().toString();
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
+        assertEquals("stream", client.objectEncoding(streamKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectRefcount(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "").get());
+        assertTrue(client.objectRefcount(key).get() >= 0L);
     }
 }

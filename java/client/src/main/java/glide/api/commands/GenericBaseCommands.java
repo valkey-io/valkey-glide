@@ -371,4 +371,40 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> type(String key);
+
+    /**
+     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the internal encoding of.
+     * @return If <code>key</code> exists, returns the internal encoding of the object stored at
+     *     <code>key</code> as a <code>String</code>. Otherwise, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String encoding = client.objectEncoding("my_hash").get();
+     * assert encoding.equals("listpack");
+     *
+     * encoding = client.objectEncoding("non_existing_key").get();
+     * assert encoding.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<String> objectEncoding(String key);
+
+    /**
+     * Returns the reference count of the object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the reference count of.
+     * @return If <code>key</code> exists, returns the reference count of the object stored at <code>
+     *     key</code> as a <code>Long</code>. Otherwise, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Long refcount = client.objectRefcount("my_hash").get();
+     * assert refcount == 2L;
+     *
+     * refcount = client.objectRefcount("non_existing_key").get();
+     * assert refcount == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectRefcount(String key);
 }

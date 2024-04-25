@@ -130,6 +130,13 @@ pub enum RequestType {
     LastSave = 120,
     GeoAdd = 121,
     GeoHash = 122,
+    ObjectEncoding = 123,
+    SDiff = 124,
+    ObjectRefcount = 126,
+    LOLWUT = 100500,
+    GeoDist = 127,
+    GeoPos = 128,
+    BZPopMax = 129,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -263,6 +270,13 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LastSave => RequestType::LastSave,
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
+            ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
+            ProtobufRequestType::GeoDist => RequestType::GeoDist,
+            ProtobufRequestType::SDiff => RequestType::SDiff,
+            ProtobufRequestType::ObjectRefcount => RequestType::ObjectRefcount,
+            ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
+            ProtobufRequestType::GeoPos => RequestType::GeoPos,
+            ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
         }
     }
 }
@@ -392,6 +406,13 @@ impl RequestType {
             RequestType::LastSave => Some(cmd("LASTSAVE")),
             RequestType::GeoAdd => Some(cmd("GEOADD")),
             RequestType::GeoHash => Some(cmd("GEOHASH")),
+            RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
+            RequestType::GeoDist => Some(cmd("GEODIST")),
+            RequestType::SDiff => Some(cmd("SDIFF")),
+            RequestType::ObjectRefcount => Some(get_two_word_command("OBJECT", "REFCOUNT")),
+            RequestType::LOLWUT => Some(cmd("LOLWUT")),
+            RequestType::GeoPos => Some(cmd("GEOPOS")),
+            RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
         }
     }
 }

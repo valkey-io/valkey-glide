@@ -8,6 +8,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     GeospatialData,
+    GeoUnit,
     InfoSection,
     InsertPosition,
     UpdateOptions,
@@ -1233,6 +1234,35 @@ class BaseTransaction:
 
         return self.append_command(RequestType.GeoAdd, args)
 
+    def geodist(
+        self: TTransaction,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> TTransaction:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is meters.
+
+        Commands response:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return self.append_command(RequestType.GeoDist, args)
+
     def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
         """
         Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
@@ -1249,6 +1279,27 @@ class BaseTransaction:
             If a member does not exist in the sorted set, a None value is returned for that member.
         """
         return self.append_command(RequestType.GeoHash, [key] + members)
+
+    def geopos(
+        self: TTransaction,
+        key: str,
+        members: List[str],
+    ) -> TTransaction:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Commands response:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+        """
+        return self.append_command(RequestType.GeoPos, [key] + members)
 
     def zadd(
         self: TTransaction,
