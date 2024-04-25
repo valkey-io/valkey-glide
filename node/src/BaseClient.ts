@@ -55,6 +55,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPersist,
+    createPfAdd,
     createPttl,
     createRPop,
     createRPush,
@@ -2201,6 +2202,28 @@ export class BaseClient {
         timeout: number,
     ): Promise<[string, string] | null> {
         return this.createWritePromise(createBrpop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://redis.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     * @example
+     * ```typescript
+     * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
+     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
+     * const result = await client.pfadd("hll_2", []);
+     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
+     * ```
+     */
+    public pfadd(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createPfAdd(key, elements));
     }
 
     /**

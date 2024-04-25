@@ -1287,3 +1287,14 @@ export function createRename(
 ): redis_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
 }
+
+/**
+ * @internal
+ */
+export function createPfAdd(
+    key: string,
+    elements: string[],
+): redis_request.Command {
+    const args = [key, ...elements];
+    return createCommand(RequestType.PfAdd, args);
+}
