@@ -138,6 +138,7 @@ pub enum RequestType {
     GeoDist = 127,
     GeoPos = 128,
     BZPopMax = 129,
+    ObjectFreq = 130,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -272,6 +273,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
             ProtobufRequestType::ObjectEncoding => RequestType::ObjectEncoding,
+            ProtobufRequestType::ObjectFreq => RequestType::ObjectFreq,
             ProtobufRequestType::ObjectIdletime => RequestType::ObjectIdletime,
             ProtobufRequestType::GeoDist => RequestType::GeoDist,
             ProtobufRequestType::SDiff => RequestType::SDiff,
@@ -409,6 +411,7 @@ impl RequestType {
             RequestType::GeoAdd => Some(cmd("GEOADD")),
             RequestType::GeoHash => Some(cmd("GEOHASH")),
             RequestType::ObjectEncoding => Some(get_two_word_command("OBJECT", "ENCODING")),
+            RequestType::ObjectFreq => Some(get_two_word_command("OBJECT", "FREQ")),
             RequestType::ObjectIdletime => Some(get_two_word_command("OBJECT", "IDLETIME")),
             RequestType::GeoDist => Some(cmd("GEODIST")),
             RequestType::SDiff => Some(cmd("SDIFF")),

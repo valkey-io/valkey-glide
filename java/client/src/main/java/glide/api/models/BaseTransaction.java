@@ -56,6 +56,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
@@ -2359,6 +2360,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectEncoding(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
+     *     of.
+     * @return Command response - If <code>key</code> exists, returns the logarithmic access frequency
+     *     counter of the object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns
+     *     <code>null</code>.
+     */
+    public T objectFreq(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectFreq, commandArgs));
         return getThis();
     }
 
