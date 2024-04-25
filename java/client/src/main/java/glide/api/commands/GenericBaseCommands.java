@@ -391,6 +391,24 @@ public interface GenericBaseCommands {
     CompletableFuture<String> objectEncoding(String key);
 
     /**
+     * Returns the time in seconds since the last access to the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the idle time of.
+     * @return If <code>key</code> exists, returns the idle time in seconds. Otherwise, returns <code>
+     *     null</code>.
+     * @example
+     *     <pre>{@code
+     * Long idletime = client.objectIdletime("my_hash").get();
+     * assert idletime == 2L;
+     *
+     * idletime = client.objectIdletime("non_existing_key").get();
+     * assert idletime == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectIdletime(String key);
+
+    /**
      * Returns the reference count of the object stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.

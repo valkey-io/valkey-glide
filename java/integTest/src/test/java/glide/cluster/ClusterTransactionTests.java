@@ -96,6 +96,19 @@ public class ClusterTransactionTests {
     // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
     // @Test
     // @SneakyThrows
+    // public void objectIdletime() {
+    //    String objectIdletimeKey = "key";
+    //    ClusterTransaction transaction = new ClusterTransaction();
+    //    transaction.set(objectIdletimeKey, "");
+    //    transaction.objectIdletime(objectIdletimeKey);
+    //    var response = clusterClient.exec(transaction).get();
+    //    assertEquals(OK, response[0]);
+    //    assertTrue((long) response[1] >= 0L);
+    // }
+
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
     // public void objectRefcount() {
     //    String objectRefcountKey = "key";
     //    ClusterTransaction transaction = new ClusterTransaction();
