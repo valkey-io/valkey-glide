@@ -2373,6 +2373,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectIdletime(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectIdletime, commandArgs));
+        return getThis();
+    }
 
     /**
      * Returns the reference count of the object stored at <code>key</code>.
