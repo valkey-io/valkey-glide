@@ -64,6 +64,7 @@ export async function transactionTest(
     const key8 = "{key}" + uuidv4();
     const key9 = "{key}" + uuidv4();
     const key10 = "{key}" + uuidv4();
+    const key11 = "{key}" + uuidv4(); // hyper log log
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -217,6 +218,8 @@ export async function transactionTest(
     args.push(3);
     baseTransaction.brpop([key6], 0.1);
     args.push([key6, field + "3"]);
+    baseTransaction.pfadd(key11, ["a", "b", "c"]);
+    args.push(1);
     return args;
 }
 

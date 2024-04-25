@@ -15,6 +15,7 @@
 * Python: Added ZREMRANGEBYLEX command ([#1306](https://github.com/aws/glide-for-redis/pull/1306))
 * Python: Added LINSERT command ([#1304](https://github.com/aws/glide-for-redis/pull/1304))
 * Python: Added GEOPOS command ([#1301](https://github.com/aws/glide-for-redis/pull/1301))
+* Node: Added PFADD command ([#1317](https://github.com/aws/glide-for-redis/pull/1317))
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
 
 #### Fixes

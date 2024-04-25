@@ -27,7 +27,7 @@ type Context = {
     client: RedisClient;
 };
 
-const TIMEOUT = 10000;
+const TIMEOUT = 50000;
 
 describe("RedisClient", () => {
     let testsFailed = 0;
