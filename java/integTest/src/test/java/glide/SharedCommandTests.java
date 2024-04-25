@@ -2791,7 +2791,7 @@ public class SharedCommandTests {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectIdletime(nonExistingKey).get());
     }
-  
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -2801,7 +2801,7 @@ public class SharedCommandTests {
         Thread.sleep(1000);
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
-  
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")

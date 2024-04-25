@@ -348,7 +348,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> objectIdletime(@NonNull String key) {
         return commandManager.submitNewCommand(
-            ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
+                ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override

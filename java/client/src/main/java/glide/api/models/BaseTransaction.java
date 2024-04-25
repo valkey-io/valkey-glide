@@ -2367,8 +2367,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
      * @param key The <code>key</code> of the object to get the idle time of.
-     * @return Command response - If <code>key</code> exists, returns the idle time in seconds of the
-     *     object at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null</code>.
+     * @return Command response - If <code>key</code> exists, returns the idle time in seconds.
+     *     Otherwise, returns <code>null</code>.
      */
     public T objectIdletime(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
