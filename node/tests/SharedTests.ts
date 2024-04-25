@@ -2278,9 +2278,27 @@ export function runBaseTests<Context>(config: {
                 await client.rename(key, newKey);
                 const result = await client.get(newKey);
                 expect(result).toEqual("value");
-                // If key doesn't exist it should throw, it also test that key has succfully been renamed
+                // If key doesn't exist it should throw, it also test that key has successfully been renamed
                 await expect(client.rename(key, newKey)).rejects.toThrow();
                 client.close();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfadd test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                expect(await client.pfadd(key, [])).toEqual(1);
+                expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
+                expect(await client.pfadd(key, ["two"])).toEqual(0);
+                expect(await client.pfadd(key, [])).toEqual(0);
+
+                // key exists, but it is not a HyperLogLog
+                expect(await client.set("foo", "value")).toEqual("OK");
+                await expect(client.pfadd("foo", [])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
