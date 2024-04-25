@@ -164,6 +164,7 @@ enum RequestType {
     GeoHash = 122;
     ObjectEncoding = 123;
     SDiff = 124;
+    ObjectIdletime = 125;
     ObjectRefcount = 126;
     LOLWUT = 100500;
     GeoDist = 127;
