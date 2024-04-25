@@ -12,7 +12,9 @@ The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings 
 
 Software Dependencies
 
-> If your NodeJS version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
+##### **Note:** Nodejs Supported Version
+
+If your Nodejs version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
 -   npm
 -   git
@@ -32,10 +34,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check the installed node version
 node -v
-# If the installed node version is below 16, see the instructions below
 ```
 
-> If node -v return version bellow 16 refer to [Installing specific node version](https://www.linode.com/docs/guides/install-nodejs-on-ubuntu-22-04/#installing-a-specific-version) or to [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script) in order to fix it.
+> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#note:-nodejs-supported-version) to upgrade your Node.js version.
 
 **Dependencies installation for CentOS**
 
