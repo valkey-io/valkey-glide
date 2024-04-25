@@ -9,14 +9,17 @@
 * Python: Added RENAME command ([#1252](https://github.com/aws/glide-for-redis/pull/1252))
 * Python: Added APPEND command ([#1152](https://github.com/aws/glide-for-redis/pull/1152))
 * Python: Added GEOADD command ([#1259](https://github.com/aws/glide-for-redis/pull/1259))
+* Python: Added GEODIST command ([#1260](https://github.com/aws/glide-for-redis/pull/1260))
 * Python: Added GEOHASH command ([#1281](https://github.com/aws/glide-for-redis/pull/1281))
 * Python: Added ZLEXCOUNT command ([#1305](https://github.com/aws/glide-for-redis/pull/1305))
 * Python: Added ZREMRANGEBYLEX command ([#1306](https://github.com/aws/glide-for-redis/pull/1306))
 * Python: Added LINSERT command ([#1304](https://github.com/aws/glide-for-redis/pull/1304))
+* Python: Added GEOPOS command ([#1301](https://github.com/aws/glide-for-redis/pull/1301))
 * Node: Added PFADD command ([#1317](https://github.com/aws/glide-for-redis/pull/1317))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
+* Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/aws/glide-for-redis/pull/1283))
 
 ## 0.3.3 (2024-03-28)
 
