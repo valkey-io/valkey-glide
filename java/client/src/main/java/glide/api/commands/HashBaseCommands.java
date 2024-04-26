@@ -225,8 +225,8 @@ public interface HashBaseCommands {
      *
      * @see <a href="https://redis.io/commands/hkeys/">redis.io</a> for details
      * @param key The key of the hash.
-     * @return An <code>array</code> of keys in the hash, or an <code>empty array</code> when the key
-     *     does not exist.
+     * @return An <code>array</code> of field names in the hash, or an <code>empty array</code> when
+     *     the key does not exist.
      * @example
      *     <pre>{@code
      * String[] names = client.hkeys("my_hash").get();
