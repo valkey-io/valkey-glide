@@ -2205,35 +2205,16 @@ export class BaseClient {
         return this.createWritePromise(createBrpop(keys, timeout));
     }
 
-
-    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
-     * Creates a new structure if the `key` does not exist.
-     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
-     *
-     * See https://redis.io/commands/pfadd/ for more details.
-     *
-     * @param key - The key of the HyperLogLog data structure to add elements into.
-     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
-     * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
-     *     altered, then returns `1`. Otherwise, returns `0`.
-     * @example
-     * ```typescript
-     * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
-     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
-     * const result = await client.pfadd("hll_2", []);
-     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
-     * ```
-     */
-    public pfadd(key: string, elements: string[]): Promise<number> {
-        return this.createWritePromise(createPfAdd(key, elements));
-    }
     /** Blocking list pop primitive.
      * Pop an element from the head of the first list that is non-empty,
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/blpop/ for more details.
-     * Note: BLPOP is a blocking command,
+     * 
+     * Note: 
+     * 1. BLPOP is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.

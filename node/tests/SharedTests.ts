@@ -12,9 +12,8 @@ import {
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
-    RequestError,
     Script,
-    parseInfoResponse,
+    parseInfoResponse
 } from "../";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
@@ -2072,13 +2071,13 @@ export function runBaseTests<Context>(config: {
                 // Test null return when key doesn't exist
                 expect(await client.blpop(["blpop-test"], 0.1)).toEqual(null);
 
-                try {
-                    await client.set("foo", "bar"),
-                        expect(await client.blpop(["foo"], 0.1)).toThrow();
-                } catch (e) {
-                    expect(e as RequestError);
-                }
+               
+                await client.set("foo", "bar"),
+                expect(await client.blpop(["foo"], 0.1)).toThrow();
 
+                await client.set("bar", "baz"),
+                expect(await client.blpop(["bar"], 0)).toThrow();
+                
                 // Same-slot requirement
                 if (client instanceof RedisClusterClient) {
                     try {
