@@ -608,6 +608,62 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Hkeys, [key])
 
+    def hrandfield(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns a random field name from the hash value stored at `key`.
+
+        See https://redis.io/commands/hrandfield/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            Optional[str]: A random field name from the hash stored at `key`.
+            If the hash does not exist or is empty, None will be returned.
+        """
+        return self.append_command(RequestType.HRandField, [key])
+
+    def hrandfield_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Retrieves random field names from the hash value stored at `key`.
+
+        See https://redis.io/commands/hrandfield/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Command response:
+            List[str]: A list of random field names from the hash.
+            If the hash does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(RequestType.HRandField, [key, str(count)])
+
+    def hrandfield_count_withvalues(
+        self: TTransaction, key: str, count: int
+    ) -> TTransaction:
+        """
+        Retrieves random field names along with their values from the hash value stored at `key`.
+
+        See https://redis.io/commands/hrandfield/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Command response:
+            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            hash and `value` is the associated value of the field name.
+            If the hash does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(
+            RequestType.HRandField, [key, str(count), "WITHVALUES"]
+        )
+
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
         Insert all the specified values at the head of the list stored at `key`.
