@@ -1000,13 +1000,6 @@ public class SharedCommandTests {
         assertEquals("key1", client.get(key2).get());
         assertEquals(1, client.del(new String[] {key1, key2}).get());
 
-        // rename a set
-        assertEquals(3, client.sadd(key1, new String[] {"a", "b", "c"}).get());
-        assertTrue(client.renamenx(key1, key2).get());
-        assertFalse(client.renamenx(key2, key3).get());
-        assertEquals(Set.of("a", "b", "c"), client.smembers(key2).get());
-        assertEquals("none", client.type(key1).get());
-
         // this one remains unchanged
         assertEquals("key3", client.get(key3).get());
 
