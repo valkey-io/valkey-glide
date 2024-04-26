@@ -56,6 +56,7 @@ jobs:
               uses: actions/setup-go@v5
               with:
                   go-version: ${{ matrix.go }}
+                  cache-dependency-path: go/go.sum
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
