@@ -1751,6 +1751,22 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZScore, [key, member])
 
+    def zmscore(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+
+        See https://redis.io/commands/zmscore for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members in the sorted set.
+
+        Command response:
+            List[float]: A list of scores of the `members`.
+                If a `member` does not exist, the corresponding value in the list will be `None`.
+        """
+        return self.append_command(RequestType.ZMScore, [key] + members)
+
     def dbsize(self: TTransaction) -> TTransaction:
         """
         Returns the number of keys in the currently selected database.

@@ -203,6 +203,8 @@ async def transaction_test(
     args.append(["two", "three", "four"])
     transaction.zrange_withscores(key8, RangeByIndex(start=0, stop=-1))
     args.append({"two": 2, "three": 3, "four": 4})
+    transaction.zmscore(key8, ["two", "three"])
+    args.append([2.0, 3.0])
     transaction.zpopmin(key8)
     args.append({"two": 2.0})
     transaction.zpopmax(key8)

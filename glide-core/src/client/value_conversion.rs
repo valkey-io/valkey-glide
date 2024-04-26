@@ -17,6 +17,7 @@ pub(crate) enum ExpectedReturnType {
     ZrankReturnType,
     JsonToggleReturnType,
     ArrayOfBools,
+    ArrayOfDoubles,
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
 }
@@ -176,6 +177,24 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::ArrayOfDoubles => match value {
+            Value::Array(array) => {
+                let array_of_doubles = array
+                    .iter()
+                    .map(|v| {
+                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::DoubleOrNull))
+                            .unwrap()
+                    })
+                    .collect();
+                Ok(Value::Array(array_of_doubles))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of doubles",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -347,6 +366,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
+        b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubles),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
@@ -530,6 +550,33 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZREVRANK").arg("key").arg("member")).is_none());
+    }
+
+    #[test]
+    fn convert_zmscore() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("ZMSCORE").arg("key").arg("member")),
+            Some(ExpectedReturnType::ArrayOfDoubles)
+        ));
+
+        let array_response = Value::Array(vec![
+            Value::Nil,
+            Value::Double(1.5),
+            Value::BulkString(b"2.5".to_vec()),
+        ]);
+        let converted_response =
+            convert_to_expected_type(array_response, Some(ExpectedReturnType::ArrayOfDoubles))
+                .unwrap();
+        let expected_response =
+            Value::Array(vec![Value::Nil, Value::Double(1.5), Value::Double(2.5)]);
+        assert_eq!(expected_response, converted_response);
+
+        let unexpected_response_type = Value::Double(0.5);
+        assert!(convert_to_expected_type(
+            unexpected_response_type,
+            Some(ExpectedReturnType::ArrayOfDoubles)
+        )
+        .is_err());
     }
 
     #[test]

@@ -17,6 +17,7 @@
 * Python: Added GEOPOS command ([#1301](https://github.com/aws/glide-for-redis/pull/1301))
 * Node: Added PFADD command ([#1317](https://github.com/aws/glide-for-redis/pull/1317))
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
+* Python: Added ZMSCORE command (TODO: add PR link)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
