@@ -1,5 +1,5 @@
 install-build-tools:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 	cargo install cbindgen
 
 install-dev-tools-go1.18:
