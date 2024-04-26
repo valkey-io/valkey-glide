@@ -5,6 +5,7 @@ from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide.async_commands.core import (
     ConditionalChange,
+    CoreCommands,
     ExpireOptions,
     ExpirySet,
     GeospatialData,
@@ -661,7 +662,7 @@ class BaseTransaction:
             If the hash does not exist or is empty, the response will be an empty list.
         """
         return self.append_command(
-            RequestType.HRandField, [key, str(count), "WITHVALUES"]
+            RequestType.HRandField, [key, str(count), CoreCommands.WITH_VALUES]
         )
 
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
