@@ -652,8 +652,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/hkeys/">redis.io</a> for details
      * @param key The key of the hash.
-     * @return Command Response - An array of field names for the hash, empty when the key does not
-     *     exist.
+     * @return Command Response - An <code>array</code> of keys in the hash, or an <code>empty array
+     *     </code> when the key does not exist.
      */
     public T hkeys(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(Hkeys, buildArgs(key)));
