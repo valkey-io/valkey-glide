@@ -2426,8 +2426,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Updates the last access time of specified <code>keys</code> and returns the count of keys that
-     * were updated.
+     * Updates the last access time of specified <code>keys</code>.
      *
      * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
      * @param keys The keys to update last access time.

@@ -447,8 +447,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectRefcount(String key);
 
     /**
-     * Updates the last access time of specified <code>keys</code> and returns the count of keys that
-     * were updated.
+     * Updates the last access time of specified <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
      *     map to different <code>hash slots</code>.
