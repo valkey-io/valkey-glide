@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.mapMemberToGeoDataToList;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -15,6 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -100,6 +102,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.ListBaseCommands;
@@ -109,6 +112,8 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GeoAddOptions;
+import glide.api.models.commands.GeospatialData;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
@@ -132,6 +137,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -155,7 +161,8 @@ public abstract class BaseClient
                 SetBaseCommands,
                 SortedSetBaseCommands,
                 StreamBaseCommands,
-                HyperLogLogBaseCommands {
+                HyperLogLogBaseCommands,
+                GeospatialIndicesBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -1089,5 +1096,32 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> touch(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geoadd(
+            @NonNull String key,
+            @NonNull Map<String, GeospatialData> membersToGeospatialData,
+            @NonNull GeoAddOptions options) {
+        List<String> arguments = new ArrayList<>();
+        arguments.add(key);
+
+        if (options.getUpdateMode() != null) {
+            arguments.add(options.getUpdateMode().getRedisApi());
+        }
+
+        if (options.isChanged()) {
+            arguments.add("CH");
+        }
+
+        arguments.addAll(mapMemberToGeoDataToList(membersToGeospatialData));
+        return commandManager.submitNewCommand(
+                GeoAdd, arguments.toArray(new String[0]), this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geoadd(
+            @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
+        return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 }

@@ -8,6 +8,7 @@ import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.mapMemberToGeoDataToList;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -25,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -115,6 +117,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GeoAddOptions;
+import glide.api.models.commands.GeospatialData;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -138,7 +142,9 @@ import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -2548,6 +2554,61 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(keys);
         protobufTransaction.addCommands(buildCommand(Touch, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at <code>key
+     * </code>.<br>
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options The GeoAdd options. {@link GeoAddOptions}
+     * @return Command Response - The number of elements added to the sorted set. If <code>changed
+     *     </code> is set to <code>true</code> in the options, returns the number of elements updated
+     *     in the sorted set.
+     */
+    public T geoadd(
+            @NonNull String key,
+            @NonNull Map<String, GeospatialData> membersToGeospatialData,
+            @NonNull GeoAddOptions options) {
+        List<String> arguments = new ArrayList<>();
+        arguments.add(key);
+
+        if (options.getUpdateMode() != null) {
+            arguments.add(options.getUpdateMode().getRedisApi());
+        }
+
+        if (options.isChanged()) {
+            arguments.add("CH");
+        }
+
+        arguments.addAll(mapMemberToGeoDataToList(membersToGeospatialData));
+        ArgsArray commandArgs = buildArgs(arguments.toArray(new String[0]));
+        protobufTransaction.addCommands(buildCommand(GeoAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at <code>key
+     * </code>.<br>
+     * If a member is already a part of the sorted set, its position is updated.<br>
+     * To perform a <code>geoadd</code> operation while specifying optional parameters, use {@link
+     * #geoadd(String, Map, GeoAddOptions)}.
+     *
+     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @return Command Response - The number of elements added to the sorted set.
+     */
+    public T geoadd(
+            @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
+        return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */

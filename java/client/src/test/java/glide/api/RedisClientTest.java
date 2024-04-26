@@ -47,6 +47,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -139,7 +140,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.Script;
 import glide.api.models.Transaction;
+import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GeoAddOptions;
+import glide.api.models.commands.GeospatialData;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -3718,6 +3722,59 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.touch(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geoadd_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, GeospatialData> membersToGeoSpatialData =
+                Map.of("Place", new GeospatialData(10.0, 20.0));
+        String[] arguments = new String[] {key, "10.0", "20.0", "Place"};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.geoadd(key, membersToGeoSpatialData);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geoadd_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, GeospatialData> membersToGeoSpatialData =
+                Map.of("Place", new GeospatialData(10.0, 20.0));
+        GeoAddOptions options = new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true);
+        String[] arguments = new String[] {key, "XX", "CH", "10.0", "20.0", "Place"};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.geoadd(key, membersToGeoSpatialData, options);
         Long payload = response.get();
 
         // verify
