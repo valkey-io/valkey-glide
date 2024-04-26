@@ -1,11 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.ffi.resolvers;
 
+import java.lang.annotation.Native;
+
 public class ScriptResolver {
 
     // TODO: consider lazy loading the glide_rs library
     static {
-        System.loadLibrary("glide_rs");
+        NativeUtils.loadGlideLib();
     }
 
     /**
