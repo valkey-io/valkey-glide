@@ -507,7 +507,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
-     * scores ordered from low to high, starting from 0.<br><br>
+     * scores ordered from low to high, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -529,7 +529,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the lowest to highest, starting from 0.<br>
+     * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -551,7 +551,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
-     * scores are ordered from the highest to lowest, starting from 0.<br>
+     * scores are ordered from the highest to lowest, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
@@ -574,7 +574,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the highest to lowest, starting from 0.
+     * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
      * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
