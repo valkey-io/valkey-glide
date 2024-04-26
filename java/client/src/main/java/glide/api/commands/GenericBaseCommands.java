@@ -385,28 +385,48 @@ public interface GenericBaseCommands {
      * assert encoding.equals("listpack");
      *
      * encoding = client.objectEncoding("non_existing_key").get();
-     * assert encoding.equals(null);
+     * assert encoding == null;
      * }</pre>
      */
     CompletableFuture<String> objectEncoding(String key);
 
     /**
-     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
-     *     same <code>hash slot</code>.
-     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
-     * @param key The key to rename.
-     * @param newKey The new key name.
-     * @return <code>true</code> if <code>key</code> was renamed to <code>newKey</code>, <code>false
-     *     </code> if <code>newKey</code> already exists.
+     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
+     *     of.
+     * @return If <code>key</code> exists, returns the logarithmic access frequency counter of the
+     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
+     *     </code>.
      * @example
      *     <pre>{@code
-     * Boolean renamed = client.renamenx("old_key", "new_key").get();
-     * assert renamed;
+     * Long frequency = client.objectFreq("my_hash").get();
+     * assert frequency == 2L;
+     *
+     * frequency = client.objectFreq("non_existing_key").get();
+     * assert frequency == null;
      * }</pre>
      */
-    CompletableFuture<Boolean> renamenx(String key, String newKey);
+    CompletableFuture<Long> objectFreq(String key);
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the idle time of.
+     * @return If <code>key</code> exists, returns the idle time in seconds. Otherwise, returns <code>
+     *     null</code>.
+     * @example
+     *     <pre>{@code
+     * Long idletime = client.objectIdletime("my_hash").get();
+     * assert idletime == 2L;
+     *
+     * idletime = client.objectIdletime("non_existing_key").get();
+     * assert idletime == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectIdletime(String key);
 
     /**
      * Returns the reference count of the object stored at <code>key</code>.
@@ -425,4 +445,22 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> objectRefcount(String key);
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return <code>true</code> if <code>key</code> was renamed to <code>newKey</code>, <code>false
+     *     </code> if <code>newKey</code> already exists.
+     * @example
+     *     <pre>{@code
+     * Boolean renamed = client.renamenx("old_key", "new_key").get();
+     * assert renamed;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> renamenx(String key, String newKey);
 }

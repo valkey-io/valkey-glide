@@ -36,7 +36,9 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.StreamOptions.MaxLen;
+import glide.api.models.commands.StreamOptions.MinId;
+import glide.api.models.commands.StreamOptions.StreamAddOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -2249,10 +2251,11 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xadd(BaseClient client) {
+    public void xadd_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
         String field2 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
 
         assertNull(
                 client
@@ -2291,9 +2294,7 @@ public class SharedCommandTests {
                         .xadd(
                                 key,
                                 Map.of(field1, "foo3", field2, "bar3"),
-                                StreamAddOptions.builder()
-                                        .trim(new StreamAddOptions.MaxLen(Boolean.TRUE, 2L))
-                                        .build())
+                                StreamAddOptions.builder().trim(new MaxLen(true, 2L)).build())
                         .get();
         assertNotNull(id);
         // TODO update test when XLEN is available
@@ -2314,9 +2315,7 @@ public class SharedCommandTests {
                         .xadd(
                                 key,
                                 Map.of(field1, "foo4", field2, "bar4"),
-                                StreamAddOptions.builder()
-                                        .trim(new StreamAddOptions.MinId(Boolean.TRUE, id))
-                                        .build())
+                                StreamAddOptions.builder().trim(new MinId(true, id)).build())
                         .get());
         // TODO update test when XLEN is available
         if (client instanceof RedisClient) {
@@ -2330,11 +2329,28 @@ public class SharedCommandTests {
                             .getSingleValue());
         }
 
-        /**
-         * TODO add test to XTRIM on maxlen expect( await client.xtrim(key, { method: "maxlen",
-         * threshold: 1, exact: true, }), ).toEqual(1); expect(await client.customCommand(["XLEN",
-         * key])).toEqual(1);
-         */
+        // test xtrim to remove 1 element
+        assertEquals(1L, client.xtrim(key, new MaxLen(1)).get());
+        // TODO update test when XLEN is available
+        if (client instanceof RedisClient) {
+            assertEquals(1L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
+        } else if (client instanceof RedisClusterClient) {
+            assertEquals(
+                    1L,
+                    ((RedisClusterClient) client)
+                            .customCommand(new String[] {"XLEN", key})
+                            .get()
+                            .getSingleValue());
+        }
+
+        // Key does not exist - returns 0
+        assertEquals(0L, client.xtrim(key, new MaxLen(true, 1)).get());
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(key2, "xtrimtest").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -2824,6 +2840,32 @@ public class SharedCommandTests {
         String streamKey = UUID.randomUUID().toString();
         assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
         assertEquals("stream", client.objectEncoding(streamKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectFreq_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectFreq(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectIdletime_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectIdletime(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectIdletime(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "").get());
+        Thread.sleep(1000);
+        assertTrue(client.objectIdletime(key).get() > 0L);
     }
 
     @SneakyThrows

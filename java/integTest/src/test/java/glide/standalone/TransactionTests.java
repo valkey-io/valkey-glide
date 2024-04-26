@@ -17,6 +17,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -120,6 +121,39 @@ public class TransactionTests {
 
         var response = client.exec(new Transaction().lastsave()).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String objectFreqKey = "key";
+        String maxmemoryPolicy = "maxmemory-policy";
+
+        String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            Transaction transaction = new Transaction();
+            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            transaction.set(objectFreqKey, "");
+            transaction.objectFreq(objectFreqKey);
+            var response = client.exec(transaction).get();
+            assertEquals(OK, response[0]);
+            assertEquals(OK, response[1]);
+            assertTrue((long) response[2] >= 0L);
+        } finally {
+            client.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectIdletime() {
+        String objectIdletimeKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.set(objectIdletimeKey, "");
+        transaction.objectIdletime(objectIdletimeKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
     }
 
     @Test
