@@ -147,14 +147,16 @@ export type BaseClientConfiguration = {
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
      * If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
+     *
      * @example
-     * <code>
+     * ```typescript
+     * configuration.addresses =
      * [
-     *   \{ address:sample-address-0001.use1.cache.amazonaws.com, port:6378 \},
-     *   \{ address: sample-address-0002.use2.cache.amazonaws.com \}
-     *   \{ address: sample-address-0003.use2.cache.amazonaws.com, port:6380 \}
+     *   { address: sample-address-0001.use1.cache.amazonaws.com, port:6378 },
+     *   { address: sample-address-0002.use2.cache.amazonaws.com }
+     *   { address: sample-address-0003.use2.cache.amazonaws.com, port:6380 }
      * ]
-     * </code>
+     * ```
      */
     addresses: {
         host: string;
@@ -1275,9 +1277,11 @@ export class BaseClient {
      * If `key` does not exist, empty list will be returned.
      *
      * @example
+     * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
      * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     * ```
      *
      * @example
      * ```typescript
@@ -1487,16 +1491,18 @@ export class BaseClient {
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
-     * @returns a value that depends on the script that was executed.
+     * @returns A value that depends on the script that was executed.
      *
      * @example
-     *       const luaScript = new Script("return \{ KEYS[1], ARGV[1] \}");
-     *       const scriptOptions = \{
-     *            keys: ["foo"],
-     *            args: ["bar"],
-     *       \};
-     *       await invokeScript(luaScript, scriptOptions);
-     *       ["foo", "bar"]
+     * ```typescript
+     * const luaScript = new Script("return { KEYS[1], ARGV[1] }");
+     * const scriptOptions = {
+     *      keys: ["foo"],
+     *      args: ["bar"],
+     * };
+     * const result = await invokeScript(luaScript, scriptOptions);
+     * console.log(result); // Output: ['foo', 'bar']
+     * ```
      */
     public invokeScript(
         script: Script,
@@ -1726,8 +1732,9 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
      * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: "negativeInfinity",
@@ -1767,8 +1774,9 @@ export class BaseClient {
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: "negativeInfinity",
