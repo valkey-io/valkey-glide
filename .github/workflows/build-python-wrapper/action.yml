@@ -7,8 +7,8 @@ inputs:
         type: string
         options:
             - amazon-linux
-            - macos-latest
-            - ubuntu-latest
+            - macos
+            - ubuntu
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string

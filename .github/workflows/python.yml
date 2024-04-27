@@ -84,7 +84,7 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "ubuntu-latest"
+                  os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -129,7 +129,7 @@ jobs:
               name: lint python-rust
 
     build-macos-latest:
-        runs-on: macos-latest
+        runs-on: macos-12
         timeout-minutes: 25
         steps:
             - uses: actions/checkout@v4
@@ -141,7 +141,7 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "macos-latest"
+                  os: "macos"
                   target: "x86_64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 

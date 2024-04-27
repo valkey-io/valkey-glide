@@ -7,8 +7,8 @@ inputs:
         type: string
         options:
             - amazon-linux
-            - macos-latest
-            - ubuntu-latest
+            - macos
+            - ubuntu
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -29,7 +29,7 @@ runs:
     steps:
         - name: Install software dependencies for macOS
           shell: bash
-          if: "${{ inputs.os == 'macos-latest' }}"
+          if: "${{ contains(inputs.os, 'macos') }}"
           run: |
               brew update
               brew upgrade || true
@@ -37,7 +37,7 @@ runs:
 
         - name: Install software dependencies for Ubuntu
           shell: bash
-          if: "${{ inputs.os == 'ubuntu-latest' }}"
+          if: "${{ contains(inputs.os, 'ubuntu') }}"
           run: |
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
