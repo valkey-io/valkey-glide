@@ -108,6 +108,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -3532,5 +3533,27 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(refcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void touch_returns_success() {
+        // setup
+        String[] keys = new String[] {"testKey1", "testKey2"};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Touch), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.touch(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 }

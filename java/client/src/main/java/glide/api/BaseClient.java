@@ -72,6 +72,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -1033,5 +1034,10 @@ public abstract class BaseClient
             @NonNull String destination, @NonNull String[] sourceKeys) {
         String[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
         return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> touch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
     }
 }
