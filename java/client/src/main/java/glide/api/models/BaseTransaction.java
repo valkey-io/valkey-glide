@@ -650,7 +650,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns all field names in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hkeys/">redis.io</a> for details
+     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details
      * @param key The key of the hash.
      * @return Command Response - An <code>array</code> of field names in the hash, or an <code>
      *     empty array</code> when the key does not exist.
