@@ -138,7 +138,7 @@ fn parse_timeout_to_f64(cmd: &Cmd, timeout_idx: usize) -> RedisResult<f64> {
                 "Expected to find timeout value at index {:?} for command {:?}. Recieved command = {:?}",
                 timeout_idx,
                 std::str::from_utf8(&cmd.command().unwrap_or_default()),
-                std::str::from_utf8(&cmd.get_packed_command())
+                cmd
             ),
         ))
     };
