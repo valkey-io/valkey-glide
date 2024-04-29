@@ -39,7 +39,6 @@ async def transaction_test(
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
-    key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hash
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -129,15 +128,12 @@ async def transaction_test(
     args.append({key: value, key2: value2, key3: "10.5"})
     transaction.hdel(key4, [key, key2])
     args.append(2)
-
-    transaction.hset(key11, {key: value})
-    args.append(1)
-    transaction.hrandfield(key11)
-    args.append(key)
-    transaction.hrandfield_count(key11, 1)
-    args.append([key])
-    transaction.hrandfield_count_withvalues(key11, 1)
-    args.append([[key, value]])
+    transaction.hrandfield(key4)
+    args.append(key3)
+    transaction.hrandfield_count(key4, 1)
+    args.append([key3])
+    transaction.hrandfield_withvalues(key4, 1)
+    args.append([[key3, "10.5"]])
 
     transaction.client_getname()
     args.append(None)

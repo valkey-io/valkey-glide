@@ -846,7 +846,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield_count_withvalues(self, redis_client: TRedisClient):
+    async def test_hrandfield_withvalues(self, redis_client: TRedisClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -855,27 +855,23 @@ class TestCommands:
 
         assert await redis_client.hset(key, field_value_map) == 2
         # Unique values are expected as count is positive
-        rand_fields_with_values = await redis_client.hrandfield_count_withvalues(key, 4)
+        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, 4)
         assert len(rand_fields_with_values) == 2
         for field_with_value in rand_fields_with_values:
             assert field_with_value in [[field, "value"], [field2, "value2"]]
 
         # Duplicate values are expected as count is negative
-        rand_fields_with_values = await redis_client.hrandfield_count_withvalues(
-            key, -4
-        )
+        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, -4)
         assert len(rand_fields_with_values) == 4
         for field_with_value in rand_fields_with_values:
             assert field_with_value in [[field, "value"], [field2, "value2"]]
 
-        assert await redis_client.hrandfield_count_withvalues(key, 0) == []
-        assert (
-            await redis_client.hrandfield_count_withvalues("non_existing_key", 4) == []
-        )
+        assert await redis_client.hrandfield_withvalues(key, 0) == []
+        assert await redis_client.hrandfield_withvalues("non_existing_key", 4) == []
 
         assert await redis_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hrandfield_count_withvalues(key2, 5)
+            await redis_client.hrandfield_withvalues(key2, 5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

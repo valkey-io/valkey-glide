@@ -363,7 +363,7 @@ fn convert_flat_array_to_key_value_pairs(array: Vec<Value>) -> RedisResult<Value
             .into());
     }
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(array.len() / 2);
     for i in (0..array.len()).step_by(2) {
         let pair = vec![array[i].clone(), array[i + 1].clone()];
         result.push(Value::Array(pair));

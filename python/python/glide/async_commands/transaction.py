@@ -613,7 +613,7 @@ class BaseTransaction:
         """
         Returns a random field name from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.
@@ -626,9 +626,9 @@ class BaseTransaction:
 
     def hrandfield_count(self: TTransaction, key: str, count: int) -> TTransaction:
         """
-        Retrieves random field names from the hash value stored at `key`.
+        Retrieves up to `count` random field names from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.
@@ -642,13 +642,11 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.HRandField, [key, str(count)])
 
-    def hrandfield_count_withvalues(
-        self: TTransaction, key: str, count: int
-    ) -> TTransaction:
+    def hrandfield_withvalues(self: TTransaction, key: str, count: int) -> TTransaction:
         """
-        Retrieves random field names along with their values from the hash value stored at `key`.
+        Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.

@@ -835,7 +835,7 @@ class CoreCommands(Protocol):
         """
         Returns a random field name from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.
@@ -854,9 +854,9 @@ class CoreCommands(Protocol):
 
     async def hrandfield_count(self, key: str, count: int) -> List[str]:
         """
-        Retrieves random field names from the hash value stored at `key`.
+        Retrieves up to `count` random field names from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.
@@ -881,13 +881,11 @@ class CoreCommands(Protocol):
 
     WITH_VALUES: str = "WITHVALUES"
 
-    async def hrandfield_count_withvalues(
-        self, key: str, count: int
-    ) -> List[List[str]]:
+    async def hrandfield_withvalues(self, key: str, count: int) -> List[List[str]]:
         """
-        Retrieves random field names along with their values from the hash value stored at `key`.
+        Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
-        See https://redis.io/commands/hrandfield/ for more details.
+        See https://valkey.io/commands/hrandfield for more details.
 
         Args:
             key (str): The key of the hash.
@@ -901,7 +899,7 @@ class CoreCommands(Protocol):
             If the hash does not exist or is empty, the response will be an empty list.
 
         Examples:
-            >>> await client.hrandfield_count_withvalues("my_hash", -3)
+            >>> await client.hrandfield_withvalues("my_hash", -3)
                 [["field1", "value1"], ["field1", "value1"], ["field2", "value2"]]
         """
         return cast(
