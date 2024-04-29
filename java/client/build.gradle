@@ -152,6 +152,7 @@ tasks.register('copyNativeLib', Copy) {
 
 jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
+compileTestJava.dependsOn('copyNativeLib')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -188,7 +189,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
 jar {
