@@ -164,16 +164,7 @@ pub(crate) fn convert_to_expected_type(
                 .into()),
         },
         ExpectedReturnType::ArrayOfBools => match value {
-            Value::Array(array) => {
-                let array_of_bools = array
-                    .iter()
-                    .map(|v| {
-                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Boolean))
-                            .unwrap()
-                    })
-                    .collect();
-                Ok(Value::Array(array_of_bools))
-            }
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::Boolean),
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
@@ -182,16 +173,7 @@ pub(crate) fn convert_to_expected_type(
                 .into()),
         },
         ExpectedReturnType::ArrayOfDoubles => match value {
-            Value::Array(array) => {
-                let array_of_doubles = array
-                    .iter()
-                    .map(|v| {
-                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::DoubleOrNull))
-                            .unwrap()
-                    })
-                    .collect();
-                Ok(Value::Array(array_of_doubles))
-            }
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::DoubleOrNull),
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of doubles",
@@ -302,6 +284,21 @@ fn convert_lolwut_string(data: &str) -> String {
     } else {
         data.to_owned()
     }
+}
+
+/// Converts elements in an array to the specified type.
+///
+/// `array` is an array of values.
+/// `element_type` is the type that the array elements should be converted to.
+fn convert_array_elements(array: Vec<Value>, element_type: ExpectedReturnType) -> RedisResult<Value> {
+    let converted_array = array
+        .iter()
+        .map(|v| {
+            convert_to_expected_type(v.clone(), Some(element_type))
+                .unwrap()
+        })
+        .collect();
+    Ok(Value::Array(converted_array))
 }
 
 fn convert_array_to_map(
