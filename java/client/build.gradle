@@ -2,6 +2,7 @@ import java.nio.file.Paths
 
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 repositories {
@@ -84,23 +85,6 @@ tasks.register('cleanRust') {
     }
 }
 
-def rustBasePath = ".."
-
-tasks.create(name: "cargoOutputDir", description: "Get cargo metadata") {
-    new ByteArrayOutputStream().withStream { os ->
-        exec {
-            commandLine 'cargo', 'metadata', '--format-version', '1'
-            workingDir rustBasePath
-            standardOutput = os
-        }
-        def outputAsString = os.toString()
-        def json = new groovy.json.JsonSlurper().parseText(outputAsString)
-
-        logger.info("cargo target directory: ${json.target_directory}")
-        project.ext.cargo_target_directory = json.target_directory
-    }
-}
-
 tasks.register('buildRustRelease', Exec) {
     commandLine 'cargo', 'build', '--release'
     workingDir project.rootDir
@@ -150,17 +134,6 @@ tasks.register('testFfi', Test) {
     include "glide/ffi/FfiTest.class"
 }
 
-tasks.create(name: "cargoBuild", type: Exec, description: "Running Cargo build", dependsOn: "cargoOutputDir") {
-    workingDir rustBasePath
-    commandLine 'cargo', 'build', '--release'
-}
-
-tasks.create(name: "copyRustLib", type: Sync, dependsOn: "cargoBuild") {
-    from "${project.ext.cargo_target_directory}/release"
-    include "*.dylib","*.so"
-    into "rust-lib/"
-}
-
 tasks.register('buildAll') {
     dependsOn 'protobuf', 'buildRust', 'testFfi'
     finalizedBy 'build'
@@ -171,8 +144,42 @@ clean.dependsOn('cleanProtobuf', 'cleanRust')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
 
+tasks.register('copyNativeLib', Copy) {
+    from "${projectDir}/../target/release"
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+jar.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn('buildRustRelease')
+
 test {
     exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'com.babushka'
+            artifactId = 'glide'
+            version = "0.0.1"
+            from components.java
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
 }
 
 tasks.withType(Test) {
@@ -184,33 +191,6 @@ tasks.withType(Test) {
     jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
-sourceSets {
-    main {
-        java {
-            srcDir 'src/main/java'
-        }
-        resources {
-            srcDir 'rust-lib'
-        }
-    }
-}
-
-tasks.named("processResources") {
-    mustRunAfter("copyRustLib")
-}
-
-tasks.withType(JavaCompile) {
-    compileTask -> compileTask.dependsOn "copyRustLib"
-}
-
 jar {
     archiveBaseName = "glide"
-
-    tasks.withType(Jar){
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    }
-
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-    }
 }
