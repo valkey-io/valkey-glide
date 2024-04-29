@@ -1788,6 +1788,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrevrank(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.5, "two", 2.0, "three", 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(0, client.zrevrank(key, "three").get());
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertArrayEquals(new Object[] {2L, 1.5}, client.zrevrankWithScore(key, "one").get());
+            assertNull(client.zrevrankWithScore(key, "nonExistingMember").get());
+            assertNull(client.zrevrankWithScore("nonExistingKey", "nonExistingMember").get());
+        }
+        assertNull(client.zrevrank(key, "nonExistingMember").get());
+        assertNull(client.zrevrank("nonExistingKey", "nonExistingMember").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrevrank(key, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zdiff(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();

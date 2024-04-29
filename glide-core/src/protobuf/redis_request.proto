@@ -173,6 +173,7 @@ enum RequestType {
     ObjectFreq = 130;
     RenameNx = 131;
     Touch = 132;
+    ZRevRank = 133;
 }
 
 message Command {

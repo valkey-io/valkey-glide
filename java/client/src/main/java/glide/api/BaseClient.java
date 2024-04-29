@@ -89,6 +89,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -842,6 +843,21 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 Zrank, new String[] {key, member, WITH_SCORE_REDIS_API}, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrevrank(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                ZRevRank, new String[] {key, member}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrevrankWithScore(
+            @NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                ZRevRank,
+                new String[] {key, member, WITH_SCORE_REDIS_API},
+                this::handleArrayOrNullResponse);
     }
 
     @Override

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
@@ -8,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestConfiguration;
 import glide.api.RedisClient;
@@ -166,5 +168,21 @@ public class TransactionTests {
         var response = client.exec(transaction).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
+    }
+
+    @Test
+    @SneakyThrows
+    public void zrank_zrevrank_withscores() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
+        Transaction transaction = new Transaction();
+        transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        transaction.zrankWithScore(zSetKey1, "one");
+        transaction.zrevrankWithScore(zSetKey1, "one");
+
+        Object[] result = client.exec(transaction).get();
+        assertEquals(3L, result[0]);
+        assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
+        assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
     }
 }

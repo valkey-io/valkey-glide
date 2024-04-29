@@ -111,6 +111,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -412,6 +413,12 @@ public class TransactionTests {
 
         transaction.zrankWithScore("key", "member");
         results.add(Pair.of(Zrank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+
+        transaction.zrevrank("key", "member");
+        results.add(Pair.of(ZRevRank, buildArgs("key", "member")));
+
+        transaction.zrevrankWithScore("key", "member");
+        results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
         results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
