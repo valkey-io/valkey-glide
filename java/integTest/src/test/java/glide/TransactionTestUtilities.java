@@ -56,6 +56,8 @@ public class TransactionTestUtilities {
         baseTransaction.exists(new String[] {key1});
         baseTransaction.persist(key1);
 
+        baseTransaction.touch(new String[] {key1});
+
         baseTransaction.del(new String[] {key1});
         baseTransaction.get(key1);
 
@@ -186,6 +188,7 @@ public class TransactionTestUtilities {
             new String[] {value1, value2},
             1L,
             Boolean.FALSE, // persist(key1)
+            1L, // touch(new String[] {key1})
             1L,
             null,
             1L,
