@@ -139,6 +139,7 @@ pub enum RequestType {
     GeoPos = 128,
     BZPopMax = 129,
     ObjectFreq = 130,
+    RenameNx = 131,
     Touch = 132,
 }
 
@@ -282,6 +283,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
             ProtobufRequestType::GeoPos => RequestType::GeoPos,
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
+            ProtobufRequestType::RenameNx => RequestType::RenameNx,
             ProtobufRequestType::Touch => RequestType::Touch,
         }
     }
@@ -421,6 +423,7 @@ impl RequestType {
             RequestType::LOLWUT => Some(cmd("LOLWUT")),
             RequestType::GeoPos => Some(cmd("GEOPOS")),
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
+            RequestType::RenameNx => Some(cmd("RENAMENX")),
             RequestType::Touch => Some(cmd("TOUCH")),
         }
     }
