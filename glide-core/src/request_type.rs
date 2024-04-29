@@ -141,6 +141,7 @@ pub enum RequestType {
     ObjectFreq = 130,
     RenameNx = 131,
     Touch = 132,
+    ZRevRank = 133,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -285,6 +286,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
             ProtobufRequestType::RenameNx => RequestType::RenameNx,
             ProtobufRequestType::Touch => RequestType::Touch,
+            ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
         }
     }
 }
@@ -425,6 +427,7 @@ impl RequestType {
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
             RequestType::RenameNx => Some(cmd("RENAMENX")),
             RequestType::Touch => Some(cmd("TOUCH")),
+            RequestType::ZRevRank => Some(cmd("ZREVRANK")),
         }
     }
 }
