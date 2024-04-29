@@ -87,6 +87,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -2421,6 +2422,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectRefcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectRefcount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Updates the last access time of specified <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @param keys The keys to update last access time.
+     * @return Command Response - The number of keys that were updated.
+     */
+    public T touch(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(Touch, commandArgs));
         return getThis();
     }
 

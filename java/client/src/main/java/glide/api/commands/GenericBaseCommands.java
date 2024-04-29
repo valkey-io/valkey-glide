@@ -445,4 +445,20 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> objectRefcount(String key);
+
+    /**
+     * Updates the last access time of specified <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different <code>hash slots</code>.
+     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @param keys The keys to update last access time.
+     * @return The number of keys that were updated.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.touch(new String[] {"myKey1", "myKey2", "nonExistentKey"}).get();
+     * assert payload == 2L; // Last access time of 2 keys has been updated.
+     * }</pre>
+     */
+    CompletableFuture<Long> touch(String[] keys);
 }
