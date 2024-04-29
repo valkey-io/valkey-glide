@@ -290,13 +290,13 @@ fn convert_lolwut_string(data: &str) -> String {
 ///
 /// `array` is an array of values.
 /// `element_type` is the type that the array elements should be converted to.
-fn convert_array_elements(array: Vec<Value>, element_type: ExpectedReturnType) -> RedisResult<Value> {
+fn convert_array_elements(
+    array: Vec<Value>,
+    element_type: ExpectedReturnType,
+) -> RedisResult<Value> {
     let converted_array = array
         .iter()
-        .map(|v| {
-            convert_to_expected_type(v.clone(), Some(element_type))
-                .unwrap()
-        })
+        .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
         .collect();
     Ok(Value::Array(converted_array))
 }
