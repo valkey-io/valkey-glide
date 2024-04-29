@@ -879,8 +879,6 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HRandField, [key, str(count)]),
         )
 
-    WITH_VALUES: str = "WITHVALUES"
-
     async def hrandfield_withvalues(self, key: str, count: int) -> List[List[str]]:
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
@@ -905,7 +903,7 @@ class CoreCommands(Protocol):
         return cast(
             List[List[str]],
             await self._execute_command(
-                RequestType.HRandField, [key, str(count), self.WITH_VALUES]
+                RequestType.HRandField, [key, str(count), "WITHVALUES"]
             ),
         )
 
