@@ -142,8 +142,6 @@ import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.GeoAddOptions;
-import glide.api.models.commands.GeospatialData;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -159,6 +157,8 @@ import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -3734,9 +3734,11 @@ public class RedisClientTest {
     public void geoadd_returns_success() {
         // setup
         String key = "testKey";
-        Map<String, GeospatialData> membersToGeoSpatialData =
-                Map.of("Place", new GeospatialData(10.0, 20.0));
-        String[] arguments = new String[] {key, "10.0", "20.0", "Place"};
+        Map<String, GeospatialData> membersToGeoSpatialData = new LinkedHashMap<>();
+        membersToGeoSpatialData.put("Catania", new GeospatialData(15.087269, 40));
+        membersToGeoSpatialData.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        String[] arguments =
+                new String[] {key, "15.087269", "40.0", "Catania", "13.361389", "38.115556", "Palermo"};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -3760,10 +3762,14 @@ public class RedisClientTest {
     public void geoadd_with_options_returns_success() {
         // setup
         String key = "testKey";
-        Map<String, GeospatialData> membersToGeoSpatialData =
-                Map.of("Place", new GeospatialData(10.0, 20.0));
+        Map<String, GeospatialData> membersToGeoSpatialData = new LinkedHashMap<>();
+        membersToGeoSpatialData.put("Catania", new GeospatialData(15.087269, 40));
+        membersToGeoSpatialData.put("Palermo", new GeospatialData(13.361389, 38.115556));
         GeoAddOptions options = new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true);
-        String[] arguments = new String[] {key, "XX", "CH", "10.0", "20.0", "Place"};
+        String[] arguments =
+                new String[] {
+                    key, "XX", "CH", "15.087269", "40.0", "Catania", "13.361389", "38.115556", "Palermo"
+                };
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();

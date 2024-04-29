@@ -2,10 +2,9 @@
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
-import glide.api.models.commands.GeospatialData;
+import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,13 +39,13 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a geospatial members to geospatial data mapping in to a list of arguments in the form
-     * of [Longitude, Latitude, Member ...].
+     * Converts a geospatial members to geospatial data mapping in to an array of arguments in the
+     * form of [Longitude, Latitude, Member ...].
      *
      * @param args A mapping of member names to their corresponding positions.
-     * @return A list of strings to be used in {@link GeospatialIndicesBaseCommands#geoadd}.
+     * @return An array of strings to be used in {@link GeospatialIndicesBaseCommands#geoadd}.
      */
-    public static List<String> mapGeoDataToList(Map<String, GeospatialData> args) {
+    public static String[] mapGeoDataToArray(Map<String, GeospatialData> args) {
         return args.entrySet().stream()
                 .flatMap(
                         entry ->
@@ -54,7 +53,7 @@ public class ArrayTransformUtils {
                                         Double.toString(entry.getValue().getLongitude()),
                                         Double.toString(entry.getValue().getLatitude()),
                                         entry.getKey()))
-                .collect(Collectors.toList());
+                .toArray(String[]::new);
     }
 
     /**

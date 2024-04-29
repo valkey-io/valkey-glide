@@ -2,6 +2,7 @@
 package glide.api.models.commands;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.commands.geospatial.GeoAddOptions;
 import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

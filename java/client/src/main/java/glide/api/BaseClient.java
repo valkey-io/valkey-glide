@@ -6,7 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
-import static glide.utils.ArrayTransformUtils.mapGeoDataToList;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -112,8 +112,6 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.GeoAddOptions;
-import glide.api.models.commands.GeospatialData;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
@@ -124,6 +122,8 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -137,7 +137,6 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1103,20 +1102,10 @@ public abstract class BaseClient
             @NonNull String key,
             @NonNull Map<String, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
-        List<String> arguments = new ArrayList<>();
-        arguments.add(key);
-
-        if (options.getUpdateMode() != null) {
-            arguments.add(options.getUpdateMode().getRedisApi());
-        }
-
-        if (options.isChanged()) {
-            arguments.add("CH");
-        }
-
-        arguments.addAll(mapGeoDataToList(membersToGeospatialData));
-        return commandManager.submitNewCommand(
-                GeoAdd, arguments.toArray(new String[0]), this::handleLongResponse);
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData));
+        return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
     }
 
     @Override

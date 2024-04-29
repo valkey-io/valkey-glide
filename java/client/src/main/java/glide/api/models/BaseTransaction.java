@@ -8,7 +8,7 @@ import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
-import static glide.utils.ArrayTransformUtils.mapGeoDataToList;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -117,8 +117,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.GeoAddOptions;
-import glide.api.models.commands.GeospatialData;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -144,7 +144,6 @@ import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -2575,19 +2574,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String key,
             @NonNull Map<String, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
-        List<String> arguments = new ArrayList<>();
-        arguments.add(key);
-
-        if (options.getUpdateMode() != null) {
-            arguments.add(options.getUpdateMode().getRedisApi());
-        }
-
-        if (options.isChanged()) {
-            arguments.add("CH");
-        }
-
-        arguments.addAll(mapGeoDataToList(membersToGeospatialData));
-        ArgsArray commandArgs = buildArgs(arguments.toArray(new String[0]));
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData)));
         protobufTransaction.addCommands(buildCommand(GeoAdd, commandArgs));
         return getThis();
     }
