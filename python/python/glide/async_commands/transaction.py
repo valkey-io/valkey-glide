@@ -1755,7 +1755,7 @@ class BaseTransaction:
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 
-        See https://redis.io/commands/zmscore for more details.
+        See https://valkey.io/commands/zmscore for more details.
 
         Args:
             key (str): The key of the sorted set.
@@ -1763,7 +1763,7 @@ class BaseTransaction:
 
         Command response:
             List[float]: A list of scores of the `members`.
-                If a `member` does not exist, the corresponding value in the list will be `None`.
+                If a member does not exist, the corresponding value in the list will be None.
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
 

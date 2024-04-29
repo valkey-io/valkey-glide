@@ -2334,7 +2334,7 @@ class CoreCommands(Protocol):
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
 
-        See https://redis.io/commands/zmscore for more details.
+        See https://valkey.io/commands/zmscore for more details.
 
         Args:
             key (str): The key of the sorted set.
@@ -2342,7 +2342,7 @@ class CoreCommands(Protocol):
 
         Returns:
             List[float]: A list of scores of the `members`.
-                If a `member` does not exist, the corresponding value in the list will be `None`.
+                If a member does not exist, the corresponding value in the list will be None.
 
         Examples:
             >>> await client.zmscore("my_sorted_set", ["one", "non_existent_member", "three"])
