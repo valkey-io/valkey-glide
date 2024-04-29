@@ -172,6 +172,7 @@ enum RequestType {
     BZPopMax = 129;
     ObjectFreq = 130;
     RenameNx = 131;
+    Touch = 132;
 }
 
 message Command {

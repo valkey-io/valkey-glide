@@ -140,6 +140,7 @@ pub enum RequestType {
     BZPopMax = 129,
     ObjectFreq = 130,
     RenameNx = 131,
+    Touch = 132,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -283,6 +284,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GeoPos => RequestType::GeoPos,
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
             ProtobufRequestType::RenameNx => RequestType::RenameNx,
+            ProtobufRequestType::Touch => RequestType::Touch,
         }
     }
 }
@@ -422,6 +424,7 @@ impl RequestType {
             RequestType::GeoPos => Some(cmd("GEOPOS")),
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
             RequestType::RenameNx => Some(cmd("RENAMENX")),
+            RequestType::Touch => Some(cmd("TOUCH")),
         }
     }
 }

@@ -37,6 +37,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
 import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -88,6 +89,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -654,6 +656,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
         protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns all field names in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details
+     * @param key The key of the hash.
+     * @return Command Response - An <code>array</code> of field names in the hash, or an <code>
+     *     empty array</code> when the key does not exist.
+     */
+    public T hkeys(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(Hkeys, buildArgs(key)));
         return getThis();
     }
 
@@ -2437,6 +2452,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T objectRefcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ObjectRefcount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Updates the last access time of specified <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @param keys The keys to update last access time.
+     * @return Command Response - The number of keys that were updated.
+     */
+    public T touch(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(Touch, commandArgs));
         return getThis();
     }
 
