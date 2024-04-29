@@ -1,9 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.StreamOptions.StreamAddOptions;
-import glide.api.models.commands.StreamOptions.StreamAddOptions.StreamAddOptionsBuilder;
-import glide.api.models.commands.StreamOptions.StreamTrimOptions;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
