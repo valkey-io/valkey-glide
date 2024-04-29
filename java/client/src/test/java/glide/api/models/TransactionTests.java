@@ -94,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -546,6 +547,9 @@ public class TransactionTests {
 
         transaction.objectRefcount("key");
         results.add(Pair.of(ObjectRefcount, buildArgs("key")));
+
+        transaction.touch(new String[] {"key1", "key2"});
+        results.add(Pair.of(Touch, buildArgs("key1", "key2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
