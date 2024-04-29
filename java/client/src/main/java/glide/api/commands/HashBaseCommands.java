@@ -219,4 +219,19 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
+
+    /**
+     * Returns all field names in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details
+     * @param key The key of the hash.
+     * @return An <code>array</code> of field names in the hash, or an <code>empty array</code> when
+     *     the key does not exist.
+     * @example
+     *     <pre>{@code
+     * String[] names = client.hkeys("my_hash").get();
+     * assert names.equals(new String[] { "field_1", "field_2" });
+     * }</pre>
+     */
+    CompletableFuture<String[]> hkeys(String key);
 }
