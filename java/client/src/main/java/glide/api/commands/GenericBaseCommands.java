@@ -447,6 +447,24 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectRefcount(String key);
 
     /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return <code>true</code> if <code>key</code> was renamed to <code>newKey</code>, <code>false
+     *     </code> if <code>newKey</code> already exists.
+     * @example
+     *     <pre>{@code
+     * Boolean renamed = client.renamenx("old_key", "new_key").get();
+     * assert renamed;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> renamenx(String key, String newKey);
+
+    /**
      * Updates the last access time of specified <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
