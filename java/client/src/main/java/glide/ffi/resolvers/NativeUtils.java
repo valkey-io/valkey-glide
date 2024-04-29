@@ -59,12 +59,13 @@ public class NativeUtils {
     }
 
     public static void loadGlideLib() {
+        String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
             if (osName.contains("mac")) {
-                NativeUtils.loadLibraryFromJar("/libglide_rs.dylib"); // for macOS, make sure this is .dylib rather than .so
+                NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
             } else if (osName.contains("linux")) {
-                NativeUtils.loadLibraryFromJar("/libglide_rs.so"); // for macOS, make sure this is .dylib rather than .so
+                NativeUtils.loadLibraryFromJar(glideLib + ".so");
             } else {
                 throw new UnsupportedOperationException("OS not supported. Glide is only available on Mac OS and Linux systems.");
             }
