@@ -147,6 +147,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -515,9 +516,9 @@ public class TransactionTests {
         transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
 
-        Map<String, Double> weightedKeys = new LinkedHashMap<>();
-        weightedKeys.put("key1", 10.0);
-        weightedKeys.put("key2", 20.0);
+        List<Pair<String, Double>> weightedKeys = new ArrayList<>();
+        weightedKeys.add(Pair.of("key1", 10.0));
+        weightedKeys.add(Pair.of("key2", 20.0));
         transaction.zunion(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(

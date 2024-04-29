@@ -170,6 +170,7 @@ import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -3009,10 +3010,10 @@ public class RedisClientTest {
     @Test
     public void zunion_with_options_returns_success() {
         // setup
-        Map<String, Double> keyWeightMap = new LinkedHashMap<>();
-        keyWeightMap.put("key1", 10.0);
-        keyWeightMap.put("key2", 20.0);
-        WeightedKeys weightedKeys = new WeightedKeys(keyWeightMap);
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
         String[] value = new String[] {"elem1", "elem2"};
@@ -3062,10 +3063,10 @@ public class RedisClientTest {
     @Test
     public void zunionWithScores_with_options_returns_success() {
         // setup
-        Map<String, Double> keyWeightMap = new LinkedHashMap<>();
-        keyWeightMap.put("key1", 10.0);
-        keyWeightMap.put("key2", 20.0);
-        WeightedKeys weightedKeys = new WeightedKeys(keyWeightMap);
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
                 concatenateArrays(

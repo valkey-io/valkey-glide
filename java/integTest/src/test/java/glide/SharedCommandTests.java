@@ -63,6 +63,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -2344,20 +2345,26 @@ public class SharedCommandTests {
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
         assertArrayEquals(
                 new String[] {"one", "three", "two"},
-                client.zunion(new WeightedKeys(Map.of(key1, 2.0, key2, 2.0))).get());
+                client.zunion(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
         assertEquals(
                 Map.of("one", 2.0, "three", 6.0, "two", 11.0),
-                client.zunionWithScores(new WeightedKeys(Map.of(key1, 2.0, key2, 2.0))).get());
+                client
+                        .zunionWithScores(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
 
         // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
         // for key2 by -2.0.
         assertArrayEquals(
                 new String[] {"two", "three", "one"},
-                client.zunion(new WeightedKeys(Map.of(key1, 1.0, key2, -2.0)), Aggregate.MIN).get());
+                client
+                        .zunion(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
         assertEquals(
                 Map.of("two", -7.0, "three", -6.0, "one", 1.0),
                 client
-                        .zunionWithScores(new WeightedKeys(Map.of(key1, 1.0, key2, -2.0)), Aggregate.MIN)
+                        .zunionWithScores(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
                         .get());
 
         // Non Existing Key

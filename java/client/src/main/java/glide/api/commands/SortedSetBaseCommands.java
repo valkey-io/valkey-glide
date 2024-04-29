@@ -876,7 +876,7 @@ public interface SortedSetBaseCommands {
      * String[] payload = client.zunion(keyArray, Aggregate.MAX).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(Map.of("mySortedSet1", 2.0, "mySortedSet2", 2.0));
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * String[] payload = client.zunion(weightedKeys).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
@@ -906,7 +906,7 @@ public interface SortedSetBaseCommands {
      * String[] payload = client.zunion(keyArray).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(Map.of("mySortedSet1", 2.0, "mySortedSet2", 2.0));
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * String[] payload = client.zunion(weightedKeys).get()
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
@@ -935,7 +935,7 @@ public interface SortedSetBaseCommands {
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(Map.of("mySortedSet1", 2.0, "mySortedSet2", 2.0));
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray, Aggregate.SUM).get();
      * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
@@ -965,7 +965,7 @@ public interface SortedSetBaseCommands {
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray).get();
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
-     * WeightedKeys weightedKeys = new WeightedKeys(Map.of("mySortedSet1", 2.0, "mySortedSet2", 2.0));
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray).get();
      * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
