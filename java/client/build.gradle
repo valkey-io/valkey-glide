@@ -172,7 +172,7 @@ sourceSets {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            groupId = 'com.babushka'
+            groupId = 'software.amazon'
             artifactId = 'glide'
             version = "0.0.1"
             from components.java
