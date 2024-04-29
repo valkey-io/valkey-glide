@@ -15,6 +15,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import glide.api.models.commands.geospatial.GeospatialData;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;

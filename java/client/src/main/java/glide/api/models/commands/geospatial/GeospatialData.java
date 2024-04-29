@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Getter
 @RequiredArgsConstructor
-public class GeospatialData {
+public final class GeospatialData {
     /** The longitude coordinate. */
     private final double longitude;
 

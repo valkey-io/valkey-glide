@@ -15,7 +15,9 @@ import lombok.Getter;
  * @see <a href="https://redis.io/commands/geoadd/">redis.io</a>
  */
 @Getter
-public class GeoAddOptions {
+public final class GeoAddOptions {
+    public static final String CHANGED_REDIS_API = "CH";
+
     /** Options for handling existing members. See {@link ConditionalChange}. */
     private final ConditionalChange updateMode;
 
@@ -71,7 +73,7 @@ public class GeoAddOptions {
         }
 
         if (changed) {
-            arguments.add("CH");
+            arguments.add(CHANGED_REDIS_API);
         }
 
         return arguments.toArray(new String[0]);

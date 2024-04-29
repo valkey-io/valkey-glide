@@ -163,6 +163,8 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.LinkedHashMap;
@@ -3768,7 +3770,15 @@ public class RedisClientTest {
         GeoAddOptions options = new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true);
         String[] arguments =
                 new String[] {
-                    key, "XX", "CH", "15.087269", "40.0", "Catania", "13.361389", "38.115556", "Palermo"
+                    key,
+                    ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
+                    CHANGED_REDIS_API,
+                    "15.087269",
+                    "40.0",
+                    "Catania",
+                    "13.361389",
+                    "38.115556",
+                    "Palermo"
                 };
         Long value = 1L;
 
