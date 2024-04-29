@@ -6,7 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
-import static glide.utils.ArrayTransformUtils.mapMemberToGeoDataToList;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToList;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -1114,7 +1114,7 @@ public abstract class BaseClient
             arguments.add("CH");
         }
 
-        arguments.addAll(mapMemberToGeoDataToList(membersToGeospatialData));
+        arguments.addAll(mapGeoDataToList(membersToGeospatialData));
         return commandManager.submitNewCommand(
                 GeoAdd, arguments.toArray(new String[0]), this::handleLongResponse);
     }

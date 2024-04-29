@@ -8,7 +8,7 @@ import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
-import static glide.utils.ArrayTransformUtils.mapMemberToGeoDataToList;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToList;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -2563,10 +2563,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
-     * @param options The GeoAdd options. {@link GeoAddOptions}
+     * @param options The GeoAdd options - see {@link GeoAddOptions}
      * @return Command Response - The number of elements added to the sorted set. If <code>changed
      *     </code> is set to <code>true</code> in the options, returns the number of elements updated
      *     in the sorted set.
@@ -2586,7 +2586,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             arguments.add("CH");
         }
 
-        arguments.addAll(mapMemberToGeoDataToList(membersToGeospatialData));
+        arguments.addAll(mapGeoDataToList(membersToGeospatialData));
         ArgsArray commandArgs = buildArgs(arguments.toArray(new String[0]));
         protobufTransaction.addCommands(buildCommand(GeoAdd, commandArgs));
         return getThis();
@@ -2601,7 +2601,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
      * @return Command Response - The number of elements added to the sorted set.

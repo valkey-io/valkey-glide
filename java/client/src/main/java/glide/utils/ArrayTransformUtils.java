@@ -46,7 +46,7 @@ public class ArrayTransformUtils {
      * @param args A mapping of member names to their corresponding positions.
      * @return A list of strings to be used in {@link GeospatialIndicesBaseCommands#geoadd}.
      */
-    public static List<String> mapMemberToGeoDataToList(Map<String, GeospatialData> args) {
+    public static List<String> mapGeoDataToList(Map<String, GeospatialData> args) {
         return args.entrySet().stream()
                 .flatMap(
                         entry ->

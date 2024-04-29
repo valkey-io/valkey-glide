@@ -21,10 +21,10 @@ public interface GeospatialIndicesBaseCommands {
      *
      * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
-     * @param options The GeoAdd options. {@link GeoAddOptions}
+     * @param options The GeoAdd options - see {@link GeoAddOptions}
      * @return The number of elements added to the sorted set. If <code>changed</code> is set to
      *     <code>true</code> in the options, returns the number of elements updated in the sorted set.
      * @example
@@ -46,7 +46,7 @@ public interface GeospatialIndicesBaseCommands {
      *
      * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
-     * @param membersToGeospatialData A mapping of member names to their corresponding positions. See
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
      * @return The number of elements added to the sorted set.
