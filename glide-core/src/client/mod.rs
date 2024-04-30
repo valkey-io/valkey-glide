@@ -231,27 +231,6 @@ impl Client {
                 ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
 
                 ClientWrapper::Cluster { ref mut client } => {
-                    if let (Some(RoutingInfo::MultiNode(ref route)), cmd_name) = (
-                        &routing,
-                        cmd.command().ok_or_else(|| {
-                            RedisError::from((
-                                ErrorKind::ClientError,
-                                "Failed to parse command name",
-                                format!("Recieved command: {:?}", cmd),
-                            ))
-                        })?,
-                    ) {
-                        if RoutingInfo::is_key_based_cmd(&cmd_name) {
-                            return Err(RedisError::from((
-                                ErrorKind::ClientError,
-                                "Key-based commands cannot be routed to multiple nodes",
-                                format!(
-                                    "Provided routing: {:?}, recieved command: {:?}",
-                                    route.0, cmd
-                                ),
-                            )));
-                        }
-                    };
                     let routing = routing
                         .or_else(|| RoutingInfo::for_routable(cmd))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
