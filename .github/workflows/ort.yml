@@ -75,19 +75,15 @@ jobs:
               with: 
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: main
+                  ref: "20.1.0"
                   submodules: recursive
 
-            - name: Checkout ORT latest release tag
-              if: steps.cache-ort.outputs.cache-hit != 'true'
-              working-directory: ./ort/
-              run: |
-                # Get new tags from remote
-                git fetch --tags
-                # Get latest tag name
-                LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
-                # Checkout latest tag
-                git checkout $LATEST_TAG
+            # Temporary workaround until ORT releases a version newer than 22.1.0 addressing https://github.com/oss-review-toolkit/ort/issues/8571.
+            # Upon resolution, remove this section and install the updated version instead of "20.1.0".
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@1.76 
+              with:
+                targets: ${{ inputs.target }}
 
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
