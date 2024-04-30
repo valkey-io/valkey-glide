@@ -81,7 +81,7 @@ jobs:
 
             - uses: ./.github/workflows/test-benchmark
               with:
-                  language-flag: -csharp
+                  language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
 
             - name: Upload test reports
               if: always()
