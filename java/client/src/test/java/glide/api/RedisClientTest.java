@@ -3107,7 +3107,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.zinterstore("destinationKey", keyArray);
+        CompletableFuture<Long> response = service.zinterstore(destination, keyArray);
         Long payload = response.get();
 
         // verify
