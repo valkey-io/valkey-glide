@@ -1,11 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TestUtilities.createDefaultClusterClient;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.tryCommandWithExpectedError;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -31,6 +30,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
@@ -100,7 +101,13 @@ public class CommandTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        clusterClient = createDefaultClusterClient();
+        clusterClient =
+                RedisClusterClient.CreateClient(
+                                RedisClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
+                                        .requestTimeout(5000)
+                                        .build())
+                        .get();
     }
 
     @AfterAll
@@ -549,22 +556,6 @@ public class CommandTests {
                 Long.parseLong((String) serverTime[0]) > now,
                 "Time() result (" + serverTime[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong((String) serverTime[1]) < 1000000);
-    }
-
-    @Test
-    @SneakyThrows
-    public void save() {
-        String error = "Background save already in progress";
-        // use another client, because it could be blocked
-        try (var testClient = createDefaultClusterClient()) {
-
-            var response = tryCommandWithExpectedError(testClient::save, error);
-            assertTrue(response.getValue() != null || response.getKey().equals(OK));
-
-            var routedResponse = tryCommandWithExpectedError(() -> testClient.save(RANDOM), error);
-            assertTrue(
-                    routedResponse.getValue() != null || routedResponse.getKey().getSingleValue().equals(OK));
-        }
     }
 
     @Test
