@@ -135,9 +135,10 @@ fn parse_timeout_to_f64(cmd: &Cmd, timeout_idx: usize) -> RedisResult<f64> {
             ErrorKind::ResponseError,
             err_msg,
             format!(
-                "Expected to find timeout value at index {:?} for command {:?}",
+                "Expected to find timeout value at index {:?} for command {:?}. Recieved command = {:?}",
                 timeout_idx,
                 std::str::from_utf8(&cmd.command().unwrap_or_default()),
+                cmd
             ),
         ))
     };
@@ -236,7 +237,7 @@ impl Client {
                             RedisError::from((
                                 ErrorKind::ClientError,
                                 "Failed to parse command name",
-                                format!("Command name bytes: {:?}", cmd.arg_idx(0)),
+                                format!("Recieved command: {:?}", cmd),
                             ))
                         })?,
                     ) {
@@ -246,7 +247,7 @@ impl Client {
                                 "Key-based commands cannot be routed to multiple nodes",
                                 format!(
                                     "Provided routing: {:?}, recieved command: {:?}",
-                                    route.0, cmd_name
+                                    route.0, cmd
                                 ),
                             )));
                         }
