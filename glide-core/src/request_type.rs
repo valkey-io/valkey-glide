@@ -142,6 +142,7 @@ pub enum RequestType {
     RenameNx = 131,
     Touch = 132,
     ZRevRank = 133,
+    ZInterStore = 134,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -287,6 +288,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::RenameNx => RequestType::RenameNx,
             ProtobufRequestType::Touch => RequestType::Touch,
             ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
+            ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
         }
     }
 }
@@ -428,6 +430,7 @@ impl RequestType {
             RequestType::RenameNx => Some(cmd("RENAMENX")),
             RequestType::Touch => Some(cmd("TOUCH")),
             RequestType::ZRevRank => Some(cmd("ZREVRANK")),
+            RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
         }
     }
 }

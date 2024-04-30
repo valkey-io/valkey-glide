@@ -36,6 +36,8 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -2285,6 +2287,88 @@ public class SharedCommandTests {
                                                 new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zinterstore(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        String key4 = "{testKey}:4-" + UUID.randomUUID();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("one", 1.5, "two", 2.5, "three", 3.5);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(3, client.zadd(key2, membersScores2).get());
+
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}).get());
+        assertEquals(Map.of("one", 2.5, "two", 4.5), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the max score of elements
+        WeightAggregateOptions options =
+                WeightAggregateOptions.builder().aggregate(Aggregate.MAX).build();
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(Map.of("one", 1.5, "two", 2.5), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the min score of elements
+        options = WeightAggregateOptions.builder().aggregate(Aggregate.MIN).build();
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(Map.of("one", 1.0, "two", 2.0), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        options = WeightAggregateOptions.builder().aggregate(Aggregate.SUM).build();
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(Map.of("one", 2.5, "two", 4.5), client.zrangeWithScores(key3, query).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        options = WeightAggregateOptions.builder().weights(List.of(2.0, 2.0)).build();
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(Map.of("one", 5.0, "two", 9.0), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the minimum score, with scores for key1 multiplied by
+        // 1.0 and
+        // for key2 by -2.0.
+        options =
+                WeightAggregateOptions.builder()
+                        .aggregate(Aggregate.MIN)
+                        .weights(List.of(1.0, -2.0))
+                        .build();
+        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(Map.of("two", -5.0, "one", -3.0), client.zrangeWithScores(key3, query).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key4, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinterstore(key3, new String[] {key4, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Keys.length != Weights.length
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zinterstore(
+                                                key3,
+                                                new String[] {key1, key2},
+                                                WeightAggregateOptions.builder().weights(List.of(2.0)).build())
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.zinterstore("foo", new String[] {"abc", "zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
     }
 
     @SneakyThrows

@@ -96,6 +96,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
@@ -132,6 +133,7 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
@@ -1972,6 +1974,47 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key, minLex.toArgs(), maxLex.toArgs());
         protobufTransaction.addCommands(buildCommand(ZLexCount, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
+     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets to intersect.
+     * @param options Weight and Aggregate options.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
+     */
+    public T zinterstore(
+            @NonNull String destination,
+            @NonNull String[] keys,
+            @NonNull WeightAggregateOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
+     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a <code>zinterstore</code> operation while specifying custom weights and aggregation
+     * settings, use {@link #zinterstore(String, String[], WeightAggregateOptions)}
+     *
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets to intersect.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
+     */
+    public T zinterstore(@NonNull String destination, @NonNull String[] keys) {
+        return zinterstore(destination, keys, WeightAggregateOptions.builder().build());
     }
 
     /**
