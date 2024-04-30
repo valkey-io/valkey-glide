@@ -12,6 +12,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -544,7 +545,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
-     * scores ordered from low to high.<br>
+     * scores ordered from low to high, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -566,7 +567,7 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the lowest to highest.
+     * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -578,13 +579,59 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Object[] result1 = client.zrankWithScore("mySortedSet", "member2").get();
-     * assert ((Long)result1[0]) == 1L && ((Double)result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "mySortedSet".
+     * assert ((Long) result1[0]) == 1L && ((Double) result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "mySortedSet".
      *
      * Object[] result2 = client.zrankWithScore("mySortedSet", "nonExistingMember").get();
-     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * assert result2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
      * }</pre>
      */
     CompletableFuture<Object[]> zrankWithScore(String key, String member);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
+     * scores are ordered from the highest to lowest, starting from <code>0</code>.<br>
+     * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
+     *
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of <code>member</code> in the sorted set, where ranks are ordered from high to
+     *     low based on scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrevrank("mySortedSet", "member2").get();
+     * assert num1 == 1L; // Indicates that "member2" has the second-highest score in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zrevrank("mySortedSet", "nonExistingMember").get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zrevrank(String key, String member);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
+     * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
+     *     of <code>member</code> in the sorted set, where ranks are ordered from high to low based on
+     *     scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Object[] result1 = client.zrevrankWithScore("mySortedSet", "member2").get();
+     * assert ((Long) result1[0]) == 1L && ((Double) result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "mySortedSet".
+     *
+     * Object[] result2 = client.zrevrankWithScore("mySortedSet", "nonExistingMember").get();
+     * assert result2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zrevrankWithScore(String key, String member);
 
     /**
      * Returns the scores associated with the specified <code>members</code> in the sorted set stored
@@ -790,4 +837,52 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zlexcount(String key, LexRange minLex, LexRange maxLex);
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
+     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets to intersect.
+     * @param options Weight and Aggregate options.
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * WeightAggregateOptions options =
+     *     WeightAggregateOptions.builder()
+     *             .aggregate(Aggregate.MAX)
+     *             .weight(1.0)
+     *             .weight(2.0)
+     *             .build();
+     * Long payload = client.zinterstore("newSortedSet", new String[] {"mySortedSet1", "mySortedSet2"}, options).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the intersection of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zinterstore(
+            String destination, String[] keys, WeightAggregateOptions options);
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
+     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
+     * overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a <code>zinterstore</code> operation while specifying custom weights and aggregation
+     * settings, use {@link #zinterstore(String, String[], WeightAggregateOptions)}
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keys The keys of sorted sets to intersect.
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.zinterstore("newSortedSet", new String[] {"mySortedSet1", "mySortedSet2"}).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the intersection of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zinterstore(String destination, String[] keys);
 }

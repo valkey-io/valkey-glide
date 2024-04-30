@@ -164,12 +164,18 @@ enum RequestType {
     GeoHash = 122;
     ObjectEncoding = 123;
     SDiff = 124;
+    ObjectIdletime = 125;
     ObjectRefcount = 126;
     LOLWUT = 100500;
     GeoDist = 127;
     GeoPos = 128;
     BZPopMax = 129;
-    BZPopMin = 130;
+    ObjectFreq = 130;
+    RenameNx = 131;
+    Touch = 132;
+    ZRevRank = 133;
+    ZInterStore = 134;
+    BZPopMin = 135;
 }
 
 message Command {
