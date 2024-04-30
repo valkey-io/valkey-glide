@@ -1249,7 +1249,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
+     * Note: `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
@@ -1266,7 +1266,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/blpop/ for more details.
-     * Note: BLPOP is a blocking command,
+     * Note: `BLPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.

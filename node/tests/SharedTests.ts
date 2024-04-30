@@ -13,7 +13,7 @@ import {
     RedisClient,
     RedisClusterClient,
     Script,
-    parseInfoResponse
+    parseInfoResponse,
 } from "../";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
@@ -2049,6 +2049,22 @@ export function runBaseTests<Context>(config: {
                 expect(await client.del(["brpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
                 expect(await client.brpop(["brpop-test"], 0.1)).toEqual(null);
+                // key exists, but it is not a list
+                await client.set("foo", "bar");
+                await expect(client.brpop(["foo"], 0.1)).rejects.toThrow();
+
+                // Same-slot requirement
+                if (client instanceof RedisClusterClient) {
+                    try {
+                        expect(
+                            await client.brpop(["abc", "zxy", "lkn"], 0.1),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message.toLowerCase()).toMatch(
+                            "crossslot",
+                        );
+                    }
+                }
             }, protocol);
         },
         config.timeout,
@@ -2070,14 +2086,10 @@ export function runBaseTests<Context>(config: {
                 expect(await client.del(["blpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
                 expect(await client.blpop(["blpop-test"], 0.1)).toEqual(null);
+                // key exists, but it is not a list
+                await client.set("foo", "bar");
+                await expect(client.blpop(["foo"], 0.1)).rejects.toThrow();
 
-               
-                await client.set("foo", "bar"),
-                expect(await client.blpop(["foo"], 0.1)).toThrow();
-
-                await client.set("bar", "baz"),
-                expect(await client.blpop(["bar"], 0)).toThrow();
-                
                 // Same-slot requirement
                 if (client instanceof RedisClusterClient) {
                     try {

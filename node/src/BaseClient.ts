@@ -2183,8 +2183,11 @@ export class BaseClient {
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
+     *
+     * Notes:
+     * 1. `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -2210,9 +2213,9 @@ export class BaseClient {
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/blpop/ for more details.
-     * 
-     * Note: 
-     * 1. BLPOP is a blocking command,
+     *
+     * Notes:
+     * 1. `BLPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
      *
