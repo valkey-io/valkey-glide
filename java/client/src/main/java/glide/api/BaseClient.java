@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
@@ -26,6 +27,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
 import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -41,6 +43,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -51,20 +57,28 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -76,6 +90,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -102,9 +117,10 @@ import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.StreamAddOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -333,6 +349,36 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> objectEncoding(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectFreq(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectIdletime(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectRefcount(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ObjectRefcount, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> renamenx(@NonNull String key, @NonNull String newKey) {
+        return commandManager.submitNewCommand(
+                RenameNx, new String[] {key, newKey}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> incr(@NonNull String key) {
         return commandManager.submitNewCommand(Incr, new String[] {key}, this::handleLongResponse);
     }
@@ -450,6 +496,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> hkeys(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                Hkeys,
+                new String[] {key},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
     public CompletableFuture<Long> lpush(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(LPush, arguments, this::handleLongResponse);
@@ -551,6 +605,24 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Set<String>> sdiff(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SDiff, keys, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> smismember(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> sdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> smove(
             @NonNull String source, @NonNull String destination, @NonNull String member) {
         return commandManager.submitNewCommand(
@@ -561,6 +633,17 @@ public abstract class BaseClient
     public CompletableFuture<Long> sinterstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sinter(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SInter, keys, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sunionstore(@NonNull String destination, @NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SUnionStore, arguments, this::handleLongResponse);
     }
 
     @Override
@@ -741,6 +824,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> bzpopmax(@NonNull String[] keys, double timeout) {
+        String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
+        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Double> zscore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZScore, new String[] {key, member}, this::handleDoubleOrNullResponse);
@@ -756,6 +845,21 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 Zrank, new String[] {key, member, WITH_SCORE_REDIS_API}, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrevrank(@NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                ZRevRank, new String[] {key, member}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrevrankWithScore(
+            @NonNull String key, @NonNull String member) {
+        return commandManager.submitNewCommand(
+                ZRevRank,
+                new String[] {key, member, WITH_SCORE_REDIS_API},
+                this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -877,6 +981,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
+        return commandManager.submitNewCommand(XTrim, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -974,5 +1084,10 @@ public abstract class BaseClient
             @NonNull String destination, @NonNull String[] sourceKeys) {
         String[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
         return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> touch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
     }
 }

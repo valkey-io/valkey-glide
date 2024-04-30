@@ -5,6 +5,8 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    GeospatialData,
+    GeoUnit,
     InfoSection,
     UpdateOptions,
 )
@@ -59,6 +61,8 @@ __all__ = [
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
+    "GeoUnit",
+    "GeospatialData",
     "InfBound",
     "InfoSection",
     "json",

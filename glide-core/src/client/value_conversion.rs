@@ -16,6 +16,9 @@ pub(crate) enum ExpectedReturnType {
     DoubleOrNull,
     ZrankReturnType,
     JsonToggleReturnType,
+    ArrayOfBools,
+    Lolwut,
+    ArrayOfArraysOfDoubleOrNull,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -159,6 +162,126 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        ExpectedReturnType::ArrayOfBools => match value {
+            Value::Array(array) => {
+                let array_of_bools = array
+                    .iter()
+                    .map(|v| {
+                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Boolean))
+                            .unwrap()
+                    })
+                    .collect();
+                Ok(Value::Array(array_of_bools))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of boolean",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::ArrayOfArraysOfDoubleOrNull => match value {
+            // This is used for GEOPOS command.
+            Value::Array(array) => {
+                let converted_array: RedisResult<Vec<_>> = array
+                    .clone()
+                    .into_iter()
+                    .map(|item| match item {
+                        Value::Nil => Ok(Value::Nil),
+                        Value::Array(mut inner_array) => {
+                            if inner_array.len() != 2 {
+                                return Err((
+                                    ErrorKind::TypeError,
+                                    "Inner Array must contain exactly two elements",
+                                )
+                                    .into());
+                            }
+                            inner_array[0] = convert_to_expected_type(
+                                inner_array[0].clone(),
+                                Some(ExpectedReturnType::Double),
+                            )?;
+                            inner_array[1] = convert_to_expected_type(
+                                inner_array[1].clone(),
+                                Some(ExpectedReturnType::Double),
+                            )?;
+
+                            Ok(Value::Array(inner_array))
+                        }
+                        _ => Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted to an array of array of double or null. Inner value of Array must be Array or Null",
+                            format!("(Inner value was {:?})", item),
+                        )
+                            .into()),
+                    })
+                    .collect();
+
+                converted_array.map(Value::Array)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of array of double or null",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::Lolwut => {
+            match value {
+                // cluster (multi-node) response - go recursive
+                Value::Map(map) => {
+                    let result = map
+                        .into_iter()
+                        .map(|(key, inner_value)| {
+                            let converted_key = convert_to_expected_type(
+                                key,
+                                Some(ExpectedReturnType::BulkString),
+                            )?;
+                            let converted_value = convert_to_expected_type(
+                                inner_value,
+                                Some(ExpectedReturnType::Lolwut),
+                            )?;
+                            Ok((converted_key, converted_value))
+                        })
+                        .collect::<RedisResult<_>>();
+
+                    result.map(Value::Map)
+                }
+                // RESP 2 response
+                Value::BulkString(bytes) => {
+                    let text = std::str::from_utf8(&bytes).unwrap();
+                    let res = convert_lolwut_string(text);
+                    Ok(Value::BulkString(Vec::from(res)))
+                }
+                // RESP 3 response
+                Value::VerbatimString {
+                    format: _,
+                    ref text,
+                } => {
+                    let res = convert_lolwut_string(text);
+                    Ok(Value::BulkString(Vec::from(res)))
+                }
+                _ => Err((
+                    ErrorKind::TypeError,
+                    "LOLWUT response couldn't be converted to a user-friendly format",
+                    (&format!("(response was {:?}...)", value)[..100]).into(),
+                )
+                    .into()),
+            }
+        }
+    }
+}
+
+/// Convert string returned by `LOLWUT` command.
+/// The input string is shell-friendly and contains color codes and escape sequences.
+/// The output string is user-friendly, colored whitespaces replaced with corresponding symbols.
+fn convert_lolwut_string(data: &str) -> String {
+    if data.contains("\x1b[0m") {
+        data.replace("\x1b[0;97;107m \x1b[0m", "\u{2591}")
+            .replace("\x1b[0;37;47m \x1b[0m", "\u{2592}")
+            .replace("\x1b[0;90;100m \x1b[0m", "\u{2593}")
+            .replace("\x1b[0;30;40m \x1b[0m", " ")
+    } else {
+        data.to_owned()
     }
 }
 
@@ -220,11 +343,13 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         }
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
-        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" => Some(ExpectedReturnType::Boolean),
-        b"SMEMBERS" => Some(ExpectedReturnType::Set),
-        b"ZSCORE" => Some(ExpectedReturnType::DoubleOrNull),
+        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" => Some(ExpectedReturnType::Boolean),
+        b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
+        b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
+        b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
+        b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
@@ -241,6 +366,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
+        b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
         _ => None,
     }
 }
@@ -248,6 +374,86 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn convert_lolwut() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
+            Some(ExpectedReturnType::Lolwut)
+        ));
+
+        let redis_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
+        let expected: String = "\u{2591}--\u{2592}--\u{2593}-- ".into();
+
+        let converted_1 = convert_to_expected_type(
+            Value::BulkString(redis_string.clone().into_bytes()),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::BulkString(expected.clone().into_bytes()),
+            converted_1.unwrap()
+        );
+
+        let converted_2 = convert_to_expected_type(
+            Value::VerbatimString {
+                format: redis::VerbatimFormat::Text,
+                text: redis_string.clone(),
+            },
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::BulkString(expected.clone().into_bytes()),
+            converted_2.unwrap()
+        );
+
+        let converted_3 = convert_to_expected_type(
+            Value::Map(vec![
+                (
+                    Value::SimpleString("node 1".into()),
+                    Value::BulkString(redis_string.clone().into_bytes()),
+                ),
+                (
+                    Value::SimpleString("node 2".into()),
+                    Value::BulkString(redis_string.clone().into_bytes()),
+                ),
+            ]),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert_eq!(
+            Value::Map(vec![
+                (
+                    Value::BulkString("node 1".into()),
+                    Value::BulkString(expected.clone().into_bytes())
+                ),
+                (
+                    Value::BulkString("node 2".into()),
+                    Value::BulkString(expected.clone().into_bytes())
+                ),
+            ]),
+            converted_3.unwrap()
+        );
+
+        let converted_4 = convert_to_expected_type(
+            Value::SimpleString(redis_string.clone()),
+            Some(ExpectedReturnType::Lolwut),
+        );
+        assert!(converted_4.is_err());
+    }
+
+    #[test]
+    fn convert_smismember() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("SMISMEMBER").arg("key").arg("elem")),
+            Some(ExpectedReturnType::ArrayOfBools)
+        ));
+
+        let redis_response = Value::Array(vec![Value::Int(0), Value::Int(1)]);
+        let converted_response =
+            convert_to_expected_type(redis_response, Some(ExpectedReturnType::ArrayOfBools))
+                .unwrap();
+        let expected_response = Value::Array(vec![Value::Boolean(false), Value::Boolean(true)]);
+        assert_eq!(expected_response, converted_response);
+    }
 
     #[test]
     fn convert_zadd_only_if_incr_is_included() {

@@ -5,6 +5,7 @@ import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -13,6 +14,7 @@ import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
+import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
@@ -36,9 +38,11 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -367,10 +371,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        // The setup for the Integration Tests server does not include a configuration file for Redis.
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        var info = clusterClient.info(InfoOptions.builder().section(SERVER).build(), RANDOM).get();
+        var configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
+
+        if (configFile.isEmpty()) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            assertEquals(OK, clusterClient.configRewrite().get());
+        }
     }
 
     // returns the line that contains the word "myself", up to that point. This is done because the
@@ -555,5 +565,72 @@ public class CommandTests {
                 Long.parseLong((String) serverTime[0]) > now,
                 "Time() result (" + serverTime[0] + ") should be greater than now (" + now + ")");
         assertTrue(Long.parseLong((String) serverTime[1]) < 1000000);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        long result = clusterClient.lastsave().get();
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+
+        ClusterValue<Long> data = clusterClient.lastsave(ALL_NODES).get();
+        for (var value : data.getMultiValue().values()) {
+            assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void lolwut_lolwut() {
+        var response = clusterClient.lolwut().get();
+        System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = clusterClient.lolwut(new int[] {50, 20}).get();
+        System.out.printf(
+                "%nLOLWUT cluster client standard response with params 50 20%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = clusterClient.lolwut(6).get();
+        System.out.printf("%nLOLWUT cluster client ver 6 response%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
+        System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
+        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+
+        var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
+        for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+            assertTrue(nodeResponse.contains("Redis ver. " + REDIS_VERSION));
+        }
+
+        clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
+        for (var nodeResponse : clusterResponse.getMultiValue().values()) {
+            assertTrue(nodeResponse.contains("Redis ver. " + REDIS_VERSION));
+        }
+
+        clusterResponse = clusterClient.lolwut(2, RANDOM).get();
+        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + REDIS_VERSION));
+
+        clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
+        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + REDIS_VERSION));
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String key = UUID.randomUUID().toString();
+        String maxmemoryPolicy = "maxmemory-policy";
+        String oldPolicy =
+                clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            assertEquals(OK, clusterClient.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu")).get());
+            assertEquals(OK, clusterClient.set(key, "").get());
+            assertTrue(clusterClient.objectFreq(key).get() >= 0L);
+        } finally {
+            clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
     }
 }
