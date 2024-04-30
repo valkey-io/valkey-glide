@@ -18,17 +18,18 @@ concurrency:
 
 jobs:
     start-self-hosted-runner:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-        - name: Start self hosted EC2 runner
-          uses: ./.github/workflows/start-self-hosted-runner
-          with:
-              aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
-              aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
-              aws-region: ${{ secrets.AWS_REGION }}
-              ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+        if: github.repository_owner == 'aws'
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
+                aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
         needs: start-self-hosted-runner
@@ -40,14 +41,14 @@ jobs:
             matrix:
                 build:
                     - {
-                          OS: ubuntu-latest,
+                          OS: ubuntu,
                           NAMED_OS: linux,
                           RUNNER: ubuntu-latest,
                           ARCH: x64,
                           TARGET: x86_64-unknown-linux-gnu,
                       }
                     - {
-                          OS: ubuntu-latest,
+                          OS: ubuntu,
                           NAMED_OS: linux,
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
@@ -55,14 +56,14 @@ jobs:
                           CONTAINER: "2_28",
                       }
                     - {
-                          OS: macos-latest,
+                          OS: macos,
                           NAMED_OS: darwin,
-                          RUNNER: macos-latest,
+                          RUNNER: macos-12,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
                       }
                     - {
-                          OS: macos-latest,
+                          OS: macos,
                           NAMED_OS: darwin,
                           RUNNER: macos-13-xlarge,
                           arch: arm64,
@@ -152,6 +153,7 @@ jobs:
                   if-no-files-found: error
 
     publish-base-to-npm:
+        if: github.event_name != 'pull_request'
         name: Publish the base NPM package
         needs: publish-binaries
         runs-on: ubuntu-latest
@@ -188,7 +190,7 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: ubuntu-latest
+                  os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 

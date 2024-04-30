@@ -57,7 +57,7 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: "ubuntu-latest"
+                  os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -128,9 +128,10 @@ jobs:
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: "macos-latest"
+                  os: "macos"
                   named_os: "darwin"
-                  target: "x86_64-apple-darwin"
+                  arch: "arm64"
+                  target: "aarch64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test compatibility

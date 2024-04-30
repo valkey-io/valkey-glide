@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
     start-self-hosted-runner:
+        if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
         steps:
           - name: Checkout
@@ -41,14 +42,14 @@ jobs:
             matrix:
                 build:
                     - {
-                          OS: ubuntu-latest,
+                          OS: ubuntu,
                           NAMED_OS: linux,
                           RUNNER: ubuntu-latest,
                           ARCH: x64,
                           TARGET: x86_64-unknown-linux-gnu,
                       }
                     - {
-                          OS: ubuntu-latest,
+                          OS: ubuntu,
                           NAMED_OS: linux,
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
@@ -56,14 +57,14 @@ jobs:
                           CONTAINER: "2_28",
                       }
                     - {
-                          OS: macos-latest,
+                          OS: macos,
                           NAMED_OS: darwin,
-                          RUNNER: macos-latest,
+                          RUNNER: macos-12,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
                       }
                     - {
-                          OS: macos-latest,
+                          OS: macos,
                           NAMED_OS: darwin,
                           RUNNER: macos-13-xlarge,
                           arch: arm64,

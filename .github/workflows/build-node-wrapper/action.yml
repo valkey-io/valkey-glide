@@ -7,8 +7,8 @@ inputs:
         type: string
         options:
             - amazon-linux
-            - macos-latest
-            - ubuntu-latest
+            - macos
+            - ubuntu
     named_os:
         description: "The name of the current operating system"
         required: false

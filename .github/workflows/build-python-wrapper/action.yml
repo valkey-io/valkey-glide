@@ -7,8 +7,8 @@ inputs:
         type: string
         options:
             - amazon-linux
-            - macos-latest
-            - ubuntu-latest
+            - macos
+            - ubuntu
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -38,9 +38,11 @@ runs:
         - name: Install Python software dependencies
           shell: bash
           run: |
+              # Disregarding PEP 668 as it addresses package managers conflicts, which is not applicable in the CI scope.
+              INSTALL_FLAGS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "--break-system-packages"; else echo ""; fi`
               python3 -m ensurepip --upgrade || true
-              python3 -m pip install --upgrade pip
-              python3 -m pip install virtualenv mypy-protobuf
+              python3 -m pip install --upgrade pip $INSTALL_FLAGS
+              python3 -m pip install virtualenv mypy-protobuf $INSTALL_FLAGS
 
         - name: Generate protobuf files
           shell: bash
@@ -58,6 +60,5 @@ runs:
               source "$HOME/.cargo/env"
               python3 -m venv .env
               source .env/bin/activate
-              python3 -m pip install --upgrade pip
               python3 -m pip install --no-cache-dir -r requirements.txt
               maturin develop

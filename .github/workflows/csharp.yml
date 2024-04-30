@@ -42,10 +42,19 @@ jobs:
                 dotnet:
                     - '6.0'
                     - '8.0'
-                os:
-                    - ubuntu-latest
-                    - macos-latest
-        runs-on: ${{ matrix.os }}
+                host:
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu
+                    }
+                    - {
+                        OS: macos,
+                        RUNNER: macos-latest,
+                        TARGET: aarch64-apple-darwin
+                    }
+    
+        runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
             - uses: actions/checkout@v4
@@ -54,22 +63,22 @@ jobs:
 
             - name: Install redis
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              if: ${{ matrix.os == 'ubuntu-latest' }}
+              if: ${{ matrix.host.OS == 'ubuntu' }}
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.redis }}
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.os }}
-                  target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ matrix.dotnet }}
+    
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Format
               working-directory: ./csharp
@@ -88,11 +97,13 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-dotnet-${{ matrix.dotnet }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  name: test-reports-dotnet-${{ matrix.dotnet }}-redis-${{ matrix.redis }}-${{ matrix.host.RUNNER }}
                   path: |
                       csharp/TestReport.html
                       benchmarks/results/*
                       utils/clusters/**
+
+# TODO Add amazonlinux
 
     lint-rust:
         timeout-minutes: 10
