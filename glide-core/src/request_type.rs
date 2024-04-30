@@ -137,6 +137,7 @@ pub enum RequestType {
     GeoDist = 127,
     GeoPos = 128,
     BZPopMax = 129,
+    BZPopMin = 130,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -277,6 +278,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
             ProtobufRequestType::GeoPos => RequestType::GeoPos,
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
+            ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
         }
     }
 }
@@ -413,6 +415,7 @@ impl RequestType {
             RequestType::LOLWUT => Some(cmd("LOLWUT")),
             RequestType::GeoPos => Some(cmd("GEOPOS")),
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
+            RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
         }
     }
 }

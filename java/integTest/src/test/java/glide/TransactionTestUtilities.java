@@ -140,6 +140,8 @@ public class TransactionTestUtilities {
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
         baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
+        baseTransaction.bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -254,7 +256,8 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
-            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zSetKey2 }, .1)
+            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zSetKey2 }, .1)
             "0-1", // xadd(key9, Map.of("field1", "value1"),
             // StreamAddOptions.builder().id("0-1").build());
             "0-2", // xadd(key9, Map.of("field2", "value2"),

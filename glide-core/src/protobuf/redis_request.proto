@@ -169,6 +169,7 @@ enum RequestType {
     GeoDist = 127;
     GeoPos = 128;
     BZPopMax = 129;
+    BZPopMin = 130;
 }
 
 message Command {

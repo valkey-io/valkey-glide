@@ -9,6 +9,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -1562,6 +1563,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zpopmin(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(ZPopMin, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * sorted sets stored at the specified <code>keys</code>. The sorted sets are checked in the order
+     * they are provided.<br>
+     * <code>BZPOPMIN</code> is the blocking variant of {@link #zpopmin(String)}.<br>
+     *
+     * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
+     * @apiNote <code>BZPOPMIN</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the key where the member was popped
+     *     out, the member itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
+     */
+    public T bzpopmin(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(BZPopMin, commandArgs));
         return getThis();
     }
 
