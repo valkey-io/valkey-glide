@@ -58,7 +58,7 @@ jobs:
                     - {
                           OS: macos,
                           NAMED_OS: darwin,
-                          RUNNER: macos-latest,
+                          RUNNER: macos-12,
                           ARCH: x64,
                           TARGET: x86_64-apple-darwin,
                       }
