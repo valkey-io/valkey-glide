@@ -12,6 +12,8 @@ import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFINITY;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
+import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
@@ -103,6 +105,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
@@ -130,6 +133,8 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -470,6 +475,30 @@ public class TransactionTests {
 
         transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
         results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
+
+        transaction.zinterstore("destination", new String[] {"key1", "key2"});
+        results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
+
+        transaction.zinterstore(
+                "destination",
+                new String[] {"key1", "key2"},
+                WeightAggregateOptions.builder()
+                        .weights(List.of(10.0, 20.0))
+                        .aggregate(Aggregate.MAX)
+                        .build());
+        results.add(
+                Pair.of(
+                        ZInterStore,
+                        buildArgs(
+                                "destination",
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
