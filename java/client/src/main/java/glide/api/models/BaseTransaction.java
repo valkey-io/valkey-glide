@@ -170,10 +170,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in args.
      *
-     * <p>See <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide for
-     * Redis Wiki</a> for details on the restrictions and limitations of the custom command API.
-     *
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command.
      * @return A response from Redis with an <code>Object</code>.
      * @example Returns a list of all pub/sub clients:

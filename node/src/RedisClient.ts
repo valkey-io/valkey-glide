@@ -110,7 +110,7 @@ export class RedisClient extends BaseClient {
      *
      * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
-     * 
+     *
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients

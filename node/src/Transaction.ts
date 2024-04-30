@@ -1147,7 +1147,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
-     * 
+     *
      * Command Response - A response from Redis with an `Object`.
      */
     public customCommand(args: string[]): T {

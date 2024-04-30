@@ -21,10 +21,10 @@ public interface GenericClusterCommands {
      *
      * <p>The command will be routed to all primaries.
      *
-     * <p>See <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide for
-     * Redis Wiki</a> for details on the restrictions and limitations of the custom command API.
-     *
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command including the command name.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
@@ -41,10 +41,10 @@ public interface GenericClusterCommands {
      *
      * <p>Client will route the command to the nodes defined by <code>route</code>.
      *
-     * <p>See <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide for
-     * Redis Wiki</a> for details on the restrictions and limitations of the custom command API.
-     *
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.

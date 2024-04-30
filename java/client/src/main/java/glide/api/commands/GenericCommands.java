@@ -15,10 +15,10 @@ public interface GenericCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * <p>See <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide for
-     * Redis Wiki</a> for details on the restrictions and limitations of the custom command API.
-     *
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
