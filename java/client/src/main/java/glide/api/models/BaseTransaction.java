@@ -2080,44 +2080,64 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
-     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
-     * overwritten. Otherwise, a new sorted set will be created.
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
-     * @param keys The keys of sorted sets to intersect.
-     * @param options Weight and Aggregate options.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArray} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeys} for weighted keys as score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *     destination</code>.
      */
     public T zinterstore(
             @NonNull String destination,
-            @NonNull String[] keys,
-            @NonNull WeightAggregateOptions options) {
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
-                                new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs()));
+                                new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
         protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
         return getThis();
     }
 
     /**
-     * Computes the intersection of sorted sets given by the specified <code>keys</code>, and stores
-     * the result in <code>destination</code>. If <code>destination</code> already exists, it is
-     * overwritten. Otherwise, a new sorted set will be created.<br>
-     * To perform a <code>zinterstore</code> operation while specifying custom weights and aggregation
-     * settings, use {@link #zinterstore(String, String[], WeightAggregateOptions)}
+     * Computes the intersection of sorted sets given by the specified <code>KeysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
+     * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
-     * @param keys The keys of sorted sets to intersect.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *     </ul>
+     *
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *     destination</code>.
      */
-    public T zinterstore(@NonNull String destination, @NonNull String[] keys) {
-        return zinterstore(destination, keys, WeightAggregateOptions.builder().build());
+    public T zinterstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
+        return getThis();
     }
 
     /**

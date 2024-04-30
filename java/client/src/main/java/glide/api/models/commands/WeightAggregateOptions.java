@@ -10,10 +10,11 @@ import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
 
 /**
- * Arguments for {@link SortedSetBaseCommands#zunion}, and {@link
- * SortedSetBaseCommands#zunionWithScores}
+ * Arguments for {@link SortedSetBaseCommands#zunion}, {@link
+ * SortedSetBaseCommands#zunionWithScores}, and {@link SortedSetBaseCommands#zinterstore}.
  *
  * @see <a href="https://redis.io/commands/zunion/">redis.io</a>
+ * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a>
  */
 public class WeightAggregateOptions {
     public static final String WEIGHTS_REDIS_API = "WEIGHTS";

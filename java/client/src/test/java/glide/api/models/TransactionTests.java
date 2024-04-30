@@ -137,8 +137,6 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.WeightAggregateOptions;
-import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -486,16 +484,20 @@ public class TransactionTests {
         transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
         results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
 
-        transaction.zinterstore("destination", new String[] {"key1", "key2"});
+        transaction.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
 
-        transaction.zinterstore(
-                "destination",
-                new String[] {"key1", "key2"},
-                WeightAggregateOptions.builder()
-                        .weights(List.of(10.0, 20.0))
-                        .aggregate(Aggregate.MAX)
-                        .build());
+        transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
+
+        transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+
+        List<Pair<String, Double>> weightedKeys = new ArrayList<>();
+        weightedKeys.add(Pair.of("key1", 10.0));
+        weightedKeys.add(Pair.of("key2", 20.0));
+
+        transaction.zinterstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZInterStore,
@@ -510,15 +512,6 @@ public class TransactionTests {
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString())));
 
-        transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
-
-        transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
-
-        List<Pair<String, Double>> weightedKeys = new ArrayList<>();
-        weightedKeys.add(Pair.of("key1", 10.0));
-        weightedKeys.add(Pair.of("key2", 20.0));
         transaction.zunion(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(

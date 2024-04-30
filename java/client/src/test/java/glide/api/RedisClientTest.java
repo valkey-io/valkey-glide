@@ -156,8 +156,6 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
-import glide.api.models.commands.WeightAggregateOptions;
-import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -179,6 +177,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -3096,8 +3095,9 @@ public class RedisClientTest {
         // setup
         String destination = "destinationKey";
         String[] keys = new String[] {"key1", "key2"};
-        String[] arguments = new String[] {destination, Integer.toString(keys.length), "key1", "key2"};
-        Long value = 5L;
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = concatenateArrays(new String[] {destination}, keyArray.toArgs());
+        Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -3107,7 +3107,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.zinterstore(destination, keys);
+        CompletableFuture<Long> response = service.zinterstore("destinationKey", keyArray);
         Long payload = response.get();
 
         // verify
@@ -3120,22 +3120,14 @@ public class RedisClientTest {
     public void zinterstore_with_options_returns_success() {
         // setup
         String destination = "destinationKey";
-        String[] keys = new String[] {"key1", "key2"};
-        WeightAggregateOptions options =
-                WeightAggregateOptions.builder().weight(10.0).weight(20.0).aggregate(Aggregate.MIN).build();
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
-                new String[] {
-                    destination,
-                    Integer.toString(keys.length),
-                    "key1",
-                    "key2",
-                    WEIGHTS_REDIS_API,
-                    "10.0",
-                    "20.0",
-                    AGGREGATE_REDIS_API,
-                    Aggregate.MIN.toString()
-                };
-        Long value = 5L;
+                concatenateArrays(new String[] {destination}, weightedKeys.toArgs(), aggregate.toArgs());
+        Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -3145,7 +3137,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.zinterstore(destination, keys, options);
+        CompletableFuture<Long> response = service.zinterstore(destination, weightedKeys, aggregate);
         Long payload = response.get();
 
         // verify

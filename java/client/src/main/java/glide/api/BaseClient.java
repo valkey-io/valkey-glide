@@ -121,7 +121,6 @@ import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZaddOptions;
@@ -962,17 +961,19 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zinterstore(
             @NonNull String destination,
-            @NonNull String[] keys,
-            @NonNull WeightAggregateOptions options) {
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs());
+                        new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs());
         return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<Long> zinterstore(@NonNull String destination, @NonNull String[] keys) {
-        return zinterstore(destination, keys, WeightAggregateOptions.builder().build());
+    public CompletableFuture<Long> zinterstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
+        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
     }
 
     @Override
