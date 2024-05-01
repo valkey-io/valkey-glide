@@ -6,6 +6,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+import static glide.api.models.commands.FlushOption.ASYNC;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
@@ -28,6 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -455,6 +457,10 @@ public class TransactionTests {
 
         transaction.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
+
+        transaction.flushall().flushall(ASYNC);
+        results.add(Pair.of(FlushAll, buildArgs()));
+        results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));

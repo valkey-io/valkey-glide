@@ -23,6 +23,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -102,6 +103,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FlushOption;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -1958,6 +1960,31 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lastsave() {
         protobufTransaction.addCommands(buildCommand(LastSave));
+        return getThis();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.<br>
+     * To explicitly specify the flushing mode, use {@link #flushall(FlushOption)}.
+     *
+     * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code> to confirm that the databases were successfully
+     *     flushed.
+     */
+    public T flushall() {
+        protobufTransaction.addCommands(buildCommand(FlushAll));
+        return getThis();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code> to confirm that the databases were successfully
+     *     flushed.
+     */
+    public T flushall(FlushOption async) {
+        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(async.toString())));
         return getThis();
     }
 

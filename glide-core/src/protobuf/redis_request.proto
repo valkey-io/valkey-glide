@@ -163,6 +163,7 @@ enum RequestType {
     GeoAdd = 121;
     GeoHash = 122;
     ObjectEncoding = 123;
+    FlushAll = 128;
 }
 
 message Command {

@@ -12,6 +12,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
@@ -22,6 +23,7 @@ import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FlushOption;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -296,5 +298,29 @@ public class RedisClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleLongResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> flushall() {
+        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall(@NonNull FlushOption mode) {
+        return commandManager.submitNewCommand(
+                FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall(@NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushAll, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall(
+            @NonNull FlushOption mode, @NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushAll, new String[] {mode.toString()}, route, this::handleStringResponse);
     }
 }
