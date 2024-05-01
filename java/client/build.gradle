@@ -4,7 +4,6 @@ plugins {
     id 'java-library'
     id 'maven-publish'
 }
-
 repositories {
     mavenCentral()
 }
@@ -152,7 +151,7 @@ tasks.register('copyNativeLib', Copy) {
 
 jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
-compileTestJava.dependsOn('copyNativeLib')
+compileTestJava.dependsOn('publishToMavenLocal')
 
 test {
     exclude "glide/ffi/FfiTest.class"
