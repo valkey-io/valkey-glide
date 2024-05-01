@@ -15,6 +15,7 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -123,6 +125,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
+import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -136,6 +139,8 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.LinkedHashMap;
@@ -594,6 +599,24 @@ public class TransactionTests {
 
         transaction.touch(new String[] {"key1", "key2"});
         results.add(Pair.of(Touch, buildArgs("key1", "key2")));
+
+        transaction.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
+        results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
+
+        transaction.geoadd(
+                "key",
+                Map.of("Place", new GeospatialData(10.0, 20.0)),
+                new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true));
+        results.add(
+                Pair.of(
+                        GeoAdd,
+                        buildArgs(
+                                "key",
+                                ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
+                                CHANGED_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                "Place")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
