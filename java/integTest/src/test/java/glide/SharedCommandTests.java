@@ -25,6 +25,7 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
+import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -39,6 +40,8 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -48,6 +51,7 @@ import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -3022,5 +3026,78 @@ public class SharedCommandTests {
 
         assertEquals(2, client.touch(new String[] {key1, key2}).get());
         assertEquals(0, client.touch(new String[] {key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geoadd(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 37.502669));
+
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 39));
+        assertEquals(
+                0,
+                client
+                        .geoadd(
+                                key1,
+                                membersToCoordinates,
+                                new GeoAddOptions(ConditionalChange.ONLY_IF_DOES_NOT_EXIST))
+                        .get());
+        assertEquals(
+                0,
+                client
+                        .geoadd(key1, membersToCoordinates, new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS))
+                        .get());
+
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 40));
+        membersToCoordinates.put("Tel-Aviv", new GeospatialData(32.0853, 34.7818));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates, new GeoAddOptions(true)).get());
+
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.geoadd(key2, membersToCoordinates).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geoadd_invalid_args(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geoadd(key, Map.of()).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of("Place", new GeospatialData(-181, 0))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of("Place", new GeospatialData(181, 0))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of("Place", new GeospatialData(0, 86))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of("Place", new GeospatialData(0, -86))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
