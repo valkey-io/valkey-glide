@@ -21,11 +21,10 @@ public interface GenericClusterCommands {
      *
      * <p>The command will be routed to all primaries.
      *
-     * @remarks This function should only be used for single-response commands. Commands that don't
-     *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single
-     *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
-     *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
-     *     this function.
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command including the command name.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
@@ -42,11 +41,10 @@ public interface GenericClusterCommands {
      *
      * <p>Client will route the command to the nodes defined by <code>route</code>.
      *
-     * @remarks This function should only be used for single-response commands. Commands that don't
-     *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single
-     *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
-     *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
-     *     this function.
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
