@@ -1780,6 +1780,28 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zmscore(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+
+        assert await redis_client.zadd(key1, members_scores=members_scores) == 3
+        assert await redis_client.zmscore(key1, ["one", "two", "three"]) == [
+            1.0,
+            2.0,
+            3.0,
+        ]
+        assert await redis_client.zmscore(
+            key1, ["one", "non_existing_member", "non_existing_member", "three"]
+        ) == [1.0, None, None, 3.0]
+        assert await redis_client.zmscore("non_existing_key", ["one"]) == [None]
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zmscore(key2, ["one"])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zpopmin(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
