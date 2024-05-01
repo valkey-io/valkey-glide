@@ -1996,7 +1996,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link WeightAggregateOptions.KeyArray} for keys only.
-     *       <li>Use {@link WeightAggregateOptions.WeightedKeys} for weighted keys as score
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeys} for weighted keys with score
      *           multipliers.
      *     </ul>
      *
@@ -2031,7 +2031,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
@@ -2054,7 +2054,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
@@ -2079,7 +2079,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return Command Response - The resulting sorted set from the union.
@@ -2098,7 +2098,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
@@ -2127,7 +2127,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return Command Response - The resulting sorted set from the union.

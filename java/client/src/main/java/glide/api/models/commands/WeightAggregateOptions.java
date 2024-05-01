@@ -13,8 +13,8 @@ import org.apache.commons.lang3.tuple.Pair;
  * Arguments for {@link SortedSetBaseCommands#zunion}, {@link
  * SortedSetBaseCommands#zunionWithScores}, and {@link SortedSetBaseCommands#zinterstore}.
  *
- * @see <a href="https://redis.io/commands/zunion/">redis.io</a>
- * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a>
+ * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+ * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
  */
 public class WeightAggregateOptions {
     public static final String WEIGHTS_REDIS_API = "WEIGHTS";
@@ -46,6 +46,7 @@ public class WeightAggregateOptions {
      * </ul>
      */
     public interface KeysOrWeightedKeys {
+        /** Convert to command arguments according to the Redis API. */
         String[] toArgs();
     }
 
@@ -54,7 +55,6 @@ public class WeightAggregateOptions {
     public static class KeyArray implements KeysOrWeightedKeys {
         private final String[] keys;
 
-        /** Convert to command arguments according to the Redis API. */
         @Override
         public String[] toArgs() {
             return concatenateArrays(new String[] {Integer.toString(keys.length)}, keys);
@@ -62,15 +62,14 @@ public class WeightAggregateOptions {
     }
 
     /**
-     * Represents the mapping of sorted set keys to their multiplication factors. Each factor is used
-     * to adjust the scores of elements in the corresponding sorted set by multiplying them before
-     * their scores are aggregated.
+     * Represents the mapping of sorted set keys to their score weights. Each weight is used to boost
+     * the scores of elements in the corresponding sorted set by multiplying them before their scores
+     * are aggregated.
      */
     @RequiredArgsConstructor
     public static class WeightedKeys implements KeysOrWeightedKeys {
         private final List<Pair<String, Double>> keysWeights;
 
-        /** Convert to command arguments according to the Redis API. */
         @Override
         public String[] toArgs() {
             List<String> keys = new ArrayList<>();

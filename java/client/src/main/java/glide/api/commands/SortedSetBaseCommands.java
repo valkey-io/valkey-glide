@@ -816,7 +816,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
@@ -846,7 +846,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
@@ -870,7 +870,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
@@ -902,7 +902,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return The resulting sorted set from the union.
@@ -929,7 +929,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
@@ -961,7 +961,7 @@ public interface SortedSetBaseCommands {
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys as score multipliers.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
      *
      * @return The resulting sorted set from the union.

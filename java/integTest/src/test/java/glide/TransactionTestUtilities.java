@@ -284,15 +284,10 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
-            new String[] {"one", "two"}, // zunion(new KeyArray(new String[] {zSetKey2, key8}))
-            new String[] {
-                "one", "two"
-            }, // zunion(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
-            Map.of(
-                    "one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}));
-            Map.of(
-                    "one", 1.0, "two",
-                    2.0), // zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);0L,
+            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, key8}))
+            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, key8}), Aggregate.MAX);
+            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, key8}));
+            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, key8}), MAX)
             0L, // zinterstore(key8, new String[] {zSetKey2, key8})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
