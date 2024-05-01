@@ -248,13 +248,13 @@ public interface SortedSetBaseCommands {
      * <code>BZPOPMIN</code> is the blocking variant of {@link #zpopmin(String)}.<br>
      *
      * @apiNote
-     *     <ol>
+     *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
      *           </code>.
      *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
-     *     </ol>
+     *     </ul>
      *
      * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
@@ -317,13 +317,13 @@ public interface SortedSetBaseCommands {
      * <code>BZPOPMAX</code> is the blocking variant of {@link #zpopmax(String)}.<br>
      *
      * @apiNote
-     *     <ol>
+     *     <ul>
      *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
      *           </code>.
      *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
-     *     </ol>
+     *     </ul>
      *
      * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
