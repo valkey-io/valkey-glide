@@ -1,36 +1,24 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+
 import glide.api.commands.SortedSetBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import lombok.Builder;
-import lombok.Singular;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
- * Optional arguments to {@link SortedSetBaseCommands#zinterstore(String, String[],
- * WeightAggregateOptions)}
+ * Arguments for {@link SortedSetBaseCommands#zunion}, {@link
+ * SortedSetBaseCommands#zunionWithScores}, and {@link SortedSetBaseCommands#zinterstore}.
  *
+ * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
  * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
  */
-@Builder
-public final class WeightAggregateOptions {
+public class WeightAggregateOptions {
     public static final String WEIGHTS_REDIS_API = "WEIGHTS";
     public static final String AGGREGATE_REDIS_API = "AGGREGATE";
-
-    /**
-     * Represents multiplication factors for each sorted set, ready for aggregation. Each
-     * multiplication factor corresponds one-to-one with the sets. The score of every element in these
-     * sets is multiplied by its associated factor before aggregation.
-     */
-    @Singular private final List<Double> weights;
-
-    /**
-     * Option for the method of aggregating scores from multiple sets. This option defaults to SUM if
-     * not specified.
-     */
-    private final Aggregate aggregate;
 
     /**
      * Option for the method of aggregating scores from multiple sets. This option defaults to SUM if
@@ -43,26 +31,63 @@ public final class WeightAggregateOptions {
         MIN,
         /** Aggregates by selecting the maximum score for each element across sets. */
         MAX;
+
+        public String[] toArgs() {
+            return new String[] {AGGREGATE_REDIS_API, toString()};
+        }
     }
 
     /**
-     * Converts WeightAggregateOptions into a String[].
+     * Basic interface. Please use one of the following implementations:
      *
-     * @return String[]
+     * <ul>
+     *   <li>{@link KeyArray}
+     *   <li>{@link WeightedKeys}
+     * </ul>
      */
-    public String[] toArgs() {
-        List<String> optionArgs = new ArrayList<>();
+    public interface KeysOrWeightedKeys {
+        /** Convert to command arguments according to the Redis API. */
+        String[] toArgs();
+    }
 
-        if (!weights.isEmpty()) {
-            optionArgs.add(WEIGHTS_REDIS_API);
-            optionArgs.addAll(
-                    weights.stream().map(element -> Double.toString(element)).collect(Collectors.toList()));
+    /** Represents the keys of the sorted sets involved in the aggregation operation. */
+    @RequiredArgsConstructor
+    public static class KeyArray implements KeysOrWeightedKeys {
+        private final String[] keys;
+
+        @Override
+        public String[] toArgs() {
+            return concatenateArrays(new String[] {Integer.toString(keys.length)}, keys);
         }
+    }
 
-        if (aggregate != null) {
-            optionArgs.addAll(List.of(AGGREGATE_REDIS_API, aggregate.toString()));
+    /**
+     * Represents the mapping of sorted set keys to their score weights. Each weight is used to boost
+     * the scores of elements in the corresponding sorted set by multiplying them before their scores
+     * are aggregated.
+     */
+    @RequiredArgsConstructor
+    public static class WeightedKeys implements KeysOrWeightedKeys {
+        private final List<Pair<String, Double>> keysWeights;
+
+        @Override
+        public String[] toArgs() {
+            List<String> keys = new ArrayList<>();
+            List<Double> weights = new ArrayList<>();
+            List<String> argumentsList = new ArrayList<>();
+
+            for (Pair<String, Double> entry : keysWeights) {
+                keys.add(entry.getLeft());
+                weights.add(entry.getRight());
+            }
+            argumentsList.add(Integer.toString(keys.size()));
+            argumentsList.addAll(keys);
+            argumentsList.add(WEIGHTS_REDIS_API);
+            for (Double weight : weights) {
+                argumentsList.add(weight.toString());
+            }
+
+            return argumentsList.toArray(new String[0]);
         }
-
-        return optionArgs.toArray(new String[0]);
     }
 }

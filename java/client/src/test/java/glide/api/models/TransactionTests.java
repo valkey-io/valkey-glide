@@ -15,6 +15,7 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,6 +36,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -117,6 +119,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -124,6 +127,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
+import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -134,11 +138,15 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -480,16 +488,20 @@ public class TransactionTests {
         transaction.zrangestore("destination", "source", new RangeByIndex(2, 3));
         results.add(Pair.of(ZRangeStore, buildArgs("destination", "source", "2", "3")));
 
-        transaction.zinterstore("destination", new String[] {"key1", "key2"});
+        transaction.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
 
-        transaction.zinterstore(
-                "destination",
-                new String[] {"key1", "key2"},
-                WeightAggregateOptions.builder()
-                        .weights(List.of(10.0, 20.0))
-                        .aggregate(Aggregate.MAX)
-                        .build());
+        transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
+
+        transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+
+        List<Pair<String, Double>> weightedKeys = new ArrayList<>();
+        weightedKeys.add(Pair.of("key1", 10.0));
+        weightedKeys.add(Pair.of("key2", 20.0));
+
+        transaction.zinterstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
                         ZInterStore,
@@ -503,6 +515,35 @@ public class TransactionTests {
                                 "20.0",
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString())));
+
+        transaction.zunion(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZUnion,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
+
+        transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZUnion,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString(),
+                                WITH_SCORES_REDIS_API)));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
@@ -598,6 +639,24 @@ public class TransactionTests {
 
         transaction.touch(new String[] {"key1", "key2"});
         results.add(Pair.of(Touch, buildArgs("key1", "key2")));
+
+        transaction.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
+        results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
+
+        transaction.geoadd(
+                "key",
+                Map.of("Place", new GeospatialData(10.0, 20.0)),
+                new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true));
+        results.add(
+                Pair.of(
+                        GeoAdd,
+                        buildArgs(
+                                "key",
+                                ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
+                                CHANGED_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                "Place")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

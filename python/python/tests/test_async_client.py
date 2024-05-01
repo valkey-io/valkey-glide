@@ -801,6 +801,80 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hrandfield(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        assert await redis_client.hrandfield(key) in [field, field2]
+        assert await redis_client.hrandfield("non_existing_key") is None
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hrandfield(key2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hrandfield_count(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        # Unique values are expected as count is positive
+        rand_fields = await redis_client.hrandfield_count(key, 4)
+        assert len(rand_fields) == 2
+        assert set(rand_fields) == {field, field2}
+
+        # Duplicate values are expected as count is negative
+        rand_fields = await redis_client.hrandfield_count(key, -4)
+        assert len(rand_fields) == 4
+        for rand_field in rand_fields:
+            assert rand_field in [field, field2]
+
+        assert await redis_client.hrandfield_count(key, 0) == []
+        assert await redis_client.hrandfield_count("non_existing_key", 4) == []
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hrandfield_count(key2, 5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hrandfield_withvalues(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        key2 = get_random_string(5)
+        field = get_random_string(5)
+        field2 = get_random_string(5)
+        field_value_map = {field: "value", field2: "value2"}
+
+        assert await redis_client.hset(key, field_value_map) == 2
+        # Unique values are expected as count is positive
+        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, 4)
+        assert len(rand_fields_with_values) == 2
+        for field_with_value in rand_fields_with_values:
+            assert field_with_value in [[field, "value"], [field2, "value2"]]
+
+        # Duplicate values are expected as count is negative
+        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, -4)
+        assert len(rand_fields_with_values) == 4
+        for field_with_value in rand_fields_with_values:
+            assert field_with_value in [[field, "value"], [field2, "value2"]]
+
+        assert await redis_client.hrandfield_withvalues(key, 0) == []
+        assert await redis_client.hrandfield_withvalues("non_existing_key", 4) == []
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hrandfield_withvalues(key2, 5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1703,6 +1777,28 @@ class TestCommands:
         assert (
             await redis_client.zscore("non_existing_key", "non_existing_member") is None
         )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zmscore(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        members_scores = {"one": 1, "two": 2, "three": 3}
+
+        assert await redis_client.zadd(key1, members_scores=members_scores) == 3
+        assert await redis_client.zmscore(key1, ["one", "two", "three"]) == [
+            1.0,
+            2.0,
+            3.0,
+        ]
+        assert await redis_client.zmscore(
+            key1, ["one", "non_existing_member", "non_existing_member", "three"]
+        ) == [1.0, None, None, 3.0]
+        assert await redis_client.zmscore("non_existing_key", ["one"]) == [None]
+
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zmscore(key2, ["one"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

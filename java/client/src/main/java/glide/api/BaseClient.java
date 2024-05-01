@@ -6,6 +6,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
@@ -16,6 +17,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -93,6 +95,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -101,6 +104,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.ListBaseCommands;
@@ -118,8 +122,11 @@ import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -156,7 +163,8 @@ public abstract class BaseClient
                 SetBaseCommands,
                 SortedSetBaseCommands,
                 StreamBaseCommands,
-                HyperLogLogBaseCommands {
+                HyperLogLogBaseCommands,
+                GeospatialIndicesBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -960,17 +968,52 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zinterstore(
             @NonNull String destination,
-            @NonNull String[] keys,
-            @NonNull WeightAggregateOptions options) {
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs());
+                        new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs());
         return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<Long> zinterstore(@NonNull String destination, @NonNull String[] keys) {
-        return zinterstore(destination, keys, WeightAggregateOptions.builder().build());
+    public CompletableFuture<Long> zinterstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
+        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zunion(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+        return commandManager.submitNewCommand(
+                ZUnion, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        return commandManager.submitNewCommand(
+                ZUnion,
+                keysOrWeightedKeys.toArgs(),
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        String[] arguments =
+                concatenateArrays(
+                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        String[] arguments =
+                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
     }
 
     @Override
@@ -1096,5 +1139,22 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> touch(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geoadd(
+            @NonNull String key,
+            @NonNull Map<String, GeospatialData> membersToGeospatialData,
+            @NonNull GeoAddOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData));
+        return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geoadd(
+            @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
+        return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 }
