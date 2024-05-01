@@ -128,6 +128,12 @@ async def transaction_test(
     args.append({key: value, key2: value2, key3: "10.5"})
     transaction.hdel(key4, [key, key2])
     args.append(2)
+    transaction.hrandfield(key4)
+    args.append(key3)
+    transaction.hrandfield_count(key4, 1)
+    args.append([key3])
+    transaction.hrandfield_withvalues(key4, 1)
+    args.append([[key3, "10.5"]])
 
     transaction.client_getname()
     args.append(None)
