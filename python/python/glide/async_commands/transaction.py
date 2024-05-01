@@ -1762,8 +1762,8 @@ class BaseTransaction:
             members (List[str]): A list of members in the sorted set.
 
         Command response:
-            List[Optional[float]]: A list of scores of the `members`.
-                If a member does not exist, the corresponding value in the list will be None.
+            List[Optional[float]]: A list of scores corresponding to `members`.
+                If a member does not exist in the sorted set, the corresponding value in the list will be None.
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
 

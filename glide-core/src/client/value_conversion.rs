@@ -17,7 +17,7 @@ pub(crate) enum ExpectedReturnType {
     ZrankReturnType,
     JsonToggleReturnType,
     ArrayOfBools,
-    ArrayOfDoubles,
+    ArrayOfDoubleOrNull,
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
 }
@@ -172,7 +172,7 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::ArrayOfDoubles => match value {
+        ExpectedReturnType::ArrayOfDoubleOrNull => match value {
             Value::Array(array) => convert_array_elements(array, ExpectedReturnType::DoubleOrNull),
             _ => Err((
                 ErrorKind::TypeError,
@@ -363,7 +363,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
-        b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubles),
+        b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
@@ -553,7 +553,7 @@ mod tests {
     fn convert_zmscore() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("ZMSCORE").arg("key").arg("member")),
-            Some(ExpectedReturnType::ArrayOfDoubles)
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
         ));
 
         let array_response = Value::Array(vec![
@@ -562,7 +562,7 @@ mod tests {
             Value::BulkString(b"2.5".to_vec()),
         ]);
         let converted_response =
-            convert_to_expected_type(array_response, Some(ExpectedReturnType::ArrayOfDoubles))
+            convert_to_expected_type(array_response, Some(ExpectedReturnType::ArrayOfDoubleOrNull))
                 .unwrap();
         let expected_response =
             Value::Array(vec![Value::Nil, Value::Double(1.5), Value::Double(2.5)]);
@@ -571,7 +571,7 @@ mod tests {
         let unexpected_response_type = Value::Double(0.5);
         assert!(convert_to_expected_type(
             unexpected_response_type,
-            Some(ExpectedReturnType::ArrayOfDoubles)
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
         )
         .is_err());
     }
