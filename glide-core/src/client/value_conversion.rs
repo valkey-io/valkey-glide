@@ -270,7 +270,7 @@ pub(crate) fn convert_to_expected_type(
             }
         }
         ExpectedReturnType::ArrayOfKeyValuePairs => match value {
-            Value::Nil => Ok(value.clone()),
+            Value::Nil => Ok(value),
             Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
                 Ok(value)
             }
