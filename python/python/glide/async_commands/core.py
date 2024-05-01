@@ -831,6 +831,82 @@ class CoreCommands(Protocol):
         """
         return cast(List[str], await self._execute_command(RequestType.Hkeys, [key]))
 
+    async def hrandfield(self, key: str) -> Optional[str]:
+        """
+        Returns a random field name from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Returns:
+            Optional[str]: A random field name from the hash stored at `key`.
+            If the hash does not exist or is empty, None will be returned.
+
+        Examples:
+            >>> await client.hrandfield("my_hash")
+                "field1"  # A random field name stored in the hash "my_hash".
+        """
+        return cast(
+            Optional[str], await self._execute_command(RequestType.HRandField, [key])
+        )
+
+    async def hrandfield_count(self, key: str, count: int) -> List[str]:
+        """
+        Retrieves up to `count` random field names from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Returns:
+            List[str]: A list of random field names from the hash.
+            If the hash does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.hrandfield_count("my_hash", -3)
+                ["field1", "field1", "field2"]  # Non-distinct, random field names stored in the hash "my_hash".
+            >>> await client.hrandfield_count("non_existing_hash", 3)
+                []  # Empty list
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.HRandField, [key, str(count)]),
+        )
+
+    async def hrandfield_withvalues(self, key: str, count: int) -> List[List[str]]:
+        """
+        Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Returns:
+            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            hash and `value` is the associated value of the field name.
+            If the hash does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.hrandfield_withvalues("my_hash", -3)
+                [["field1", "value1"], ["field1", "value1"], ["field2", "value2"]]
+        """
+        return cast(
+            List[List[str]],
+            await self._execute_command(
+                RequestType.HRandField, [key, str(count), "WITHVALUES"]
+            ),
+        )
+
     async def lpush(self, key: str, elements: List[str]) -> int:
         """
         Insert all the specified values at the head of the list stored at `key`.

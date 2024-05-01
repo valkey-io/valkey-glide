@@ -175,6 +175,7 @@ enum RequestType {
     Touch = 132;
     ZRevRank = 133;
     ZInterStore = 134;
+    HRandField = 135;
 }
 
 message Command {
