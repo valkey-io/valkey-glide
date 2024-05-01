@@ -12,6 +12,7 @@ import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.Map;
@@ -35,6 +36,7 @@ public class TransactionTestUtilities {
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
+    private static final String geoKey1 = "{key}:geoKey1-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -147,6 +149,14 @@ public class TransactionTestUtilities {
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
         baseTransaction.zinterstore(key8, new String[] {zSetKey2, key8});
         baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
+
+        baseTransaction.geoadd(
+                geoKey1,
+                Map.of(
+                        "Palermo",
+                        new GeospatialData(13.361389, 38.115556),
+                        "Catania",
+                        new GeospatialData(15.087269, 37.502669)));
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -268,6 +278,7 @@ public class TransactionTestUtilities {
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
             0L, // zinterstore(key8, new String[] {zSetKey2, key8})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
             "0-2", // xadd(key9, Map.of("field2", "value2"), id("0-2"));
             "0-3", // xadd(key9, Map.of("field3", "value3"), id("0-3"));
