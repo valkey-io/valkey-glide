@@ -17,6 +17,7 @@ pub(crate) enum ExpectedReturnType {
     ZrankReturnType,
     JsonToggleReturnType,
     ArrayOfBools,
+    ArrayOfDoubleOrNull,
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
@@ -164,19 +165,19 @@ pub(crate) fn convert_to_expected_type(
                 .into()),
         },
         ExpectedReturnType::ArrayOfBools => match value {
-            Value::Array(array) => {
-                let array_of_bools = array
-                    .iter()
-                    .map(|v| {
-                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Boolean))
-                            .unwrap()
-                    })
-                    .collect();
-                Ok(Value::Array(array_of_bools))
-            }
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::Boolean),
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::ArrayOfDoubleOrNull => match value {
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::DoubleOrNull),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of doubles",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -303,6 +304,21 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
+/// Converts elements in an array to the specified type.
+///
+/// `array` is an array of values.
+/// `element_type` is the type that the array elements should be converted to.
+fn convert_array_elements(
+    array: Vec<Value>,
+    element_type: ExpectedReturnType,
+) -> RedisResult<Value> {
+    let converted_array = array
+        .iter()
+        .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
+        .collect();
+    Ok(Value::Array(converted_array))
+}
+
 fn convert_array_to_map(
     array: Vec<Value>,
     key_expected_return_type: Option<ExpectedReturnType>,
@@ -385,6 +401,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
+        b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
@@ -635,6 +652,35 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZREVRANK").arg("key").arg("member")).is_none());
+    }
+
+    #[test]
+    fn convert_zmscore() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("ZMSCORE").arg("key").arg("member")),
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
+        ));
+
+        let array_response = Value::Array(vec![
+            Value::Nil,
+            Value::Double(1.5),
+            Value::BulkString(b"2.5".to_vec()),
+        ]);
+        let converted_response = convert_to_expected_type(
+            array_response,
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull),
+        )
+        .unwrap();
+        let expected_response =
+            Value::Array(vec![Value::Nil, Value::Double(1.5), Value::Double(2.5)]);
+        assert_eq!(expected_response, converted_response);
+
+        let unexpected_response_type = Value::Double(0.5);
+        assert!(convert_to_expected_type(
+            unexpected_response_type,
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
+        )
+        .is_err());
     }
 
     #[test]

@@ -2402,6 +2402,33 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZScore, [key, member]),
         )
 
+    async def zmscore(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[float]]:
+        """
+        Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+
+        See https://valkey.io/commands/zmscore for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members in the sorted set.
+
+        Returns:
+            List[Optional[float]]: A list of scores corresponding to `members`.
+                If a member does not exist in the sorted set, the corresponding value in the list will be None.
+
+        Examples:
+            >>> await client.zmscore("my_sorted_set", ["one", "non_existent_member", "three"])
+                [1.0, None, 3.0]
+        """
+        return cast(
+            List[Optional[float]],
+            await self._execute_command(RequestType.ZMScore, [key] + members),
+        )
+
     async def invoke_script(
         self,
         script: Script,
