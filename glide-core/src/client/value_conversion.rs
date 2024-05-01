@@ -561,9 +561,11 @@ mod tests {
             Value::Double(1.5),
             Value::BulkString(b"2.5".to_vec()),
         ]);
-        let converted_response =
-            convert_to_expected_type(array_response, Some(ExpectedReturnType::ArrayOfDoubleOrNull))
-                .unwrap();
+        let converted_response = convert_to_expected_type(
+            array_response,
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull),
+        )
+        .unwrap();
         let expected_response =
             Value::Array(vec![Value::Nil, Value::Double(1.5), Value::Double(2.5)]);
         assert_eq!(expected_response, converted_response);
