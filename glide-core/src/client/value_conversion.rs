@@ -17,8 +17,10 @@ pub(crate) enum ExpectedReturnType {
     ZrankReturnType,
     JsonToggleReturnType,
     ArrayOfBools,
+    ArrayOfDoubleOrNull,
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
+    ArrayOfKeyValuePairs,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -163,19 +165,19 @@ pub(crate) fn convert_to_expected_type(
                 .into()),
         },
         ExpectedReturnType::ArrayOfBools => match value {
-            Value::Array(array) => {
-                let array_of_bools = array
-                    .iter()
-                    .map(|v| {
-                        convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Boolean))
-                            .unwrap()
-                    })
-                    .collect();
-                Ok(Value::Array(array_of_bools))
-            }
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::Boolean),
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        ExpectedReturnType::ArrayOfDoubleOrNull => match value {
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::DoubleOrNull),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of doubles",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -268,6 +270,23 @@ pub(crate) fn convert_to_expected_type(
                     .into()),
             }
         }
+        ExpectedReturnType::ArrayOfKeyValuePairs => match value {
+            Value::Nil => Ok(value),
+            Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
+                Ok(value)
+            }
+            Value::Array(array)
+                if matches!(array[0], Value::BulkString(_) | Value::SimpleString(_)) =>
+            {
+                convert_flat_array_to_key_value_pairs(array)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of key-value pairs",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -283,6 +302,21 @@ fn convert_lolwut_string(data: &str) -> String {
     } else {
         data.to_owned()
     }
+}
+
+/// Converts elements in an array to the specified type.
+///
+/// `array` is an array of values.
+/// `element_type` is the type that the array elements should be converted to.
+fn convert_array_elements(
+    array: Vec<Value>,
+    element_type: ExpectedReturnType,
+) -> RedisResult<Value> {
+    let converted_array = array
+        .iter()
+        .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
+        .collect();
+    Ok(Value::Array(converted_array))
 }
 
 fn convert_array_to_map(
@@ -333,6 +367,26 @@ fn convert_array_to_map(
     Ok(Value::Map(map))
 }
 
+/// Converts a flat array of values to a two-dimensional array, where the inner arrays are two-length arrays representing key-value pairs. Normally a map would be more suitable for these responses, but some commands (eg HRANDFIELD) may return duplicate key-value pairs depending on the command arguments. These duplicated pairs cannot be represented by a map.
+///
+/// `array` is a flat array containing keys at even-positioned elements and their associated values at odd-positioned elements.
+fn convert_flat_array_to_key_value_pairs(array: Vec<Value>) -> RedisResult<Value> {
+    if array.len() % 2 != 0 {
+        return Err((
+            ErrorKind::TypeError,
+            "Response has odd number of items, and cannot be converted to an array of key-value pairs"
+        )
+            .into());
+    }
+
+    let mut result = Vec::with_capacity(array.len() / 2);
+    for i in (0..array.len()).step_by(2) {
+        let pair = vec![array[i].clone(), array[i + 1].clone()];
+        result.push(Value::Array(pair));
+    }
+    Ok(Value::Array(result))
+}
+
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
 
@@ -347,13 +401,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
+        b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
+        b"HRANDFIELD" => cmd
+            .position(b"WITHVALUES")
+            .map(|_| ExpectedReturnType::ArrayOfKeyValuePairs),
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
-        b"ZRANGE" | b"ZDIFF" => cmd
+        b"ZRANGE" | b"ZDIFF" | b"ZUNION" => cmd
             .position(b"WITHSCORES")
             .map(|_| ExpectedReturnType::MapOfStringToDouble),
         b"ZRANK" | b"ZREVRANK" => cmd
@@ -456,6 +514,70 @@ mod tests {
     }
 
     #[test]
+    fn convert_hrandfield() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("HRANDFIELD")
+                    .arg("key")
+                    .arg("1")
+                    .arg("withvalues")
+            ),
+            Some(ExpectedReturnType::ArrayOfKeyValuePairs)
+        ));
+
+        assert!(expected_type_for_cmd(redis::cmd("HRANDFIELD").arg("key").arg("1")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("HRANDFIELD").arg("key")).is_none());
+
+        let flat_array = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"key2".to_vec()),
+            Value::BulkString(b"value2".to_vec()),
+        ]);
+        let two_dimensional_array = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"value1".to_vec()),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"key2".to_vec()),
+                Value::BulkString(b"value2".to_vec()),
+            ]),
+        ]);
+        let converted_flat_array =
+            convert_to_expected_type(flat_array, Some(ExpectedReturnType::ArrayOfKeyValuePairs))
+                .unwrap();
+        assert_eq!(two_dimensional_array, converted_flat_array);
+
+        let converted_two_dimensional_array = convert_to_expected_type(
+            two_dimensional_array.clone(),
+            Some(ExpectedReturnType::ArrayOfKeyValuePairs),
+        )
+        .unwrap();
+        assert_eq!(two_dimensional_array, converted_two_dimensional_array);
+
+        let empty_array = Value::Array(vec![]);
+        let converted_empty_array = convert_to_expected_type(
+            empty_array.clone(),
+            Some(ExpectedReturnType::ArrayOfKeyValuePairs),
+        )
+        .unwrap();
+        assert_eq!(empty_array, converted_empty_array);
+
+        let converted_nil_value =
+            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::ArrayOfKeyValuePairs))
+                .unwrap();
+        assert_eq!(Value::Nil, converted_nil_value);
+
+        let array_of_doubles = Value::Array(vec![Value::Double(5.5)]);
+        assert!(convert_to_expected_type(
+            array_of_doubles,
+            Some(ExpectedReturnType::ArrayOfKeyValuePairs)
+        )
+        .is_err());
+    }
+
+    #[test]
     fn convert_zadd_only_if_incr_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
@@ -490,6 +612,105 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZDIFF").arg("1")).is_none());
+    }
+
+    #[test]
+    fn convert_zunion_only_if_withscores_is_included() {
+        // Test ZUNION without options
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(
+            expected_type_for_cmd(redis::cmd("ZUNION").arg("2").arg("set1").arg("set2")).is_none()
+        );
+
+        // Test ZUNION with Weights
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("WEIGHTS")
+                .arg("1")
+                .arg("2")
+        )
+        .is_none());
+
+        // Test ZUNION with Aggregate
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("AGGREGATE")
+                .arg("MAX")
+        )
+        .is_none());
+
+        // Test ZUNION with Weights and Aggregate
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("WEIGHTS")
+                .arg("1")
+                .arg("2")
+                .arg("AGGREGATE")
+                .arg("MAX")
+        )
+        .is_none());
     }
 
     #[test]
@@ -530,6 +751,35 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZREVRANK").arg("key").arg("member")).is_none());
+    }
+
+    #[test]
+    fn convert_zmscore() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("ZMSCORE").arg("key").arg("member")),
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
+        ));
+
+        let array_response = Value::Array(vec![
+            Value::Nil,
+            Value::Double(1.5),
+            Value::BulkString(b"2.5".to_vec()),
+        ]);
+        let converted_response = convert_to_expected_type(
+            array_response,
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull),
+        )
+        .unwrap();
+        let expected_response =
+            Value::Array(vec![Value::Nil, Value::Double(1.5), Value::Double(2.5)]);
+        assert_eq!(expected_response, converted_response);
+
+        let unexpected_response_type = Value::Double(0.5);
+        assert!(convert_to_expected_type(
+            unexpected_response_type,
+            Some(ExpectedReturnType::ArrayOfDoubleOrNull)
+        )
+        .is_err());
     }
 
     #[test]

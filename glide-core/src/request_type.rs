@@ -143,6 +143,8 @@ pub enum RequestType {
     Touch = 132,
     ZRevRank = 133,
     ZInterStore = 134,
+    HRandField = 135,
+    ZUnion = 136,
     FlushAll = 137,
 }
 
@@ -290,6 +292,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Touch => RequestType::Touch,
             ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
             ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
+            ProtobufRequestType::HRandField => RequestType::HRandField,
+            ProtobufRequestType::ZUnion => RequestType::ZUnion,
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
         }
     }
@@ -433,6 +437,8 @@ impl RequestType {
             RequestType::Touch => Some(cmd("TOUCH")),
             RequestType::ZRevRank => Some(cmd("ZREVRANK")),
             RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
+            RequestType::HRandField => Some(cmd("HRANDFIELD")),
+            RequestType::ZUnion => Some(cmd("ZUNION")),
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
         }
     }

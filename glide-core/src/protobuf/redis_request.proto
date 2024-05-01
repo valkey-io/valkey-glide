@@ -175,7 +175,9 @@ enum RequestType {
     Touch = 132;
     ZRevRank = 133;
     ZInterStore = 134;
-    FlushAll = 137;
+    HRandField = 135;
+    ZUnion = 136;
+    FlushAll = 138;
 }
 
 message Command {
