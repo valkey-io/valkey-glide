@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -13,6 +14,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -27,6 +29,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -150,5 +153,34 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> flushall(@NonNull FlushOption mode) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut() {
+        return commandManager.submitNewCommand(LOLWUT, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int version) {
+        return commandManager.submitNewCommand(
+                LOLWUT,
+                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
     }
 }

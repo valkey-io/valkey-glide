@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
@@ -11,7 +12,9 @@ import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +36,7 @@ public class TransactionTestUtilities {
     private static final String hllKey1 = "{key}:hllKey1-" + UUID.randomUUID();
     private static final String hllKey2 = "{key}:hllKey2-" + UUID.randomUUID();
     private static final String hllKey3 = "{key}:hllKey3-" + UUID.randomUUID();
+    private static final String geoKey1 = "{key}:geoKey1-" + UUID.randomUUID();
     private static final String value1 = UUID.randomUUID().toString();
     private static final String value2 = UUID.randomUUID().toString();
     private static final String value3 = UUID.randomUUID().toString();
@@ -50,9 +54,12 @@ public class TransactionTestUtilities {
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.strlen(key2);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
+        baseTransaction.renamenx(key1, key2);
 
         baseTransaction.exists(new String[] {key1});
         baseTransaction.persist(key1);
+
+        baseTransaction.touch(new String[] {key1});
 
         baseTransaction.del(new String[] {key1});
         baseTransaction.get(key1);
@@ -87,6 +94,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.hincrBy(key4, field3, 5);
         baseTransaction.hincrByFloat(key4, field3, 5.5);
+        baseTransaction.hkeys(key4);
 
         baseTransaction.lpush(key5, new String[] {value1, value1, value2, value3, value3});
         baseTransaction.llen(key5);
@@ -113,10 +121,12 @@ public class TransactionTestUtilities {
         baseTransaction.sunionstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sdiffstore(setKey3, new String[] {setKey2, key7});
         baseTransaction.sinterstore(setKey3, new String[] {setKey2, key7});
+        baseTransaction.sdiff(new String[] {setKey2, setKey3});
         baseTransaction.smove(key7, setKey2, "baz");
 
         baseTransaction.zadd(key8, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
         baseTransaction.zrank(key8, "one");
+        baseTransaction.zrevrank(key8, "one");
         baseTransaction.zaddIncr(key8, "one", 3);
         baseTransaction.zrem(key8, new String[] {"one"});
         baseTransaction.zcard(key8);
@@ -137,6 +147,16 @@ public class TransactionTestUtilities {
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
+        baseTransaction.zinterstore(key8, new String[] {zSetKey2, key8});
+        baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
+
+        baseTransaction.geoadd(
+                geoKey1,
+                Map.of(
+                        "Palermo",
+                        new GeospatialData(13.361389, 38.115556),
+                        "Catania",
+                        new GeospatialData(15.087269, 37.502669)));
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -144,6 +164,7 @@ public class TransactionTestUtilities {
                 key9, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build());
         baseTransaction.xadd(
                 key9, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
+        baseTransaction.xtrim(key9, new MinId(true, "0-2"));
 
         baseTransaction.configSet(Map.of("timeout", "1000"));
         baseTransaction.configGet(new String[] {"timeout"});
@@ -151,6 +172,8 @@ public class TransactionTestUtilities {
         baseTransaction.configResetStat();
 
         baseTransaction.echo("GLIDE");
+
+        baseTransaction.lolwut(1);
 
         baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
         baseTransaction
@@ -177,8 +200,10 @@ public class TransactionTestUtilities {
             null,
             (long) value1.length(), // strlen(key2)
             new String[] {value1, value2},
+            false, // renamenx(key1, key2)
             1L,
             Boolean.FALSE, // persist(key1)
+            1L, // touch(new String[] {key1})
             1L,
             null,
             1L,
@@ -204,6 +229,7 @@ public class TransactionTestUtilities {
             new String[] {value2}, // hvals(key4)
             5L,
             10.5,
+            new String[] {field2, field3}, // hkeys(key4)
             5L,
             5L,
             value3, // lindex(key5, 0)
@@ -226,9 +252,11 @@ public class TransactionTestUtilities {
             3L, // sunionstore(setKey3, new String[] { setKey2, key7 })
             2L, // sdiffstore(setKey3, new String[] { setKey2, key7 })
             0L, // sinterstore(setKey3, new String[] { setKey2, key7 })
+            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(key7, setKey2, "baz")
             3L,
             0L, // zrank(key8, "one")
+            2L, // zrevrank(key8, "one")
             4.0,
             1L,
             2L,
@@ -248,16 +276,18 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
-            "0-1", // xadd(key9, Map.of("field1", "value1"),
-            // StreamAddOptions.builder().id("0-1").build());
-            "0-2", // xadd(key9, Map.of("field2", "value2"),
-            // StreamAddOptions.builder().id("0-2").build());
-            "0-3", // xadd(key9, Map.of("field3", "value3"),
-            // StreamAddOptions.builder().id("0-3").build());
+            0L, // zinterstore(key8, new String[] {zSetKey2, key8})
+            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
+            "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
+            "0-2", // xadd(key9, Map.of("field2", "value2"), id("0-2"));
+            "0-3", // xadd(key9, Map.of("field3", "value3"), id("0-3"));
+            1L, // xtrim(key9, new MinId(true, "0-2"));
             OK,
             Map.of("timeout", "1000"),
             OK,
             "GLIDE", // echo
+            "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             0L, // rpushx(listKey3, new String[] { "_" })
             0L, // lpushx(listKey3, new String[] { "_" })
             3L, // lpush(listKey3, new String[] { value1, value2, value3})

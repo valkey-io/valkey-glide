@@ -163,7 +163,19 @@ enum RequestType {
     GeoAdd = 121;
     GeoHash = 122;
     ObjectEncoding = 123;
-    FlushAll = 128;
+    SDiff = 124;
+    ObjectIdletime = 125;
+    ObjectRefcount = 126;
+    LOLWUT = 100500;
+    GeoDist = 127;
+    GeoPos = 128;
+    BZPopMax = 129;
+    ObjectFreq = 130;
+    RenameNx = 131;
+    Touch = 132;
+    ZRevRank = 133;
+    ZInterStore = 134;
+    FlushAll = 137;
 }
 
 message Command {
