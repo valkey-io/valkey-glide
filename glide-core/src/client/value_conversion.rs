@@ -411,7 +411,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
-        b"ZRANGE" | b"ZDIFF" => cmd
+        b"ZRANGE" | b"ZDIFF" | b"ZUNION" => cmd
             .position(b"WITHSCORES")
             .map(|_| ExpectedReturnType::MapOfStringToDouble),
         b"ZRANK" | b"ZREVRANK" => cmd
@@ -612,6 +612,105 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZDIFF").arg("1")).is_none());
+    }
+
+    #[test]
+    fn convert_zunion_only_if_withscores_is_included() {
+        // Test ZUNION without options
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(
+            expected_type_for_cmd(redis::cmd("ZUNION").arg("2").arg("set1").arg("set2")).is_none()
+        );
+
+        // Test ZUNION with Weights
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("WEIGHTS")
+                .arg("1")
+                .arg("2")
+        )
+        .is_none());
+
+        // Test ZUNION with Aggregate
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("AGGREGATE")
+                .arg("MAX")
+        )
+        .is_none());
+
+        // Test ZUNION with Weights and Aggregate
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZUNION")
+                    .arg("2")
+                    .arg("set1")
+                    .arg("set2")
+                    .arg("WEIGHTS")
+                    .arg("1")
+                    .arg("2")
+                    .arg("AGGREGATE")
+                    .arg("MAX")
+                    .arg("WITHSCORES")
+            ),
+            Some(ExpectedReturnType::MapOfStringToDouble)
+        ));
+
+        assert!(expected_type_for_cmd(
+            redis::cmd("ZUNION")
+                .arg("2")
+                .arg("set1")
+                .arg("set2")
+                .arg("WEIGHTS")
+                .arg("1")
+                .arg("2")
+                .arg("AGGREGATE")
+                .arg("MAX")
+        )
+        .is_none());
     }
 
     #[test]
