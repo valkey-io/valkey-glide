@@ -87,9 +87,8 @@ Other useful gradle developer commands:
 * `./gradlew :integTest:test` to run client examples
 * `./gradlew spotlessCheck` to check for codestyle issues
 * `./gradlew spotlessApply` to apply codestyle recommendations
-* `./gradlew :examples:run` to run client examples (Note: Make sure to run `./gradlew :client:publishToMavenLocal` first)
+* `./gradlew :examples:run` to run client examples
 * `./gradlew :benchmarks:run` to run performance benchmarks
-* `./gradlew :client:publishToMavenLocal` to publish the JAR to the local Maven repository
 
 ## Basic Examples
 

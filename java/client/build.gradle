@@ -152,7 +152,7 @@ tasks.register('copyNativeLib', Copy) {
 
 jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
-compileTestJava.dependsOn('publishToMavenLocal')
+compileTestJava.dependsOn('copyNativeLib')
 
 test {
     exclude "glide/ffi/FfiTest.class"
