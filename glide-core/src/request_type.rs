@@ -145,7 +145,7 @@ pub enum RequestType {
     ZInterStore = 134,
     HRandField = 135,
     ZUnion = 136,
-    FlushAll = 137,
+    FlushAll = 138,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
