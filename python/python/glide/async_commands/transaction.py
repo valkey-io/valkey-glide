@@ -741,8 +741,7 @@ class BaseTransaction:
 
         Args:
             keys (List[str]): The keys of the lists to pop from.
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A
-                value of `0` will block indefinitely.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 
         Command response:
             Optional[List[str]]: A two-element list containing the `key` from which the element was popped and the `value` of the
@@ -870,8 +869,7 @@ class BaseTransaction:
 
         Args:
             keys (List[str]): The keys of the lists to pop from.
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A
-                value of `0` will block indefinitely.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 
         Command response:
             Optional[List[str]]: A two-element list containing the `key` from which the element was popped and the `value` of the
