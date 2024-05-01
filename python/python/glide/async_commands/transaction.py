@@ -1264,7 +1264,7 @@ class BaseTransaction:
         Args:
             key (str): The key of the stream.
             values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
-            options (StreamAddOptions, optional): Additional options for adding entries to the stream. See `StreamAddOptions`.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
 
         Commands response:
             str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.

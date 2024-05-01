@@ -43,7 +43,8 @@ async def transaction_test(
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
+    key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -251,11 +252,11 @@ async def transaction_test(
         ]
     )
 
-    transaction.xadd(key10, [("foo", "bar")], StreamAddOptions(id="0-1"))
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
-    transaction.xadd(key10, [("foo", "bar")], StreamAddOptions(id="0-2"))
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append("0-2")
-    transaction.xtrim(key10, TrimByMinId(threshold="0-2", exact=True))
+    transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
     return args
 

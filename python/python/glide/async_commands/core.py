@@ -170,8 +170,11 @@ class StreamTrimOptions(ABC):
                 Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (Union[str, int]): Threshold for trimming.
             method (str): Method for trimming (e.g., MINID, MAXLEN).
-            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
+        if exact and limit:
+            raise ValueError("LIMIT cannot be used without the special ~ option.")
         self.exact = exact
         self.threshold = threshold
         self.method = method
@@ -207,7 +210,8 @@ class TrimByMinId(StreamTrimOptions):
             exact (bool): If `true`, the stream will be trimmed exactly.
                 Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (str): Threshold for trimming by minimum ID.
-            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         super().__init__(exact, threshold, "MINID", limit)
 
@@ -225,7 +229,8 @@ class TrimByMaxLen(StreamTrimOptions):
             exact (bool): If `true`, the stream will be trimmed exactly.
                 Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
             threshold (int): Threshold for trimming by maximum length.
-            limit (Optional[int], optional): Max number of entries to be trimmed. Defaults to None.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         super().__init__(exact, threshold, "MAXLEN", limit)
 
@@ -1800,7 +1805,7 @@ class CoreCommands(Protocol):
         self,
         key: str,
         values: List[Tuple[str, str]],
-        options: StreamAddOptions = StreamAddOptions(),
+        options: Optional[StreamAddOptions] = None,
     ) -> Optional[str]:
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
@@ -1810,7 +1815,7 @@ class CoreCommands(Protocol):
         Args:
             key (str): The key of the stream.
             values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
-            options (StreamAddOptions, optional): Additional options for adding entries to the stream. See `StreamAddOptions`.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
 
         Returns:
             str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
@@ -1826,6 +1831,8 @@ class CoreCommands(Protocol):
         args = [key]
         if options:
             args.extend(options.to_args())
+        else:
+            args.append("*")
         args.extend([field for pair in values for field in pair])
 
         return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
