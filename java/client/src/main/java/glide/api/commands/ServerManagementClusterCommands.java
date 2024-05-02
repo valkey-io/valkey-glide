@@ -320,11 +320,10 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * The command will be routed to all primary nodes.<br>
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
-     * @return Aggregated response - <code>OK</code>.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall().get();
@@ -340,7 +339,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return Aggregated response - <code>OK</code>.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall(ASYNC).get();
@@ -350,8 +349,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> flushall(FlushMode mode);
 
     /**
-     * Deletes all the keys of all the existing databases. This command never fails. To explicitly
-     * specify the flushing mode, use {@link #flushall(FlushMode, SingleNodeRoute)}.
+     * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the

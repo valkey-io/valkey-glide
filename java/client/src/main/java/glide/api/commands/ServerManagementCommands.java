@@ -153,8 +153,7 @@ public interface ServerManagementCommands {
     CompletableFuture<Long> lastsave();
 
     /**
-     * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
+     * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
      * @return <code>OK</code>.
