@@ -96,21 +96,10 @@ tasks.register('buildRustReleaseStrip', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
-tasks.register('buildRust', Exec) {
-    commandLine 'cargo', 'build'
-    workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always'
-}
-
 tasks.register('buildRustFfi', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
-}
-
-tasks.register('buildWithRust') {
-    dependsOn 'buildRust'
-    finalizedBy 'build'
 }
 
 tasks.register('buildWithRustRelease') {
@@ -134,7 +123,7 @@ tasks.register('testFfi', Test) {
 }
 
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    dependsOn 'protobuf', 'buildRustRelease', 'testFfi'
     finalizedBy 'build'
 }
 
