@@ -1263,7 +1263,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Blocking list pop primitive.
      * Pop an element from the head of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/blpop/ for more details.
      * Note: `BLPOP` is a blocking command,
