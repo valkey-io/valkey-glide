@@ -11,6 +11,8 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
+    StreamAddOptions,
+    StreamTrimOptions,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -1247,6 +1249,55 @@ class BaseTransaction:
             Otherwise, a "none" string is returned.
         """
         return self.append_command(RequestType.Type, [key])
+
+    def xadd(
+        self: TTransaction,
+        key: str,
+        values: List[Tuple[str, str]],
+        options: StreamAddOptions = StreamAddOptions(),
+    ) -> TTransaction:
+        """
+        Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+
+        See https://valkey.io/commands/xadd for more details.
+
+        Args:
+            key (str): The key of the stream.
+            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
+
+        Commands response:
+            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+        args.extend([field for pair in values for field in pair])
+
+        return self.append_command(RequestType.XAdd, args)
+
+    def xtrim(
+        self: TTransaction,
+        key: str,
+        options: StreamTrimOptions,
+    ) -> TTransaction:
+        """
+        Trims the stream stored at `key` by evicting older entries.
+
+        See https://valkey.io/commands/xtrim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
+
+        Commands response:
+            int: TThe number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XTrim, args)
 
     def geoadd(
         self: TTransaction,

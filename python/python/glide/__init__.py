@@ -9,6 +9,10 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
+    StreamAddOptions,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.redis_modules import json
@@ -94,6 +98,10 @@ __all__ = [
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",
+    "StreamAddOptions",
+    "StreamTrimOptions",
+    "TrimByMaxLen",
+    "TrimByMinId",
     "UpdateOptions",
     # Logger
     "Logger",
