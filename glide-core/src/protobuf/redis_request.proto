@@ -171,6 +171,12 @@ enum RequestType {
     GeoPos = 128;
     BZPopMax = 129;
     ObjectFreq = 130;
+    RenameNx = 131;
+    Touch = 132;
+    ZRevRank = 133;
+    ZInterStore = 134;
+    HRandField = 135;
+    ZUnion = 136;
 }
 
 message Command {

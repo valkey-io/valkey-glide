@@ -17,7 +17,9 @@
 * Python: Added GEOPOS command ([#1301](https://github.com/aws/glide-for-redis/pull/1301))
 * Node: Added PFADD command ([#1317](https://github.com/aws/glide-for-redis/pull/1317))
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
-* Node: Added `BLPOP` command ([#1223](https://github.com/aws/glide-for-redis/pull/1223))
+* Python: Added ZMSCORE command ([#1357](https://github.com/aws/glide-for-redis/pull/1357))
+* Python: Added HRANDFIELD command ([#1334](https://github.com/aws/glide-for-redis/pull/1334))
+* Node: Added BLPOP command ([#1223](https://github.com/aws/glide-for-redis/pull/1223))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
