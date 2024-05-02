@@ -174,7 +174,9 @@ class StreamTrimOptions(ABC):
                 Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
         if exact and limit:
-            raise ValueError("LIMIT cannot be used without the special ~ option.")
+            raise ValueError(
+                "If `exact` is set to `True`, `limit` cannot be specified."
+            )
         self.exact = exact
         self.threshold = threshold
         self.method = method
