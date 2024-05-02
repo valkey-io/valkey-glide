@@ -36,7 +36,7 @@ source "$HOME/.cargo/env"
 node -v
 ```
 
-> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](nodejs-supported-version) to upgrade your Node.js version.
+> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#nodejs-supported-version) to upgrade your Node.js version.
 
 **Dependencies installation for CentOS**
 
