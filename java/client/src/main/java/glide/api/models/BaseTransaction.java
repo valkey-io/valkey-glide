@@ -2248,12 +2248,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
+     * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
-     * @return Command Response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code>.
      */
     public T flushall() {
         protobufTransaction.addCommands(buildCommand(FlushAll));
@@ -2263,11 +2261,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return Command Response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @return Command Response - <code>OK</code>.
      */
     public T flushall(FlushMode mode) {
         protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(mode.toString())));
