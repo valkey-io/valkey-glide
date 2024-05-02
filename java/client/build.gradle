@@ -2,8 +2,8 @@ import java.nio.file.Paths
 
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
-
 repositories {
     mavenCentral()
 }
@@ -96,21 +96,10 @@ tasks.register('buildRustReleaseStrip', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
-tasks.register('buildRust', Exec) {
-    commandLine 'cargo', 'build'
-    workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always'
-}
-
 tasks.register('buildRustFfi', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
-}
-
-tasks.register('buildWithRust') {
-    dependsOn 'buildRust'
-    finalizedBy 'build'
 }
 
 tasks.register('buildWithRustRelease') {
@@ -134,17 +123,50 @@ tasks.register('testFfi', Test) {
 }
 
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    dependsOn 'protobuf', 'buildRustRelease', 'testFfi'
     finalizedBy 'build'
 }
 
 compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
-test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
+
+tasks.register('copyNativeLib', Copy) {
+    from "${projectDir}/../target/release"
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+jar.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn('buildRustRelease')
+compileTestJava.dependsOn('publishToMavenLocal')
 
 test {
     exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'software.amazon'
+            artifactId = 'glide'
+            version = "0.0.1"
+            from components.java
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
 }
 
 tasks.withType(Test) {
@@ -153,7 +175,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
 jar {
