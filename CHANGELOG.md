@@ -19,6 +19,7 @@
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
 * Python: Added ZMSCORE command ([#1357](https://github.com/aws/glide-for-redis/pull/1357))
 * Python: Added HRANDFIELD command ([#1334](https://github.com/aws/glide-for-redis/pull/1334))
+* Python: Added XADD, XTRIM commands ([#1320](https://github.com/aws/glide-for-redis/pull/1320))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

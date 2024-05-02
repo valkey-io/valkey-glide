@@ -22,6 +22,9 @@ from glide.async_commands.core import (
     InfBound,
     InfoSection,
     InsertPosition,
+    StreamAddOptions,
+    TrimByMaxLen,
+    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -2064,7 +2067,7 @@ class TestCommands:
         assert (await redis_client.type(key)).lower() == "hash"
         assert await redis_client.delete([key]) == 1
 
-        await redis_client.custom_command(["XADD", key, "*", "field", "value"])
+        await redis_client.xadd(key, [("field", "value")])
         assert await redis_client.type(key) == "stream"
         assert await redis_client.delete([key]) == 1
 
@@ -2122,6 +2125,57 @@ class TestCommands:
 
         assert await redis_client.append(key, value) == 10
         assert await redis_client.get(key) == value * 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xadd_xtrim(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field, field2 = get_random_string(10), get_random_string(10)
+
+        assert (
+            await redis_client.xadd(
+                key,
+                [(field, "foo"), (field2, "bar")],
+                StreamAddOptions(make_stream=False),
+            )
+            is None
+        )
+
+        assert (
+            await redis_client.xadd(
+                key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
+            )
+            == "0-1"
+        )
+
+        assert (
+            await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
+        ) is not None
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        # This will trim the first entry.
+        id = await redis_client.xadd(
+            key,
+            [(field, "foo3"), (field2, "bar3")],
+            StreamAddOptions(trim=TrimByMaxLen(exact=True, threshold=2)),
+        )
+
+        assert id is not None
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        # This will trim the 2nd entry.
+        assert (
+            await redis_client.xadd(
+                key,
+                [(field, "foo4"), (field2, "bar4")],
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=str(id))),
+            )
+            is not None
+        )
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
+        assert await redis_client.custom_command(["XLEN", key]) == 1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
