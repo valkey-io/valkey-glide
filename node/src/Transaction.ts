@@ -57,6 +57,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPersist,
+    createPfAdd,
     createPing,
     createPttl,
     createRPop,
@@ -104,11 +105,13 @@ import { redis_request } from "./ProtobufMessage";
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new BaseTransaction()
- *          .set("key", "value")
- *          .get("key");
- *       await client.exec(transaction);
- *       [OK , "value"]
+ * ```typescript
+ * const transaction = new BaseTransaction()
+ *    .set("key", "value")
+ *    .get("key");
+ * const result = await client.exec(transaction);
+ * console.log(result); // Output: ['OK', 'value']
+ * ```
  */
 export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
@@ -321,10 +324,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
-     *
-     * @example
-     * config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
-     *
      */
     public configSet(parameters: Record<string, string>): T {
         return this.addAndReturn(createConfigSet(parameters));
@@ -1146,13 +1145,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+     * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+     * for details on the restrictions and limitations of the custom command API.
      *
-     * @example
-     * Returns a list of all pub/sub clients:
-     * ```ts
-     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
-     * ```
+     * Command Response - A response from Redis with an `Object`.
      */
     public customCommand(args: string[]): T {
         return this.addAndReturn(createCustomCommand(args));
@@ -1258,6 +1254,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public brpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBrpop(keys, timeout));
     }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://redis.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     */
+    public pfadd(key: string, elements: string[]): T {
+        return this.addAndReturn(createPfAdd(key, elements));
+    }
 }
 
 /**
@@ -1271,12 +1282,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new Transaction()
- *          .set("key", "value")
- *          .select(1)  /// Standalone command
- *          .get("key");
- *       await RedisClient.exec(transaction);
- *       [OK , OK , null]
+ * ```typescript
+ * const transaction = new Transaction()
+ *    .set("key", "value")
+ *    .select(1)  /// Standalone command
+ *    .get("key");
+ * const result = await redisClient.exec(transaction);
+ * console.log(result); // Output: ['OK', 'OK', null]
+ * ```
  */
 export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands

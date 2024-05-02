@@ -7,11 +7,15 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
+    GeospatialData,
+    GeoUnit,
     InfoSection,
+    InsertPosition,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -148,7 +152,9 @@ class BaseTransaction:
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.
-            @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+        See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        for details on the restrictions and limitations of the custom command API.
+
             @example - Append a command to list of all pub/sub clients:
 
                 transaction.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
@@ -161,6 +167,22 @@ class BaseTransaction:
             TResult: The returning value depends on the executed command.
         """
         return self.append_command(RequestType.CustomCommand, command_args)
+
+    def append(self: TTransaction, key: str, value: str) -> TTransaction:
+        """
+        Appends a value to a key.
+        If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to SET in this special case.
+
+        See https://redis.io/commands/append for more details.
+
+        Args:
+            key (str): The key to which the value will be appended.
+            value (str): The value to append.
+
+        Commands response:
+            int: The length of the string after appending the value.
+        """
+        return self.append_command(RequestType.Append, [key, value])
 
     def info(
         self: TTransaction,
@@ -588,6 +610,60 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Hkeys, [key])
 
+    def hrandfield(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns a random field name from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Command response:
+            Optional[str]: A random field name from the hash stored at `key`.
+            If the hash does not exist or is empty, None will be returned.
+        """
+        return self.append_command(RequestType.HRandField, [key])
+
+    def hrandfield_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Retrieves up to `count` random field names from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Command response:
+            List[str]: A list of random field names from the hash.
+            If the hash does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(RequestType.HRandField, [key, str(count)])
+
+    def hrandfield_withvalues(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Command response:
+            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            hash and `value` is the associated value of the field name.
+            If the hash does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(
+            RequestType.HRandField, [key, str(count), "WITHVALUES"]
+        )
+
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
         Insert all the specified values at the head of the list stored at `key`.
@@ -754,6 +830,30 @@ class BaseTransaction:
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
+
+    def linsert(
+        self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> TTransaction:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Command response:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+        """
+        return self.append_command(
+            RequestType.LInsert, [key, position.value, pivot, element]
+        )
 
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:
         """
@@ -1148,6 +1248,115 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Type, [key])
 
+    def geoadd(
+        self: TTransaction,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> TTransaction:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Commands response:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return self.append_command(RequestType.GeoAdd, args)
+
+    def geodist(
+        self: TTransaction,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> TTransaction:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is meters.
+
+        Commands response:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return self.append_command(RequestType.GeoDist, args)
+
+    def geohash(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Commands response:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+        """
+        return self.append_command(RequestType.GeoHash, [key] + members)
+
+    def geopos(
+        self: TTransaction,
+        key: str,
+        members: List[str],
+    ) -> TTransaction:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Commands response:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+        """
+        return self.append_command(RequestType.GeoPos, [key] + members)
+
     def zadd(
         self: TTransaction,
         key: str,
@@ -1508,6 +1717,79 @@ class BaseTransaction:
             RequestType.ZRemRangeByScore, [key, score_min, score_max]
         )
 
+    def zremrangebylex(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Command response:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(
+            RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+        )
+
+    def zlexcount(
+        self: TTransaction,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> TTransaction:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical value to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Command response:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return self.append_command(
+            RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
+        )
+
     def zscore(self: TTransaction, key: str, member: str) -> TTransaction:
         """
         Returns the score of `member` in the sorted set stored at `key`.
@@ -1525,6 +1807,22 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZScore, [key, member])
 
+    def zmscore(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+
+        See https://valkey.io/commands/zmscore for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members in the sorted set.
+
+        Command response:
+            List[Optional[float]]: A list of scores corresponding to `members`.
+                If a member does not exist in the sorted set, the corresponding value in the list will be None.
+        """
+        return self.append_command(RequestType.ZMScore, [key] + members)
+
     def dbsize(self: TTransaction) -> TTransaction:
         """
         Returns the number of keys in the currently selected database.
@@ -1534,6 +1832,24 @@ class BaseTransaction:
             int: The number of keys in the database.
         """
         return self.append_command(RequestType.DBSize, [])
+
+    def pfadd(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
+        """
+        Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+        Creates a new structure if the `key` does not exist.
+        When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+
+        See https://redis.io/commands/pfadd/ for more details.
+
+        Args:
+            key (str): The key of the HyperLogLog data structure to add elements into.
+            elements (List[str]): A list of members to add to the HyperLogLog stored at `key`.
+
+        Commands response:
+            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns 1. Otherwise, returns 0.
+        """
+        return self.append_command(RequestType.PfAdd, [key] + elements)
 
 
 class Transaction(BaseTransaction):

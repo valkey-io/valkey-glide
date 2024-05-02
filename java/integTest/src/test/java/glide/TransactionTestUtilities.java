@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
@@ -12,11 +13,17 @@ import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.StreamAddOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.provider.Arguments;
 
 public class TransactionTestUtilities {
 
@@ -29,6 +36,23 @@ public class TransactionTestUtilities {
 
     @FunctionalInterface
     public interface TransactionBuilder extends Function<BaseTransaction<?>, Object[]> {}
+
+    /** Generate test samples for parametrized tests. */
+    public static Stream<Arguments> getTransactionBuilders() {
+        return Stream.of(
+                Arguments.of("Generic Commands", GenericCommandsTransactionBuilder),
+                Arguments.of("String Commands", StringCommandsTransactionBuilder),
+                Arguments.of("Hash Commands", HashCommandsTransactionBuilder),
+                Arguments.of("List Commands", ListCommandsTransactionBuilder),
+                Arguments.of("Set Commands", SetCommandsTransactionBuilder),
+                Arguments.of("Sorted Set Commands", SortedSetCommandsTransactionBuilder),
+                Arguments.of("Server Management Commands", ServerManagementCommandsTransactionBuilder),
+                Arguments.of("HyperLogLog Commands", HyperLogLogCommandsTransactionBuilder),
+                Arguments.of("Stream Commands", StreamCommandsTransactionBuilder),
+                Arguments.of(
+                        "Connection Management Commands", ConnectionManagementCommandsTransactionBuilder),
+                Arguments.of("Geospatial Commands", GeospatialCommandsTransactionBuilder));
+    }
 
     public static TransactionBuilder GenericCommandsTransactionBuilder =
             TransactionTestUtilities::genericCommands;
@@ -50,6 +74,8 @@ public class TransactionTestUtilities {
             TransactionTestUtilities::streamCommands;
     public static TransactionBuilder ConnectionManagementCommandsTransactionBuilder =
             TransactionTestUtilities::connectionManagementCommands;
+    public static TransactionBuilder GeospatialCommandsTransactionBuilder =
+            TransactionTestUtilities::geospatialCommands;
 
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
         String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
@@ -61,9 +87,12 @@ public class TransactionTestUtilities {
                 .exists(new String[] {genericKey1})
                 .persist(genericKey1)
                 .type(genericKey1)
+                .objectEncoding(genericKey1)
+                .touch(new String[] {genericKey1})
                 .del(new String[] {genericKey1})
                 .get(genericKey1)
                 .set(genericKey2, value2)
+                .renamenx(genericKey1, genericKey2)
                 .unlink(new String[] {genericKey2})
                 .get(genericKey2)
                 .set(genericKey1, value1)
@@ -79,9 +108,12 @@ public class TransactionTestUtilities {
             1L, // exists(new String[] {genericKey1})
             false, // persist(key1)
             "string", // type(genericKey1)
+            "embstr", // objectEncoding(genericKey1)
+            1L, // touch(new String[] {genericKey1})
             1L, // del(new String[] {genericKey1})
             null, // get(genericKey1)
             OK, // set(genericKey2, value2)
+            false, // renamenx(genericKey1, genericKey2)
             1L, // unlink(new String[] {genericKey2})
             null, // get(genericKey2)
             OK, // set(genericKey1, value1)
@@ -110,7 +142,8 @@ public class TransactionTestUtilities {
                 .decr(stringKey3)
                 .decrBy(stringKey3, 2)
                 .incrByFloat(stringKey3, 0.5)
-                .setrange(stringKey3, 0, "GLIDE");
+                .setrange(stringKey3, 0, "GLIDE")
+                .getrange(stringKey3, 0, 5);
 
         return new Object[] {
             OK, // set(stringKey1, value1)
@@ -125,6 +158,7 @@ public class TransactionTestUtilities {
             0L, // decrBy(stringKey3, 2)
             0.5, // incrByFloat(stringKey3, 0.5)
             5L, // setrange(stringKey3, 0, "GLIDE")
+            "GLIDE" // getrange(stringKey3, 0, 5)
         };
     }
 
@@ -142,7 +176,8 @@ public class TransactionTestUtilities {
                 .hdel(hashKey1, new String[] {field1})
                 .hvals(hashKey1)
                 .hincrBy(hashKey1, field3, 5)
-                .hincrByFloat(hashKey1, field3, 5.5);
+                .hincrByFloat(hashKey1, field3, 5.5)
+                .hkeys(hashKey1);
 
         return new Object[] {
             2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
@@ -156,6 +191,7 @@ public class TransactionTestUtilities {
             new String[] {value2}, // hvals(hashKey1)
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
+            new String[] {field2, field3}, // hkeys(hashKey1)
         };
     }
 
@@ -206,20 +242,38 @@ public class TransactionTestUtilities {
 
     private static Object[] setCommands(BaseTransaction<?> transaction) {
         String setKey1 = "{setKey}-1-" + UUID.randomUUID();
+        String setKey2 = "{setKey}-2-" + UUID.randomUUID();
+        String setKey3 = "{setKey}-3-" + UUID.randomUUID();
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
                 .srem(setKey1, new String[] {"foo"})
                 .scard(setKey1)
                 .sismember(setKey1, "baz")
-                .smembers(setKey1);
+                .smembers(setKey1)
+                .smismember(setKey1, new String[] {"baz", "foo"})
+                .sinter(new String[] {setKey1, setKey1})
+                .sadd(setKey2, new String[] {"a", "b"})
+                .sunionstore(setKey3, new String[] {setKey2, setKey1})
+                .sdiffstore(setKey3, new String[] {setKey2, setKey1})
+                .sinterstore(setKey3, new String[] {setKey2, setKey1})
+                .sdiff(new String[] {setKey2, setKey3})
+                .smove(setKey1, setKey2, "baz");
 
         return new Object[] {
             2L, // sadd(setKey1, new String[] {"baz", "foo"});
             1L, // srem(setKey1, new String[] {"foo"});
             1L, // scard(setKey1);
-            true, // sismember(key7, "baz")
+            true, // sismember(setKey1, "baz")
             Set.of("baz"), // smembers(setKey1);
+            new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
+            Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
+            2L, // sadd(setKey2, new String[] { "a", "b" })
+            3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
+            2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
+            0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
+            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
+            true, // smove(setKey1, setKey2, "baz")
         };
     }
 
@@ -230,12 +284,14 @@ public class TransactionTestUtilities {
         transaction
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
                 .zrank(zSetKey1, "one")
+                .zrevrank(zSetKey1, "one")
                 .zaddIncr(zSetKey1, "one", 3)
                 .zrem(zSetKey1, new String[] {"one"})
                 .zcard(zSetKey1)
                 .zmscore(zSetKey1, new String[] {"two", "three"})
                 .zrange(zSetKey1, new RangeByIndex(0, 1))
                 .zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
+                .zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
                 .zscore(zSetKey1, "two")
                 .zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
                 .zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
@@ -247,17 +303,25 @@ public class TransactionTestUtilities {
                 .zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                 .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
                 .zdiff(new String[] {zSetKey2, zSetKey1})
-                .zdiffWithScores(new String[] {zSetKey2, zSetKey1});
+                .zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
+                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
+                .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .bzpopmax(new String[] {zSetKey2}, .1);
 
         return new Object[] {
             3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
             0L, // zrank(zSetKey1, "one")
+            2L, // zrevrank(zSetKey1, "one")
             4.0, // zaddIncr(zSetKey1, "one", 3)
             1L, // zrem(zSetKey1, new String[] {"one"})
             2L, // zcard(zSetKey1)
             new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
             new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
             Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
+            2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
             2.0, // zscore(zSetKey1, "two")
             2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
             2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
@@ -270,6 +334,12 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
+            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
+            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}));
+            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}), MAX)
+            0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
+            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
         };
     }
 
@@ -277,12 +347,14 @@ public class TransactionTestUtilities {
         transaction
                 .configSet(Map.of("timeout", "1000"))
                 .configGet(new String[] {"timeout"})
-                .configResetStat();
+                .configResetStat()
+                .lolwut(1);
 
         return new Object[] {
             OK, // configSet(Map.of("timeout", "1000"))
             Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
-            OK // configResetStat()
+            OK, // configResetStat()
+            "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
         };
     }
 
@@ -324,12 +396,30 @@ public class TransactionTestUtilities {
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
-                .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build());
+                .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
+                .xtrim(streamKey1, new MinId(true, "0-2"));
 
         return new Object[] {
             "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
+            1L, // xtrim(streamKey1, new MinId(true, "0-2"))
+        };
+    }
+
+    private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
+        final String geoKey1 = "{geoKey}-1-" + UUID.randomUUID();
+
+        transaction.geoadd(
+                geoKey1,
+                Map.of(
+                        "Palermo",
+                        new GeospatialData(13.361389, 38.115556),
+                        "Catania",
+                        new GeospatialData(15.087269, 37.502669)));
+
+        return new Object[] {
+            2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
         };
     }
 

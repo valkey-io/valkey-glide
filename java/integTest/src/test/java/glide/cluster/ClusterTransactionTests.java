@@ -2,16 +2,6 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TransactionTestUtilities.ConnectionManagementCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.GenericCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.HashCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.HyperLogLogCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.ListCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.ServerManagementCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.SetCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.SortedSetCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.StreamCommandsTransactionBuilder;
-import static glide.TransactionTestUtilities.StringCommandsTransactionBuilder;
 import static glide.TransactionTestUtilities.redisV7plusCommands;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -27,14 +17,16 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
-import java.util.stream.Stream;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.UUID;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
@@ -89,24 +81,9 @@ public class ClusterTransactionTests {
         assertTrue(((String) result[1]).contains("# Stats"));
     }
 
-    public static Stream<Arguments> getTransactionBuilders() {
-        return Stream.of(
-                Arguments.of("Generic Commands", GenericCommandsTransactionBuilder),
-                Arguments.of("String Commands", StringCommandsTransactionBuilder),
-                Arguments.of("Hash Commands", HashCommandsTransactionBuilder),
-                Arguments.of("List Commands", ListCommandsTransactionBuilder),
-                Arguments.of("Set Commands", SetCommandsTransactionBuilder),
-                Arguments.of("Sorted Set Commands", SortedSetCommandsTransactionBuilder),
-                Arguments.of("Server Management Commands", ServerManagementCommandsTransactionBuilder),
-                Arguments.of("HyperLogLog Commands", HyperLogLogCommandsTransactionBuilder),
-                Arguments.of("Stream Commands", StreamCommandsTransactionBuilder),
-                Arguments.of(
-                        "Connection Management Commands", ConnectionManagementCommandsTransactionBuilder));
-    }
-
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
-    @MethodSource("getTransactionBuilders")
+    @MethodSource("glide.TransactionTestUtilities#getTransactionBuilders")
     public void transactions_with_group_of_commands(String testName, TransactionBuilder builder) {
         ClusterTransaction transaction = new ClusterTransaction();
         Object[] expectedResult = builder.apply(transaction);
@@ -125,5 +102,77 @@ public class ClusterTransactionTests {
 
         Object[] results = clusterClient.exec(transaction).get();
         assertArrayEquals(expectedResult, results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        var response = clusterClient.exec(new ClusterTransaction().lastsave()).get();
+        assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
+    }
+
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
+    // public void objectFreq() {
+    //    String objectFreqKey = "key";
+    //    String maxmemoryPolicy = "maxmemory-policy";
+    //    String oldPolicy = clusterClient.configGet(new String[] { maxmemoryPolicy
+    // }).get().get(maxmemoryPolicy);
+    //    try {
+    //        ClusterTransaction transaction = new ClusterTransaction();
+    //        transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"), ALL_NODES).get();
+    //        transaction.set(objectFreqKey, "");
+    //        transaction.objectFreq(objectFreqKey);
+    //        var response = clusterClient.exec(transaction).get();
+    //        assertEquals(OK, response[0]);
+    //        assertEquals(OK, response[1]);
+    //        assertTrue((long) response[2] >= 0L);
+    //    } finally {
+    //        clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy));
+    //    }
+    // }
+
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
+    // public void objectIdletime() {
+    //    String objectIdletimeKey = "key";
+    //    ClusterTransaction transaction = new ClusterTransaction();
+    //    transaction.set(objectIdletimeKey, "");
+    //    transaction.objectIdletime(objectIdletimeKey);
+    //    var response = clusterClient.exec(transaction).get();
+    //    assertEquals(OK, response[0]);
+    //    assertTrue((long) response[1] >= 0L);
+    // }
+
+    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
+    // @Test
+    // @SneakyThrows
+    // public void objectRefcount() {
+    //    String objectRefcountKey = "key";
+    //    ClusterTransaction transaction = new ClusterTransaction();
+    //    transaction.set(objectRefcountKey, "");
+    //    transaction.objectRefcount(objectRefcountKey);
+    //    var response = clusterClient.exec(transaction).get();
+    //    assertEquals(OK, response[0]);
+    //    assertTrue((long) response[1] >= 0L);
+    // }
+
+    @Test
+    @SneakyThrows
+    public void zrank_zrevrank_withscores() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        transaction.zrankWithScore(zSetKey1, "one");
+        transaction.zrevrankWithScore(zSetKey1, "one");
+
+        Object[] result = clusterClient.exec(transaction).get();
+        assertEquals(3L, result[0]);
+        assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
+        assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
     }
 }

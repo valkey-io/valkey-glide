@@ -5,7 +5,13 @@ from typing import List, Union
 
 import pytest
 from glide import RequestError
-from glide.async_commands.sorted_set import InfBound, RangeByIndex, ScoreBoundary
+from glide.async_commands.core import GeospatialData, InsertPosition
+from glide.async_commands.sorted_set import (
+    InfBound,
+    LexBoundary,
+    RangeByIndex,
+    ScoreBoundary,
+)
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -32,6 +38,7 @@ async def transaction_test(
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -50,6 +57,8 @@ async def transaction_test(
     args.append(value)
     transaction.strlen(key)
     args.append(len(value))
+    transaction.append(key, value)
+    args.append(len(value) * 2)
 
     transaction.persist(key)
     args.append(False)
@@ -119,6 +128,12 @@ async def transaction_test(
     args.append({key: value, key2: value2, key3: "10.5"})
     transaction.hdel(key4, [key, key2])
     args.append(2)
+    transaction.hrandfield(key4)
+    args.append(key3)
+    transaction.hrandfield_count(key4, 1)
+    args.append([key3])
+    transaction.hrandfield_withvalues(key4, 1)
+    args.append([[key3, "10.5"]])
 
     transaction.client_getname()
     args.append(None)
@@ -139,6 +154,8 @@ async def transaction_test(
     args.append([value2, value])
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
+    transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
+    args.append(0)
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -184,18 +201,51 @@ async def transaction_test(
     args.append(3)
     transaction.zcount(key8, ScoreBoundary(2, is_inclusive=True), InfBound.POS_INF)
     args.append(3)
+    transaction.zlexcount(key8, LexBoundary("a", is_inclusive=True), InfBound.POS_INF)
+    args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
     transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
     args.append(["two", "three", "four"])
     transaction.zrange_withscores(key8, RangeByIndex(start=0, stop=-1))
     args.append({"two": 2, "three": 3, "four": 4})
+    transaction.zmscore(key8, ["two", "three"])
+    args.append([2.0, 3.0])
     transaction.zpopmin(key8)
     args.append({"two": 2.0})
     transaction.zpopmax(key8)
     args.append({"four": 4})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(1)
+    transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(0)
+
+    transaction.pfadd(key10, ["a", "b", "c"])
+    args.append(1)
+
+    transaction.geoadd(
+        key9,
+        {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+        },
+    )
+    args.append(2)
+    transaction.geodist(key9, "Palermo", "Catania")
+    args.append(166274.1516)
+    transaction.geohash(key9, ["Palermo", "Catania", "Place"])
+    args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
+    transaction.geopos(key9, ["Palermo", "Catania", "Place"])
+    # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
+    # No worries, Python can handle it, therefore, this shouldn't fail
+    args.append(
+        [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+            None,
+        ]
+    )
+
     return args
 
 
