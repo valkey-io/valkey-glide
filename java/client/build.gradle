@@ -140,8 +140,6 @@ tasks.register('buildAll') {
 
 compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
-test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
 
 tasks.register('copyNativeLib', Copy) {
     from "${projectDir}/../target/release"
