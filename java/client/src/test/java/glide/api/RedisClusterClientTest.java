@@ -3,7 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.models.commands.FlushOption.SYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -822,9 +822,8 @@ public class RedisClusterClientTest {
     @Test
     public void flushall_returns_success() {
         // setup
-        String value = OK;
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(FlushAll), eq(new String[0]), any()))
@@ -836,16 +835,15 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
     @Test
     public void flushall_with_mode_returns_success() {
         // setup
-        String value = OK;
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -858,16 +856,15 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
     @Test
     public void flushall_with_route_returns_success() {
         // setup
-        String value = OK;
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -880,16 +877,15 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
     @Test
     public void flushall_with_route_and_mode_returns_success() {
         // setup
-        String value = OK;
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
@@ -902,7 +898,7 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows

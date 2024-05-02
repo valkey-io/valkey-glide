@@ -119,7 +119,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -2249,7 +2249,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushOption)}.
+     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
      * @return Command Response - <code>OK</code> to confirm that the databases were successfully
@@ -2264,11 +2264,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
      * @return Command Response - <code>OK</code> to confirm that the databases were successfully
      *     flushed.
      */
-    public T flushall(FlushOption async) {
-        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(async.toString())));
+    public T flushall(FlushMode mode) {
+        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(mode.toString())));
         return getThis();
     }
 

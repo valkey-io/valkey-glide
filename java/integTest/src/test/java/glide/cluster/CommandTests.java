@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
@@ -640,7 +640,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, clusterClient.flushall(FlushOption.SYNC).get());
+        assertEquals(OK, clusterClient.flushall(FlushMode.SYNC).get());
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter =
@@ -650,8 +650,8 @@ public class CommandTests {
         var route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
         assertEquals(OK, clusterClient.flushall(route).get());
-        assertEquals(OK, clusterClient.flushall(FlushOption.ASYNC).get());
-        assertEquals(OK, clusterClient.flushall(FlushOption.ASYNC, route).get());
+        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC).get());
+        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC, route).get());
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
         // command should fail on a replica, because it is read-only

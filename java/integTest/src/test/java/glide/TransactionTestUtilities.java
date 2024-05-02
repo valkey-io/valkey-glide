@@ -3,7 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
-import static glide.api.models.commands.FlushOption.ASYNC;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;

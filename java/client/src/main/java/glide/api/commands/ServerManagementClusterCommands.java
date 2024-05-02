@@ -2,7 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -320,15 +320,11 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * The command will be routed to all primary nodes.
-     * <br.
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushOption)}.
+     * The command will be routed to all primary nodes.<br>
+     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
      *
-     * @see <a href="https://redis.io/commands/flushall/">
-     * redis.io</a> for details.
-     *
-     * @return Aggregated response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @return Aggregated response - <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall().get();
@@ -342,25 +338,25 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
-     * @return Aggregated response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return Aggregated response - <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall(ASYNC).get();
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(FlushOption mode);
+    CompletableFuture<String> flushall(FlushMode mode);
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails. To explicitly
-     * specify the flushing mode, use {@link #flushall(FlushOption, SingleNodeRoute)}.
+     * specify the flushing mode, use {@link #flushall(FlushMode, SingleNodeRoute)}.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return Aggregated response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -374,10 +370,11 @@ public interface ServerManagementClusterCommands {
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return Aggregated response - <code>OK</code> to confirm that the databases were successfully
-     *     flushed.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * Route route = new SlotKeyRoute("key", PRIMARY);
@@ -385,7 +382,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(FlushOption mode, SingleNodeRoute route);
+    CompletableFuture<String> flushall(FlushMode mode, SingleNodeRoute route);
 
     /**
      * Displays a piece of generative computer art and the Redis version.<br>

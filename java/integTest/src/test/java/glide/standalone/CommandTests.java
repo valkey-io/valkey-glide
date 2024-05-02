@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -326,13 +326,13 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(FlushOption.SYNC).get());
+        assertEquals(OK, regularClient.flushall(FlushMode.SYNC).get());
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
         assertEquals(0, keysAfter.length);
 
         assertEquals(OK, regularClient.flushall().get());
-        assertEquals(OK, regularClient.flushall(FlushOption.ASYNC).get());
+        assertEquals(OK, regularClient.flushall(FlushMode.ASYNC).get());
     }
 }

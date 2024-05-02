@@ -26,7 +26,7 @@ import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -310,7 +310,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> flushall(@NonNull FlushOption mode) {
+    public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
     }
@@ -323,7 +323,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushall(
-            @NonNull FlushOption mode, @NonNull SingleNodeRoute route) {
+            @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, route, this::handleStringResponse);
     }

@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.FlushOption;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import java.util.Map;
@@ -154,10 +154,10 @@ public interface ServerManagementCommands {
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.<br>
-     * To explicitly specify the flushing mode, use {@link #flushall(FlushOption)}.
+     * To explicitly specify the flushing mode, use {@link #flushall(FlushMode)}.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
-     * @return <code>OK</code> to confirm that the databases were successfully flushed.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall().get();
@@ -170,14 +170,16 @@ public interface ServerManagementCommands {
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://redis.io/commands/flushall/">redis.io</a> for details.
-     * @return <code>OK</code> to confirm that the databases were successfully flushed.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * String response = client.flushall(ASYNC).get();
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(FlushOption async);
+    CompletableFuture<String> flushall(FlushMode mode);
 
     /**
      * Displays a piece of generative computer art and the Redis version.

@@ -7,12 +7,12 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 
 /**
  * Defines flushing mode for <code>FLUSHALL</code> command implemented by {@link
- * RedisClient#flushall(FlushOption)}, {@link RedisClusterClient#flushall(FlushOption)}, and {@link
- * RedisClusterClient#flushall(FlushOption, Route)}.
+ * RedisClient#flushall(FlushMode)}, {@link RedisClusterClient#flushall(FlushMode)}, and {@link
+ * RedisClusterClient#flushall(FlushMode, Route)}.
  *
  * @see <a href="https://redis.io/commands/flushall/">redis.io</a>
  */
-public enum FlushOption {
+public enum FlushMode {
     /** Flushes the databases synchronously. */
     SYNC,
     /** Flushes the databases asynchronously. */
