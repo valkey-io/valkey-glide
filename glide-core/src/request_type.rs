@@ -139,6 +139,12 @@ pub enum RequestType {
     GeoPos = 128,
     BZPopMax = 129,
     ObjectFreq = 130,
+    RenameNx = 131,
+    Touch = 132,
+    ZRevRank = 133,
+    ZInterStore = 134,
+    HRandField = 135,
+    ZUnion = 136,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -281,6 +287,12 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
             ProtobufRequestType::GeoPos => RequestType::GeoPos,
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
+            ProtobufRequestType::RenameNx => RequestType::RenameNx,
+            ProtobufRequestType::Touch => RequestType::Touch,
+            ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
+            ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
+            ProtobufRequestType::HRandField => RequestType::HRandField,
+            ProtobufRequestType::ZUnion => RequestType::ZUnion,
         }
     }
 }
@@ -419,6 +431,12 @@ impl RequestType {
             RequestType::LOLWUT => Some(cmd("LOLWUT")),
             RequestType::GeoPos => Some(cmd("GEOPOS")),
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
+            RequestType::RenameNx => Some(cmd("RENAMENX")),
+            RequestType::Touch => Some(cmd("TOUCH")),
+            RequestType::ZRevRank => Some(cmd("ZREVRANK")),
+            RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
+            RequestType::HRandField => Some(cmd("HRANDFIELD")),
+            RequestType::ZUnion => Some(cmd("ZUNION")),
         }
     }
 }
