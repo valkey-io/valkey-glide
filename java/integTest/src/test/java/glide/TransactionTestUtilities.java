@@ -40,42 +40,31 @@ public class TransactionTestUtilities {
     /** Generate test samples for parametrized tests. */
     public static Stream<Arguments> getTransactionBuilders() {
         return Stream.of(
-                Arguments.of("Generic Commands", GenericCommandsTransactionBuilder),
-                Arguments.of("String Commands", StringCommandsTransactionBuilder),
-                Arguments.of("Hash Commands", HashCommandsTransactionBuilder),
-                Arguments.of("List Commands", ListCommandsTransactionBuilder),
-                Arguments.of("Set Commands", SetCommandsTransactionBuilder),
-                Arguments.of("Sorted Set Commands", SortedSetCommandsTransactionBuilder),
-                Arguments.of("Server Management Commands", ServerManagementCommandsTransactionBuilder),
-                Arguments.of("HyperLogLog Commands", HyperLogLogCommandsTransactionBuilder),
-                Arguments.of("Stream Commands", StreamCommandsTransactionBuilder),
                 Arguments.of(
-                        "Connection Management Commands", ConnectionManagementCommandsTransactionBuilder),
-                Arguments.of("Geospatial Commands", GeospatialCommandsTransactionBuilder));
+                        "Generic Commands", (TransactionBuilder) TransactionTestUtilities::genericCommands),
+                Arguments.of(
+                        "String Commands", (TransactionBuilder) TransactionTestUtilities::stringCommands),
+                Arguments.of("Hash Commands", (TransactionBuilder) TransactionTestUtilities::hashCommands),
+                Arguments.of("List Commands", (TransactionBuilder) TransactionTestUtilities::listCommands),
+                Arguments.of("Set Commands", (TransactionBuilder) TransactionTestUtilities::setCommands),
+                Arguments.of(
+                        "Sorted Set Commands",
+                        (TransactionBuilder) TransactionTestUtilities::sortedSetCommands),
+                Arguments.of(
+                        "Server Management Commands",
+                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands),
+                Arguments.of(
+                        "HyperLogLog Commands",
+                        (TransactionBuilder) TransactionTestUtilities::hyperLogLogCommands),
+                Arguments.of(
+                        "Stream Commands", (TransactionBuilder) TransactionTestUtilities::streamCommands),
+                Arguments.of(
+                        "Connection Management Commands",
+                        (TransactionBuilder) TransactionTestUtilities::connectionManagementCommands),
+                Arguments.of(
+                        "Geospatial Commands",
+                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands));
     }
-
-    public static TransactionBuilder GenericCommandsTransactionBuilder =
-            TransactionTestUtilities::genericCommands;
-    public static TransactionBuilder StringCommandsTransactionBuilder =
-            TransactionTestUtilities::stringCommands;
-    public static TransactionBuilder HashCommandsTransactionBuilder =
-            TransactionTestUtilities::hashCommands;
-    public static TransactionBuilder ListCommandsTransactionBuilder =
-            TransactionTestUtilities::listCommands;
-    public static TransactionBuilder SetCommandsTransactionBuilder =
-            TransactionTestUtilities::setCommands;
-    public static TransactionBuilder SortedSetCommandsTransactionBuilder =
-            TransactionTestUtilities::sortedSetCommands;
-    public static TransactionBuilder ServerManagementCommandsTransactionBuilder =
-            TransactionTestUtilities::serverManagementCommands;
-    public static TransactionBuilder HyperLogLogCommandsTransactionBuilder =
-            TransactionTestUtilities::hyperLogLogCommands;
-    public static TransactionBuilder StreamCommandsTransactionBuilder =
-            TransactionTestUtilities::streamCommands;
-    public static TransactionBuilder ConnectionManagementCommandsTransactionBuilder =
-            TransactionTestUtilities::connectionManagementCommands;
-    public static TransactionBuilder GeospatialCommandsTransactionBuilder =
-            TransactionTestUtilities::geospatialCommands;
 
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
         String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
@@ -89,12 +78,12 @@ public class TransactionTestUtilities {
                 .type(genericKey1)
                 .objectEncoding(genericKey1)
                 .touch(new String[] {genericKey1})
-                .del(new String[] {genericKey1})
-                .get(genericKey1)
                 .set(genericKey2, value2)
                 .renamenx(genericKey1, genericKey2)
                 .unlink(new String[] {genericKey2})
                 .get(genericKey2)
+                .del(new String[] {genericKey1})
+                .get(genericKey1)
                 .set(genericKey1, value1)
                 .expire(genericKey1, 100500)
                 .expireAt(genericKey1, 42) // expire (delete) key immediately
@@ -110,12 +99,12 @@ public class TransactionTestUtilities {
             "string", // type(genericKey1)
             "embstr", // objectEncoding(genericKey1)
             1L, // touch(new String[] {genericKey1})
-            1L, // del(new String[] {genericKey1})
-            null, // get(genericKey1)
             OK, // set(genericKey2, value2)
             false, // renamenx(genericKey1, genericKey2)
             1L, // unlink(new String[] {genericKey2})
             null, // get(genericKey2)
+            1L, // del(new String[] {genericKey1})
+            null, // get(genericKey1)
             OK, // set(genericKey1, value1)
             true, // expire(genericKey1, 100500)
             true, // expireAt(genericKey1, 42)
