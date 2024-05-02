@@ -2,7 +2,6 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TransactionTestUtilities.redisV7plusCommands;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -89,18 +88,6 @@ public class ClusterTransactionTests {
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = clusterClient.exec(transaction, RANDOM).get();
-        assertArrayEquals(expectedResult, results);
-    }
-
-    // Test commands supported by redis >= 7 only
-    @SneakyThrows
-    @Test
-    public void test_cluster_transactions_redis_7() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        ClusterTransaction transaction = new ClusterTransaction();
-        Object[] expectedResult = redisV7plusCommands(transaction);
-
-        Object[] results = clusterClient.exec(transaction).get();
         assertArrayEquals(expectedResult, results);
     }
 

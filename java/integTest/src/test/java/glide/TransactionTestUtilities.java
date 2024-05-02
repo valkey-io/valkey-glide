@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
@@ -91,27 +92,51 @@ public class TransactionTestUtilities {
                 .pexpireAt(genericKey1, 42)
                 .ttl(genericKey2);
 
-        return new Object[] {
-            OK, // set(genericKey1, value1)
-            new String[] {value1, null}, // customCommand(new String[] {"MGET", genericKey1, genericKey2})
-            1L, // exists(new String[] {genericKey1})
-            false, // persist(key1)
-            "string", // type(genericKey1)
-            "embstr", // objectEncoding(genericKey1)
-            1L, // touch(new String[] {genericKey1})
-            OK, // set(genericKey2, value2)
-            false, // renamenx(genericKey1, genericKey2)
-            1L, // unlink(new String[] {genericKey2})
-            null, // get(genericKey2)
-            1L, // del(new String[] {genericKey1})
-            null, // get(genericKey1)
-            OK, // set(genericKey1, value1)
-            true, // expire(genericKey1, 100500)
-            true, // expireAt(genericKey1, 42)
-            false, // pexpire(genericKey1, 42)
-            false, // pexpireAt(genericKey1, 42)
-            -2L, // ttl(genericKey2)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .set(genericKey1, value1)
+                    .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                    .expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
+                    .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                    .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY);
+        }
+        // TODO add BZMPOP from #194 here
+
+        var expectedResults =
+                new Object[] {
+                    OK, // set(genericKey1, value1)
+                    new String[] {value1, null}, // customCommand("MGET", genericKey1, genericKey2)
+                    1L, // exists(new String[] {genericKey1})
+                    false, // persist(key1)
+                    "string", // type(genericKey1)
+                    "embstr", // objectEncoding(genericKey1)
+                    1L, // touch(new String[] {genericKey1})
+                    OK, // set(genericKey2, value2)
+                    false, // renamenx(genericKey1, genericKey2)
+                    1L, // unlink(new String[] {genericKey2})
+                    null, // get(genericKey2)
+                    1L, // del(new String[] {genericKey1})
+                    null, // get(genericKey1)
+                    OK, // set(genericKey1, value1)
+                    true, // expire(genericKey1, 100500)
+                    true, // expireAt(genericKey1, 42)
+                    false, // pexpire(genericKey1, 42)
+                    false, // pexpireAt(genericKey1, 42)
+                    -2L, // ttl(genericKey2)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        OK, // set(genericKey1, value1)
+                        true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                        true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
+                        false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                        false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                    });
+        }
+        return expectedResults;
     }
 
     private static Object[] stringCommands(BaseTransaction<?> transaction) {
@@ -409,27 +434,6 @@ public class TransactionTestUtilities {
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
-        };
-    }
-
-    /** Commands supported by redis version 7.0 and higher */
-    public static Object[] redisV7plusCommands(BaseTransaction<?> transaction) {
-        String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
-
-        transaction
-                .set(genericKey1, value1)
-                .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                .expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
-                .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY);
-        // TODO add BZMPOP from #194 here
-
-        return new Object[] {
-            OK, // set(genericKey1, value1)
-            true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-            true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
-            false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-            false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
         };
     }
 }
