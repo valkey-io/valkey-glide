@@ -3,6 +3,7 @@ import java.nio.file.Paths
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
 }
 repositories {
     mavenCentral()
@@ -157,14 +158,39 @@ sourceSets {
 
 publishing {
     publications {
-        mavenJava(MavenPublication) {
-            groupId = 'software.amazon'
-            artifactId = 'glide'
-            version = "0.0.1"
+        maven(MavenPublication) {
             from components.java
+            pom {
+                name = 'glide-for-valkey'
+                description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
+                url = 'https://github.com/aws/glide-for-redis.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/aws/glide-for-redis/tree/main'
+                    connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'glide-for-valkey'
+                        url = 'https://github.com/aws/glide-for-redis.git'
+                    }
+                }
+            }
         }
     }
     repositories {
+        maven {
+            url = 'https://aws.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            credentials(PasswordCredentials)
+        }
         mavenLocal()
     }
 }
