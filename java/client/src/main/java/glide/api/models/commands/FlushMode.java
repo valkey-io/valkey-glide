@@ -10,7 +10,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
  * RedisClient#flushall(FlushMode)}, {@link RedisClusterClient#flushall(FlushMode)}, and {@link
  * RedisClusterClient#flushall(FlushMode, Route)}.
  *
- * @see <a href="https://redis.io/commands/flushall/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a>
  */
 public enum FlushMode {
     /** Flushes the databases synchronously. */
