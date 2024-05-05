@@ -19,11 +19,14 @@
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
 * Python: Added ZMSCORE command ([#1357](https://github.com/aws/glide-for-redis/pull/1357))
 * Python: Added HRANDFIELD command ([#1334](https://github.com/aws/glide-for-redis/pull/1334))
-* Node: When receiving SPOP with count, SMEMBERS convert result to Set ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
+
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
 * Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/aws/glide-for-redis/pull/1283))
+
+### Breaking Change
+* Node: When receiving SPOP with count, SMEMBERS convert result to Set ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
 
 ## 0.3.3 (2024-03-28)
 

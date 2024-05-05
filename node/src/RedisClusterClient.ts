@@ -290,23 +290,14 @@ export class RedisClusterClient extends BaseClient {
         transaction: ClusterTransaction,
         route?: SingleNodeRoute,
     ): Promise<ReturnType[] | null> {
-        return this.createWritePromise(
+        return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             toProtobufRoute(route),
-        ).then((result: unknown) => {
-            if (result === null) {
-                return null;
-            }
-
-            const modifiedResult: ReturnType[] = result as ReturnType[];
-
-            for (const index of transaction.set_commands_indexes) {
-                modifiedResult[index] = new Set(
-                    modifiedResult[index] as string[],
-                );
-            }
-
-            return modifiedResult;
+        ).then((result: ReturnType[] | null) => {
+            return this.processResultWithSetCommands(
+                result,
+                transaction.set_commands_indexes,
+            );
         });
     }
 

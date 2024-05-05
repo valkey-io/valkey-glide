@@ -421,6 +421,28 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
+    // Define a common function to process the result of a transaction with set commands
+    /**
+     * @internal
+     */
+    protected processResultWithSetCommands<ReturnType>(
+        result: ReturnType[] | null,
+        setCommandsIndexes: number[],
+    ): (ReturnType | Set<string>)[] | null {
+        if (result === null) {
+            return null;
+        }
+
+        const modifiedResult: (ReturnType | Set<string>)[] =
+            result as ReturnType[];
+
+        for (const index of setCommandsIndexes) {
+            modifiedResult[index] = new Set(modifiedResult[index] as string[]);
+        }
+
+        return modifiedResult;
+    }
+
     /** Get the value associated with the given key, or null if no such value exists.
      * See https://redis.io/commands/get/ for details.
      *
@@ -1186,8 +1208,8 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns A set containing all members of the set.
-     * If `key` does not exist, it is treated as an empty set and this command returns an empty set.
+     * @returns A `Set` containing all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
      * @example
      * ```typescript
@@ -1197,11 +1219,9 @@ export class BaseClient {
      * ```
      */
     public smembers(key: string): Promise<Set<string>> {
-        return this.createWritePromise(createSMembers(key)).then(
-            (result: unknown) => {
-                const resultSet: Set<string> = new Set<string>(
-                    result as string[],
-                );
+        return this.createWritePromise<string[]>(createSMembers(key)).then(
+            (result: string[]) => {
+                const resultSet: Set<string> = new Set<string>(result);
                 return resultSet;
             },
         );
@@ -1281,8 +1301,8 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
-     * @returns A set containing the popped elements, depending on the set's length.
-     * If `key` does not exist, an empty set will be returned.
+     * @returns A `Set` containing the popped elements, depending on the set's length.
+     * If `key` does not exist, an empty `Set` will be returned.
      *
      * @example
      * ```typescript
@@ -1299,10 +1319,12 @@ export class BaseClient {
      * ```
      */
     public async spopCount(key: string, count: number): Promise<Set<string>> {
-        const result = (await this.createWritePromise(
-            createSPop(key, count),
-        )) as string[];
-        return new Set(result);
+        return this.createWritePromise<string[]>(createSPop(key, count)).then(
+            (result: string[]) => {
+                const resultSet: Set<string> = new Set<string>(result);
+                return resultSet;
+            },
+        );
     }
 
     /** Returns the number of keys in `keys` that exist in the database.

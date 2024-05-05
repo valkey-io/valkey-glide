@@ -118,6 +118,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @internal
      */
     readonly commands: redis_request.Command[] = [];
+    /**
+     * @internal
+     */
     readonly set_commands_indexes: number[] = [];
 
     protected addAndReturn(
