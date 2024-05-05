@@ -14976,7 +14976,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: num-traits:0.2.18
+Package: num-traits:0.2.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27153,7 +27153,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.10
+Package: tokio-util:0.7.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35438,7 +35438,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.32
+Package: zerocopy:0.7.33
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35690,7 +35690,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.32
+Package: zerocopy-derive:0.7.33
 
 The following copyrights and licenses were found in the source code of this package:
 
