@@ -19,6 +19,7 @@
 * Python: Added PFADD command ([#1315](https://github.com/aws/glide-for-redis/pull/1315))
 * Python: Added ZMSCORE command ([#1357](https://github.com/aws/glide-for-redis/pull/1357))
 * Python: Added HRANDFIELD command ([#1334](https://github.com/aws/glide-for-redis/pull/1334))
+* Node: Added BLPOP command ([#1223](https://github.com/aws/glide-for-redis/pull/1223))
 * Python: Added XADD, XTRIM commands ([#1320](https://github.com/aws/glide-for-redis/pull/1320))
 * Python: Added ZRANGESTORE command ([#1377](https://github.com/aws/glide-for-redis/pull/1377))
 
