@@ -2049,6 +2049,59 @@ export function runBaseTests<Context>(config: {
                 expect(await client.del(["brpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
                 expect(await client.brpop(["brpop-test"], 0.1)).toEqual(null);
+                // key exists, but it is not a list
+                await client.set("foo", "bar");
+                await expect(client.brpop(["foo"], 0.1)).rejects.toThrow();
+
+                // Same-slot requirement
+                if (client instanceof RedisClusterClient) {
+                    try {
+                        expect(
+                            await client.brpop(["abc", "zxy", "lkn"], 0.1),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message.toLowerCase()).toMatch(
+                            "crossslot",
+                        );
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `test blpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                expect(
+                    await client.rpush("blpop-test", ["foo", "bar", "baz"]),
+                ).toEqual(3);
+                // Test basic usage
+                expect(await client.blpop(["blpop-test"], 0.1)).toEqual([
+                    "blpop-test",
+                    "foo",
+                ]);
+                // Delete all values from list
+                expect(await client.del(["blpop-test"])).toEqual(1);
+                // Test null return when key doesn't exist
+                expect(await client.blpop(["blpop-test"], 0.1)).toEqual(null);
+                // key exists, but it is not a list
+                await client.set("foo", "bar");
+                await expect(client.blpop(["foo"], 0.1)).rejects.toThrow();
+
+                // Same-slot requirement
+                if (client instanceof RedisClusterClient) {
+                    try {
+                        expect(
+                            await client.blpop(["abc", "zxy", "lkn"], 0.1),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message.toLowerCase()).toMatch(
+                            "crossslot",
+                        );
+                    }
+                }
             }, protocol);
         },
         config.timeout,
