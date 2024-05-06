@@ -22,12 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.BitMapOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -3480,5 +3482,25 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitcount(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String value = "foobar";
+        String missingKey = "missing";
+
+        assertEquals(OK, client.set(key, value).get());
+        assertEquals(26, client.bitcount(key).get());
+        assertEquals(6, client.bitcount(key, 1, 1).get());
+        assertEquals(0, client.bitcount(missingKey, 5, 30).get());
+        assertEquals(0, client.bitcount(missingKey).get());
+
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        assertEquals(16, client.bitcount(key, 2, 5, BitMapOptions.BYTE).get());
+        assertEquals(17L, client.bitcount(key, 5, 30, BitMapOptions.BIT).get());
+        assertEquals(0, client.bitcount(missingKey, 5, 30, BitMapOptions.BIT).get());
     }
 }

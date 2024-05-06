@@ -9,6 +9,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.BitMapOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -238,6 +239,20 @@ public class TransactionTestUtilities {
                 .blpop(new String[] {listKey3}, 0.01)
                 .brpop(new String[] {listKey3}, 0.01);
 
+        baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+        baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
+        baseTransaction
+                .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+                .pfcount(new String[] {hllKey3});
+
+        baseTransaction.bitcount(key3);
+        baseTransaction.bitcount(key3, 2, 4);
+        baseTransaction.bitcount(key3, 2, 19, BitMapOptions.BIT);
+
+        return baseTransaction;
+    }
+
+    public static Object[] transactionTestResult() {
         return new Object[] {
             5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
             5L, // llen(listKey1)
@@ -421,6 +436,9 @@ public class TransactionTestUtilities {
             3L, // pfcount(new String[] { hllKey1, hllKey2 })
             OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
             3L, // pfcount(new String[] { hllKey3 })
+            15L, // bitcount(key3)
+            8L, // bitcount(key3, 2, 4)
+            7L, // bitcount(key3, 2, 19, BitMapOptions.BIT)
         };
     }
 
