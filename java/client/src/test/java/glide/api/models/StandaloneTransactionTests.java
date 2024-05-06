@@ -8,14 +8,14 @@ import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
+import redis_request.RedisRequestOuterClass.RequestType;
+import redis_request.RedisRequestOuterClass.SingleCommand;
+import redis_request.RedisRequestOuterClass.SingleCommand.ArgsArray;
 
 public class StandaloneTransactionTests {
     @Test
     public void standalone_transaction_commands() {
-        List<Pair<RedisRequestOuterClass.RequestType, RedisRequestOuterClass.Command.ArgsArray>>
-                results = new LinkedList<>();
+        List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
         Transaction transaction = new Transaction();
 
         transaction.select(5L);
@@ -24,7 +24,7 @@ public class StandaloneTransactionTests {
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            RedisRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
+            SingleCommand protobuf = protobufTransaction.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

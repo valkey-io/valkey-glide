@@ -19,13 +19,13 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.RequestType;
 import redis_request.RedisRequestOuterClass.Routes;
 import redis_request.RedisRequestOuterClass.ScriptInvocation;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
+import redis_request.RedisRequestOuterClass.SingleCommand;
+import redis_request.RedisRequestOuterClass.SingleCommand.ArgsArray;
 import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
@@ -168,7 +168,7 @@ public class CommandManager {
         var builder =
                 RedisRequest.newBuilder()
                         .setSingleCommand(
-                                Command.newBuilder()
+                                SingleCommand.newBuilder()
                                         .setRequestType(requestType)
                                         .setArgsArray(commandArgs.build())
                                         .build());
@@ -240,7 +240,7 @@ public class CommandManager {
 
         return RedisRequest.newBuilder()
                 .setSingleCommand(
-                        Command.newBuilder()
+                        SingleCommand.newBuilder()
                                 .setRequestType(requestType)
                                 .setArgsArray(commandArgs.build())
                                 .build());

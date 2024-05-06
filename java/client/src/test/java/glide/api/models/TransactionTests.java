@@ -155,9 +155,9 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
+import redis_request.RedisRequestOuterClass.SingleCommand;
+import redis_request.RedisRequestOuterClass.SingleCommand.ArgsArray;
 
 public class TransactionTests {
     private static Stream<Arguments> getTransactionBuilders() {
@@ -657,7 +657,7 @@ public class TransactionTests {
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            Command protobuf = protobufTransaction.getCommands(idx);
+            SingleCommand protobuf = protobufTransaction.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
+import redis_request.RedisRequestOuterClass.SingleCommand;
 import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
@@ -302,8 +303,7 @@ public class CommandManagerTest {
         resultPayloads.add("one");
         resultPayloads.add("two");
         resultPayloads.add("three");
-        for (redis_request.RedisRequestOuterClass.Command command :
-                requestBuilder.getTransaction().getCommandsList()) {
+        for (SingleCommand command : requestBuilder.getTransaction().getCommandsList()) {
             assertEquals(CustomCommand, command.getRequestType());
             assertEquals("GETSTRING", command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));

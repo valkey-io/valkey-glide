@@ -71,7 +71,7 @@ describe("RedisClient", () => {
             callbackIdx: 1,
             singleCommand: {
                 requestType: 2,
-                argsArray: redis_request.Command.ArgsArray.create({
+                argsArray: redis_request.SingleCommand.ArgsArray.create({
                     args: ["bar1", "bar2"],
                 }),
             },
@@ -80,7 +80,7 @@ describe("RedisClient", () => {
             callbackIdx: 3,
             singleCommand: {
                 requestType: 4,
-                argsArray: redis_request.Command.ArgsArray.create({
+                argsArray: redis_request.SingleCommand.ArgsArray.create({
                     args: ["bar3", "bar4"],
                 }),
             },

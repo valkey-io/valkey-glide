@@ -13,7 +13,7 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass.Command;
+import redis_request.RedisRequestOuterClass.SingleCommand;
 
 /**
  * Optional arguments for {@link StringBaseCommands#set(String, String, SetOptions)} command.
@@ -143,7 +143,7 @@ public final class SetOptions {
     public static final String RETURN_OLD_VALUE = "GET";
 
     /**
-     * Converts SetOptions into a String[] to add to a {@link Command} arguments.
+     * Converts SetOptions into a String[] to add to a {@link SingleCommand} arguments.
      *
      * @return String[]
      */

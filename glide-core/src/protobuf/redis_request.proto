@@ -179,7 +179,7 @@ enum RequestType {
     ZUnion = 136;
 }
 
-message Command {
+message SingleCommand {
     message ArgsArray {
         repeated string args = 1;
     }
@@ -198,14 +198,14 @@ message ScriptInvocation {
 }
 
 message Transaction {
-    repeated Command commands = 1;
+    repeated SingleCommand commands = 1;
 }
 
 message RedisRequest {
     uint32 callback_idx = 1;
 
     oneof command {
-        Command single_command = 2;
+        SingleCommand single_command = 2;
         Transaction transaction = 3;
         ScriptInvocation script_invocation = 4;
     }

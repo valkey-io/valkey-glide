@@ -6,8 +6,8 @@ use std::io::Write;
 use bytes::BufMut;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use glide_core::{
-    redis_request::{command, redis_request},
-    redis_request::{Command, RedisRequest, RequestType},
+    redis_request::{redis_request, single_command},
+    redis_request::{RedisRequest, RequestType, SingleCommand},
     rotating_buffer::RotatingBuffer,
 };
 use integer_encoding::VarInt;
@@ -166,16 +166,16 @@ fn split_data() -> Vec<Vec<u8>> {
 fn create_request(args: Vec<String>, args_pointer: bool) -> RedisRequest {
     let mut request = RedisRequest::new();
     request.callback_idx = 1;
-    let mut command = Command::new();
+    let mut command = SingleCommand::new();
     command.request_type = RequestType::CustomCommand.into();
     if args_pointer {
-        command.args = Some(command::Args::ArgsVecPointer(Box::leak(Box::new(args))
-            as *mut Vec<String>
-            as u64));
+        command.args = Some(single_command::Args::ArgsVecPointer(
+            Box::leak(Box::new(args)) as *mut Vec<String> as u64,
+        ));
     } else {
-        let mut args_array = command::ArgsArray::new();
+        let mut args_array = single_command::ArgsArray::new();
         args_array.args = args.into_iter().map(|str| str.into()).collect();
-        command.args = Some(command::Args::ArgsArray(args_array));
+        command.args = Some(single_command::Args::ArgsArray(args_array));
     }
     request.command = Some(redis_request::Command::SingleCommand(command));
     request

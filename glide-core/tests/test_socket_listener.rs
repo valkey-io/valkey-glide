@@ -22,8 +22,8 @@ mod socket_listener {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use glide_core::redis_request::command::{Args, ArgsArray};
-    use glide_core::redis_request::{Command, Transaction};
+    use glide_core::redis_request::single_command::{Args, ArgsArray};
+    use glide_core::redis_request::{SingleCommand, Transaction};
     use glide_core::response::{response, ConstantResponse, Response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
@@ -236,8 +236,8 @@ mod socket_listener {
         let _res = buffer.write_all(&request.write_to_bytes().unwrap());
     }
 
-    fn get_command(components: CommandComponents) -> Command {
-        let mut command = Command::new();
+    fn get_command(components: CommandComponents) -> SingleCommand {
+        let mut command = SingleCommand::new();
         command.request_type = components.request_type;
         if components.args_pointer {
             command.args = Some(Args::ArgsVecPointer(Box::leak(Box::new(components.args))

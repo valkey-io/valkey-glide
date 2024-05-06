@@ -20,7 +20,7 @@ from glide.exceptions import (
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
+from glide.protobuf.redis_request_pb2 import RedisRequest, RequestType, SingleCommand
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
@@ -212,7 +212,7 @@ class BaseRedisClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         transaction_commands = []
         for requst_type, args in commands:
-            command = Command()
+            command = SingleCommand()
             command.request_type = requst_type
             command.args_array.args[:] = args
             transaction_commands.append(command)

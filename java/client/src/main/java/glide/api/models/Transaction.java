@@ -4,7 +4,7 @@ package glide.api.models;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
 import lombok.AllArgsConstructor;
-import redis_request.RedisRequestOuterClass;
+import redis_request.RedisRequestOuterClass.SingleCommand.ArgsArray;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -41,7 +41,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
+        ArgsArray commandArgs = buildArgs(Long.toString(index));
 
         protobufTransaction.addCommands(buildCommand(Select, commandArgs));
         return this;

@@ -42,8 +42,8 @@ export function parseInfoResponse(response: string): Record<string, string> {
 function createCommand(
     requestType: redis_request.RequestType,
     args: string[],
-): redis_request.Command {
-    const singleCommand = redis_request.Command.create({
+): redis_request.SingleCommand {
+    const singleCommand = redis_request.SingleCommand.create({
         requestType,
     });
 
@@ -53,7 +53,7 @@ function createCommand(
         const pointer = new Long(pointerArr[0], pointerArr[1]);
         singleCommand.argsVecPointer = pointer;
     } else {
-        singleCommand.argsArray = redis_request.Command.ArgsArray.create({
+        singleCommand.argsArray = redis_request.SingleCommand.ArgsArray.create({
             args: args,
         });
     }
@@ -64,7 +64,7 @@ function createCommand(
 /**
  * @internal
  */
-export function createGet(key: string): redis_request.Command {
+export function createGet(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.GetString, [key]);
 }
 
@@ -116,7 +116,7 @@ export function createSet(
     key: string,
     value: string,
     options?: SetOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key, value];
 
     if (options) {
@@ -236,7 +236,7 @@ export enum InfoOptions {
 /**
  * @internal
  */
-export function createPing(str?: string): redis_request.Command {
+export function createPing(str?: string): redis_request.SingleCommand {
     const args: string[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
@@ -244,7 +244,9 @@ export function createPing(str?: string): redis_request.Command {
 /**
  * @internal
  */
-export function createInfo(options?: InfoOptions[]): redis_request.Command {
+export function createInfo(
+    options?: InfoOptions[],
+): redis_request.SingleCommand {
     const args: string[] = options == undefined ? [] : options;
     return createCommand(RequestType.Info, args);
 }
@@ -252,42 +254,42 @@ export function createInfo(options?: InfoOptions[]): redis_request.Command {
 /**
  * @internal
  */
-export function createDel(keys: string[]): redis_request.Command {
+export function createDel(keys: string[]): redis_request.SingleCommand {
     return createCommand(RequestType.Del, keys);
 }
 
 /**
  * @internal
  */
-export function createSelect(index: number): redis_request.Command {
+export function createSelect(index: number): redis_request.SingleCommand {
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
 /**
  * @internal
  */
-export function createClientGetName(): redis_request.Command {
+export function createClientGetName(): redis_request.SingleCommand {
     return createCommand(RequestType.ClientGetName, []);
 }
 
 /**
  * @internal
  */
-export function createConfigRewrite(): redis_request.Command {
+export function createConfigRewrite(): redis_request.SingleCommand {
     return createCommand(RequestType.ConfigRewrite, []);
 }
 
 /**
  * @internal
  */
-export function createConfigResetStat(): redis_request.Command {
+export function createConfigResetStat(): redis_request.SingleCommand {
     return createCommand(RequestType.ConfigResetStat, []);
 }
 
 /**
  * @internal
  */
-export function createMGet(keys: string[]): redis_request.Command {
+export function createMGet(keys: string[]): redis_request.SingleCommand {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -296,14 +298,14 @@ export function createMGet(keys: string[]): redis_request.Command {
  */
 export function createMSet(
     keyValueMap: Record<string, string>,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
 }
 
 /**
  * @internal
  */
-export function createIncr(key: string): redis_request.Command {
+export function createIncr(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Incr, [key]);
 }
 
@@ -313,7 +315,7 @@ export function createIncr(key: string): redis_request.Command {
 export function createIncrBy(
     key: string,
     amount: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
 }
 
@@ -323,21 +325,23 @@ export function createIncrBy(
 export function createIncrByFloat(
     key: string,
     amount: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
 /**
  * @internal
  */
-export function createClientId(): redis_request.Command {
+export function createClientId(): redis_request.SingleCommand {
     return createCommand(RequestType.ClientId, []);
 }
 
 /**
  * @internal
  */
-export function createConfigGet(parameters: string[]): redis_request.Command {
+export function createConfigGet(
+    parameters: string[],
+): redis_request.SingleCommand {
     return createCommand(RequestType.ConfigGet, parameters);
 }
 
@@ -346,7 +350,7 @@ export function createConfigGet(parameters: string[]): redis_request.Command {
  */
 export function createConfigSet(
     parameters: Record<string, string>,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(
         RequestType.ConfigSet,
         Object.entries(parameters).flat(),
@@ -356,7 +360,10 @@ export function createConfigSet(
 /**
  * @internal
  */
-export function createHGet(key: string, field: string): redis_request.Command {
+export function createHGet(
+    key: string,
+    field: string,
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashGet, [key, field]);
 }
 
@@ -366,7 +373,7 @@ export function createHGet(key: string, field: string): redis_request.Command {
 export function createHSet(
     key: string,
     fieldValueMap: Record<string, string>,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(
         RequestType.HashSet,
         [key].concat(Object.entries(fieldValueMap).flat()),
@@ -380,14 +387,14 @@ export function createHSetNX(
     key: string,
     field: string,
     value: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HSetNX, [key, field, value]);
 }
 
 /**
  * @internal
  */
-export function createDecr(key: string): redis_request.Command {
+export function createDecr(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Decr, [key]);
 }
 
@@ -397,7 +404,7 @@ export function createDecr(key: string): redis_request.Command {
 export function createDecrBy(
     key: string,
     amount: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
 }
 
@@ -407,7 +414,7 @@ export function createDecrBy(
 export function createHDel(
     key: string,
     fields: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashDel, [key].concat(fields));
 }
 
@@ -417,7 +424,7 @@ export function createHDel(
 export function createHMGet(
     key: string,
     fields: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashMGet, [key].concat(fields));
 }
 
@@ -427,14 +434,14 @@ export function createHMGet(
 export function createHExists(
     key: string,
     field: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashExists, [key, field]);
 }
 
 /**
  * @internal
  */
-export function createHGetAll(key: string): redis_request.Command {
+export function createHGetAll(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.HashGetAll, [key]);
 }
 
@@ -444,14 +451,17 @@ export function createHGetAll(key: string): redis_request.Command {
 export function createLPush(
     key: string,
     elements: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
 
 /**
  * @internal
  */
-export function createLPop(key: string, count?: number): redis_request.Command {
+export function createLPop(
+    key: string,
+    count?: number,
+): redis_request.SingleCommand {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
@@ -463,7 +473,7 @@ export function createLRange(
     key: string,
     start: number,
     end: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.LRange, [
         key,
         start.toString(),
@@ -474,7 +484,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): redis_request.Command {
+export function createLLen(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -485,7 +495,7 @@ export function createLTrim(
     key: string,
     start: number,
     end: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.LTrim, [
         key,
         start.toString(),
@@ -500,7 +510,7 @@ export function createLRem(
     key: string,
     count: number,
     element: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.LRem, [key, count.toString(), element]);
 }
 
@@ -510,14 +520,17 @@ export function createLRem(
 export function createRPush(
     key: string,
     elements: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
 
 /**
  * @internal
  */
-export function createRPop(key: string, count?: number): redis_request.Command {
+export function createRPop(
+    key: string,
+    count?: number,
+): redis_request.SingleCommand {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
@@ -528,7 +541,7 @@ export function createRPop(key: string, count?: number): redis_request.Command {
 export function createSAdd(
     key: string,
     members: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.SAdd, [key].concat(members));
 }
 
@@ -538,21 +551,21 @@ export function createSAdd(
 export function createSRem(
     key: string,
     members: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.SRem, [key].concat(members));
 }
 
 /**
  * @internal
  */
-export function createSMembers(key: string): redis_request.Command {
+export function createSMembers(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.SMembers, [key]);
 }
 
 /**
  * @internal
  */
-export function createSCard(key: string): redis_request.Command {
+export function createSCard(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.SCard, [key]);
 }
 
@@ -562,14 +575,17 @@ export function createSCard(key: string): redis_request.Command {
 export function createSismember(
     key: string,
     member: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.SIsMember, [key, member]);
 }
 
 /**
  * @internal
  */
-export function createSPop(key: string, count?: number): redis_request.Command {
+export function createSPop(
+    key: string,
+    count?: number,
+): redis_request.SingleCommand {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.Spop, args);
 }
@@ -588,7 +604,7 @@ export function createHIncrBy(
     key: string,
     field: string,
     amount: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashIncrBy, [
         key,
         field,
@@ -603,7 +619,7 @@ export function createHIncrByFloat(
     key: string,
     field: string,
     amount: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.HashIncrByFloat, [
         key,
         field,
@@ -614,28 +630,28 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
-export function createHLen(key: string): redis_request.Command {
+export function createHLen(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.HLen, [key]);
 }
 
 /**
  * @internal
  */
-export function createHvals(key: string): redis_request.Command {
+export function createHvals(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Hvals, [key]);
 }
 
 /**
  * @internal
  */
-export function createExists(keys: string[]): redis_request.Command {
+export function createExists(keys: string[]): redis_request.SingleCommand {
     return createCommand(RequestType.Exists, keys);
 }
 
 /**
  * @internal
  */
-export function createUnlink(keys: string[]): redis_request.Command {
+export function createUnlink(keys: string[]): redis_request.SingleCommand {
     return createCommand(RequestType.Unlink, keys);
 }
 
@@ -665,7 +681,7 @@ export function createExpire(
     key: string,
     seconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] =
         option == undefined
             ? [key, seconds.toString()]
@@ -680,7 +696,7 @@ export function createExpireAt(
     key: string,
     unixSeconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] =
         option == undefined
             ? [key, unixSeconds.toString()]
@@ -695,7 +711,7 @@ export function createPExpire(
     key: string,
     milliseconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] =
         option == undefined
             ? [key, milliseconds.toString()]
@@ -710,7 +726,7 @@ export function createPExpireAt(
     key: string,
     unixMilliseconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] =
         option == undefined
             ? [key, unixMilliseconds.toString()]
@@ -721,7 +737,7 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createTTL(key: string): redis_request.Command {
+export function createTTL(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.TTL, [key]);
 }
 
@@ -748,7 +764,7 @@ export function createZadd(
     membersScoresMap: Record<string, number>,
     options?: ZaddOptions,
     changedOrIncr?: "CH" | "INCR",
-): redis_request.Command {
+): redis_request.SingleCommand {
     let args = [key];
 
     if (options) {
@@ -790,14 +806,14 @@ export function createZadd(
 export function createZrem(
     key: string,
     members: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.Zrem, [key].concat(members));
 }
 
 /**
  * @internal
  */
-export function createZcard(key: string): redis_request.Command {
+export function createZcard(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Zcard, [key]);
 }
 
@@ -807,7 +823,7 @@ export function createZcard(key: string): redis_request.Command {
 export function createZscore(
     key: string,
     member: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.ZScore, [key, member]);
 }
 
@@ -955,7 +971,7 @@ export function createZcount(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key];
     args.push(getScoreBoundaryArg(minScore));
     args.push(getScoreBoundaryArg(maxScore));
@@ -969,7 +985,7 @@ export function createZrange(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = createZrangeArgs(key, rangeQuery, reverse, false);
     return createCommand(RequestType.Zrange, args);
 }
@@ -981,7 +997,7 @@ export function createZrangeWithScores(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = createZrangeArgs(key, rangeQuery, reverse, true);
     return createCommand(RequestType.Zrange, args);
 }
@@ -989,14 +1005,14 @@ export function createZrangeWithScores(
 /**
  * @internal
  */
-export function createType(key: string): redis_request.Command {
+export function createType(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Type, [key]);
 }
 
 /**
  * @internal
  */
-export function createStrlen(key: string): redis_request.Command {
+export function createStrlen(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Strlen, [key]);
 }
 
@@ -1006,7 +1022,7 @@ export function createStrlen(key: string): redis_request.Command {
 export function createLindex(
     key: string,
     index: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.Lindex, [key, index.toString()]);
 }
 
@@ -1016,7 +1032,7 @@ export function createLindex(
 export function createZpopmin(
     key: string,
     count?: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMin, args);
 }
@@ -1027,7 +1043,7 @@ export function createZpopmin(
 export function createZpopmax(
     key: string,
     count?: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMax, args);
 }
@@ -1035,14 +1051,14 @@ export function createZpopmax(
 /**
  * @internal
  */
-export function createEcho(message: string): redis_request.Command {
+export function createEcho(message: string): redis_request.SingleCommand {
     return createCommand(RequestType.Echo, [message]);
 }
 
 /**
  * @internal
  */
-export function createPttl(key: string): redis_request.Command {
+export function createPttl(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.PTTL, [key]);
 }
 
@@ -1053,7 +1069,7 @@ export function createZremRangeByRank(
     key: string,
     start: number,
     stop: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.ZRemRangeByRank, [
         key,
         start.toString(),
@@ -1068,14 +1084,14 @@ export function createZremRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key];
     args.push(getScoreBoundaryArg(minScore));
     args.push(getScoreBoundaryArg(maxScore));
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
-export function createPersist(key: string): redis_request.Command {
+export function createPersist(key: string): redis_request.SingleCommand {
     return createCommand(RequestType.Persist, [key]);
 }
 
@@ -1083,7 +1099,7 @@ export function createZrank(
     key: string,
     member: string,
     withScores?: boolean,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key, member];
 
     if (withScores) {
@@ -1166,7 +1182,7 @@ export function createXadd(
     key: string,
     values: [string, string][],
     options?: StreamAddOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key];
 
     if (options?.makeStream === false) {
@@ -1197,7 +1213,7 @@ export function createXadd(
 export function createXtrim(
     key: string,
     options: StreamTrimOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key];
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
@@ -1206,7 +1222,7 @@ export function createXtrim(
 /**
  * @internal
  */
-export function createTime(): redis_request.Command {
+export function createTime(): redis_request.SingleCommand {
     return createCommand(RequestType.Time, []);
 }
 
@@ -1216,7 +1232,7 @@ export function createTime(): redis_request.Command {
 export function createBrpop(
     keys: string[],
     timeout: number,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [...keys, timeout.toString()];
     return createCommand(RequestType.Brpop, args);
 }
@@ -1266,7 +1282,7 @@ function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
 export function createXread(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args: string[] = [];
 
     if (options) {
@@ -1284,7 +1300,7 @@ export function createXread(
 export function createRename(
     key: string,
     newKey: string,
-): redis_request.Command {
+): redis_request.SingleCommand {
     return createCommand(RequestType.Rename, [key, newKey]);
 }
 
@@ -1294,7 +1310,7 @@ export function createRename(
 export function createPfAdd(
     key: string,
     elements: string[],
-): redis_request.Command {
+): redis_request.SingleCommand {
     const args = [key, ...elements];
     return createCommand(RequestType.PfAdd, args);
 }

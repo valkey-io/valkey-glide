@@ -152,9 +152,9 @@ import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
+import redis_request.RedisRequestOuterClass.SingleCommand;
+import redis_request.RedisRequestOuterClass.SingleCommand.ArgsArray;
 import redis_request.RedisRequestOuterClass.Transaction;
 
 /**
@@ -2719,14 +2719,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 
-    /** Build protobuf {@link Command} object for given command and arguments. */
-    protected Command buildCommand(RequestType requestType) {
+    /** Build protobuf {@link SingleCommand} object for given command and arguments. */
+    protected SingleCommand buildCommand(RequestType requestType) {
         return buildCommand(requestType, buildArgs());
     }
 
-    /** Build protobuf {@link Command} object for given command and arguments. */
-    protected Command buildCommand(RequestType requestType, ArgsArray args) {
-        return Command.newBuilder().setRequestType(requestType).setArgsArray(args).build();
+    /** Build protobuf {@link SingleCommand} object for given command and arguments. */
+    protected SingleCommand buildCommand(RequestType requestType, ArgsArray args) {
+        return SingleCommand.newBuilder().setRequestType(requestType).setArgsArray(args).build();
     }
 
     /** Build protobuf {@link ArgsArray} object for given arguments. */

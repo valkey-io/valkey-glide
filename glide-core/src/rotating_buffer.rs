@@ -64,8 +64,8 @@ impl RotatingBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::redis_request::{command, redis_request};
-    use crate::redis_request::{Command, RedisRequest, RequestType};
+    use crate::redis_request::{redis_request, single_command};
+    use crate::redis_request::{RedisRequest, RequestType, SingleCommand};
     use bytes::BufMut;
     use rand::{distributions::Alphanumeric, Rng};
     use rstest::rstest;
@@ -85,16 +85,16 @@ mod tests {
     ) -> RedisRequest {
         let mut request = RedisRequest::new();
         request.callback_idx = callback_index;
-        let mut command = Command::new();
+        let mut command = SingleCommand::new();
         command.request_type = request_type.into();
         if args_pointer {
-            command.args = Some(command::Args::ArgsVecPointer(Box::leak(Box::new(args))
-                as *mut Vec<String>
-                as u64));
+            command.args = Some(single_command::Args::ArgsVecPointer(
+                Box::leak(Box::new(args)) as *mut Vec<String> as u64,
+            ));
         } else {
-            let mut args_array = command::ArgsArray::new();
+            let mut args_array = single_command::ArgsArray::new();
             args_array.args = args.into_iter().map(|str| str.into()).collect();
-            command.args = Some(command::Args::ArgsArray(args_array));
+            command.args = Some(single_command::Args::ArgsArray(args_array));
         }
         request.command = Some(redis_request::Command::SingleCommand(command));
         request

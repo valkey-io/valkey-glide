@@ -117,9 +117,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * @internal
      */
-    readonly commands: redis_request.Command[] = [];
+    readonly commands: redis_request.SingleCommand[] = [];
 
-    protected addAndReturn(command: redis_request.Command): T {
+    protected addAndReturn(command: redis_request.SingleCommand): T {
         this.commands.push(command);
         return this as unknown as T;
     }

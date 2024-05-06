@@ -356,8 +356,8 @@ export class BaseClient {
      */
     protected createWritePromise<T>(
         command:
-            | redis_request.Command
-            | redis_request.Command[]
+            | redis_request.SingleCommand
+            | redis_request.SingleCommand[]
             | redis_request.ScriptInvocation,
         route?: redis_request.Routes,
     ): Promise<T> {
@@ -377,8 +377,8 @@ export class BaseClient {
     private writeOrBufferRedisRequest(
         callbackIdx: number,
         command:
-            | redis_request.Command
-            | redis_request.Command[]
+            | redis_request.SingleCommand
+            | redis_request.SingleCommand[]
             | redis_request.ScriptInvocation,
         route?: redis_request.Routes,
     ) {
@@ -389,7 +389,7 @@ export class BaseClient {
                       commands: command,
                   }),
               })
-            : command instanceof redis_request.Command
+            : command instanceof redis_request.SingleCommand
               ? redis_request.RedisRequest.create({
                     callbackIdx,
                     singleCommand: command,

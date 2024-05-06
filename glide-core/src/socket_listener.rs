@@ -6,7 +6,8 @@ use crate::client::Client;
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::redis_request::{
-    command, redis_request, Command, RedisRequest, Routes, ScriptInvocation, SlotTypes, Transaction,
+    redis_request, single_command, RedisRequest, Routes, ScriptInvocation, SingleCommand,
+    SlotTypes, Transaction,
 };
 use crate::response;
 use crate::response::Response;
@@ -256,12 +257,12 @@ async fn write_to_writer(response: Response, writer: &Rc<Writer>) -> Result<(), 
     }
 }
 
-fn get_command(request: &Command) -> Option<Cmd> {
+fn get_command(request: &SingleCommand) -> Option<Cmd> {
     let request_type: crate::request_type::RequestType = request.request_type.into();
     request_type.get_command()
 }
 
-fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
+fn get_redis_command(command: &SingleCommand) -> Result<Cmd, ClienUsageError> {
     let Some(mut cmd) = get_command(command) else {
         return Err(ClienUsageError::Internal(format!(
             "Received invalid request type: {:?}",
@@ -270,12 +271,12 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     };
 
     match &command.args {
-        Some(command::Args::ArgsArray(args_vec)) => {
+        Some(single_command::Args::ArgsArray(args_vec)) => {
             for arg in args_vec.args.iter() {
                 cmd.arg(arg.as_bytes());
             }
         }
-        Some(command::Args::ArgsVecPointer(pointer)) => {
+        Some(single_command::Args::ArgsVecPointer(pointer)) => {
             let res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
             for arg in res {
                 cmd.arg(arg.as_bytes());
