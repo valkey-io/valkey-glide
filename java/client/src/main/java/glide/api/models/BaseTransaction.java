@@ -125,7 +125,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitMapOptions;
+import glide.api.models.commands.BitmapOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -2877,12 +2877,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key to count set bits of.
      * @param start The starting offset.
      * @param end The ending offset.
-     * @param options The index offset type. Could be either {@link BitMapOptions#BIT} or {@link
-     *     BitMapOptions#BYTE}.
+     * @param options The index offset type. Could be either {@link BitmapOptions#BIT} or {@link
+     *     BitmapOptions#BYTE}.
      * @return Command Response - The number set bits in the string. Returns zero if the key is
      *     missing as it treated as an empty string.
      */
-    public T bitcount(@NonNull String key, long start, long end, BitMapOptions options) {
+    public T bitcount(@NonNull String key, long start, long end, BitmapOptions options) {
         ArgsArray commandArgs =
                 buildArgs(new String[] {key, Long.toString(start), Long.toString(end), options.toString()});
 

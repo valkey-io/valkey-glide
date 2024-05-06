@@ -28,7 +28,7 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
-import glide.api.models.commands.BitMapOptions;
+import glide.api.models.commands.BitmapOptions;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -3499,8 +3499,8 @@ public class SharedCommandTests {
         assertEquals(0, client.bitcount(missingKey).get());
 
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
-        assertEquals(16, client.bitcount(key, 2, 5, BitMapOptions.BYTE).get());
-        assertEquals(17L, client.bitcount(key, 5, 30, BitMapOptions.BIT).get());
-        assertEquals(0, client.bitcount(missingKey, 5, 30, BitMapOptions.BIT).get());
+        assertEquals(16, client.bitcount(key, 2, 5, BitmapOptions.BYTE).get());
+        assertEquals(17L, client.bitcount(key, 5, 30, BitmapOptions.BIT).get());
+        assertEquals(0, client.bitcount(missingKey, 5, 30, BitmapOptions.BIT).get());
     }
 }

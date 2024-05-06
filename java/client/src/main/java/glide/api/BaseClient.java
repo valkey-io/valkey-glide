@@ -121,7 +121,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
-import glide.api.models.commands.BitMapOptions;
+import glide.api.models.commands.BitmapOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
@@ -1234,7 +1234,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> bitcount(
-            @NonNull String key, long start, long end, @NonNull BitMapOptions options) {
+            @NonNull String key, long start, long end, @NonNull BitmapOptions options) {
         String[] arguments =
                 new String[] {key, Long.toString(start), Long.toString(end), options.toString()};
         return commandManager.submitNewCommand(Bitcount, arguments, this::handleLongResponse);

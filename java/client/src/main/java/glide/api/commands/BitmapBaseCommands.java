@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.BitMapOptions;
+import glide.api.models.commands.BitmapOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -50,8 +50,8 @@ public interface BitmapBaseCommands {
      * @param key The key to count set bits of.
      * @param start The starting offset.
      * @param end The ending offset.
-     * @param options The index offset type. Could be either {@link BitMapOptions#BIT} or {@link
-     *     BitMapOptions#BYTE}.
+     * @param options The index offset type. Could be either {@link BitmapOptions#BIT} or {@link
+     *     BitmapOptions#BYTE}.
      * @return The number set bits in the string. Returns zero if the key is missing as it treated as
      *     an empty string.
      * @example
@@ -60,5 +60,5 @@ public interface BitmapBaseCommands {
      * assert payload == 2L; // Count of set bits in a string with BIT index offset
      * }</pre>
      */
-    CompletableFuture<Long> bitcount(String key, long start, long end, BitMapOptions options);
+    CompletableFuture<Long> bitcount(String key, long start, long end, BitmapOptions options);
 }
