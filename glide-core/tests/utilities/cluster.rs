@@ -122,7 +122,7 @@ impl RedisCluster {
         let (cluster_folder, addresses) = Self::parse_start_script_output(&stdout, &stderr);
         let mut password: Option<String> = None;
         if let Some(info) = conn_info {
-            password = info.password.clone();
+            password.clone_from(&info.password);
         };
         RedisCluster {
             cluster_folder,
