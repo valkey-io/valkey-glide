@@ -45,7 +45,7 @@ async def transaction_test(
     key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
     key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
     key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
-    key13 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # geo
+    key12 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # geo
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -238,18 +238,18 @@ async def transaction_test(
     args.append(1)
 
     transaction.geoadd(
-        key13,
+        key12,
         {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         },
     )
     args.append(2)
-    transaction.geodist(key13, "Palermo", "Catania")
+    transaction.geodist(key12, "Palermo", "Catania")
     args.append(166274.1516)
-    transaction.geohash(key13, ["Palermo", "Catania", "Place"])
+    transaction.geohash(key12, ["Palermo", "Catania", "Place"])
     args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
-    transaction.geopos(key13, ["Palermo", "Catania", "Place"])
+    transaction.geopos(key12, ["Palermo", "Catania", "Place"])
     # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
     # No worries, Python can handle it, therefore, this shouldn't fail
     args.append(
