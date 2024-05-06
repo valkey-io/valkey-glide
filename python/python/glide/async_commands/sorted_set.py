@@ -158,3 +158,29 @@ def _create_zrange_args(
         args.append("WITHSCORES")
 
     return args
+
+
+def _create_zrangestore_args(
+    destination: str,
+    source: str,
+    range_query: Union[RangeByLex, RangeByScore, RangeByIndex],
+    reverse: bool,
+) -> List[str]:
+    args = [destination, source, str(range_query.start), str(range_query.stop)]
+
+    if isinstance(range_query, RangeByScore):
+        args.append("BYSCORE")
+    elif isinstance(range_query, RangeByLex):
+        args.append("BYLEX")
+    if reverse:
+        args.append("REV")
+    if hasattr(range_query, "limit") and range_query.limit is not None:
+        args.extend(
+            [
+                "LIMIT",
+                str(range_query.limit.offset),
+                str(range_query.limit.count),
+            ]
+        )
+
+    return args
