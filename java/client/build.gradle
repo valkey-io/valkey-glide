@@ -3,7 +3,6 @@ import java.nio.file.Paths
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'signing'
 }
 repositories {
     mavenCentral()
@@ -187,10 +186,6 @@ publishing {
         }
     }
     repositories {
-        maven {
-            url = 'https://aws.oss.sonatype.org/service/local/staging/deploy/maven2/'
-            credentials(PasswordCredentials)
-        }
         mavenLocal()
     }
 }
