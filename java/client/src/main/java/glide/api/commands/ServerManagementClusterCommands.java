@@ -351,7 +351,7 @@ public interface ServerManagementClusterCommands {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
@@ -367,7 +367,7 @@ public interface ServerManagementClusterCommands {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the

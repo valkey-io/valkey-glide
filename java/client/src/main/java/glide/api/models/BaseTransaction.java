@@ -2250,7 +2250,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @return Command Response - <code>OK</code>.
      */
     public T flushall() {
@@ -2261,7 +2261,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * @see <a href="https://valkey.io/commands/flushall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @return Command Response - <code>OK</code>.
