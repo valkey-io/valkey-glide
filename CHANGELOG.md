@@ -26,7 +26,7 @@
 * Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/aws/glide-for-redis/pull/1283))
 
 ### Breaking Changes
-* Node: Changed SMEMBERS and SPOP with count functions to return Set instead of string [] ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
+* Node: Changed `smembers` and `spopCount` functions to return Set instead of string[] ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
 
 ## 0.3.3 (2024-03-28)
 

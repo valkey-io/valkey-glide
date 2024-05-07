@@ -122,21 +122,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
      * @internal
      */
-    readonly set_commands_indexes: number[] = [];
+    readonly setCommandsIndexes: number[] = [];
 
     /**
      * Adds a command to the transaction and returns the transaction instance.
      * @param command - The command to add.
-     * @param is_set - Indicates if the command should be converted to a `Set`.
+     * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
      * @returns The updated transaction instance.
      */
     protected addAndReturn(
         command: redis_request.Command,
-        is_set: boolean = false,
+        shouldConvertToSet: boolean = false,
     ): T {
-        if (is_set) {
-            // If the command is marked as a Set command, its index within the transaction is recorded for conversion.
-            this.set_commands_indexes.push(this.commands.length);
+        if (shouldConvertToSet) {
+            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            this.setCommandsIndexes.push(this.commands.length);
         }
 
         this.commands.push(command);

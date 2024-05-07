@@ -296,7 +296,7 @@ export class RedisClusterClient extends BaseClient {
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,
-                transaction.set_commands_indexes,
+                transaction.setCommandsIndexes,
             );
         });
     }
