@@ -2739,9 +2739,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
-                2  # Indicates that two elements have been added to the sorted set at "key1."
+                2  # Indicates that two elements have been added to the sorted set at "key1".
             >>> await client.zadd("key2", {"member1": 10.5})
-                1  # Indicates that one element has been added to the sorted set at "key2."
+                1  # Indicates that one element has been added to the sorted set at "key2".
             >>> await client.zdiffstore("my_sorted_set", ["key1", "key2"])
                 1  # One member exists in "key1" but not "key2", and this member was stored in "my_sorted_set".
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
