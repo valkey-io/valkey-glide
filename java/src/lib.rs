@@ -240,7 +240,7 @@ pub extern "system" fn Java_glide_utils_Logger_initInternal<'local>(
     let file_name: Option<String> = match env.get_string(&file_name) {
         Ok(file_name) => Some(file_name.into()),
         Err(JniError::NullPtr(_)) => None,
-        _ => panic!(make_jstring_error("file_name")),
+        _ => panic!("{}", make_jstring_error("file_name")),
     };
     let logger_level = logger_core::init(
         level.map(|level| Level(level).try_into().unwrap()),
