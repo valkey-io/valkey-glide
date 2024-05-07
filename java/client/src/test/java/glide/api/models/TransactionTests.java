@@ -7,6 +7,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
@@ -20,6 +21,7 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDI
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -35,6 +37,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
@@ -409,6 +412,9 @@ public class TransactionTests {
         transaction.zpopmin("key", 2);
         results.add(Pair.of(ZPopMin, buildArgs("key", "2")));
 
+        transaction.bzpopmin(new String[] {"key1", "key2"}, .5);
+        results.add(Pair.of(BZPopMin, buildArgs("key1", "key2", "0.5")));
+
         transaction.zpopmax("key");
         results.add(Pair.of(ZPopMax, buildArgs("key")));
 
@@ -555,6 +561,10 @@ public class TransactionTests {
 
         transaction.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
+
+        transaction.flushall().flushall(ASYNC);
+        results.add(Pair.of(FlushAll, buildArgs()));
+        results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(LOLWUT, buildArgs()));

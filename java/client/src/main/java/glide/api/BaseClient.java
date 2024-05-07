@@ -8,6 +8,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
@@ -818,6 +819,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zpopmin(@NonNull String key) {
         return commandManager.submitNewCommand(ZPopMin, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzpopmin(@NonNull String[] keys, double timeout) {
+        String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
+        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override
