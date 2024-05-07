@@ -245,6 +245,37 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Map<String, Double>> zpopmin(String key);
 
     /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given <code>keys</code> being checked in the order they
+     * are provided.<br>
+     * <code>BZPOPMIN</code> is the blocking variant of {@link #zpopmin(String)}.<br>
+     *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *           </code>.
+     *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
+     * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the key where the member was popped out, the member
+     *     itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[] data = client.bzpopmin(new String[] {"zset1", "zset2"}, 0.5).get();
+     * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout);
+
+    /**
      * Removes and returns up to <code>count</code> members with the highest scores from the sorted
      * set stored at the specified <code>key</code>.
      *
@@ -284,14 +315,20 @@ public interface SortedSetBaseCommands {
 
     /**
      * Blocks the connection until it removes and returns a member with the highest score from the
-     * sorted sets stored at the specified <code>keys</code>. The sorted sets are checked in the order
-     * they are provided.<br>
+     * first non-empty sorted set, with the given <code>keys</code> being checked in the order they
+     * are provided.<br>
      * <code>BZPOPMAX</code> is the blocking variant of {@link #zpopmax(String)}.<br>
      *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *           </code>.
+     *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
      * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
-     * @apiNote <code>BZPOPMAX</code> is a client blocking command, see <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
-     *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.

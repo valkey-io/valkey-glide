@@ -155,6 +155,8 @@ public class TransactionTestUtilities {
         baseTransaction.zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
         baseTransaction.zinterstore(key8, new KeyArray(new String[] {zSetKey2, key8}));
         baseTransaction.bzpopmax(new String[] {zSetKey2}, .1);
+        baseTransaction.bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
 
         baseTransaction.geoadd(
                 geoKey1,
@@ -288,6 +290,7 @@ public class TransactionTestUtilities {
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, key8}), MAX)
             0L, // zinterstore(key8, new String[] {zSetKey2, key8})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zSetKey2 }, .1)
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
             "0-2", // xadd(key9, Map.of("field2", "value2"), id("0-2"));
