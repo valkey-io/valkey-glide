@@ -146,6 +146,7 @@ pub enum RequestType {
     HRandField = 135,
     ZUnion = 136,
     BZPopMin = 137,
+    FlushAll = 138,
     BZMPop = 139,
 }
 
@@ -296,6 +297,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HRandField => RequestType::HRandField,
             ProtobufRequestType::ZUnion => RequestType::ZUnion,
             ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
+            ProtobufRequestType::FlushAll => RequestType::FlushAll,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
         }
     }
@@ -442,6 +444,7 @@ impl RequestType {
             RequestType::HRandField => Some(cmd("HRANDFIELD")),
             RequestType::ZUnion => Some(cmd("ZUNION")),
             RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
+            RequestType::FlushAll => Some(cmd("FLUSHALL")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
         }
     }

@@ -29,6 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
@@ -121,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -2274,6 +2276,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T flushall() {
+        protobufTransaction.addCommands(buildCommand(FlushAll));
+        return getThis();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T flushall(FlushMode mode) {
+        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(mode.toString())));
+        return getThis();
+    }
+
+    /**
      * Displays a piece of generative computer art and the Redis version.
      *
      * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
@@ -2401,8 +2427,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops an element from the tail of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the tail of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
@@ -2425,8 +2451,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -2440,8 +2467,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -2455,8 +2483,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops an element from the head of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the head of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
