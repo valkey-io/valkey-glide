@@ -146,6 +146,7 @@ pub enum RequestType {
     HRandField = 135,
     ZUnion = 136,
     BZPopMin = 137,
+    FlushAll = 138,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -295,6 +296,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HRandField => RequestType::HRandField,
             ProtobufRequestType::ZUnion => RequestType::ZUnion,
             ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
+            ProtobufRequestType::FlushAll => RequestType::FlushAll,
         }
     }
 }
@@ -440,6 +442,7 @@ impl RequestType {
             RequestType::HRandField => Some(cmd("HRANDFIELD")),
             RequestType::ZUnion => Some(cmd("ZUNION")),
             RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
+            RequestType::FlushAll => Some(cmd("FLUSHALL")),
         }
     }
 }
