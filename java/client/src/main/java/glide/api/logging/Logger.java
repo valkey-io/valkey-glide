@@ -46,21 +46,21 @@ public class Logger {
         this(Level.DISABLED, null);
     }
 
-    public static void init(Level level, String fileName) {
+    public static void init(@NonNull Level level, String fileName) {
         if (instance == null) {
             instance = new Logger(level, fileName);
         }
     }
 
     public static void init(String fileName) {
-        init(null, fileName);
+        init(Level.DISABLED, fileName);
     }
 
     public static void init() {
-        init(null, null);
+        init(Level.DISABLED, null);
     }
 
-    public static void init(Level level) {
+    public static void init(@NonNull Level level) {
         init(level, null);
     }
 
@@ -75,7 +75,7 @@ public class Logger {
         logInternal(level.getLevel(), logIdentifier, message);
     }
 
-    public void setLoggerConfig(Level level, String fileName) {
+    public void setLoggerConfig(@NonNull Level level, String fileName) {
         instance = new Logger(level, fileName);
     }
 
