@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TransactionTestUtilities.transactionTest;
+import static glide.TransactionTestUtilities.transactionTestRedis7;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -195,5 +196,17 @@ public class TransactionTests {
         assertEquals(OK, client.customCommand(new String[] {"WATCH", "key"}).get());
         assertEquals(OK, client.set("key", "foo").get());
         assertNull(client.exec(transaction).get());
+    }
+
+    // Test commands supported by redis >= 7 only
+    @SneakyThrows
+    @Test
+    public void test_cluster_transactions_redis_7() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        Transaction transaction = new Transaction();
+        Object[] expectedResult = transactionTestRedis7(transaction);
+
+        Object[] results = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
     }
 }

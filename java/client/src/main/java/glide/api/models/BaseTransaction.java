@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -9,6 +10,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -132,6 +134,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.ScoreModifier;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -2422,7 +2425,72 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zrangeWithScores(@NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
-        return getThis().zrangeWithScores(key, rangeQuery, false);
+        return zrangeWithScores(key, rangeQuery, false);
+    }
+
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns a member-score pair from the sorted sets stored
+     * at the specified <code>keys</code>. The sorted sets are checked in the order they are provided.
+     * <br>
+     * To pop more than one element use {@link #bzmpop(String[], ScoreModifier, double, long)}.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     *
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
+     *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which an element was popped, and a member-score <code>Map</code>.<br>
+     *     If no member could be popped and the timeout expired, returns </code>null</code>.
+     */
+    public T bzmpop(@NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString()}));
+        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+        return getThis();
+    }
+
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns multiple member-score pairs from the sorted
+     * sets stored at the specified <code>keys</code>. The sorted sets are checked in the order they
+     * are provided.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.<br>
+     *
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
+     *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @param count The amount elements to pop.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which elements were popped, and a member-score <code>Map</code>.<br>
+     *     If no members could be popped and the timeout expired, returns </code>null</code>.
+     */
+    public T bzmpop(
+            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout, long count) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
+        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+        return getThis();
     }
 
     /**

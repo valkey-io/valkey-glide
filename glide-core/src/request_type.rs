@@ -144,6 +144,7 @@ pub enum RequestType {
     ZRevRank = 133,
     ZInterStore = 134,
     HRandField = 135,
+    BZMPop = 136,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -291,6 +292,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
             ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
             ProtobufRequestType::HRandField => RequestType::HRandField,
+            ProtobufRequestType::BZMPop => RequestType::BZMPop,
         }
     }
 }
@@ -434,6 +436,7 @@ impl RequestType {
             RequestType::ZRevRank => Some(cmd("ZREVRANK")),
             RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
             RequestType::HRandField => Some(cmd("HRANDFIELD")),
+            RequestType::BZMPop => Some(cmd("BZMPOP")),
         }
     }
 }

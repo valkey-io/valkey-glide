@@ -7,6 +7,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
@@ -118,6 +119,7 @@ import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.ScoreModifier;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions;
@@ -1057,7 +1059,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String[]> zrange(@NonNull String key, @NonNull RangeQuery rangeQuery) {
-        return this.zrange(key, rangeQuery, false);
+        return zrange(key, rangeQuery, false);
     }
 
     @Override
@@ -1071,7 +1073,29 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
-        return this.zrangeWithScores(key, rangeQuery, false);
+        return zrangeWithScores(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzmpop(
+            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                        keys,
+                        new String[] {modifier.toString()});
+        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzmpop(
+            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout, long count) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                        keys,
+                        new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)});
+        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override

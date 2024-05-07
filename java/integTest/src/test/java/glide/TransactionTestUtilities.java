@@ -4,6 +4,8 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
+import static glide.api.models.commands.ScoreModifier.MAX;
+import static glide.api.models.commands.ScoreModifier.MIN;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -189,6 +191,24 @@ public class TransactionTestUtilities {
                 .pfcount(new String[] {hllKey3});
 
         return baseTransaction;
+    }
+
+    // only commands supported by redis >= 7
+    public static <T extends BaseTransaction<?>> Object[] transactionTestRedis7(T transaction) {
+        String zSetKey1 = "{key}-zSet-1-" + UUID.randomUUID();
+
+        transaction
+                .zadd(zSetKey1, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                .bzmpop(new String[] {zSetKey1}, MAX, .1)
+                .bzmpop(new String[] {zSetKey1}, MIN, .1, 2);
+
+        return new Object[] {
+            4L, // zadd(zSetKey1, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+            new Object[] {zSetKey1, Map.of("d", 4.)}, // bzmpop(.1, new String[] { zSetKey1 }, MAX)
+            new Object[] {
+                zSetKey1, Map.of("a", 1., "b", 2.)
+            }, // bzmpop(.1, new String[] { zSetKey1 }, MIN, 2)
+        };
     }
 
     public static Object[] transactionTestResult() {

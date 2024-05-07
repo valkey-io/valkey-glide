@@ -176,6 +176,7 @@ enum RequestType {
     ZRevRank = 133;
     ZInterStore = 134;
     HRandField = 135;
+    BZMPop = 136;
 }
 
 message Command {
