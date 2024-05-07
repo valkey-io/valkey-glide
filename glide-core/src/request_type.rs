@@ -145,6 +145,7 @@ pub enum RequestType {
     ZInterStore = 134,
     HRandField = 135,
     ZUnion = 136,
+    BZPopMin = 137,
     FlushAll = 138,
 }
 
@@ -294,6 +295,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
             ProtobufRequestType::HRandField => RequestType::HRandField,
             ProtobufRequestType::ZUnion => RequestType::ZUnion,
+            ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
         }
     }
@@ -439,6 +441,7 @@ impl RequestType {
             RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
             RequestType::HRandField => Some(cmd("HRANDFIELD")),
             RequestType::ZUnion => Some(cmd("ZUNION")),
+            RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
         }
     }
