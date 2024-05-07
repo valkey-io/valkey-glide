@@ -425,22 +425,19 @@ export class BaseClient {
     /**
      * @internal
      */
-    protected processResultWithSetCommands<ReturnType>(
+    protected processResultWithSetCommands(
         result: ReturnType[] | null,
         setCommandsIndexes: number[],
-    ): (ReturnType | Set<string>)[] | null {
+    ): ReturnType[] | null {
         if (result === null) {
             return null;
         }
 
-        const modifiedResult: (ReturnType | Set<string>)[] =
-            result as ReturnType[];
-
         for (const index of setCommandsIndexes) {
-            modifiedResult[index] = new Set(modifiedResult[index] as string[]);
+            result[index] = new Set<ReturnType>(result[index] as ReturnType[]);
         }
 
-        return modifiedResult;
+        return result;
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
@@ -1220,10 +1217,7 @@ export class BaseClient {
      */
     public smembers(key: string): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSMembers(key)).then(
-            (result: string[]) => {
-                const resultSet: Set<string> = new Set<string>(result);
-                return resultSet;
-            },
+            (smembes) => new Set<string>(smembes),
         );
     }
 
@@ -1320,10 +1314,7 @@ export class BaseClient {
      */
     public async spopCount(key: string, count: number): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSPop(key, count)).then(
-            (result: string[]) => {
-                const resultSet: Set<string> = new Set<string>(result);
-                return resultSet;
-            },
+            (spop) => new Set<string>(spop),
         );
     }
 

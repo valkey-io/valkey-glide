@@ -147,6 +147,8 @@ export async function transactionTest(
     args.push(new Set(["bar"]));
     baseTransaction.spop(key7);
     args.push("bar");
+    baseTransaction.spopCount(key7, 2);
+    args.push(new Set());
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {

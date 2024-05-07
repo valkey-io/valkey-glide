@@ -25,8 +25,8 @@
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
 * Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/aws/glide-for-redis/pull/1283))
 
-### Breaking Change
-* Node: When receiving SPOP with count, SMEMBERS convert result to Set ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
+### Breaking Changes
+* Node: Changed SMEMBERS and SPOP with count functions to return Set instead of string [] ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
 
 ## 0.3.3 (2024-03-28)
 
