@@ -119,8 +119,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @internal
      */
     readonly commands: redis_request.Command[] = [];
+    /**
+     * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
+     * @internal
+     */
+    readonly setCommandsIndexes: number[] = [];
 
-    protected addAndReturn(command: redis_request.Command): T {
+    /**
+     * Adds a command to the transaction and returns the transaction instance.
+     * @param command - The command to add.
+     * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
+     * @returns The updated transaction instance.
+     */
+    protected addAndReturn(
+        command: redis_request.Command,
+        shouldConvertToSet: boolean = false,
+    ): T {
+        if (shouldConvertToSet) {
+            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            this.setCommandsIndexes.push(this.commands.length);
+        }
+
         this.commands.push(command);
         return this as unknown as T;
     }
@@ -656,7 +675,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      */
     public smembers(key: string): T {
-        return this.addAndReturn(createSMembers(key));
+        return this.addAndReturn(createSMembers(key), true);
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -706,7 +725,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, empty list will be returned.
      */
     public spopCount(key: string, count: number): T {
-        return this.addAndReturn(createSPop(key, count));
+        return this.addAndReturn(createSPop(key, count), true);
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
