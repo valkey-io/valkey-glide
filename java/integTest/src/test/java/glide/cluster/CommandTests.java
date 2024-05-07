@@ -23,6 +23,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -32,6 +33,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -43,12 +46,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
 public class CommandTests {
@@ -632,5 +640,57 @@ public class CommandTests {
         } finally {
             clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
         }
+    }
+
+    public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
+        return Stream.of(
+                Arguments.of("smove", clusterClient.smove("abc", "zxy", "lkn")),
+                Arguments.of("renamenx", clusterClient.renamenx("abc", "zxy")),
+                Arguments.of("sinterstore", clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sdiff", clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("sdiffstore", clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sinter", clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("sunionstore", clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("zdiff", clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "zdiffWithScores", clusterClient.zdiffWithScores(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("zdiffstore", clusterClient.zdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "zunion", clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
+                        "zrangestore", clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
+                Arguments.of(
+                        "zinterstore",
+                        clusterClient.zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of("brpop", clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("blpop", clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("pfcount", clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("pfmerge", clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0} cross slot keys will throw RequestException")
+    @MethodSource("callCrossSlotCommandsWhichShouldFail")
+    public void check_throws_cross_slot_error(String testName, CompletableFuture<?> future) {
+        var executionException = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+    }
+
+    public static Stream<Arguments> callCrossSlotCommandsWhichShouldPass() {
+        return Stream.of(
+                Arguments.of("exists", clusterClient.exists(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("unlink", clusterClient.unlink(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("del", clusterClient.del(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
+                Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0} cross slot keys are allowed")
+    @MethodSource("callCrossSlotCommandsWhichShouldPass")
+    public void check_does_not_throw_cross_slot_error(String testName, CompletableFuture<?> future) {
+        future.get();
     }
 }

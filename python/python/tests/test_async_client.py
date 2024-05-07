@@ -2191,6 +2191,28 @@ class TestCommands:
             await redis_client.pfadd("foo", [])
 
 
+class TestMultiKeyCommandCrossSlot:
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_multi_key_command_returns_cross_slot_error(
+        self, redis_client: RedisClusterClient
+    ):
+        # TODO brpop, bz*, zdiff, sdiff and others - all rest multi-key commands except ones tested below
+        pass
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_multi_key_command_routed_to_multiple_nodes(
+        self, redis_client: RedisClusterClient
+    ):
+        await redis_client.exists(["abc", "zxy", "lkn"])
+        await redis_client.unlink(["abc", "zxy", "lkn"])
+        await redis_client.delete(["abc", "zxy", "lkn"])
+        await redis_client.mget(["abc", "zxy", "lkn"])
+        await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
+        # TODO touch
+
+
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
         exp_sec = ExpirySet(ExpiryType.SEC, 5)

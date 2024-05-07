@@ -18,6 +18,8 @@ public interface GenericBaseCommands {
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
      *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different <code>hash slot</code>s.
      * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return The number of keys that were removed.
@@ -32,6 +34,8 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different <code>hash slot</code>s.
      * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
@@ -50,6 +54,8 @@ public interface GenericBaseCommands {
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://redis.io/commands/del/">DEL</a> does.
      *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different <code>hash slot</code>s.
      * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.

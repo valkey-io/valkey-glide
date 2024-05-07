@@ -51,6 +51,16 @@ export function getFirstResult(
     return Object.values(res).at(0);
 }
 
+export async function checkCommandThrowsCrossSlotError(
+    promise: Promise<unknown>,
+): Promise<void> {
+    try {
+        expect(await promise).toThrow();
+    } catch (e) {
+        expect((e as Error).message.toLowerCase()).toMatch("crossslot");
+    }
+}
+
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
 ): Promise<ReturnType[]> {

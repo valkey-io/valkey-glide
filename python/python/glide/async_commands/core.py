@@ -500,6 +500,9 @@ class CoreCommands(Protocol):
         meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
         See https://redis.io/commands/rename/ for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+
         Args:
             key (str) : The key to rename.
             new_key (str) : The new name of the key.
@@ -515,6 +518,9 @@ class CoreCommands(Protocol):
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
         See https://redis.io/commands/del/ for details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): A list of keys to be deleted from the database.
@@ -600,6 +606,9 @@ class CoreCommands(Protocol):
         Set multiple keys to multiple values in a single atomic operation.
         See https://redis.io/commands/mset/ for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slot.
+
         Args:
             parameters (Mapping[str, str]): A map of key value pairs.
 
@@ -619,6 +628,9 @@ class CoreCommands(Protocol):
         """
         Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
 
         Args:
             keys (List[str]): A list of keys to retrieve values for.
@@ -1554,6 +1566,9 @@ class CoreCommands(Protocol):
         Returns the number of keys in `keys` that exist in the database.
         See https://redis.io/commands/exists/ for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+
         Args:
             keys (List[str]): The list of keys to check.
 
@@ -1574,6 +1589,9 @@ class CoreCommands(Protocol):
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
         However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
         See https://redis.io/commands/unlink/ for more details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
 
         Args:
             keys (List[str]): The list of keys to unlink.

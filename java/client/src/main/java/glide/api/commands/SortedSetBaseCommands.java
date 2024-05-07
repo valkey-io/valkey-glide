@@ -453,6 +453,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -485,6 +487,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -621,6 +625,8 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -638,6 +644,8 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *     </code>.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -657,6 +665,8 @@ public interface SortedSetBaseCommands {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.

@@ -503,6 +503,7 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      * See https://redis.io/commands/mget/ for details.
      *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
@@ -523,6 +524,7 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      * See https://redis.io/commands/mset/ for details.
      *
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slot.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
      *
@@ -2169,6 +2171,7 @@ export class BaseClient {
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      * See https://redis.io/commands/rename/ for more details.
      *
+     * @remarks When in cluster mode, all `keys` must map to the same `hash slot`.
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -2193,6 +2196,9 @@ export class BaseClient {
      * Note: BRPOP is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
+     * @remarks
+     * 1. When in cluster mode, all `keys` must map to the same `hash slot`.
+     * 2. BRPOP is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
