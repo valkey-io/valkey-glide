@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 
 import glide.api.models.BaseTransaction;
@@ -196,6 +197,9 @@ public class TransactionTestUtilities {
                 .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
                 .pfcount(new String[] {hllKey3});
 
+        // keep it last - it deletes all the keys
+        baseTransaction.flushall().flushall(ASYNC);
+
         return baseTransaction;
     }
 
@@ -311,6 +315,8 @@ public class TransactionTestUtilities {
             3L, // pfcount(new String[] { hllKey1, hllKey2 });;
             OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
             3L, // pfcount(new String[] { hllKey3 })
+            OK, // flushall()
+            OK, // flushall(ASYNC)
         };
     }
 }
