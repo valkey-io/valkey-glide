@@ -1,5 +1,5 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
-
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -24,6 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     _create_zrange_args,
+    _create_zrangestore_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -147,6 +148,134 @@ class GeospatialData:
         """
         self.longitude = longitude
         self.latitude = latitude
+
+
+class StreamTrimOptions(ABC):
+    """
+    Abstract base class for stream trim options.
+    """
+
+    @abstractmethod
+    def __init__(
+        self,
+        exact: bool,
+        threshold: Union[str, int],
+        method: str,
+        limit: Optional[int] = None,
+    ):
+        """
+        Initialize stream trim options.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (Union[str, int]): Threshold for trimming.
+            method (str): Method for trimming (e.g., MINID, MAXLEN).
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        if exact and limit:
+            raise ValueError(
+                "If `exact` is set to `True`, `limit` cannot be specified."
+            )
+        self.exact = exact
+        self.threshold = threshold
+        self.method = method
+        self.limit = limit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = [
+            self.method,
+            "=" if self.exact else "~",
+            str(self.threshold),
+        ]
+        if self.limit is not None:
+            option_args.extend(["LIMIT", str(self.limit)])
+        return option_args
+
+
+class TrimByMinId(StreamTrimOptions):
+    """
+    Stream trim option to trim by minimum ID.
+    """
+
+    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
+        """
+        Initialize trim option by minimum ID.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (str): Threshold for trimming by minimum ID.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        super().__init__(exact, threshold, "MINID", limit)
+
+
+class TrimByMaxLen(StreamTrimOptions):
+    """
+    Stream trim option to trim by maximum length.
+    """
+
+    def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
+        """
+        Initialize trim option by maximum length.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (int): Threshold for trimming by maximum length.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        super().__init__(exact, threshold, "MAXLEN", limit)
+
+
+class StreamAddOptions:
+    """
+    Options for adding entries to a stream.
+    """
+
+    def __init__(
+        self,
+        id: Optional[str] = None,
+        make_stream: bool = True,
+        trim: Optional[StreamTrimOptions] = None,
+    ):
+        """
+        Initialize stream add options.
+
+        Args:
+            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
+            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
+        """
+        self.id = id
+        self.make_stream = make_stream
+        self.trim = trim
+
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = []
+        if not self.make_stream:
+            option_args.append("NOMKSTREAM")
+        if self.trim:
+            option_args.extend(self.trim.to_args())
+        option_args.append(self.id if self.id else "*")
+
+        return option_args
 
 
 class GeoUnit(Enum):
@@ -1245,7 +1374,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of all members of the set.
-                If `key` does not exist an empty list will be returned.
+                If `key` does not exist an empty set will be returned.
 
         Examples:
             >>> await client.smembers("my_set")
@@ -1305,7 +1434,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, an empty set will be returned.
+                If `key` does not exist, an empty set will be returned.
 
         Examples:
             >>> await client.spop_count("my_set", 2)
@@ -1674,6 +1803,70 @@ class CoreCommands(Protocol):
                 'list'
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
+
+    async def xadd(
+        self,
+        key: str,
+        values: List[Tuple[str, str]],
+        options: Optional[StreamAddOptions] = None,
+    ) -> Optional[str]:
+        """
+        Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+
+        See https://valkey.io/commands/xadd for more details.
+
+        Args:
+            key (str): The key of the stream.
+            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
+
+        Returns:
+            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+
+        Example:
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")])
+                "1615957011958-0"  # Example stream entry ID.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1", make_stream=False))
+                None  # The key doesn't exist, therefore, None is returned.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1"))
+                "0-1"  # Returns the stream id.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+        else:
+            args.append("*")
+        args.extend([field for pair in values for field in pair])
+
+        return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
+
+    async def xtrim(
+        self,
+        key: str,
+        options: StreamTrimOptions,
+    ) -> int:
+        """
+        Trims the stream stored at `key` by evicting older entries.
+
+        See https://valkey.io/commands/xtrim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
+
+        Returns:
+            int: TThe number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+
+        Example:
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")], StreamAddOptions(id="0-1"))
+            >>> await client.xtrim("mystream", TrimByMinId(exact=True, threshold="0-2")))
+                1 # One entry was deleted from the stream.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+
+        return cast(int, await self._execute_command(RequestType.XTrim, args))
 
     async def geoadd(
         self,
@@ -2145,6 +2338,46 @@ class CoreCommands(Protocol):
         return cast(
             Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
         )
+
+    async def zrangestore(
+        self,
+        destination: str,
+        source: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> int:
+        """
+        Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
+        `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
+
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
+        order.
+
+        See https://valkey.io/commands/zrangestore for more details.
+
+        Args:
+            destination (str): The key for the destination sorted set.
+            source (str): The key of the source sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            int: The number of elements in the resulting sorted set.
+
+        Examples:
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByIndex(0, 2), True)
+                3  # The 3 members with the highest scores from "my_sorted_set" were stored in the sorted set at "destination_key".
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
+                2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
+        """
+        args = _create_zrangestore_args(destination, source, range_query, reverse)
+
+        return cast(int, await self._execute_command(RequestType.ZRangeStore, args))
 
     async def zrank(
         self,

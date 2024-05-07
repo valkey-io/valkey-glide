@@ -11,6 +11,8 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
+    StreamAddOptions,
+    StreamTrimOptions,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -21,6 +23,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     _create_zrange_args,
+    _create_zrangestore_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1248,6 +1251,55 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Type, [key])
 
+    def xadd(
+        self: TTransaction,
+        key: str,
+        values: List[Tuple[str, str]],
+        options: StreamAddOptions = StreamAddOptions(),
+    ) -> TTransaction:
+        """
+        Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+
+        See https://valkey.io/commands/xadd for more details.
+
+        Args:
+            key (str): The key of the stream.
+            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
+
+        Commands response:
+            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+        args.extend([field for pair in values for field in pair])
+
+        return self.append_command(RequestType.XAdd, args)
+
+    def xtrim(
+        self: TTransaction,
+        key: str,
+        options: StreamTrimOptions,
+    ) -> TTransaction:
+        """
+        Trims the stream stored at `key` by evicting older entries.
+
+        See https://valkey.io/commands/xtrim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
+
+        Commands response:
+            int: TThe number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XTrim, args)
+
     def geoadd(
         self: TTransaction,
         key: str,
@@ -1612,6 +1664,38 @@ class BaseTransaction:
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
         return self.append_command(RequestType.Zrange, args)
+
+    def zrangestore(
+        self: TTransaction,
+        destination: str,
+        source: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> TTransaction:
+        """
+        Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
+        `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
+
+        ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
+        order.
+
+        See https://valkey.io/commands/zrangestore for more details.
+
+        Args:
+            destination (str): The key for the destination sorted set.
+            source (str): The key of the source sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Command response:
+            int: The number of elements in the resulting sorted set.
+        """
+        args = _create_zrangestore_args(destination, source, range_query, reverse)
+
+        return self.append_command(RequestType.ZRangeStore, args)
 
     def zrank(
         self: TTransaction,

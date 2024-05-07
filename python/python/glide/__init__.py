@@ -8,6 +8,11 @@ from glide.async_commands.core import (
     GeospatialData,
     GeoUnit,
     InfoSection,
+    InsertPosition,
+    StreamAddOptions,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.redis_modules import json
@@ -22,9 +27,13 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
+    BackoffStrategy,
     BaseClientConfiguration,
     ClusterClientConfiguration,
     NodeAddress,
+    PeriodicChecksManualInterval,
+    PeriodicChecksStatus,
+    ProtocolVersion,
     ReadFrom,
     RedisClientConfiguration,
     RedisCredentials,
@@ -53,9 +62,26 @@ from glide.routes import (
 from .glide import Script
 
 __all__ = [
+    # Client
+    "RedisClient",
+    "RedisClusterClient",
+    "Transaction",
+    "ClusterTransaction",
+    # Config
     "BaseClientConfiguration",
-    "ClusterClientConfiguration",
     "RedisClientConfiguration",
+    "ClusterClientConfiguration",
+    "BackoffStrategy",
+    "ReadFrom",
+    "RedisCredentials",
+    "NodeAddress",
+    "ProtocolVersion",
+    "PeriodicChecksManualInterval",
+    "PeriodicChecksStatus",
+    # Response
+    "OK",
+    # Commands
+    "Script",
     "ScoreBoundary",
     "ConditionalChange",
     "ExpireOptions",
@@ -65,24 +91,21 @@ __all__ = [
     "GeospatialData",
     "InfBound",
     "InfoSection",
+    "InsertPosition",
     "json",
     "LexBoundary",
     "Limit",
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",
+    "StreamAddOptions",
+    "StreamTrimOptions",
+    "TrimByMaxLen",
+    "TrimByMinId",
     "UpdateOptions",
+    # Logger
     "Logger",
     "LogLevel",
-    "OK",
-    "ReadFrom",
-    "RedisClient",
-    "RedisClusterClient",
-    "RedisCredentials",
-    "Script",
-    "NodeAddress",
-    "Transaction",
-    "ClusterTransaction",
     # Routes
     "SlotType",
     "AllNodes",
