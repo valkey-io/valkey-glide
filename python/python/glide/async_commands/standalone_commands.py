@@ -207,7 +207,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.dbsize()
                 10  # Indicates there are 10 keys in the current database.
         """
-        return cast(int, await self._execute_command(RequestType.DBSize, []))
+        return cast(int, await self._execute_command(RequestType.DbSize, []))
 
     async def echo(self, message: str) -> str:
         """

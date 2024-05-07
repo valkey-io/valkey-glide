@@ -282,7 +282,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.dbsize()
                 10  # Indicates there are 10 keys in the cluster.
         """
-        return cast(int, await self._execute_command(RequestType.DBSize, [], route))
+        return cast(int, await self._execute_command(RequestType.DbSize, [], route))
 
     async def echo(
         self, message: str, route: Optional[Route] = None

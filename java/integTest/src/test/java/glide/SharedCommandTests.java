@@ -40,7 +40,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -1564,13 +1564,13 @@ public class SharedCommandTests {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
 
-        ZaddOptions onlyIfExistsOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+        ZAddOptions onlyIfExistsOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
                         .build();
-        ZaddOptions onlyIfDoesNotExistOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+        ZAddOptions onlyIfDoesNotExistOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .build();
 
         assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
@@ -1592,13 +1592,13 @@ public class SharedCommandTests {
         assertEquals(3, client.zadd(key, membersScores).get());
         membersScores.put("one", 10.0);
 
-        ZaddOptions scoreGreaterThanOptions =
-                ZaddOptions.builder()
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+        ZAddOptions scoreGreaterThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
-        ZaddOptions scoreLessThanOptions =
-                ZaddOptions.builder()
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+        ZAddOptions scoreLessThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
 
         assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
@@ -1610,33 +1610,33 @@ public class SharedCommandTests {
     // TODO move to another class
     @Test
     public void zadd_illegal_arguments() {
-        ZaddOptions existsGreaterThanOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+        ZAddOptions existsGreaterThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
         assertThrows(IllegalArgumentException.class, existsGreaterThanOptions::toArgs);
-        ZaddOptions existsLessThanOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+        ZAddOptions existsLessThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
         assertThrows(IllegalArgumentException.class, existsLessThanOptions::toArgs);
-        ZaddOptions options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .build();
         options.toArgs();
         options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
         options.toArgs();
         options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
         options.toArgs();
     }

@@ -7,9 +7,9 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
-import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -17,23 +17,24 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HExists;
+import static redis_request.RedisRequestOuterClass.RequestType.HGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
-import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
-import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
-import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
-import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
+import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HSet;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNx;
+import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
@@ -42,16 +43,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
+import static redis_request.RedisRequestOuterClass.RequestType.PTtl;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
@@ -72,15 +72,18 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
+import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
-import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
+import static redis_request.RedisRequestOuterClass.RequestType.Ttl;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
+import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -88,19 +91,16 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRem;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
-import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
-import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.GeospatialIndicesBaseCommands;
@@ -123,7 +123,7 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -328,20 +328,20 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> get(@NonNull String key) {
         return commandManager.submitNewCommand(
-                GetString, new String[] {key}, this::handleStringOrNullResponse);
+                Get, new String[] {key}, this::handleStringOrNullResponse);
     }
 
     @Override
     public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
-                SetString, new String[] {key, value}, this::handleStringResponse);
+                Set, new String[] {key, value}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
-        return commandManager.submitNewCommand(SetString, arguments, this::handleStringOrNullResponse);
+        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -371,13 +371,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> objectIdletime(@NonNull String key) {
         return commandManager.submitNewCommand(
-                ObjectIdletime, new String[] {key}, this::handleLongOrNullResponse);
+                ObjectIdleTime, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
         return commandManager.submitNewCommand(
-                ObjectRefcount, new String[] {key}, this::handleLongOrNullResponse);
+                ObjectRefCount, new String[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -434,27 +434,27 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> hget(@NonNull String key, @NonNull String field) {
         return commandManager.submitNewCommand(
-                HashGet, new String[] {key, field}, this::handleStringOrNullResponse);
+                HGet, new String[] {key, field}, this::handleStringOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Long> hset(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         String[] args = ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key);
-        return commandManager.submitNewCommand(HashSet, args, this::handleLongResponse);
+        return commandManager.submitNewCommand(HSet, args, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Boolean> hsetnx(
             @NonNull String key, @NonNull String field, @NonNull String value) {
         return commandManager.submitNewCommand(
-                HSetNX, new String[] {key, field, value}, this::handleBooleanResponse);
+                HSetNx, new String[] {key, field, value}, this::handleBooleanResponse);
     }
 
     @Override
     public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
         String[] args = ArrayUtils.addFirst(fields, key);
-        return commandManager.submitNewCommand(HashDel, args, this::handleLongResponse);
+        return commandManager.submitNewCommand(HDel, args, this::handleLongResponse);
     }
 
     @Override
@@ -465,7 +465,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> hvals(@NonNull String key) {
         return commandManager.submitNewCommand(
-                Hvals,
+                HVals,
                 new String[] {key},
                 response -> castArray(handleArrayResponse(response), String.class));
     }
@@ -474,31 +474,31 @@ public abstract class BaseClient
     public CompletableFuture<String[]> hmget(@NonNull String key, @NonNull String[] fields) {
         String[] arguments = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(
-                HashMGet, arguments, response -> castArray(handleArrayResponse(response), String.class));
+                HMGet, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<Boolean> hexists(@NonNull String key, @NonNull String field) {
         return commandManager.submitNewCommand(
-                HashExists, new String[] {key, field}, this::handleBooleanResponse);
+                HExists, new String[] {key, field}, this::handleBooleanResponse);
     }
 
     @Override
     public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
-        return commandManager.submitNewCommand(HashGetAll, new String[] {key}, this::handleMapResponse);
+        return commandManager.submitNewCommand(HGetAll, new String[] {key}, this::handleMapResponse);
     }
 
     @Override
     public CompletableFuture<Long> hincrBy(@NonNull String key, @NonNull String field, long amount) {
         return commandManager.submitNewCommand(
-                HashIncrBy, new String[] {key, field, Long.toString(amount)}, this::handleLongResponse);
+                HIncrBy, new String[] {key, field, Long.toString(amount)}, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Double> hincrByFloat(
             @NonNull String key, @NonNull String field, double amount) {
         return commandManager.submitNewCommand(
-                HashIncrByFloat,
+                HIncrByFloat,
                 new String[] {key, field, Double.toString(amount)},
                 this::handleDoubleResponse);
     }
@@ -506,7 +506,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> hkeys(@NonNull String key) {
         return commandManager.submitNewCommand(
-                Hkeys,
+                HKeys,
                 new String[] {key},
                 response -> castArray(handleArrayResponse(response), String.class));
     }
@@ -542,7 +542,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> lindex(@NonNull String key, long index) {
         return commandManager.submitNewCommand(
-                Lindex, new String[] {key, Long.toString(index)}, this::handleStringOrNullResponse);
+                LIndex, new String[] {key, Long.toString(index)}, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -725,7 +725,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
-        return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(Ttl, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -745,7 +745,7 @@ public abstract class BaseClient
     public CompletableFuture<Long> zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
-            @NonNull ZaddOptions options,
+            @NonNull ZAddOptions options,
             boolean changed) {
         String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
         String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
@@ -753,39 +753,39 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(new String[] {key}, options.toArgs(), changedArg, membersScores);
 
-        return commandManager.submitNewCommand(Zadd, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Long> zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
-            @NonNull ZaddOptions options) {
+            @NonNull ZAddOptions options) {
         return this.zadd(key, membersScoresMap, options, false);
     }
 
     @Override
     public CompletableFuture<Long> zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
-        return this.zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+        return this.zadd(key, membersScoresMap, ZAddOptions.builder().build(), changed);
     }
 
     @Override
     public CompletableFuture<Long> zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
-        return this.zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+        return this.zadd(key, membersScoresMap, ZAddOptions.builder().build(), false);
     }
 
     @Override
     public CompletableFuture<Double> zaddIncr(
-            @NonNull String key, @NonNull String member, double increment, @NonNull ZaddOptions options) {
+            @NonNull String key, @NonNull String member, double increment, @NonNull ZAddOptions options) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
                         options.toArgs(),
                         new String[] {"INCR", Double.toString(increment), member});
 
-        return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleOrNullResponse);
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleOrNullResponse);
     }
 
     @Override
@@ -795,18 +795,18 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
 
-        return commandManager.submitNewCommand(Zadd, arguments, this::handleDoubleResponse);
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleResponse);
     }
 
     @Override
     public CompletableFuture<Long> zrem(@NonNull String key, @NonNull String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
-        return commandManager.submitNewCommand(Zrem, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(ZRem, arguments, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Long> zcard(@NonNull String key) {
-        return commandManager.submitNewCommand(Zcard, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(ZCard, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -846,13 +846,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zrank(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
-                Zrank, new String[] {key, member}, this::handleLongOrNullResponse);
+                ZRank, new String[] {key, member}, this::handleLongOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
-                Zrank, new String[] {key, member, WITH_SCORE_REDIS_API}, this::handleArrayOrNullResponse);
+                ZRank, new String[] {key, member, WITH_SCORE_REDIS_API}, this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -904,7 +904,7 @@ public abstract class BaseClient
     public CompletableFuture<Long> zcount(
             @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
-                Zcount, new String[] {key, minScore.toArgs(), maxScore.toArgs()}, this::handleLongResponse);
+                ZCount, new String[] {key, minScore.toArgs(), maxScore.toArgs()}, this::handleLongResponse);
     }
 
     @Override
@@ -1031,7 +1031,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
-        return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(PTtl, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1059,14 +1059,14 @@ public abstract class BaseClient
     public CompletableFuture<String[]> blpop(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
         return commandManager.submitNewCommand(
-                Blpop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
+                BLPop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
     public CompletableFuture<String[]> brpop(@NonNull String[] keys, double timeout) {
         String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
         return commandManager.submitNewCommand(
-                Brpop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
+                BRPop, arguments, response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
 
     @Override
@@ -1087,7 +1087,7 @@ public abstract class BaseClient
         String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, false);
 
         return commandManager.submitNewCommand(
-                Zrange,
+                ZRange,
                 arguments,
                 response -> castArray(handleArrayOrNullResponse(response), String.class));
     }
@@ -1102,7 +1102,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
         String[] arguments = RangeOptions.createZRangeArgs(key, rangeQuery, reverse, true);
 
-        return commandManager.submitNewCommand(Zrange, arguments, this::handleMapResponse);
+        return commandManager.submitNewCommand(ZRange, arguments, this::handleMapResponse);
     }
 
     @Override

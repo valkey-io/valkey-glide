@@ -20,8 +20,8 @@ import {
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
-    ZaddOptions,
-    createBrpop,
+    ZAddOptions,
+    createBRPop,
     createDecr,
     createDecrBy,
     createDel,
@@ -38,25 +38,25 @@ import {
     createHLen,
     createHMGet,
     createHSet,
-    createHSetNX,
-    createHvals,
+    createHSetNx,
+    createHVals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLIndex,
     createLLen,
     createLPop,
     createLPush,
     createLRange,
     createLRem,
     createLTrim,
-    createLindex,
     createMGet,
     createMSet,
     createPExpire,
     createPExpireAt,
+    createPTtl,
     createPersist,
     createPfAdd,
-    createPttl,
     createRPop,
     createRPush,
     createRename,
@@ -68,24 +68,24 @@ import {
     createSet,
     createSismember,
     createStrlen,
-    createTTL,
+    createTtl,
     createType,
     createUnlink,
-    createXadd,
-    createXread,
-    createXtrim,
-    createZadd,
-    createZcard,
-    createZcount,
-    createZpopmax,
-    createZpopmin,
-    createZrange,
-    createZrangeWithScores,
-    createZrank,
-    createZrem,
-    createZremRangeByRank,
-    createZremRangeByScore,
-    createZscore,
+    createXAdd,
+    createXRead,
+    createXTrim,
+    createZAdd,
+    createZCard,
+    createZCount,
+    createZPopMax,
+    createZPopMin,
+    createZRange,
+    createZRangeWithScores,
+    createZRank,
+    createZRem,
+    createZRemRangeByRank,
+    createZRemRangeByScore,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -705,7 +705,7 @@ export class BaseClient {
      * ```
      */
     public hsetnx(key: string, field: string, value: string): Promise<boolean> {
-        return this.createWritePromise(createHSetNX(key, field, value));
+        return this.createWritePromise(createHSetNx(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
@@ -879,7 +879,7 @@ export class BaseClient {
      * ```
      */
     public hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHvals(key));
+        return this.createWritePromise(createHVals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -1481,7 +1481,7 @@ export class BaseClient {
      * ```
      */
     public ttl(key: string): Promise<number> {
-        return this.createWritePromise(createTTL(key));
+        return this.createWritePromise(createTtl(key));
     }
 
     /** Invokes a Lua script with its keys and arguments.
@@ -1523,7 +1523,7 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
@@ -1545,11 +1545,11 @@ export class BaseClient {
     public zadd(
         key: string,
         membersScoresMap: Record<string, number>,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
         changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
-            createZadd(
+            createZAdd(
                 key,
                 membersScoresMap,
                 options,
@@ -1566,7 +1566,7 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      * @returns The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
      *
@@ -1588,10 +1588,10 @@ export class BaseClient {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZadd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
@@ -1619,7 +1619,7 @@ export class BaseClient {
      * ```
      */
     public zrem(key: string, members: string[]): Promise<number> {
-        return this.createWritePromise(createZrem(key, members));
+        return this.createWritePromise(createZRem(key, members));
     }
 
     /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
@@ -1644,7 +1644,7 @@ export class BaseClient {
      * ```
      */
     public zcard(key: string): Promise<number> {
-        return this.createWritePromise(createZcard(key));
+        return this.createWritePromise(createZCard(key));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
@@ -1678,7 +1678,7 @@ export class BaseClient {
      * ```
      */
     public zscore(key: string, member: string): Promise<number | null> {
-        return this.createWritePromise(createZscore(key, member));
+        return this.createWritePromise(createZScore(key, member));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
@@ -1710,7 +1710,7 @@ export class BaseClient {
         minScore: ScoreBoundary<number>,
         maxScore: ScoreBoundary<number>,
     ): Promise<number> {
-        return this.createWritePromise(createZcount(key, minScore, maxScore));
+        return this.createWritePromise(createZCount(key, minScore, maxScore));
     }
 
     /** Returns the specified range of elements in the sorted set stored at `key`.
@@ -1750,7 +1750,7 @@ export class BaseClient {
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): Promise<string[]> {
-        return this.createWritePromise(createZrange(key, rangeQuery, reverse));
+        return this.createWritePromise(createZRange(key, rangeQuery, reverse));
     }
 
     /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
@@ -1793,7 +1793,7 @@ export class BaseClient {
         reverse: boolean = false,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
-            createZrangeWithScores(key, rangeQuery, reverse),
+            createZRangeWithScores(key, rangeQuery, reverse),
         );
     }
 
@@ -1878,7 +1878,7 @@ export class BaseClient {
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZpopmin(key, count));
+        return this.createWritePromise(createZPopMin(key, count));
     }
 
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
@@ -1910,7 +1910,7 @@ export class BaseClient {
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZpopmax(key, count));
+        return this.createWritePromise(createZPopMax(key, count));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
@@ -1941,7 +1941,7 @@ export class BaseClient {
      * ```
      */
     public pttl(key: string): Promise<number> {
-        return this.createWritePromise(createPttl(key));
+        return this.createWritePromise(createPTtl(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
@@ -1969,7 +1969,7 @@ export class BaseClient {
         start: number,
         end: number,
     ): Promise<number> {
-        return this.createWritePromise(createZremRangeByRank(key, start, end));
+        return this.createWritePromise(createZRemRangeByRank(key, start, end));
     }
 
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
@@ -2002,7 +2002,7 @@ export class BaseClient {
         maxScore: ScoreBoundary<number>,
     ): Promise<number> {
         return this.createWritePromise(
-            createZremRangeByScore(key, minScore, maxScore),
+            createZRemRangeByScore(key, minScore, maxScore),
         );
     }
 
@@ -2030,7 +2030,7 @@ export class BaseClient {
      * ```
      */
     public zrank(key: string, member: string): Promise<number | null> {
-        return this.createWritePromise(createZrank(key, member));
+        return this.createWritePromise(createZRank(key, member));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
@@ -2061,7 +2061,7 @@ export class BaseClient {
         key: string,
         member: string,
     ): Promise<number[] | null> {
-        return this.createWritePromise(createZrank(key, member, true));
+        return this.createWritePromise(createZRank(key, member, true));
     }
 
     /**
@@ -2077,7 +2077,7 @@ export class BaseClient {
         values: [string, string][],
         options?: StreamAddOptions,
     ): Promise<string | null> {
-        return this.createWritePromise(createXadd(key, values, options));
+        return this.createWritePromise(createXAdd(key, values, options));
     }
 
     /**
@@ -2089,7 +2089,7 @@ export class BaseClient {
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
-        return this.createWritePromise(createXtrim(key, options));
+        return this.createWritePromise(createXTrim(key, options));
     }
 
     /**
@@ -2104,7 +2104,7 @@ export class BaseClient {
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): Promise<Record<string, [string, string[]][]>> {
-        return this.createWritePromise(createXread(keys_and_ids, options));
+        return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
@@ -2141,7 +2141,7 @@ export class BaseClient {
      * ```
      */
     public lindex(key: string, index: number): Promise<string | null> {
-        return this.createWritePromise(createLindex(key, index));
+        return this.createWritePromise(createLIndex(key, index));
     }
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
@@ -2209,7 +2209,7 @@ export class BaseClient {
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBrpop(keys, timeout));
+        return this.createWritePromise(createBRPop(keys, timeout));
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.

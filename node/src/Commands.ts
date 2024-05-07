@@ -65,7 +65,7 @@ function createCommand(
  * @internal
  */
 export function createGet(key: string): redis_request.Command {
-    return createCommand(RequestType.GetString, [key]);
+    return createCommand(RequestType.Get, [key]);
 }
 
 export type SetOptions = {
@@ -155,7 +155,7 @@ export function createSet(
         }
     }
 
-    return createCommand(RequestType.SetString, args);
+    return createCommand(RequestType.Set, args);
 }
 
 /**
@@ -357,7 +357,7 @@ export function createConfigSet(
  * @internal
  */
 export function createHGet(key: string, field: string): redis_request.Command {
-    return createCommand(RequestType.HashGet, [key, field]);
+    return createCommand(RequestType.HGet, [key, field]);
 }
 
 /**
@@ -368,7 +368,7 @@ export function createHSet(
     fieldValueMap: Record<string, string>,
 ): redis_request.Command {
     return createCommand(
-        RequestType.HashSet,
+        RequestType.HSet,
         [key].concat(Object.entries(fieldValueMap).flat()),
     );
 }
@@ -376,12 +376,12 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHSetNX(
+export function createHSetNx(
     key: string,
     field: string,
     value: string,
 ): redis_request.Command {
-    return createCommand(RequestType.HSetNX, [key, field, value]);
+    return createCommand(RequestType.HSetNx, [key, field, value]);
 }
 
 /**
@@ -408,7 +408,7 @@ export function createHDel(
     key: string,
     fields: string[],
 ): redis_request.Command {
-    return createCommand(RequestType.HashDel, [key].concat(fields));
+    return createCommand(RequestType.HDel, [key].concat(fields));
 }
 
 /**
@@ -418,7 +418,7 @@ export function createHMGet(
     key: string,
     fields: string[],
 ): redis_request.Command {
-    return createCommand(RequestType.HashMGet, [key].concat(fields));
+    return createCommand(RequestType.HMGet, [key].concat(fields));
 }
 
 /**
@@ -428,14 +428,14 @@ export function createHExists(
     key: string,
     field: string,
 ): redis_request.Command {
-    return createCommand(RequestType.HashExists, [key, field]);
+    return createCommand(RequestType.HExists, [key, field]);
 }
 
 /**
  * @internal
  */
 export function createHGetAll(key: string): redis_request.Command {
-    return createCommand(RequestType.HashGetAll, [key]);
+    return createCommand(RequestType.HGetAll, [key]);
 }
 
 /**
@@ -571,7 +571,7 @@ export function createSismember(
  */
 export function createSPop(key: string, count?: number): redis_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
-    return createCommand(RequestType.Spop, args);
+    return createCommand(RequestType.SPop, args);
 }
 
 /**
@@ -589,11 +589,7 @@ export function createHIncrBy(
     field: string,
     amount: number,
 ): redis_request.Command {
-    return createCommand(RequestType.HashIncrBy, [
-        key,
-        field,
-        amount.toString(),
-    ]);
+    return createCommand(RequestType.HIncrBy, [key, field, amount.toString()]);
 }
 
 /**
@@ -604,7 +600,7 @@ export function createHIncrByFloat(
     field: string,
     amount: number,
 ): redis_request.Command {
-    return createCommand(RequestType.HashIncrByFloat, [
+    return createCommand(RequestType.HIncrByFloat, [
         key,
         field,
         amount.toString(),
@@ -621,8 +617,8 @@ export function createHLen(key: string): redis_request.Command {
 /**
  * @internal
  */
-export function createHvals(key: string): redis_request.Command {
-    return createCommand(RequestType.Hvals, [key]);
+export function createHVals(key: string): redis_request.Command {
+    return createCommand(RequestType.HVals, [key]);
 }
 
 /**
@@ -721,11 +717,11 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createTTL(key: string): redis_request.Command {
-    return createCommand(RequestType.TTL, [key]);
+export function createTtl(key: string): redis_request.Command {
+    return createCommand(RequestType.Ttl, [key]);
 }
 
-export type ZaddOptions = {
+export type ZAddOptions = {
     /**
      * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Redis API.
      * `onlyIfExists` - Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Redis API.
@@ -743,10 +739,10 @@ export type ZaddOptions = {
 /**
  * @internal
  */
-export function createZadd(
+export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
-    options?: ZaddOptions,
+    options?: ZAddOptions,
     changedOrIncr?: "CH" | "INCR",
 ): redis_request.Command {
     let args = [key];
@@ -781,30 +777,30 @@ export function createZadd(
             key,
         ]),
     );
-    return createCommand(RequestType.Zadd, args);
+    return createCommand(RequestType.ZAdd, args);
 }
 
 /**
  * @internal
  */
-export function createZrem(
+export function createZRem(
     key: string,
     members: string[],
 ): redis_request.Command {
-    return createCommand(RequestType.Zrem, [key].concat(members));
+    return createCommand(RequestType.ZRem, [key].concat(members));
 }
 
 /**
  * @internal
  */
-export function createZcard(key: string): redis_request.Command {
-    return createCommand(RequestType.Zcard, [key]);
+export function createZCard(key: string): redis_request.Command {
+    return createCommand(RequestType.ZCard, [key]);
 }
 
 /**
  * @internal
  */
-export function createZscore(
+export function createZScore(
     key: string,
     member: string,
 ): redis_request.Command {
@@ -910,7 +906,7 @@ function getScoreBoundaryArg(
     return value;
 }
 
-function createZrangeArgs(
+function createZRangeArgs(
     key: string,
     rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
     reverse: boolean,
@@ -951,7 +947,7 @@ function createZrangeArgs(
 /**
  * @internal
  */
-export function createZcount(
+export function createZCount(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
@@ -959,31 +955,31 @@ export function createZcount(
     const args = [key];
     args.push(getScoreBoundaryArg(minScore));
     args.push(getScoreBoundaryArg(maxScore));
-    return createCommand(RequestType.Zcount, args);
+    return createCommand(RequestType.ZCount, args);
 }
 
 /**
  * @internal
  */
-export function createZrange(
+export function createZRange(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
 ): redis_request.Command {
-    const args = createZrangeArgs(key, rangeQuery, reverse, false);
-    return createCommand(RequestType.Zrange, args);
+    const args = createZRangeArgs(key, rangeQuery, reverse, false);
+    return createCommand(RequestType.ZRange, args);
 }
 
 /**
  * @internal
  */
-export function createZrangeWithScores(
+export function createZRangeWithScores(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
 ): redis_request.Command {
-    const args = createZrangeArgs(key, rangeQuery, reverse, true);
-    return createCommand(RequestType.Zrange, args);
+    const args = createZRangeArgs(key, rangeQuery, reverse, true);
+    return createCommand(RequestType.ZRange, args);
 }
 
 /**
@@ -1003,17 +999,17 @@ export function createStrlen(key: string): redis_request.Command {
 /**
  * @internal
  */
-export function createLindex(
+export function createLIndex(
     key: string,
     index: number,
 ): redis_request.Command {
-    return createCommand(RequestType.Lindex, [key, index.toString()]);
+    return createCommand(RequestType.LIndex, [key, index.toString()]);
 }
 
 /**
  * @internal
  */
-export function createZpopmin(
+export function createZPopMin(
     key: string,
     count?: number,
 ): redis_request.Command {
@@ -1024,7 +1020,7 @@ export function createZpopmin(
 /**
  * @internal
  */
-export function createZpopmax(
+export function createZPopMax(
     key: string,
     count?: number,
 ): redis_request.Command {
@@ -1042,14 +1038,14 @@ export function createEcho(message: string): redis_request.Command {
 /**
  * @internal
  */
-export function createPttl(key: string): redis_request.Command {
-    return createCommand(RequestType.PTTL, [key]);
+export function createPTtl(key: string): redis_request.Command {
+    return createCommand(RequestType.PTtl, [key]);
 }
 
 /**
  * @internal
  */
-export function createZremRangeByRank(
+export function createZRemRangeByRank(
     key: string,
     start: number,
     stop: number,
@@ -1064,7 +1060,7 @@ export function createZremRangeByRank(
 /**
  * @internal
  */
-export function createZremRangeByScore(
+export function createZRemRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
@@ -1079,7 +1075,7 @@ export function createPersist(key: string): redis_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
-export function createZrank(
+export function createZRank(
     key: string,
     member: string,
     withScores?: boolean,
@@ -1090,7 +1086,7 @@ export function createZrank(
         args.push("WITHSCORE");
     }
 
-    return createCommand(RequestType.Zrank, args);
+    return createCommand(RequestType.ZRank, args);
 }
 
 export type StreamTrimOptions = (
@@ -1162,7 +1158,7 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
-export function createXadd(
+export function createXAdd(
     key: string,
     values: [string, string][],
     options?: StreamAddOptions,
@@ -1194,7 +1190,7 @@ export function createXadd(
 /**
  * @internal
  */
-export function createXtrim(
+export function createXTrim(
     key: string,
     options: StreamTrimOptions,
 ): redis_request.Command {
@@ -1213,12 +1209,12 @@ export function createTime(): redis_request.Command {
 /**
  * @internal
  */
-export function createBrpop(
+export function createBRPop(
     keys: string[],
     timeout: number,
 ): redis_request.Command {
     const args = [...keys, timeout.toString()];
-    return createCommand(RequestType.Brpop, args);
+    return createCommand(RequestType.BRPop, args);
 }
 
 export type StreamReadOptions = {
@@ -1263,7 +1259,7 @@ function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
 /**
  * @internal
  */
-export function createXread(
+export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
 ): redis_request.Command {

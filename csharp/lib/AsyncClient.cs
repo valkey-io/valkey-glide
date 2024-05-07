@@ -38,7 +38,7 @@ public class AsyncClient : IDisposable
         IntPtr[] args = _arrayPool.Rent(2);
         args[0] = Marshal.StringToHGlobalAnsi(key);
         args[1] = Marshal.StringToHGlobalAnsi(value);
-        string? result = await Command(args, 2, RequestType.SetString);
+        string? result = await Command(args, 2, RequestType.Set);
         _arrayPool.Return(args);
         return result;
     }
@@ -47,7 +47,7 @@ public class AsyncClient : IDisposable
     {
         IntPtr[] args = _arrayPool.Rent(1);
         args[0] = Marshal.StringToHGlobalAnsi(key);
-        string? result = await Command(args, 1, RequestType.GetString);
+        string? result = await Command(args, 1, RequestType.Get);
         _arrayPool.Return(args);
         return result;
     }
@@ -129,8 +129,8 @@ public class AsyncClient : IDisposable
     {
         InvalidRequest = 0,
         CustomCommand = 1,
-        GetString = 2,
-        SetString = 3,
+        Get = 2,
+        Set = 3,
         Ping = 4,
         Info = 5,
         Del = 6,
@@ -154,10 +154,10 @@ public class AsyncClient : IDisposable
         ClientUnblock = 24,
         ClientUnpause = 25,
         Expire = 26,
-        HashSet = 27,
-        HashGet = 28,
-        HashDel = 29,
-        HashExists = 30,
+        HSet = 27,
+        HGet = 28,
+        HDel = 29,
+        HExists = 30,
         MGet = 31,
         MSet = 32,
         Incr = 33,
@@ -165,11 +165,11 @@ public class AsyncClient : IDisposable
         Decr = 35,
         IncrByFloat = 36,
         DecrBy = 37,
-        HashGetAll = 38,
-        HashMSet = 39,
-        HashMGet = 40,
-        HashIncrBy = 41,
-        HashIncrByFloat = 42,
+        HGetAll = 38,
+        HMSet = 39,
+        HMGet = 40,
+        HIncrBy = 41,
+        HIncrByFloat = 42,
         LPush = 43,
         LPop = 44,
         RPush = 45,
@@ -187,12 +187,12 @@ public class AsyncClient : IDisposable
         ExpireAt = 57,
         Exists = 58,
         Unlink = 59,
-        TTL = 60,
-        Zadd = 61,
-        Zrem = 62,
-        Zrange = 63,
-        Zcard = 64,
-        Zcount = 65,
+        Ttl = 60,
+        ZAdd = 61,
+        ZRem = 62,
+        ZRange = 63,
+        ZCard = 64,
+        ZCount = 65,
         ZIncrBy = 66,
         ZScore = 67,
         Type = 68,
@@ -200,7 +200,7 @@ public class AsyncClient : IDisposable
         Echo = 70,
         ZPopMin = 71,
         Strlen = 72,
-        Lindex = 73,
+        LIndex = 73,
         ZPopMax = 74,
         XRead = 75,
         XAdd = 76,
@@ -209,23 +209,23 @@ public class AsyncClient : IDisposable
         XTrim = 79,
         XGroupCreate = 80,
         XGroupDestroy = 81,
-        HSetNX = 82,
+        HSetNx = 82,
         SIsMember = 83,
-        Hvals = 84,
-        PTTL = 85,
+        HVals = 84,
+        PTtl = 85,
         ZRemRangeByRank = 86,
         Persist = 87,
         ZRemRangeByScore = 88,
         Time = 89,
-        Zrank = 90,
+        ZRank = 90,
         Rename = 91,
-        DBSize = 92,
-        Brpop = 93,
-        Hkeys = 94,
+        DbSize = 92,
+        BRPop = 93,
+        HKeys = 94,
         PfAdd = 96,
         PfCount = 97,
         PfMerge = 98,
-        Blpop = 100,
+        BLPop = 100,
         RPushX = 102,
         LPushX = 103,
     }
