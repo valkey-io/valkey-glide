@@ -24,6 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     _create_zrange_args,
+    _create_zrangestore_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -2329,6 +2330,46 @@ class CoreCommands(Protocol):
         return cast(
             Mapping[str, float], await self._execute_command(RequestType.ZRange, args)
         )
+
+    async def zrangestore(
+        self,
+        destination: str,
+        source: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> int:
+        """
+        Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
+        `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
+
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
+        order.
+
+        See https://valkey.io/commands/zrangestore for more details.
+
+        Args:
+            destination (str): The key for the destination sorted set.
+            source (str): The key of the source sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            int: The number of elements in the resulting sorted set.
+
+        Examples:
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByIndex(0, 2), True)
+                3  # The 3 members with the highest scores from "my_sorted_set" were stored in the sorted set at "destination_key".
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
+                2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
+        """
+        args = _create_zrangestore_args(destination, source, range_query, reverse)
+
+        return cast(int, await self._execute_command(RequestType.ZRangeStore, args))
 
     async def zrank(
         self,

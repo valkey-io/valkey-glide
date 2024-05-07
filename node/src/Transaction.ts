@@ -14,6 +14,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLPop,
     createBRPop,
     createClientGetName,
     createClientId,
@@ -1243,16 +1244,33 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * with the given keys being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
+     * Note: `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
     public brpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBRPop(keys, timeout));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given `keys` being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://redis.io/commands/blpop/ for more details.
+     * Note: `BLPOP` is a blocking command,
+     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
+     */
+    public blpop(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBLPop(keys, timeout));
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.

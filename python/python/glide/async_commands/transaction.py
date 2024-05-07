@@ -23,6 +23,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     _create_zrange_args,
+    _create_zrangestore_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1661,6 +1662,38 @@ class BaseTransaction:
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
         return self.append_command(RequestType.ZRange, args)
+
+    def zrangestore(
+        self: TTransaction,
+        destination: str,
+        source: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> TTransaction:
+        """
+        Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
+        `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
+
+        ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
+        order.
+
+        See https://valkey.io/commands/zrangestore for more details.
+
+        Args:
+            destination (str): The key for the destination sorted set.
+            source (str): The key of the source sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Command response:
+            int: The number of elements in the resulting sorted set.
+        """
+        args = _create_zrangestore_args(destination, source, range_query, reverse)
+
+        return self.append_command(RequestType.ZRangeStore, args)
 
     def zrank(
         self: TTransaction,

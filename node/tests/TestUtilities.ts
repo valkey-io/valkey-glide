@@ -218,6 +218,8 @@ export async function transactionTest(
     args.push(3);
     baseTransaction.brpop([key6], 0.1);
     args.push([key6, field + "3"]);
+    baseTransaction.blpop([key6], 0.1);
+    args.push([key6, field + "1"]);
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     return args;

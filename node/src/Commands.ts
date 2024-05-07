@@ -1217,6 +1217,17 @@ export function createBRPop(
     return createCommand(RequestType.BRPop, args);
 }
 
+/**
+ * @internal
+ */
+export function createBLPop(
+    keys: string[],
+    timeout: number,
+): redis_request.Command {
+    const args = [...keys, timeout.toString()];
+    return createCommand(RequestType.BLPop, args);
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or until the server has the required number of entries.
