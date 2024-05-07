@@ -218,12 +218,12 @@ pub extern "system" fn Java_glide_utils_Logger_logInternal<'local>(
 
     let log_identifier: String = env
         .get_string(&log_identifier)
-        .expect(make_jstring_error("log_identifier").as_str())
+        .unwrap_or_else(|_| panic!("{}", make_jstring_error("log_identifier")))
         .into();
 
     let message: String = env
         .get_string(&message)
-        .expect(make_jstring_error("message").as_str())
+        .unwrap_or_else(|_| panic!("{}", make_jstring_error("message")))
         .into();
 
     logger_core::log(level.try_into().unwrap(), log_identifier, message);
