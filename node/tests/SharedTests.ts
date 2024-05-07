@@ -1028,11 +1028,9 @@ export function runBaseTests<Context>(config: {
                     await client.srem(key, ["member3", "nonExistingMember"]),
                 ).toEqual(1);
                 /// compare the 2 sets.
-                expect((await client.smembers(key)).sort()).toEqual([
-                    "member1",
-                    "member2",
-                    "member4",
-                ]);
+                expect(await client.smembers(key)).toEqual(
+                    new Set(["member1", "member2", "member4"]),
+                );
                 expect(await client.srem(key, ["member1"])).toEqual(1);
                 expect(await client.scard(key)).toEqual(2);
             }, protocol);
@@ -1048,7 +1046,9 @@ export function runBaseTests<Context>(config: {
                     0,
                 );
                 expect(await client.scard("nonExistingKey")).toEqual(0);
-                expect(await client.smembers("nonExistingKey")).toEqual([]);
+                expect(await client.smembers("nonExistingKey")).toEqual(
+                    new Set(),
+                );
             }, protocol);
         },
         config.timeout,
@@ -1126,19 +1126,22 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const members = ["member1", "member2", "member3"];
+                let members = ["member1", "member2", "member3"];
                 expect(await client.sadd(key, members)).toEqual(3);
 
                 const result1 = await client.spop(key);
                 expect(members).toContain(result1);
 
-                const result2 = await client.spopCount(key, 2);
-                expect(members).toContain(result2?.[0]);
-                expect(members).toContain(result2?.[1]);
-                expect(result2).not.toContain(result1);
+                members = members.filter((item) => item !== result1);
+
+                expect(await client.spopCount(key, 2)).toEqual(
+                    new Set(members),
+                );
 
                 expect(await client.spop("nonExistingKey")).toEqual(null);
-                expect(await client.spopCount("nonExistingKey", 1)).toEqual([]);
+                expect(await client.spopCount("nonExistingKey", 1)).toEqual(
+                    new Set(),
+                );
             }, protocol);
         },
         config.timeout,

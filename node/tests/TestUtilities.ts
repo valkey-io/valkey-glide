@@ -144,9 +144,11 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     args.push(true);
     baseTransaction.smembers(key7);
-    args.push(["bar"]);
+    args.push(new Set(["bar"]));
     baseTransaction.spop(key7);
     args.push("bar");
+    baseTransaction.spopCount(key7, 2);
+    args.push(new Set());
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {

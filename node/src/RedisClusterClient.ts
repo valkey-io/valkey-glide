@@ -290,10 +290,15 @@ export class RedisClusterClient extends BaseClient {
         transaction: ClusterTransaction,
         route?: SingleNodeRoute,
     ): Promise<ReturnType[] | null> {
-        return this.createWritePromise(
+        return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             toProtobufRoute(route),
-        );
+        ).then((result: ReturnType[] | null) => {
+            return this.processResultWithSetCommands(
+                result,
+                transaction.setCommandsIndexes,
+            );
+        });
     }
 
     /** Ping the Redis server.
