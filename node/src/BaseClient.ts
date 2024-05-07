@@ -21,6 +21,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLPop,
     createBRPop,
     createDecr,
     createDecrBy,
