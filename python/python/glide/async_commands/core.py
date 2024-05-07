@@ -1374,7 +1374,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of all members of the set.
-                If `key` does not exist an empty list will be returned.
+                If `key` does not exist an empty set will be returned.
 
         Examples:
             >>> await client.smembers("my_set")
@@ -1434,7 +1434,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, an empty set will be returned.
+                If `key` does not exist, an empty set will be returned.
 
         Examples:
             >>> await client.spop_count("my_set", 2)
