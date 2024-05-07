@@ -17,12 +17,14 @@ from typing import (
 )
 
 from glide.async_commands.sorted_set import (
+    AggregationType,
     InfBound,
     LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
 )
@@ -2875,6 +2877,72 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZDiffStore, [destination, str(len(keys))] + keys
             ),
+        )
+
+    async def zinterstore(
+        self,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, int]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> int:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
+        see https://redis.io/commands/zinterstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+        >>> await client.zinterstore("new_sorted_set", "my_sorted_set", AggregationType.MAX)
+            3
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return cast(
+            int,
+            await self._execute_command(RequestType.ZInterStore, args),
+        )
+
+    async def zunionstore(
+        self,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, int]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> int:
+        """
+        Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
+        see https://redis.io/commands/zunionstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+        >>> await client.zunionstore("new_sorted_set", "my_sorted_set", AggregationType.MAX)
+            3
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return cast(
+            int,
+            await self._execute_command(RequestType.ZUnionStore, args),
         )
 
     async def invoke_script(

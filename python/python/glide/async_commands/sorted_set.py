@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 
 class InfBound(Enum):
@@ -21,6 +21,19 @@ class InfBound(Enum):
         score_arg: represents numeric negative infinity (-inf).
         lex_arg: represents lexicographic negative infinity (-).
     """
+
+
+class AggregationType(Enum):
+    """
+    A condition to the "SINTERSTORE" and "ZUNIONSTORE" commands.
+    With the AGGREGATE option, it is possible to specify how the results of the union are aggregated.
+    - SUM - The score of an element is summed across the inputs where it exists
+    - MIN/MAX - The resulting set will contain the minimum or maximum score of an element across the inputs where it exists
+    """
+
+    SUM = "sum"
+    MIN = "min"
+    MAX = "max"
 
 
 class ScoreBoundary:
@@ -156,6 +169,46 @@ def _create_zrange_args(
         )
     if with_scores:
         args.append("WITHSCORES")
+
+    return args
+
+
+def separate_keys(
+    keys: Union[List[str], List[Tuple[str, int]]]
+) -> Tuple[List[str], List[str]]:
+    if len(keys) == 0:
+        return [], []
+
+    str_list: List[str] = []
+    int_list: List[str] = []
+
+    if isinstance(keys[0], tuple):
+        str_list = [item[0] for item in keys]
+        int_list = [str(item[1]) for item in keys]
+    elif isinstance(keys[0], str):
+        str_list = [str(item) for item in keys]
+
+    return str_list, int_list
+
+
+def _create_z_cmd_store_args(
+    destination: str,
+    keys: Union[List[str], List[Tuple[str, int]]],
+    aggregation_type: Optional[AggregationType] = None,
+) -> List[str]:
+    args = [destination, str(len(keys))]
+
+    only_keys, weights = separate_keys(keys)
+
+    args += only_keys
+
+    if len(weights) != 0:
+        args.append("WEIGHTS")
+        args += weights
+
+    if aggregation_type is not None:
+        args.append("AGGREGATE")
+        args.append(aggregation_type.value)
 
     return args
 

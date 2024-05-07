@@ -26,6 +26,7 @@ from glide.async_commands.core import (
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
+    AggregationType,
     InfBound,
     LexBoundary,
     Limit,
@@ -1813,6 +1814,149 @@ class TestCommands:
         assert await redis_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zmscore(key2, ["one"])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zinterstore(self, redis_client: TRedisClient):
+        key1 = "{testKey}:1-" + get_random_string(10)
+        key2 = "{testKey}:2-" + get_random_string(10)
+        key3 = "{testKey}:3-" + get_random_string(10)
+        range = RangeByIndex(0, -1)
+        members_scores1 = {"one": 1.0, "two": 2.0}
+        members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
+
+        assert await redis_client.zadd(key1, members_scores=members_scores1) == 2
+        assert await redis_client.zadd(key2, members_scores=members_scores2) == 3
+
+        assert await redis_client.zinterstore(key3, [key1, key2]) == 2
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 2.5,
+            "two": 4.5,
+        }
+
+        # Intersection results are aggregated by the MAX score of elements
+        assert (
+            await redis_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 1.5,
+            "two": 2.5,
+        }
+
+        # Intersection results are aggregated by the MIN score of elements
+        assert (
+            await redis_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 1.0,
+            "two": 2.0,
+        }
+
+        # Intersection results are aggregated by the SUM score of elements
+        assert (
+            await redis_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 2.5,
+            "two": 4.5,
+        }
+
+        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assert (
+            await redis_client.zinterstore(
+                key3, [(key1, 2), (key2, 2)], AggregationType.SUM
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 5.0,
+            "two": 9.0,
+        }
+
+        assert (
+            await redis_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
+            == 0
+        )
+
+        # Cross slot query
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zinterstore("{xyz}", ["{abc}", "{def}"])
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zunionstore(self, redis_client: TRedisClient):
+        key1 = "{testKey}:1-" + get_random_string(10)
+        key2 = "{testKey}:2-" + get_random_string(10)
+        key3 = "{testKey}:3-" + get_random_string(10)
+        range = RangeByIndex(0, -1)
+        members_scores1 = {"one": 1.0, "two": 2.0}
+        members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
+
+        assert await redis_client.zadd(key1, members_scores=members_scores1) == 2
+        assert await redis_client.zadd(key2, members_scores=members_scores2) == 3
+
+        assert await redis_client.zunionstore(key3, [key1, key2]) == 3
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 2.5,
+            "three": 3.5,
+            "two": 4.5,
+        }
+
+        # Intersection results are aggregated by the MAX score of elements
+        assert (
+            await redis_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 1.5,
+            "two": 2.5,
+            "three": 3.5,
+        }
+
+        # Intersection results are aggregated by the MIN score of elements
+        assert (
+            await redis_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 1.0,
+            "two": 2.0,
+            "three": 3.5,
+        }
+
+        # Intersection results are aggregated by the SUM score of elements
+        assert (
+            await redis_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 2.5,
+            "three": 3.5,
+            "two": 4.5,
+        }
+
+        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assert (
+            await redis_client.zunionstore(
+                key3, [(key1, 2), (key2, 2)], AggregationType.SUM
+            )
+            == 3
+        )
+        assert await redis_client.zrange_withscores(key3, range) == {
+            "one": 5.0,
+            "three": 7,
+            "two": 9.0,
+        }
+
+        assert (
+            await redis_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
+            == 2
+        )
+
+        # Cross slot query
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zunionstore("{xyz}", ["{abc}", "{def}"])
+            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
