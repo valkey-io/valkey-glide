@@ -21,8 +21,10 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,6 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
@@ -632,5 +635,33 @@ public class CommandTests {
         } finally {
             clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void flushall() {
+        assertEquals(OK, clusterClient.flushall(FlushMode.SYNC).get());
+
+        // TODO replace with KEYS command when implemented
+        Object[] keysAfter =
+                (Object[]) clusterClient.customCommand(new String[] {"keys", "*"}).get().getSingleValue();
+        assertEquals(0, keysAfter.length);
+
+        var route = new SlotKeyRoute("key", PRIMARY);
+        assertEquals(OK, clusterClient.flushall().get());
+        assertEquals(OK, clusterClient.flushall(route).get());
+        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC).get());
+        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC, route).get());
+
+        var replicaRoute = new SlotKeyRoute("key", REPLICA);
+        // command should fail on a replica, because it is read-only
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.flushall(replicaRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .toLowerCase()
+                        .contains("can't write against a read only replica"));
     }
 }

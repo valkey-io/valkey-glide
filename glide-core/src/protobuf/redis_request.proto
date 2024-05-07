@@ -178,6 +178,7 @@ enum RequestType {
     HRandField = 135;
     ZUnion = 136;
     BZPopMin = 137;
+    FlushAll = 138;
 }
 
 message Command {
