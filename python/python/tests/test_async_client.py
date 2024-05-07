@@ -22,6 +22,9 @@ from glide.async_commands.core import (
     InfBound,
     InfoSection,
     InsertPosition,
+    StreamAddOptions,
+    TrimByMaxLen,
+    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -929,6 +932,40 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_blpop(self, redis_client: TRedisClient):
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        value1 = "value1"
+        value2 = "value2"
+        value_list = [value1, value2]
+
+        assert await redis_client.lpush(key1, value_list) == 2
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.blpop([key1, key2], 0.5) == [key1, value2]
+
+        assert await redis_client.blpop(["non_existent_key"], 0.5) is None
+
+        # key exists, but not a list
+        assert await redis_client.set("foo", "bar")
+        with pytest.raises(RequestError):
+            await redis_client.blpop(["foo"], 0.001)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.blpop(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_blpop_call():
+            await redis_client.blpop(["non_existent_key"], 0)
+
+        # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_blpop_call(), timeout=3)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lindex(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
@@ -984,6 +1021,40 @@ class TestCommands:
         # incorrect arguments
         with pytest.raises(RequestError):
             await redis_client.rpushx(key2, [])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_brpop(self, redis_client: TRedisClient):
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        value1 = "value1"
+        value2 = "value2"
+        value_list = [value1, value2]
+
+        assert await redis_client.lpush(key1, value_list) == 2
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.brpop([key1, key2], 0.5) == [key1, value1]
+
+        assert await redis_client.brpop(["non_existent_key"], 0.5) is None
+
+        # key exists, but not a list
+        assert await redis_client.set("foo", "bar")
+        with pytest.raises(RequestError):
+            await redis_client.brpop(["foo"], 0.001)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.brpop(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_brpop_call():
+            await redis_client.brpop(["non_existent_key"], 0)
+
+        # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_brpop_call(), timeout=3)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2021,6 +2092,275 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrangestore_by_index(self, redis_client: TRedisClient):
+        destination = f"{{testKey}}:{get_random_string(10)}"
+        source = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:{get_random_string(10)}"
+
+        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert await redis_client.zadd(source, member_scores) == 3
+
+        # full range
+        assert (
+            await redis_client.zrangestore(destination, source, RangeByIndex(0, -1))
+            == 3
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        # range from rank 0 to 1, from highest to lowest score
+        assert (
+            await redis_client.zrangestore(
+                destination, source, RangeByIndex(0, 1), True
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"three": 3.0, "two": 2.0}
+
+        # incorrect range, as start > stop
+        assert (
+            await redis_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # non-existing source
+        assert (
+            await redis_client.zrangestore(
+                destination, non_existing_key, RangeByIndex(0, -1)
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrangestore(destination, string_key, RangeByIndex(0, -1))
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zrangestore("abc", "def", RangeByIndex(0, -1))
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrangestore_by_score(self, redis_client: TRedisClient):
+        destination = f"{{testKey}}:{get_random_string(10)}"
+        source = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:{get_random_string(10)}"
+
+        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert await redis_client.zadd(source, member_scores) == 3
+
+        # range from negative infinity to 3 (exclusive)
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, False)),
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"one": 1.0, "two": 2.0}
+
+        # range from 1 (inclusive) to positive infinity
+        assert (
+            await redis_client.zrangestore(
+                destination, source, RangeByScore(ScoreBoundary(1), InfBound.POS_INF)
+            )
+            == 3
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        # range from negative to positive infinity, limited to ranks 1 to 2
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByScore(InfBound.NEG_INF, InfBound.POS_INF, Limit(1, 2)),
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"two": 2.0, "three": 3.0}
+
+        # range from positive to negative infinity reversed, limited to ranks 1 to 2
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByScore(InfBound.POS_INF, InfBound.NEG_INF, Limit(1, 2)),
+                True,
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"two": 2.0, "one": 1.0}
+
+        # incorrect range as start > stop
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByScore(ScoreBoundary(3, False), InfBound.NEG_INF),
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # non-existing source
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                non_existing_key,
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, False)),
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrangestore(
+                destination,
+                string_key,
+                RangeByScore(ScoreBoundary(0), ScoreBoundary(3)),
+            )
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zrangestore(
+                    "abc", "def", RangeByScore(ScoreBoundary(0), ScoreBoundary(3))
+                )
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrangestore_by_lex(self, redis_client: TRedisClient):
+        destination = f"{{testKey}}:{get_random_string(10)}"
+        source = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        member_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        assert await redis_client.zadd(source, member_scores) == 3
+
+        # range from negative infinity to "c" (exclusive)
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByLex(InfBound.NEG_INF, LexBoundary("c", False)),
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"a": 1.0, "b": 2.0}
+
+        # range from "a" (inclusive) to positive infinity
+        assert (
+            await redis_client.zrangestore(
+                destination, source, RangeByLex(LexBoundary("a"), InfBound.POS_INF)
+            )
+            == 3
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"a": 1.0, "b": 2.0, "c": 3.0}
+
+        # range from negative to positive infinity, limited to ranks 1 to 2
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByLex(InfBound.NEG_INF, InfBound.POS_INF, Limit(1, 2)),
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"b": 2.0, "c": 3.0}
+
+        # range from positive to negative infinity reversed, limited to ranks 1 to 2
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByLex(InfBound.POS_INF, InfBound.NEG_INF, Limit(1, 2)),
+                True,
+            )
+            == 2
+        )
+        assert await redis_client.zrange_withscores(
+            destination, RangeByIndex(0, -1)
+        ) == {"b": 2.0, "a": 1.0}
+
+        # incorrect range as start > stop
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                source,
+                RangeByLex(LexBoundary("c", False), InfBound.NEG_INF),
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # non-existing source
+        assert (
+            await redis_client.zrangestore(
+                destination,
+                non_existing_key,
+                RangeByLex(InfBound.NEG_INF, InfBound.POS_INF),
+            )
+            == 0
+        )
+        assert (
+            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+        )
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrangestore(
+                destination, string_key, RangeByLex(InfBound.NEG_INF, InfBound.POS_INF)
+            )
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zrangestore(
+                    "abc", "def", RangeByLex(InfBound.NEG_INF, InfBound.POS_INF)
+                )
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrank(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"one": 1.5, "two": 2, "three": 3}
@@ -2064,7 +2404,7 @@ class TestCommands:
         assert (await redis_client.type(key)).lower() == "hash"
         assert await redis_client.delete([key]) == 1
 
-        await redis_client.custom_command(["XADD", key, "*", "field", "value"])
+        await redis_client.xadd(key, [("field", "value")])
         assert await redis_client.type(key) == "stream"
         assert await redis_client.delete([key]) == 1
 
@@ -2122,6 +2462,57 @@ class TestCommands:
 
         assert await redis_client.append(key, value) == 10
         assert await redis_client.get(key) == value * 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xadd_xtrim(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        field, field2 = get_random_string(10), get_random_string(10)
+
+        assert (
+            await redis_client.xadd(
+                key,
+                [(field, "foo"), (field2, "bar")],
+                StreamAddOptions(make_stream=False),
+            )
+            is None
+        )
+
+        assert (
+            await redis_client.xadd(
+                key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
+            )
+            == "0-1"
+        )
+
+        assert (
+            await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
+        ) is not None
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        # This will trim the first entry.
+        id = await redis_client.xadd(
+            key,
+            [(field, "foo3"), (field2, "bar3")],
+            StreamAddOptions(trim=TrimByMaxLen(exact=True, threshold=2)),
+        )
+
+        assert id is not None
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        # This will trim the 2nd entry.
+        assert (
+            await redis_client.xadd(
+                key,
+                [(field, "foo4"), (field2, "bar4")],
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=str(id))),
+            )
+            is not None
+        )
+        assert await redis_client.custom_command(["XLEN", key]) == 2
+
+        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
+        assert await redis_client.custom_command(["XLEN", key]) == 1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

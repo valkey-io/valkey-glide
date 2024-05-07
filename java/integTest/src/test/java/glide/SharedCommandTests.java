@@ -42,8 +42,9 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -67,6 +68,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -1707,6 +1709,69 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void bzpopmin(BaseClient client) {
+        String key1 = "{test}-1-" + UUID.randomUUID();
+        String key2 = "{test}-2-" + UUID.randomUUID();
+        String key3 = "{test}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
+        assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
+        assertArrayEquals(
+                new Object[] {key1, "a", 1.0}, client.bzpopmin(new String[] {key1, key2}, .5).get());
+
+        // nothing popped out - key does not exist
+        assertNull(
+                client
+                        .bzpopmin(new String[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // pops from the second key
+        assertArrayEquals(
+                new Object[] {key2, "c", 2.0}, client.bzpopmin(new String[] {key3, key2}, .5).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzpopmin(new String[] {key3}, .5).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzpopmin_timeout_check(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzpopmin(new String[] {key}, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzpopmin(new String[] {key}, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zpopmax(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
@@ -1751,7 +1816,39 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.bzpopmax(new String[] {key3}, .5).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzpopmax_timeout_check(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzpopmax(new String[] {key}, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzpopmax(new String[] {key}, 0).get(3, TimeUnit.SECONDS));
+        }
     }
 
     @SneakyThrows
@@ -2303,6 +2400,102 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zunion(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Union results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new KeyArray(new String[] {key1, key2})).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 5.5),
+                client.zunionWithScores(new KeyArray(new String[] {key1, key2})).get());
+
+        // Union results are aggregated by the max score of elements
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 3.5),
+                client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+
+        // Union results are aggregated by the min score of elements
+        assertArrayEquals(
+                new String[] {"one", "two", "three"},
+                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+
+        // Union results are aggregated by the sum of the scores of elements
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+        assertEquals(
+                Map.of("one", 1.0, "three", 3.0, "two", 5.5),
+                client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertArrayEquals(
+                new String[] {"one", "three", "two"},
+                client.zunion(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
+        assertEquals(
+                Map.of("one", 2.0, "three", 6.0, "two", 11.0),
+                client
+                        .zunionWithScores(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
+        // for key2 by -2.0.
+        assertArrayEquals(
+                new String[] {"two", "three", "one"},
+                client
+                        .zunion(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of("two", -7.0, "three", -6.0, "one", 1.0),
+                client
+                        .zunionWithScores(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+
+        // Non Existing Key
+        assertArrayEquals(
+                new String[] {"one", "two"}, client.zunion(new KeyArray(new String[] {key1, key3})).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0),
+                client.zunionWithScores(new KeyArray(new String[] {key1, key3})).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zunion(new KeyArray(new String[] {key1, key3})).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"})).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zinterstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -2315,39 +2508,42 @@ public class SharedCommandTests {
         assertEquals(2, client.zadd(key1, membersScores1).get());
         assertEquals(3, client.zadd(key2, membersScores2).get());
 
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}).get());
+        assertEquals(2, client.zinterstore(key3, new KeyArray(new String[] {key1, key2})).get());
         assertEquals(Map.of("one", 2.5, "two", 4.5), client.zrangeWithScores(key3, query).get());
 
         // Intersection results are aggregated by the max score of elements
-        WeightAggregateOptions options =
-                WeightAggregateOptions.builder().aggregate(Aggregate.MAX).build();
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(
+                2, client.zinterstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
         assertEquals(Map.of("one", 1.5, "two", 2.5), client.zrangeWithScores(key3, query).get());
 
         // Intersection results are aggregated by the min score of elements
-        options = WeightAggregateOptions.builder().aggregate(Aggregate.MIN).build();
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(
+                2, client.zinterstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
         assertEquals(Map.of("one", 1.0, "two", 2.0), client.zrangeWithScores(key3, query).get());
 
         // Intersection results are aggregated by the sum of the scores of elements
-        options = WeightAggregateOptions.builder().aggregate(Aggregate.SUM).build();
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(
+                2, client.zinterstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
         assertEquals(Map.of("one", 2.5, "two", 4.5), client.zrangeWithScores(key3, query).get());
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
-        options = WeightAggregateOptions.builder().weights(List.of(2.0, 2.0)).build();
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        assertEquals(
+                2,
+                client
+                        .zinterstore(key3, new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
         assertEquals(Map.of("one", 5.0, "two", 9.0), client.zrangeWithScores(key3, query).get());
 
         // Intersection results are aggregated by the minimum score, with scores for key1 multiplied by
-        // 1.0 and
-        // for key2 by -2.0.
-        options =
-                WeightAggregateOptions.builder()
-                        .aggregate(Aggregate.MIN)
-                        .weights(List.of(1.0, -2.0))
-                        .build();
-        assertEquals(2, client.zinterstore(key3, new String[] {key1, key2}, options).get());
+        // 1.0 and for key2 by -2.0.
+        assertEquals(
+                2,
+                client
+                        .zinterstore(
+                                key3,
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))),
+                                Aggregate.MIN)
+                        .get());
         assertEquals(Map.of("two", -5.0, "one", -3.0), client.zrangeWithScores(key3, query).get());
 
         // Key exists, but it is not a set
@@ -2355,20 +2551,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.zinterstore(key3, new String[] {key4, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-
-        // Keys.length != Weights.length
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () ->
-                                client
-                                        .zinterstore(
-                                                key3,
-                                                new String[] {key1, key2},
-                                                WeightAggregateOptions.builder().weights(List.of(2.0)).build())
-                                        .get());
+                        () -> client.zinterstore(key3, new KeyArray(new String[] {key4, key2})).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
         // same-slot requirement
@@ -2376,7 +2559,10 @@ public class SharedCommandTests {
             executionException =
                     assertThrows(
                             ExecutionException.class,
-                            () -> client.zinterstore("foo", new String[] {"abc", "zxy", "lkn"}).get());
+                            () ->
+                                    client
+                                            .zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))
+                                            .get());
             assertInstanceOf(RequestException.class, executionException.getCause());
             assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
         }
