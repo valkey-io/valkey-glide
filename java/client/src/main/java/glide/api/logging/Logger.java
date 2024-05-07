@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.logging;
 
 import lombok.Getter;
@@ -63,7 +64,8 @@ public class Logger {
         init(level, null);
     }
 
-    public static void log(@NonNull Level level, @NonNull String logIdentifier, @NonNull String message) {
+    public static void log(
+            @NonNull Level level, @NonNull String logIdentifier, @NonNull String message) {
         if (instance == null) {
             instance = new Logger(Level.DISABLED, null);
         }
@@ -80,5 +82,4 @@ public class Logger {
     private static native int initInternal(int level, String fileName);
 
     private static native void logInternal(int level, String logIdentifier, String message);
-
 }
