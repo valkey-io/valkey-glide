@@ -2883,6 +2883,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
+     * @since Redis 7.0 and above
      * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
