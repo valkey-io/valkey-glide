@@ -422,6 +422,25 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
+    // Define a common function to process the result of a transaction with set commands
+    /**
+     * @internal
+     */
+    protected processResultWithSetCommands(
+        result: ReturnType[] | null,
+        setCommandsIndexes: number[],
+    ): ReturnType[] | null {
+        if (result === null) {
+            return null;
+        }
+
+        for (const index of setCommandsIndexes) {
+            result[index] = new Set<ReturnType>(result[index] as ReturnType[]);
+        }
+
+        return result;
+    }
+
     /** Get the value associated with the given key, or null if no such value exists.
      * See https://redis.io/commands/get/ for details.
      *
@@ -1187,18 +1206,20 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns All members of the set.
-     * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     * @returns A `Set` containing all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
      * @example
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: ["member1", "member2", "member3"]
+     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<string[]> {
-        return this.createWritePromise(createSMembers(key));
+    public smembers(key: string): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSMembers(key)).then(
+            (smembes) => new Set<string>(smembes),
+        );
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -1275,25 +1296,27 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
-     * @returns A list of popped elements will be returned depending on the set's length.
-     * If `key` does not exist, empty list will be returned.
+     * @returns A `Set` containing the popped elements, depending on the set's length.
+     * If `key` does not exist, an empty `Set` will be returned.
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: []
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public spopCount(key: string, count: number): Promise<string[]> {
-        return this.createWritePromise(createSPop(key, count));
+    public async spopCount(key: string, count: number): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSPop(key, count)).then(
+            (spop) => new Set<string>(spop),
+        );
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -2188,7 +2211,7 @@ export class BaseClient {
 
     /** Blocking list pop primitive.
      * Pop an element from the tail of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
      *

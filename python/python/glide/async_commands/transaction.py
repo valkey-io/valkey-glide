@@ -685,7 +685,8 @@ class BaseTransaction:
 
     def lpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
-        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -727,6 +728,25 @@ class BaseTransaction:
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.LPop, [key, str(count)])
+
+    def blpop(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        See https://valkey.io/commands/blpop for details.
+
+        BLPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.Blpop, keys + [str(timeout)])
 
     def lrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
@@ -791,7 +811,8 @@ class BaseTransaction:
 
     def rpushx(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
-        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/rpushx/ for more details.
 
@@ -833,6 +854,25 @@ class BaseTransaction:
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
+
+    def brpop(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        See https://valkey.io/commands/brpop for details.
+
+        BRPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.Brpop, keys + [str(timeout)])
 
     def linsert(
         self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str

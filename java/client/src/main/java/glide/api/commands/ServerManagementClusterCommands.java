@@ -2,9 +2,11 @@
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -315,6 +317,70 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Long>> lastsave(Route route);
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushall().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushall();
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushall(ASYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushall(FlushMode mode);
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * Route route = new SlotKeyRoute("key", PRIMARY);
+     * String response = client.flushall(route).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushall(SingleNodeRoute route);
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * Route route = new SlotKeyRoute("key", PRIMARY);
+     * String response = client.flushall(SYNC, route).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushall(FlushMode mode, SingleNodeRoute route);
 
     /**
      * Displays a piece of generative computer art and the Redis version.<br>
