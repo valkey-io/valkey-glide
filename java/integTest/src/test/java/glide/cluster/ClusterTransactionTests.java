@@ -87,7 +87,7 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = new ClusterTransaction();
         Object[] expectedResult = builder.apply(transaction);
 
-        Object[] results = clusterClient.exec(transaction, RANDOM).get();
+        Object[] results = clusterClient.exec(transaction).get();
         assertArrayEquals(expectedResult, results);
     }
 
