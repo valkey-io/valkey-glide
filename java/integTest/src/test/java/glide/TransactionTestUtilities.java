@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
@@ -323,7 +324,9 @@ public class TransactionTestUtilities {
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .bzpopmax(new String[] {zSetKey2}, .1);
+                .bzpopmax(new String[] {zSetKey2}, .1)
+                .bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
 
         return new Object[] {
             3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
@@ -354,6 +357,7 @@ public class TransactionTestUtilities {
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}), MAX)
             0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
         };
     }
 
@@ -362,13 +366,17 @@ public class TransactionTestUtilities {
                 .configSet(Map.of("timeout", "1000"))
                 .configGet(new String[] {"timeout"})
                 .configResetStat()
-                .lolwut(1);
+                .lolwut(1)
+                .flushall()
+                .flushall(ASYNC);
 
         return new Object[] {
             OK, // configSet(Map.of("timeout", "1000"))
             Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
             OK, // configResetStat()
             "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
+            OK, // flushall()
+            OK, // flushall(ASYNC)
         };
     }
 

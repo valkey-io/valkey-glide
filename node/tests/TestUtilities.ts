@@ -144,9 +144,11 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     args.push(true);
     baseTransaction.smembers(key7);
-    args.push(["bar"]);
+    args.push(new Set(["bar"]));
     baseTransaction.spop(key7);
     args.push("bar");
+    baseTransaction.spopCount(key7, 2);
+    args.push(new Set());
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {
@@ -218,6 +220,8 @@ export async function transactionTest(
     args.push(3);
     baseTransaction.brpop([key6], 0.1);
     args.push([key6, field + "3"]);
+    baseTransaction.blpop([key6], 0.1);
+    args.push([key6, field + "1"]);
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     return args;
