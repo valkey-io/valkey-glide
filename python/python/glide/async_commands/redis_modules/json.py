@@ -112,10 +112,6 @@ async def get(
         options (Optional[JsonGetOptions]): Options for formatting the string representation of the JSON data. See `JsonGetOptions`.
 
     Returns:
-        Optional[string]: A bulk string representation of the returned value.
-            If `key` doesn't exists, returns None.
-
-    Returns:
         TJsonResponse[Optional[string]]:
             If one path is given:
                 For JSONPath (path starts with `$`):
