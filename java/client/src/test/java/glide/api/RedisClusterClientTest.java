@@ -22,8 +22,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
@@ -825,7 +825,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(new String[0]), any()))
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -847,7 +847,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -868,7 +868,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -890,7 +890,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -911,7 +911,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(new String[0]), eq(RANDOM), any()))
+                        eq(LOLWUT), eq(new String[0]), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -934,7 +934,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(arguments), eq(RANDOM), any()))
+                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -955,7 +955,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
+                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -978,7 +978,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(arguments), eq(RANDOM), any()))
+                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise

@@ -39,7 +39,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
-    createHSetNx,
+    createHSetNX,
     createHVals,
     createIncr,
     createIncrBy,
@@ -55,7 +55,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
-    createPTtl,
+    createPTTL,
     createPersist,
     createPfAdd,
     createRPop,
@@ -63,13 +63,13 @@ import {
     createRename,
     createSAdd,
     createSCard,
+    createSIsMember,
     createSMembers,
     createSPop,
     createSRem,
     createSet,
-    createSismember,
     createStrlen,
-    createTtl,
+    createTTL,
     createType,
     createUnlink,
     createXAdd,
@@ -706,7 +706,7 @@ export class BaseClient {
      * ```
      */
     public hsetnx(key: string, field: string, value: string): Promise<boolean> {
-        return this.createWritePromise(createHSetNx(key, field, value));
+        return this.createWritePromise(createHSetNX(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
@@ -1241,7 +1241,7 @@ export class BaseClient {
      * ```
      */
     public sismember(key: string, member: string): Promise<boolean> {
-        return this.createWritePromise(createSismember(key, member));
+        return this.createWritePromise(createSIsMember(key, member));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
@@ -1482,7 +1482,7 @@ export class BaseClient {
      * ```
      */
     public ttl(key: string): Promise<number> {
-        return this.createWritePromise(createTtl(key));
+        return this.createWritePromise(createTTL(key));
     }
 
     /** Invokes a Lua script with its keys and arguments.
@@ -1942,7 +1942,7 @@ export class BaseClient {
      * ```
      */
     public pttl(key: string): Promise<number> {
-        return this.createWritePromise(createPTtl(key));
+        return this.createWritePromise(createPTTL(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.

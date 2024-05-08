@@ -40,7 +40,7 @@ import {
     createHLen,
     createHMGet,
     createHSet,
-    createHSetNx,
+    createHSetNX,
     createHVals,
     createIncr,
     createIncrBy,
@@ -57,7 +57,7 @@ import {
     createMSet,
     createPExpire,
     createPExpireAt,
-    createPTtl,
+    createPTTL,
     createPersist,
     createPfAdd,
     createPing,
@@ -66,15 +66,15 @@ import {
     createRename,
     createSAdd,
     createSCard,
+    createSIsMember,
     createSMembers,
     createSPop,
     createSRem,
     createSelect,
     createSet,
-    createSismember,
     createStrlen,
+    createTTL,
     createTime,
-    createTtl,
     createType,
     createUnlink,
     createXAdd,
@@ -367,7 +367,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the field was set, `false` if the field already existed and was not set.
      */
     public hsetnx(key: string, field: string, value: string): T {
-        return this.addAndReturn(createHSetNx(key, field, value));
+        return this.addAndReturn(createHSetNX(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
@@ -680,7 +680,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
      */
     public sismember(key: string, member: string): T {
-        return this.addAndReturn(createSismember(key, member));
+        return this.addAndReturn(createSIsMember(key, member));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
@@ -824,7 +824,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
      */
     public ttl(key: string): T {
-        return this.addAndReturn(createTtl(key));
+        return this.addAndReturn(createTTL(key));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -1060,7 +1060,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
     public pttl(key: string): T {
-        return this.addAndReturn(createPTtl(key));
+        return this.addAndReturn(createPTTL(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.

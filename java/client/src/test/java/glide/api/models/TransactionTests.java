@@ -48,7 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNx;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -57,6 +57,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -64,7 +65,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
@@ -73,7 +73,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PTtl;
+import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
@@ -98,9 +98,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Ttl;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -230,7 +230,7 @@ public class TransactionTests {
         results.add(Pair.of(HSet, buildArgs("key", "field", "value")));
 
         transaction.hsetnx("key", "field", "value");
-        results.add(Pair.of(HSetNx, buildArgs("key", "field", "value")));
+        results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));
 
         transaction.hget("key", "field");
         results.add(Pair.of(HGet, buildArgs("key", "field")));
@@ -353,10 +353,10 @@ public class TransactionTests {
         results.add(Pair.of(PExpireAt, buildArgs("key", "99999999", "NX")));
 
         transaction.ttl("key");
-        results.add(Pair.of(Ttl, buildArgs("key")));
+        results.add(Pair.of(TTL, buildArgs("key")));
 
         transaction.pttl("key");
-        results.add(Pair.of(PTtl, buildArgs("key")));
+        results.add(Pair.of(PTTL, buildArgs("key")));
 
         transaction.clientId();
         results.add(Pair.of(ClientId, buildArgs()));
@@ -557,10 +557,10 @@ public class TransactionTests {
         results.add(Pair.of(LastSave, buildArgs()));
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
-        results.add(Pair.of(Lolwut, buildArgs()));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
-        results.add(Pair.of(Lolwut, buildArgs("1", "2")));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
+        results.add(Pair.of(LOLWUT, buildArgs()));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(LOLWUT, buildArgs("1", "2")));
+        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "6", "42")));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));

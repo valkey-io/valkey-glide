@@ -455,7 +455,7 @@ class BaseTransaction:
         Commands response:
             bool: True if the field was set, False if the field already existed and was not set.
         """
-        return self.append_command(RequestType.HSetNx, [key, field, value])
+        return self.append_command(RequestType.HSetNX, [key, field, value])
 
     def hincrby(self: TTransaction, key: str, field: str, amount: int) -> TTransaction:
         """
@@ -1184,7 +1184,7 @@ class BaseTransaction:
         Commands response:
             int: TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
         """
-        return self.append_command(RequestType.Ttl, [key])
+        return self.append_command(RequestType.TTL, [key])
 
     def pttl(
         self: TTransaction,
@@ -1200,7 +1200,7 @@ class BaseTransaction:
         Commands Response:
             int: TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
         """
-        return self.append_command(RequestType.PTtl, [key])
+        return self.append_command(RequestType.PTTL, [key])
 
     def persist(
         self: TTransaction,
@@ -1913,7 +1913,7 @@ class BaseTransaction:
         Commands response:
             int: The number of keys in the database.
         """
-        return self.append_command(RequestType.DbSize, [])
+        return self.append_command(RequestType.DBSize, [])
 
     def pfadd(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """

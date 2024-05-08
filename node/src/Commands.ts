@@ -376,12 +376,12 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHSetNx(
+export function createHSetNX(
     key: string,
     field: string,
     value: string,
 ): redis_request.Command {
-    return createCommand(RequestType.HSetNx, [key, field, value]);
+    return createCommand(RequestType.HSetNX, [key, field, value]);
 }
 
 /**
@@ -559,7 +559,7 @@ export function createSCard(key: string): redis_request.Command {
 /**
  * @internal
  */
-export function createSismember(
+export function createSIsMember(
     key: string,
     member: string,
 ): redis_request.Command {
@@ -717,8 +717,8 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createTtl(key: string): redis_request.Command {
-    return createCommand(RequestType.Ttl, [key]);
+export function createTTL(key: string): redis_request.Command {
+    return createCommand(RequestType.TTL, [key]);
 }
 
 export type ZAddOptions = {
@@ -1038,8 +1038,8 @@ export function createEcho(message: string): redis_request.Command {
 /**
  * @internal
  */
-export function createPTtl(key: string): redis_request.Command {
-    return createCommand(RequestType.PTtl, [key]);
+export function createPTTL(key: string): redis_request.Command {
+    return createCommand(RequestType.PTTL, [key]);
 }
 
 /**

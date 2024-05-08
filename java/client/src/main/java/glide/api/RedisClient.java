@@ -13,8 +13,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -144,20 +144,20 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(LOLWUT, new String[0], this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
-                Lolwut,
+                LOLWUT,
                 new String[] {VERSION_REDIS_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
@@ -168,6 +168,6 @@ public class RedisClient extends BaseClient
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
     }
 }

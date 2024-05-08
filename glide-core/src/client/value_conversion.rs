@@ -18,7 +18,7 @@ pub(crate) enum ExpectedReturnType {
     JsonToggleReturnType,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
-    Lolwut,
+    LOLWUT,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
 }
@@ -227,7 +227,7 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::Lolwut => {
+        ExpectedReturnType::LOLWUT => {
             match value {
                 // cluster (multi-node) response - go recursive
                 Value::Map(map) => {
@@ -240,7 +240,7 @@ pub(crate) fn convert_to_expected_type(
                             )?;
                             let converted_value = convert_to_expected_type(
                                 inner_value,
-                                Some(ExpectedReturnType::Lolwut),
+                                Some(ExpectedReturnType::LOLWUT),
                             )?;
                             Ok((converted_key, converted_value))
                         })
@@ -424,7 +424,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
-        b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
+        b"LOLWUT" => Some(ExpectedReturnType::LOLWUT),
         _ => None,
     }
 }
@@ -437,7 +437,7 @@ mod tests {
     fn convert_lolwut() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
-            Some(ExpectedReturnType::Lolwut)
+            Some(ExpectedReturnType::LOLWUT)
         ));
 
         let redis_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
@@ -445,7 +445,7 @@ mod tests {
 
         let converted_1 = convert_to_expected_type(
             Value::BulkString(redis_string.clone().into_bytes()),
-            Some(ExpectedReturnType::Lolwut),
+            Some(ExpectedReturnType::LOLWUT),
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -457,7 +457,7 @@ mod tests {
                 format: redis::VerbatimFormat::Text,
                 text: redis_string.clone(),
             },
-            Some(ExpectedReturnType::Lolwut),
+            Some(ExpectedReturnType::LOLWUT),
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -475,7 +475,7 @@ mod tests {
                     Value::BulkString(redis_string.clone().into_bytes()),
                 ),
             ]),
-            Some(ExpectedReturnType::Lolwut),
+            Some(ExpectedReturnType::LOLWUT),
         );
         assert_eq!(
             Value::Map(vec![
@@ -493,7 +493,7 @@ mod tests {
 
         let converted_4 = convert_to_expected_type(
             Value::SimpleString(redis_string.clone()),
-            Some(ExpectedReturnType::Lolwut),
+            Some(ExpectedReturnType::LOLWUT),
         );
         assert!(converted_4.is_err());
     }

@@ -29,7 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNx;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -51,7 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PTtl;
+import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
@@ -75,8 +75,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Ttl;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -448,7 +448,7 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> hsetnx(
             @NonNull String key, @NonNull String field, @NonNull String value) {
         return commandManager.submitNewCommand(
-                HSetNx, new String[] {key, field, value}, this::handleBooleanResponse);
+                HSetNX, new String[] {key, field, value}, this::handleBooleanResponse);
     }
 
     @Override
@@ -725,7 +725,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
-        return commandManager.submitNewCommand(Ttl, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1031,7 +1031,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
-        return commandManager.submitNewCommand(PTtl, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
 
     @Override

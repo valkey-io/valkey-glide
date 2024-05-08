@@ -39,7 +39,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNx;
+import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -55,7 +56,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
@@ -64,7 +64,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PTtl;
+import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
@@ -89,9 +89,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
+import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Ttl;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -528,7 +528,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hsetnx(@NonNull String key, @NonNull String field, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, field, value);
-        protobufTransaction.addCommands(buildCommand(HSetNx, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HSetNX, commandArgs));
         return getThis();
     }
 
@@ -1350,7 +1350,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T ttl(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
 
-        protobufTransaction.addCommands(buildCommand(Ttl, commandArgs));
+        protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
         return getThis();
     }
 
@@ -2199,7 +2199,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T pttl(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(PTtl, commandArgs));
+        protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
         return getThis();
     }
 
@@ -2253,7 +2253,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut() {
-        protobufTransaction.addCommands(buildCommand(Lolwut));
+        protobufTransaction.addCommands(buildCommand(LOLWUT));
         return getThis();
     }
 
@@ -2275,7 +2275,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
         return getThis();
     }
 
@@ -2290,7 +2290,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lolwut(int version) {
         ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
-        protobufTransaction.addCommands(buildCommand(Lolwut, commandArgs));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
         return getThis();
     }
 
@@ -2315,7 +2315,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
         return getThis();
     }
 

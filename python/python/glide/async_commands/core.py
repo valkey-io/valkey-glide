@@ -753,7 +753,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             bool,
-            await self._execute_command(RequestType.HSetNx, [key, field, value]),
+            await self._execute_command(RequestType.HSetNX, [key, field, value]),
         )
 
     async def hincrby(self, key: str, field: str, amount: int) -> int:
@@ -1721,7 +1721,7 @@ class CoreCommands(Protocol):
             >>> await client.ttl("key")
                 -1  # Indicates that "key: has no has no associated expire.
         """
-        return cast(int, await self._execute_command(RequestType.Ttl, [key]))
+        return cast(int, await self._execute_command(RequestType.TTL, [key]))
 
     async def pttl(
         self,
@@ -1745,7 +1745,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(RequestType.PTtl, [key]),
+            await self._execute_command(RequestType.PTTL, [key]),
         )
 
     async def persist(
