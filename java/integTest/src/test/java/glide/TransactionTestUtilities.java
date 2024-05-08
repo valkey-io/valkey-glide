@@ -166,6 +166,7 @@ public class TransactionTestUtilities {
                         new GeospatialData(13.361389, 38.115556),
                         "Catania",
                         new GeospatialData(15.087269, 37.502669)));
+        baseTransaction.geopos(geoKey1, new String[] {"Palermo", "Catania"});
 
         baseTransaction.xadd(
                 key9, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build());
@@ -296,6 +297,10 @@ public class TransactionTestUtilities {
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
             new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zSetKey2 }, .1)
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
+            new Double[][] {
+                {13.36138933897018433, 38.11555639549629859},
+                {15.08726745843887329, 37.50266842333162032},
+            }, // geopos(new String[]{"Palermo", "Catania"})
             "0-1", // xadd(key9, Map.of("field1", "value1"), id("0-1"));
             "0-2", // xadd(key9, Map.of("field2", "value2"), id("0-2"));
             "0-3", // xadd(key9, Map.of("field3", "value3"), id("0-3"));
