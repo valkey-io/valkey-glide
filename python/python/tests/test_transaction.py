@@ -235,6 +235,8 @@ async def transaction_test(
     args.append(1)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
+    transaction.zdiffstore(key8, [key8, key8])
+    args.append(0)
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
