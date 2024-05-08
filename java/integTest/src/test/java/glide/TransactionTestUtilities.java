@@ -11,6 +11,7 @@ import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.BitMapOptions;
 import glide.api.models.commands.BitmapOptions;
+import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -248,7 +249,7 @@ public class TransactionTestUtilities {
 
         baseTransaction.bitcount(key3);
         baseTransaction.bitcount(key3, 2, 4);
-        baseTransaction.bitcount(key3, 2, 19, BitmapOptions.BIT);
+        baseTransaction.bitcount(key3, 2, 19, BitmapIndexType.BIT);
 
         return baseTransaction;
     }
@@ -439,7 +440,7 @@ public class TransactionTestUtilities {
             3L, // pfcount(new String[] { hllKey3 })
             15L, // bitcount(key3)
             8L, // bitcount(key3, 2, 4)
-            7L, // bitcount(key3, 2, 19, BitmapOptions.BIT)
+            7L, // bitcount(key3, 2, 19, BitmapIndexType.BIT)
         };
     }
 
