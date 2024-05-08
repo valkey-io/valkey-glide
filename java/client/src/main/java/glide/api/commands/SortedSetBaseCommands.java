@@ -1032,13 +1032,10 @@ public interface SortedSetBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * Object[][] payload1 = client.zrandmemberWithCountWithScores(key1, -3).get();
-     * assert payload1.length == 3;
-     * for (Object[] memberScoreArray : payload1) {
-     *     String member = (String) memberScoreArray[0];
-     *     Double score = (Double) memberScoreArray[1];
-     *     System.out.println("Member: " + member);
-     *     System.out.println("Score: " + score);
+     * Object[][] data = client.zrandmemberWithCountWithScores(key1, -3).get();
+     * assert data.length == 3;
+     * for (Object[] memberScorePair : data) {
+     *     System.out.printf("Member: '%s', score: %d", memberScorePair[0], memberScorePair[1]);
      * }
      * }</pre>
      */
