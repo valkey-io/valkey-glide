@@ -1221,6 +1221,17 @@ export function createBrpop(
     return createCommand(RequestType.Brpop, args);
 }
 
+/**
+ * @internal
+ */
+export function createBlpop(
+    keys: string[],
+    timeout: number,
+): redis_request.Command {
+    const args = [...keys, timeout.toString()];
+    return createCommand(RequestType.Blpop, args);
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or until the server has the required number of entries.
@@ -1286,4 +1297,15 @@ export function createRename(
     newKey: string,
 ): redis_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
+}
+
+/**
+ * @internal
+ */
+export function createPfAdd(
+    key: string,
+    elements: string[],
+): redis_request.Command {
+    const args = [key, ...elements];
+    return createCommand(RequestType.PfAdd, args);
 }

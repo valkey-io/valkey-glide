@@ -1,12 +1,16 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
 import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -23,6 +27,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
@@ -35,6 +41,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
 import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -42,15 +49,21 @@ import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -62,23 +75,32 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
+import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.SInter;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
+import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
@@ -87,7 +109,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
@@ -97,6 +121,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -115,10 +140,18 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
-import glide.api.models.commands.StreamAddOptions;
-import glide.api.models.commands.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamTrimOptions;
+import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
@@ -150,13 +183,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in args.
      *
+     * @apiNote See <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
+     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
+     *     API.
      * @param args Arguments for the custom command.
      * @return A response from Redis with an <code>Object</code>.
-     * @remarks This function should only be used for single-response commands. Commands that don't
-     *     return response (such as <em>SUBSCRIBE</em>), or that return potentially more than a single
-     *     response (such as <em>XREAD</em>), or that change the client's behavior (such as entering
-     *     <em>pub</em>/<em>sub</em> mode on <em>RESP2</em> connections) shouldn't be called using
-     *     this function.
      * @example Returns a list of all pub/sub clients:
      *     <pre>{@code
      * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
@@ -643,6 +675,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns all field names in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details
+     * @param key The key of the hash.
+     * @return Command Response - An <code>array</code> of field names in the hash, or an <code>
+     *     empty array</code> when the key does not exist.
+     */
+    public T hkeys(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(Hkeys, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
      * elements</code> are inserted one after the other to the head of the list, from the leftmost
      * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
@@ -930,6 +975,51 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return Command Response - A <code>Set</code> of elements representing the difference between
+     *     the sets.<br>
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
+     */
+    public T sdiff(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(SDiff, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
+     * @param key The key of the set to check.
+     * @param members A list of members to check for existence in the set.
+     * @return Command Response - An <code>array</code> of <code>Boolean</code> values, each
+     *     indicating if the respective member exists in the set.
+     */
+    public T smismember(@NonNull String key, @NonNull String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+        protobufTransaction.addCommands(buildCommand(SMIsMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets to diff.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sdiffstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SDiffStore, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
@@ -948,6 +1038,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Gets the intersection of all the given sets.
+     *
+     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - A <code>Set</code> of members which are present in all given sets.
+     *     <br>
+     *     Missing or empty input sets cause an empty response.
+     */
+    public T sinter(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(SInter, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
@@ -959,6 +1064,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T sinterstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
         protobufTransaction.addCommands(buildCommand(SInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return Command Response - The number of elements in the resulting set.
+     */
+    public T sunionstore(@NonNull String destination, @NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
+        protobufTransaction.addCommands(buildCommand(SUnionStore, commandArgs));
         return getThis();
     }
 
@@ -1481,6 +1601,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * sorted sets stored at the specified <code>keys</code>. The sorted sets are checked in the order
+     * they are provided.<br>
+     * <code>BZPOPMIN</code> is the blocking variant of {@link #zpopmin(String)}.<br>
+     *
+     * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
+     * @apiNote <code>BZPOPMIN</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the key where the member was popped
+     *     out, the member itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
+     */
+    public T bzpopmin(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(BZPopMin, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Removes and returns up to <code>count</code> members with the highest scores from the sorted
      * set stored at the specified <code>key</code>.
      *
@@ -1517,6 +1661,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * sorted sets stored at the specified <code>keys</code>. The sorted sets are checked in the order
+     * they are provided.<br>
+     * <code>BZPOPMAX</code> is the blocking variant of {@link #zpopmax(String)}.<br>
+     *
+     * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
+     * @apiNote <code>BZPOPMAX</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - An <code>array</code> containing the key where the member was popped
+     *     out, the member itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     </code>.
+     */
+    public T bzpopmax(@NonNull String[] keys, double timeout) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
+        protobufTransaction.addCommands(buildCommand(BZPopMax, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
@@ -1534,7 +1702,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
-     * scores ordered from low to high.<br>
+     * scores ordered from low to high, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
@@ -1552,7 +1720,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
-     * score, where scores are ordered from the lowest to highest.
+     * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
      * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1565,6 +1733,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zrankWithScore(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(key, member, WITH_SCORE_REDIS_API);
         protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
+     * scores are ordered from the highest to lowest, starting from <code>0</code>.<br>
+     * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
+     *
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return Command Response - The rank of <code>member</code> in the sorted set, where ranks are
+     *     ordered from high to low based on scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     */
+    public T zrevrank(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, member);
+        protobufTransaction.addCommands(buildCommand(ZRevRank, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
+     * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return Command Response - An array containing the rank (as <code>Long</code>) and score (as
+     *     <code>Double</code>) of <code>member</code> in the sorted set, where ranks are ordered from
+     *     high to low based on scores.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     */
+    public T zrevrankWithScore(@NonNull String key, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, member, WITH_SCORE_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(ZRevRank, commandArgs));
         return getThis();
     }
 
@@ -1807,42 +2013,210 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
-     * result in <code>destination</code>. If <code>destination</code> already exists, it is
-     * overwritten. Otherwise, a new sorted set will be created.
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
      *
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
-     * @param keys The keys of sorted sets.
-     * @param options Weight and Aggregate options.
-     * @return Command Response - The number of elements in the resulting sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArray} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeys} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
      */
     public T zunionstore(
             @NonNull String destination,
-            @NonNull String[] keys,
-            @NonNull WeightAggregateOptions options) {
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
-                                new String[] {destination, Integer.toString(keys.length)}, keys, options.toArgs()));
+                                new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
         protobufTransaction.addCommands(buildCommand(ZUnionStore, commandArgs));
         return getThis();
     }
 
     /**
-     * Computes the union of sorted sets given by the specified <code>keys</code>, and stores the
-     * result in <code>destination</code>. If <code>destination</code> already exists, it is
-     * overwritten. Otherwise, a new sorted set will be created.<br>
-     * To perform a zunionstore operation while specifying custom weights and aggregation settings,
-     * use {@link #zunionstore(String, String[], WeightAggregateOptions)}
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
      *
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
-     * @param keys The keys of sorted sets.
-     * @return Command Response - The number of elements in the resulting sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
      */
-    public T zunionstore(@NonNull String destination, @NonNull String[] keys) {
-        return zunionstore(destination, keys, WeightAggregateOptions.builder().build());
+    public T zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZUnionStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArray} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeys} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
+     */
+    public T zinterstore(
+            @NonNull String destination,
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>KeysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
+     * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
+     * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
+     *
+     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *     destination</code>.
+     */
+    public T zinterstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
+     * </code>.<br>
+     * To get the elements with their scores, see {@link #zunionWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the union.
+     */
+    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
+     * </code>.<br>
+     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
+     * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zunionWithScores}.
+     *
+     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the union.
+     */
+    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.
+     *
+     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the union.
+     */
+    public T zunionWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                keysOrWeightedKeys.toArgs(),
+                                aggregate.toArgs(),
+                                new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
+     * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the union.
+     */
+    public T zunionWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
     }
 
     /**
@@ -1881,6 +2255,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Trims the stream by evicting older entries.
+     *
+     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @param key The key of the stream.
+     * @param options Stream trim options.
+     * @return Command Response - The number of entries deleted from the stream.
+     */
+    public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
+        protobufTransaction.addCommands(buildCommand(XTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
      *
      * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
@@ -1915,12 +2303,122 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
      * @return Command Response - The current server time as a <code>String</code> array with two
-     *     elements: A Unix timestamp and the amount of microseconds already elapsed in the current
-     *     second. The returned array is in a <code>[Unix timestamp, Microseconds already elapsed]
+     *     elements: A <code>UNIX TIME</code> and the amount of microseconds already elapsed in the
+     *     current second. The returned array is in a <code>[UNIX TIME, Microseconds already elapsed]
      *     </code> format.
      */
     public T time() {
         protobufTransaction.addCommands(buildCommand(Time));
+        return getThis();
+    }
+
+    /**
+     * Returns <code>UNIX TIME</code> of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * @see <a href="https://redis.io/commands/lastsave/">redis.io</a> for details.
+     * @return Command Response - <code>UNIX TIME</code> of the last DB save executed with success.
+     */
+    public T lastsave() {
+        protobufTransaction.addCommands(buildCommand(LastSave));
+        return getThis();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T flushall() {
+        protobufTransaction.addCommands(buildCommand(FlushAll));
+        return getThis();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T flushall(FlushMode mode) {
+        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(mode.toString())));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut() {
+        protobufTransaction.addCommands(buildCommand(LOLWUT));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *           row, and number of squares per column.
+     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On other versions parameters are ignored.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int @NonNull [] parameters) {
+        String[] arguments =
+                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version) {
+        ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * @apiNote Versions 5 and 6 produce graphical things.
+     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @param version Version of computer art to generate.
+     * @param parameters Additional set of arguments in order to change the output:
+     *     <ul>
+     *       <li>For version <code>5</code>, those are length of the line, number of squares per row,
+     *           and number of squares per column.
+     *       <li>For version <code>6</code>, those are number of columns and number of lines.
+     *     </ul>
+     *
+     * @return Command Response - A piece of generative computer art along with the current Redis
+     *     version.
+     */
+    public T lolwut(int version, int @NonNull [] parameters) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
+        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
         return getThis();
     }
 
@@ -1935,6 +2433,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return Command Response - <code>true</code> if <code>key</code> was renamed to <code>newKey
+     *     </code>, <code>false</code> if <code>newKey</code> already exists.
+     */
+    public T renamenx(@NonNull String key, @NonNull String newKey) {
+        ArgsArray commandArgs = buildArgs(key, newKey);
+        protobufTransaction.addCommands(buildCommand(RenameNx, commandArgs));
         return getThis();
     }
 
@@ -1963,8 +2476,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops an element from the tail of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the tail of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
@@ -1972,10 +2485,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
-     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
+     *     from which the element was popped and the <code>value</code> of the popped element,
+     *     formatted as <code>
      *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
      *     null</code>.
      */
@@ -1986,8 +2500,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -2001,8 +2516,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -2016,8 +2532,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops an element from the head of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the head of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
@@ -2025,10 +2541,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return Command Response - An <code>array</code> containing the <code>key</code> from which the
-     *     element was popped and the <code>value</code> of the popped element, formatted as <code>
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
+     *     from which the element was popped and the <code>value</code> of the popped element,
+     *     formatted as <code>
      *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
      *     null</code>.
      */
@@ -2186,6 +2703,125 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destination));
         protobufTransaction.addCommands(buildCommand(PfMerge, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the internal encoding of.
+     * @return Command response - If <code>key</code> exists, returns the internal encoding of the
+     *     object stored at <code>key</code> as a <code>String</code>. Otherwise, return <code>null
+     *     </code>.
+     */
+    public T objectEncoding(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
+     *     of.
+     * @return Command response - If <code>key</code> exists, returns the logarithmic access frequency
+     *     counter of the object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns
+     *     <code>null</code>.
+     */
+    public T objectFreq(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectFreq, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the idle time of.
+     * @return Command response - If <code>key</code> exists, returns the idle time in seconds.
+     *     Otherwise, returns <code>null</code>.
+     */
+    public T objectIdletime(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectIdletime, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the reference count of the object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the reference count of.
+     * @return Command response - If <code>key</code> exists, returns the reference count of the
+     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
+     *     </code>.
+     */
+    public T objectRefcount(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(ObjectRefcount, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Updates the last access time of specified <code>keys</code>.
+     *
+     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @param keys The keys to update last access time.
+     * @return Command Response - The number of keys that were updated.
+     */
+    public T touch(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(keys);
+        protobufTransaction.addCommands(buildCommand(Touch, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at <code>key
+     * </code>.<br>
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options The GeoAdd options - see {@link GeoAddOptions}
+     * @return Command Response - The number of elements added to the sorted set. If <code>changed
+     *     </code> is set to <code>true</code> in the options, returns the number of elements updated
+     *     in the sorted set.
+     */
+    public T geoadd(
+            @NonNull String key,
+            @NonNull Map<String, GeospatialData> membersToGeospatialData,
+            @NonNull GeoAddOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData)));
+        protobufTransaction.addCommands(buildCommand(GeoAdd, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at <code>key
+     * </code>.<br>
+     * If a member is already a part of the sorted set, its position is updated.<br>
+     * To perform a <code>geoadd</code> operation while specifying optional parameters, use {@link
+     * #geoadd(String, Map, GeoAddOptions)}.
+     *
+     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @return Command Response - The number of elements added to the sorted set.
+     */
+    public T geoadd(
+            @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
+        return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 
     /** Build protobuf {@link Command} object for given command and arguments. */

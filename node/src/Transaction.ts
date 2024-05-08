@@ -14,6 +14,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
+    createBlpop,
     createBrpop,
     createClientGetName,
     createClientId,
@@ -57,6 +58,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPersist,
+    createPfAdd,
     createPing,
     createPttl,
     createRPop,
@@ -104,19 +106,40 @@ import { redis_request } from "./ProtobufMessage";
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new BaseTransaction()
- *          .set("key", "value")
- *          .get("key");
- *       await client.exec(transaction);
- *       [OK , "value"]
+ * ```typescript
+ * const transaction = new BaseTransaction()
+ *    .set("key", "value")
+ *    .get("key");
+ * const result = await client.exec(transaction);
+ * console.log(result); // Output: ['OK', 'value']
+ * ```
  */
 export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * @internal
      */
     readonly commands: redis_request.Command[] = [];
+    /**
+     * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
+     * @internal
+     */
+    readonly setCommandsIndexes: number[] = [];
 
-    protected addAndReturn(command: redis_request.Command): T {
+    /**
+     * Adds a command to the transaction and returns the transaction instance.
+     * @param command - The command to add.
+     * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
+     * @returns The updated transaction instance.
+     */
+    protected addAndReturn(
+        command: redis_request.Command,
+        shouldConvertToSet: boolean = false,
+    ): T {
+        if (shouldConvertToSet) {
+            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            this.setCommandsIndexes.push(this.commands.length);
+        }
+
         this.commands.push(command);
         return this as unknown as T;
     }
@@ -321,10 +344,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
-     *
-     * @example
-     * config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
-     *
      */
     public configSet(parameters: Record<string, string>): T {
         return this.addAndReturn(createConfigSet(parameters));
@@ -656,7 +675,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      */
     public smembers(key: string): T {
-        return this.addAndReturn(createSMembers(key));
+        return this.addAndReturn(createSMembers(key), true);
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -706,7 +725,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, empty list will be returned.
      */
     public spopCount(key: string, count: number): T {
-        return this.addAndReturn(createSPop(key, count));
+        return this.addAndReturn(createSPop(key, count), true);
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -1146,13 +1165,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+     * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+     * for details on the restrictions and limitations of the custom command API.
      *
-     * @example
-     * Returns a list of all pub/sub clients:
-     * ```ts
-     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
-     * ```
+     * Command Response - A response from Redis with an `Object`.
      */
     public customCommand(args: string[]): T {
         return this.addAndReturn(createCustomCommand(args));
@@ -1244,19 +1260,51 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Blocking list pop primitive.
      * Pop an element from the tail of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
+     * Note: `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
     public brpop(keys: string[], timeout: number): T {
         return this.addAndReturn(createBrpop(keys, timeout));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given `keys` being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://redis.io/commands/blpop/ for more details.
+     * Note: `BLPOP` is a blocking command,
+     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
+     */
+    public blpop(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBlpop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://redis.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     */
+    public pfadd(key: string, elements: string[]): T {
+        return this.addAndReturn(createPfAdd(key, elements));
     }
 }
 
@@ -1271,12 +1319,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new Transaction()
- *          .set("key", "value")
- *          .select(1)  /// Standalone command
- *          .get("key");
- *       await RedisClient.exec(transaction);
- *       [OK , OK , null]
+ * ```typescript
+ * const transaction = new Transaction()
+ *    .set("key", "value")
+ *    .select(1)  /// Standalone command
+ *    .get("key");
+ * const result = await redisClient.exec(transaction);
+ * console.log(result); // Output: ['OK', 'OK', null]
+ * ```
  */
 export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands

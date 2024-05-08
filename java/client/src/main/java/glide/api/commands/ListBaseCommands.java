@@ -277,8 +277,8 @@ public interface ListBaseCommands {
             String key, InsertPosition position, String pivot, String element);
 
     /**
-     * Pops an element from the head of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the head of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
@@ -286,11 +286,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BLPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.blpop(["list1", "list2"], 0.5).get();
@@ -301,8 +302,8 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> blpop(String[] keys, double timeout);
 
     /**
-     * Pops an element from the tail of the first list that is non-empty, with the given keys being
-     * checked in the order that they are given.<br>
+     * Pops an element from the tail of the first list that is non-empty, with the given <code>keys
+     * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
@@ -310,11 +311,12 @@ public interface ListBaseCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
-     * @param timeout The number of seconds to wait for a blocking <code>BRPOP</code> operation to
-     *     complete. A value of <code>0</code> will block indefinitely.
-     * @return An <code>array</code> containing the <code>key</code> from which the element was popped
-     *     and the <code>value</code> of the popped element, formatted as <code>[key, value]</code>.
-     *     If no element could be popped and the timeout expired, returns </code>null</code>.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the <code>key</code> from which the element
+     *     was popped and the <code>value</code> of the popped element, formatted as <code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     null</code>.
      * @example
      *     <pre>{@code
      * String[] response = client.brpop(["list1", "list2"], 0.5).get();
@@ -325,8 +327,9 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> brpop(String[] keys, double timeout);
 
     /**
-     * Inserts specified values at the tail of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
      * @param key The key of the list.
@@ -341,8 +344,9 @@ public interface ListBaseCommands {
     CompletableFuture<Long> rpushx(String key, String[] elements);
 
     /**
-     * Inserts specified values at the head of the <code>list</code>, only if <code>key</code> already
-     * exists and holds a list.
+     * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
      *
      * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
      * @param key The key of the list.

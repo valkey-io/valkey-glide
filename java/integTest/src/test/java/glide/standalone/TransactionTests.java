@@ -1,13 +1,16 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TransactionTestUtilities.transactionTest;
 import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestConfiguration;
 import glide.api.RedisClient;
@@ -15,6 +18,9 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -109,5 +115,85 @@ public class TransactionTests {
 
         Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void lastsave() {
+        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        var response = client.exec(new Transaction().lastsave()).get();
+        assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String objectFreqKey = "key";
+        String maxmemoryPolicy = "maxmemory-policy";
+
+        String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            Transaction transaction = new Transaction();
+            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            transaction.set(objectFreqKey, "");
+            transaction.objectFreq(objectFreqKey);
+            var response = client.exec(transaction).get();
+            assertEquals(OK, response[0]);
+            assertEquals(OK, response[1]);
+            assertTrue((long) response[2] >= 0L);
+        } finally {
+            client.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectIdletime() {
+        String objectIdletimeKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.set(objectIdletimeKey, "");
+        transaction.objectIdletime(objectIdletimeKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
+    }
+
+    @Test
+    @SneakyThrows
+    public void objectRefcount() {
+        String objectRefcountKey = "key";
+        Transaction transaction = new Transaction();
+        transaction.set(objectRefcountKey, "");
+        transaction.objectRefcount(objectRefcountKey);
+        var response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
+    }
+
+    @Test
+    @SneakyThrows
+    public void zrank_zrevrank_withscores() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
+        Transaction transaction = new Transaction();
+        transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        transaction.zrankWithScore(zSetKey1, "one");
+        transaction.zrevrankWithScore(zSetKey1, "one");
+
+        Object[] result = client.exec(transaction).get();
+        assertEquals(3L, result[0]);
+        assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
+        assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void WATCH_transaction_failure_returns_null() {
+        Transaction transaction = new Transaction();
+        transaction.get("key");
+        assertEquals(OK, client.customCommand(new String[] {"WATCH", "key"}).get());
+        assertEquals(OK, client.set("key", "foo").get());
+        assertNull(client.exec(transaction).get());
     }
 }

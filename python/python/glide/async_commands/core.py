@@ -1,5 +1,5 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
-
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -18,11 +18,13 @@ from typing import (
 
 from glide.async_commands.sorted_set import (
     InfBound,
+    LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     _create_zrange_args,
+    _create_zrangestore_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -33,7 +35,7 @@ from ..glide import Script
 
 class ConditionalChange(Enum):
     """
-    A condition to the "SET" and "ZADD" commands.
+    A condition to the `SET`, `ZADD` and `GEOADD` commands.
     - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
     - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
     """
@@ -131,6 +133,174 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
+
+
+class StreamTrimOptions(ABC):
+    """
+    Abstract base class for stream trim options.
+    """
+
+    @abstractmethod
+    def __init__(
+        self,
+        exact: bool,
+        threshold: Union[str, int],
+        method: str,
+        limit: Optional[int] = None,
+    ):
+        """
+        Initialize stream trim options.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (Union[str, int]): Threshold for trimming.
+            method (str): Method for trimming (e.g., MINID, MAXLEN).
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        if exact and limit:
+            raise ValueError(
+                "If `exact` is set to `True`, `limit` cannot be specified."
+            )
+        self.exact = exact
+        self.threshold = threshold
+        self.method = method
+        self.limit = limit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = [
+            self.method,
+            "=" if self.exact else "~",
+            str(self.threshold),
+        ]
+        if self.limit is not None:
+            option_args.extend(["LIMIT", str(self.limit)])
+        return option_args
+
+
+class TrimByMinId(StreamTrimOptions):
+    """
+    Stream trim option to trim by minimum ID.
+    """
+
+    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
+        """
+        Initialize trim option by minimum ID.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (str): Threshold for trimming by minimum ID.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        super().__init__(exact, threshold, "MINID", limit)
+
+
+class TrimByMaxLen(StreamTrimOptions):
+    """
+    Stream trim option to trim by maximum length.
+    """
+
+    def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
+        """
+        Initialize trim option by maximum length.
+
+        Args:
+            exact (bool): If `true`, the stream will be trimmed exactly.
+                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
+            threshold (int): Threshold for trimming by maximum length.
+            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
+                Note: If `exact` is set to `True`, `limit` cannot be specified.
+        """
+        super().__init__(exact, threshold, "MAXLEN", limit)
+
+
+class StreamAddOptions:
+    """
+    Options for adding entries to a stream.
+    """
+
+    def __init__(
+        self,
+        id: Optional[str] = None,
+        make_stream: bool = True,
+        trim: Optional[StreamTrimOptions] = None,
+    ):
+        """
+        Initialize stream add options.
+
+        Args:
+            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
+            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
+        """
+        self.id = id
+        self.make_stream = make_stream
+        self.trim = trim
+
+    def to_args(self) -> List[str]:
+        """
+        Convert options to arguments for Redis command.
+
+        Returns:
+            List[str]: List of arguments for Redis command.
+        """
+        option_args = []
+        if not self.make_stream:
+            option_args.append("NOMKSTREAM")
+        if self.trim:
+            option_args.extend(self.trim.to_args())
+        option_args.append(self.id if self.id else "*")
+
+        return option_args
+
+
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -182,6 +352,11 @@ class ExpirySet:
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class InsertPosition(Enum):
+    BEFORE = "BEFORE"
+    AFTER = "AFTER"
 
 
 class CoreCommands(Protocol):
@@ -785,6 +960,82 @@ class CoreCommands(Protocol):
         """
         return cast(List[str], await self._execute_command(RequestType.Hkeys, [key]))
 
+    async def hrandfield(self, key: str) -> Optional[str]:
+        """
+        Returns a random field name from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+
+        Returns:
+            Optional[str]: A random field name from the hash stored at `key`.
+            If the hash does not exist or is empty, None will be returned.
+
+        Examples:
+            >>> await client.hrandfield("my_hash")
+                "field1"  # A random field name stored in the hash "my_hash".
+        """
+        return cast(
+            Optional[str], await self._execute_command(RequestType.HRandField, [key])
+        )
+
+    async def hrandfield_count(self, key: str, count: int) -> List[str]:
+        """
+        Retrieves up to `count` random field names from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Returns:
+            List[str]: A list of random field names from the hash.
+            If the hash does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.hrandfield_count("my_hash", -3)
+                ["field1", "field1", "field2"]  # Non-distinct, random field names stored in the hash "my_hash".
+            >>> await client.hrandfield_count("non_existing_hash", 3)
+                []  # Empty list
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.HRandField, [key, str(count)]),
+        )
+
+    async def hrandfield_withvalues(self, key: str, count: int) -> List[List[str]]:
+        """
+        Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
+
+        See https://valkey.io/commands/hrandfield for more details.
+
+        Args:
+            key (str): The key of the hash.
+            count (int): The number of field names to return.
+                If `count` is positive, returns unique elements.
+                If negative, allows for duplicates.
+
+        Returns:
+            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            hash and `value` is the associated value of the field name.
+            If the hash does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.hrandfield_withvalues("my_hash", -3)
+                [["field1", "value1"], ["field1", "value1"], ["field2", "value2"]]
+        """
+        return cast(
+            List[List[str]],
+            await self._execute_command(
+                RequestType.HRandField, [key, str(count), "WITHVALUES"]
+            ),
+        )
+
     async def lpush(self, key: str, elements: List[str]) -> int:
         """
         Insert all the specified values at the head of the list stored at `key`.
@@ -811,7 +1062,8 @@ class CoreCommands(Protocol):
 
     async def lpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -878,6 +1130,34 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.LPop, [key, str(count)]),
+        )
+
+    async def blpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+        """
+        Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/blpop for details.
+
+        BLPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.blpop(["list1", "list2"], 0.5)
+                ["list1", "element"]  # "element" was popped from the head of the list with key "list1"
+        """
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.Blpop, keys + [str(timeout)]),
         )
 
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
@@ -973,7 +1253,8 @@ class CoreCommands(Protocol):
 
     async def rpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/rpushx/ for more details.
 
@@ -1042,6 +1323,65 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
+    async def brpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+        """
+        Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/brpop for details.
+
+        BRPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.brpop(["list1", "list2"], 0.5)
+                ["list1", "element"]  # "element" was popped from the tail of the list with key "list1"
+        """
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.Brpop, keys + [str(timeout)]),
+        )
+
+    async def linsert(
+        self, key: str, position: InsertPosition, pivot: str, element: str
+    ) -> int:
+        """
+        Inserts `element` in the list at `key` either before or after the `pivot`.
+
+        See https://redis.io/commands/linsert/ for details.
+
+        Args:
+            key (str): The key of the list.
+            position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
+                `InsertPosition.AFTER` the `pivot`.
+            pivot (str): An element of the list.
+            element (str): The new element to insert.
+
+        Returns:
+            int: The list length after a successful insert operation.
+                If the `key` doesn't exist returns `-1`.
+                If the `pivot` wasn't found, returns `0`.
+
+        Examples:
+            >>> await client.linsert("my_list", InsertPosition.BEFORE, "World", "There")
+                3 # "There" was inserted before "World", and the new length of the list is 3.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.LInsert, [key, position.value, pivot, element]
+            ),
+        )
+
     async def sadd(self, key: str, members: List[str]) -> int:
         """
         Add specified members to the set stored at `key`.
@@ -1092,7 +1432,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of all members of the set.
-                If `key` does not exist an empty list will be returned.
+                If `key` does not exist an empty set will be returned.
 
         Examples:
             >>> await client.smembers("my_set")
@@ -1152,7 +1492,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Set[str]: A set of popped elements will be returned depending on the set's length.
-                  If `key` does not exist, an empty set will be returned.
+                If `key` does not exist, an empty set will be returned.
 
         Examples:
             >>> await client.spop_count("my_set", 2)
@@ -1522,6 +1862,216 @@ class CoreCommands(Protocol):
         """
         return cast(str, await self._execute_command(RequestType.Type, [key]))
 
+    async def xadd(
+        self,
+        key: str,
+        values: List[Tuple[str, str]],
+        options: Optional[StreamAddOptions] = None,
+    ) -> Optional[str]:
+        """
+        Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
+
+        See https://valkey.io/commands/xadd for more details.
+
+        Args:
+            key (str): The key of the stream.
+            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
+
+        Returns:
+            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+
+        Example:
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")])
+                "1615957011958-0"  # Example stream entry ID.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1", make_stream=False))
+                None  # The key doesn't exist, therefore, None is returned.
+            >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1"))
+                "0-1"  # Returns the stream id.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+        else:
+            args.append("*")
+        args.extend([field for pair in values for field in pair])
+
+        return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
+
+    async def xtrim(
+        self,
+        key: str,
+        options: StreamTrimOptions,
+    ) -> int:
+        """
+        Trims the stream stored at `key` by evicting older entries.
+
+        See https://valkey.io/commands/xtrim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
+
+        Returns:
+            int: TThe number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+
+        Example:
+            >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")], StreamAddOptions(id="0-1"))
+            >>> await client.xtrim("mystream", TrimByMinId(exact=True, threshold="0-2")))
+                1 # One entry was deleted from the stream.
+        """
+        args = [key]
+        if options:
+            args.extend(options.to_args())
+
+        return cast(int, await self._execute_command(RequestType.XTrim, args))
+
+    async def geoadd(
+        self,
+        key: str,
+        members_geospatialdata: Mapping[str, GeospatialData],
+        existing_options: Optional[ConditionalChange] = None,
+        changed: bool = False,
+    ) -> int:
+        """
+        Adds geospatial members with their positions to the specified sorted set stored at `key`.
+        If a member is already a part of the sorted set, its position is updated.
+
+        See https://valkey.io/commands/geoadd for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            The command will report an error when the user attempts to index coordinates outside the specified ranges.
+            existing_options (Optional[ConditionalChange]): Options for handling existing members.
+                - NX: Only add new elements.
+                - XX: Only update existing elements.
+            changed (bool): Modify the return value to return the number of changed elements, instead of the number of new elements added.
+
+        Returns:
+            int: The number of elements added to the sorted set.
+            If `changed` is set, returns the number of elements updated in the sorted set.
+
+        Examples:
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+                2  # Indicates that two elements have been added to the sorted set "my_sorted_set".
+            >>> await client.geoadd("my_sorted_set", {"Palermo": GeospatialData(14.361389, 38.115556)}, existing_options=ConditionalChange.XX, changed=True)
+                1  # Updates the position of an existing member in the sorted set "my_sorted_set".
+        """
+        args = [key]
+        if existing_options:
+            args.append(existing_options.value)
+
+        if changed:
+            args.append("CH")
+
+        members_geospatialdata_list = [
+            coord
+            for member, position in members_geospatialdata.items()
+            for coord in [str(position.longitude), str(position.latitude), member]
+        ]
+        args += members_geospatialdata_list
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoAdd, args),
+        )
+
+    async def geodist(
+        self,
+        key: str,
+        member1: str,
+        member2: str,
+        unit: Optional[GeoUnit] = None,
+    ) -> Optional[float]:
+        """
+        Returns the distance between two members in the geospatial index stored at `key`.
+
+        See https://valkey.io/commands/geodist for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member1 (str): The name of the first member.
+            member2 (str): The name of the second member.
+            unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
+                If not specified, the default unit is `METERS`.
+
+        Returns:
+            Optional[float]: The distance between `member1` and `member2`.
+            If one or both members do not exist, or if the key does not exist, returns None.
+
+        Examples:
+            >>> await client.geoadd("my_geo_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geodist("my_geo_set", "Palermo", "Catania")
+                166274.1516  # Indicates the distance between "Palermo" and "Catania" in meters.
+            >>> await client.geodist("my_geo_set", "Palermo", "Palermo", unit=GeoUnit.KILOMETERS)
+                166.2742  # Indicates the distance between "Palermo" and "Palermo" in kilometers.
+            >>> await client.geodist("my_geo_set", "non-existing", "Palermo", unit=GeoUnit.KILOMETERS)
+                None  # Returns None for non-existing member.
+        """
+        args = [key, member1, member2]
+        if unit:
+            args.append(unit.value)
+
+        return cast(
+            Optional[float],
+            await self._execute_command(RequestType.GeoDist, args),
+        )
+
+    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+        """
+        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geohash for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+
+        Returns:
+            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            If a member does not exist in the sorted set, a None value is returned for that member.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+        """
+        return cast(
+            List[Optional[str]],
+            await self._execute_command(RequestType.GeoHash, [key] + members),
+        )
+
+    async def geopos(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[List[float]]]:
+        """
+        Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
+        `key`.
+
+        See https://valkey.io/commands/geopos for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): The members for which to get the positions.
+
+        Returns:
+            List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
+            If a member does not exist, its position will be None.
+
+        Example:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geopos("my_geo_sorted_set", ["Palermo", "Catania", "NonExisting"])
+                [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], None]
+        """
+        return cast(
+            List[Optional[List[float]]],
+            await self._execute_command(RequestType.GeoPos, [key] + members),
+        )
+
     async def zadd(
         self,
         key: str,
@@ -1847,6 +2397,46 @@ class CoreCommands(Protocol):
             Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
         )
 
+    async def zrangestore(
+        self,
+        destination: str,
+        source: str,
+        range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
+        reverse: bool = False,
+    ) -> int:
+        """
+        Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
+        `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
+
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
+        order.
+
+        See https://valkey.io/commands/zrangestore for more details.
+
+        Args:
+            destination (str): The key for the destination sorted set.
+            source (str): The key of the source sorted set.
+            range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
+                - For range queries by index (rank), use RangeByIndex.
+                - For range queries by lexicographical order, use RangeByLex.
+                - For range queries by score, use RangeByScore.
+            reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
+
+        Returns:
+            int: The number of elements in the resulting sorted set.
+
+        Examples:
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByIndex(0, 2), True)
+                3  # The 3 members with the highest scores from "my_sorted_set" were stored in the sorted set at "destination_key".
+            >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
+                2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
+        """
+        args = _create_zrangestore_args(destination, source, range_query, reverse)
+
+        return cast(int, await self._execute_command(RequestType.ZRangeStore, args))
+
     async def zrank(
         self,
         key: str,
@@ -1986,6 +2576,97 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zremrangebylex(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
+        `max_lex`.
+
+        See https://redis.io/commands/zremrangebylex/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum bound of the lexicographical range.
+                Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
+                representing a specific lex and inclusivity.
+
+        Returns:
+            int: The number of members that were removed from the sorted set.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `min_lex` is greater than `max_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebylex("my_sorted_set",  LexBoundary("a", is_inclusive=False), LexBoundary("e"))
+                4  # Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebylex("non_existing_sorted_set", InfBound.NEG_INF, LexBoundary("e"))
+                0  # Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
+    async def zlexcount(
+        self,
+        key: str,
+        min_lex: Union[InfBound, LexBoundary],
+        max_lex: Union[InfBound, LexBoundary],
+    ) -> int:
+        """
+        Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
+
+        See https://redis.io/commands/zlexcount/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+            max_lex (Union[InfBound, LexBoundary]): The maximum lexicographical to count up to.
+                Can be an instance of InfBound representing positive/negative infinity,
+                or LexBoundary representing a specific lexicographical value and inclusivity.
+
+        Returns:
+            int: The number of members in the specified lexicographical range.
+                If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+                If `max_lex < min_lex`, `0` is returned.
+
+        Examples:
+            >>> await client.zlexcount("my_sorted_set",  LexBoundary("c" , is_inclusive=True), InfBound.POS_INF)
+                2  # Indicates that there are 2 members with lexicographical values between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+            >>> await client.zlexcount("my_sorted_set", LexBoundary("c" , is_inclusive=True), LexBoundary("k" , is_inclusive=False))
+                1  # Indicates that there is one member with LexBoundary "c" <= lexicographical value < "k" in the sorted set "my_sorted_set".
+        """
+        min_lex_arg = (
+            min_lex.value["lex_arg"] if type(min_lex) == InfBound else min_lex.value
+        )
+        max_lex_arg = (
+            max_lex.value["lex_arg"] if type(max_lex) == InfBound else max_lex.value
+        )
+
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZLexCount, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
     async def zscore(self, key: str, member: str) -> Optional[float]:
         """
         Returns the score of `member` in the sorted set stored at `key`.
@@ -2010,6 +2691,33 @@ class CoreCommands(Protocol):
         return cast(
             Optional[float],
             await self._execute_command(RequestType.ZScore, [key, member]),
+        )
+
+    async def zmscore(
+        self,
+        key: str,
+        members: List[str],
+    ) -> List[Optional[float]]:
+        """
+        Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+
+        See https://valkey.io/commands/zmscore for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            members (List[str]): A list of members in the sorted set.
+
+        Returns:
+            List[Optional[float]]: A list of scores corresponding to `members`.
+                If a member does not exist in the sorted set, the corresponding value in the list will be None.
+
+        Examples:
+            >>> await client.zmscore("my_sorted_set", ["one", "non_existent_member", "three"])
+                [1.0, None, 3.0]
+        """
+        return cast(
+            List[Optional[float]],
+            await self._execute_command(RequestType.ZMScore, [key] + members),
         )
 
     async def invoke_script(
@@ -2041,3 +2749,30 @@ class CoreCommands(Protocol):
                 ["foo", "bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
+
+    async def pfadd(self, key: str, elements: List[str]) -> int:
+        """
+        Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+        Creates a new structure if the `key` does not exist.
+        When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+
+        See https://redis.io/commands/pfadd/ for more details.
+
+        Args:
+            key (str): The key of the HyperLogLog data structure to add elements into.
+            elements (List[str]): A list of members to add to the HyperLogLog stored at `key`.
+
+        Returns:
+            int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+            altered, then returns 1. Otherwise, returns 0.
+
+        Examples:
+            >>> await client.pfadd("hll_1", ["a", "b", "c" ])
+                1 # A data structure was created or modified
+            >>> await client.pfadd("hll_2", [])
+                1 # A new empty data structure was created
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfAdd, [key] + elements),
+        )

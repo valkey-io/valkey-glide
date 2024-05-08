@@ -21,6 +21,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZaddOptions,
+    createBlpop,
     createBrpop,
     createDecr,
     createDecrBy,
@@ -55,6 +56,7 @@ import {
     createPExpire,
     createPExpireAt,
     createPersist,
+    createPfAdd,
     createPttl,
     createRPop,
     createRPush,
@@ -147,14 +149,16 @@ export type BaseClientConfiguration = {
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
      * If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
+     *
      * @example
-     * <code>
+     * ```typescript
+     * configuration.addresses =
      * [
-     *   \{ address:sample-address-0001.use1.cache.amazonaws.com, port:6378 \},
-     *   \{ address: sample-address-0002.use2.cache.amazonaws.com \}
-     *   \{ address: sample-address-0003.use2.cache.amazonaws.com, port:6380 \}
+     *   { address: sample-address-0001.use1.cache.amazonaws.com, port:6378 },
+     *   { address: sample-address-0002.use2.cache.amazonaws.com }
+     *   { address: sample-address-0003.use2.cache.amazonaws.com, port:6380 }
      * ]
-     * </code>
+     * ```
      */
     addresses: {
         host: string;
@@ -416,6 +420,25 @@ export class BaseClient {
         }
 
         this.writeBufferedRequestsToSocket();
+    }
+
+    // Define a common function to process the result of a transaction with set commands
+    /**
+     * @internal
+     */
+    protected processResultWithSetCommands(
+        result: ReturnType[] | null,
+        setCommandsIndexes: number[],
+    ): ReturnType[] | null {
+        if (result === null) {
+            return null;
+        }
+
+        for (const index of setCommandsIndexes) {
+            result[index] = new Set<ReturnType>(result[index] as ReturnType[]);
+        }
+
+        return result;
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
@@ -1183,18 +1206,20 @@ export class BaseClient {
      * See https://redis.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns All members of the set.
-     * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     * @returns A `Set` containing all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
      * @example
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: ["member1", "member2", "member3"]
+     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<string[]> {
-        return this.createWritePromise(createSMembers(key));
+    public smembers(key: string): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSMembers(key)).then(
+            (smembes) => new Set<string>(smembes),
+        );
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
@@ -1271,23 +1296,27 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
-     * @returns A list of popped elements will be returned depending on the set's length.
-     * If `key` does not exist, empty list will be returned.
+     * @returns A `Set` containing the popped elements, depending on the set's length.
+     * If `key` does not exist, an empty `Set` will be returned.
      *
      * @example
+     * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
+     * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: []
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public spopCount(key: string, count: number): Promise<string[]> {
-        return this.createWritePromise(createSPop(key, count));
+    public async spopCount(key: string, count: number): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSPop(key, count)).then(
+            (spop) => new Set<string>(spop),
+        );
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -1487,16 +1516,18 @@ export class BaseClient {
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
-     * @returns a value that depends on the script that was executed.
+     * @returns A value that depends on the script that was executed.
      *
      * @example
-     *       const luaScript = new Script("return \{ KEYS[1], ARGV[1] \}");
-     *       const scriptOptions = \{
-     *            keys: ["foo"],
-     *            args: ["bar"],
-     *       \};
-     *       await invokeScript(luaScript, scriptOptions);
-     *       ["foo", "bar"]
+     * ```typescript
+     * const luaScript = new Script("return { KEYS[1], ARGV[1] }");
+     * const scriptOptions = {
+     *      keys: ["foo"],
+     *      args: ["bar"],
+     * };
+     * const result = await invokeScript(luaScript, scriptOptions);
+     * console.log(result); // Output: ['foo', 'bar']
+     * ```
      */
     public invokeScript(
         script: Script,
@@ -1726,8 +1757,9 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
      * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: "negativeInfinity",
@@ -1767,8 +1799,9 @@ export class BaseClient {
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: "negativeInfinity",
@@ -2178,16 +2211,19 @@ export class BaseClient {
 
     /** Blocking list pop primitive.
      * Pop an element from the tail of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
+     *
+     * Notes:
+     * 1. `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
      * @example
      * ```typescript
@@ -2201,6 +2237,57 @@ export class BaseClient {
         timeout: number,
     ): Promise<[string, string] | null> {
         return this.createWritePromise(createBrpop(keys, timeout));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given `keys` being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://redis.io/commands/blpop/ for more details.
+     *
+     * Notes:
+     * 1. `BLPOP` is a blocking command,
+     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.blpop(["list1", "list2"], 5);
+     * console.log(result); // Output: ['list1', 'element']
+     * ```
+     */
+    public blpop(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string] | null> {
+        return this.createWritePromise(createBlpop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://redis.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     * @example
+     * ```typescript
+     * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
+     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
+     * const result = await client.pfadd("hll_2", []);
+     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
+     * ```
+     */
+    public pfadd(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createPfAdd(key, elements));
     }
 
     /**

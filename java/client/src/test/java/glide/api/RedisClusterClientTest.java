@@ -2,6 +2,8 @@
 package glide.api;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -20,7 +22,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
+import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
@@ -770,5 +775,302 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(payload, response.get().getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lastsave_returns_success() {
+        // setup
+        Long value = 42L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LastSave), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lastsave();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lastsave_returns_with_route_success() {
+        // setup
+        Long value = 42L;
+        CompletableFuture<ClusterValue<Long>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Long>>submitNewCommand(
+                        eq(LastSave), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Long>> response = service.lastsave(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get().getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FlushAll), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_with_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushAll), eq(new String[] {SYNC.toString()}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall(SYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushAll), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall(RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_with_route_and_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushAll), eq(new String[] {SYNC.toString()}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall(SYNC, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_returns_success() {
+        // setup
+        String value = "pewpew";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lolwut();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_params_returns_success() {
+        // setup
+        String value = "pewpew";
+        String[] arguments = new String[] {"1", "2"};
+        int[] params = new int[] {1, 2};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lolwut(params);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_version_returns_success() {
+        // setup
+        String value = "pewpew";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lolwut(42);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_version_and_params_returns_success() {
+        // setup
+        String value = "pewpew";
+        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        int[] params = new int[] {1, 2};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lolwut(42, params);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(LOLWUT), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.lolwut(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_params_and_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
+        String[] arguments = new String[] {"1", "2"};
+        int[] params = new int[] {1, 2};
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.lolwut(params, RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_version_and_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.lolwut(42, RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lolwut_with_version_and_params_and_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
+        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        int[] params = new int[] {1, 2};
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.lolwut(42, params, RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 }
