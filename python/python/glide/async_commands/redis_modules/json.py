@@ -77,7 +77,7 @@ async def set(
 
     Returns:
         Optional[TOK]: If the value is successfully set, returns OK.
-            If value isn't set because of `set_condition`, returns None.
+            If `value` isn't set because of `set_condition`, returns None.
 
     Examples:
         >>> from glide import json as redisJson
@@ -112,8 +112,24 @@ async def get(
         options (Optional[JsonGetOptions]): Options for formatting the string representation of the JSON data. See `JsonGetOptions`.
 
     Returns:
-        str: A bulk string representation of the returned value.
+        Optional[string]: A bulk string representation of the returned value.
             If `key` doesn't exists, returns None.
+
+    Returns:
+        TJsonResponse[Optional[string]]:
+            If one path is given:
+                For JSONPath (path starts with `$`):
+                    Returns a stringified JSON list of string replies for every possible path,
+                    or a string representation of an empty array, if path doesn't exists.
+                    If `key` doesn't exist, returns None.
+                For legacy path (path doesn't start with `$`):
+                    Returns a bulk string representation of the value in `path`.
+                    If `path` doesn't exist, an error is raised.
+                    If `key` doesn't exist, returns None.
+            If multiple paths are given:
+                Returns a stringified JSON object, in which each path is a key, and it's corresponding value, is the value as if the path was executed in the command as a single path.
+        In case of multiple paths, and `paths` are a mix of both JSONPath and legacy path, the command behaves as if all are JSONPath paths.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import json as redisJson
@@ -157,7 +173,7 @@ async def delete(
 
     Returns:
         int: The number of elements removed.
-        If `key` or path doesn't exist, returns 0.
+        If `key` or `path` doesn't exist, returns 0.
 
     Examples:
         >>> from glide import json as redisJson
@@ -194,7 +210,7 @@ async def forget(
 
     Returns:
         int: The number of elements removed.
-        If `key` or path doesn't exist, returns 0.
+        If `key` or `path` doesn't exist, returns 0.
 
     Examples:
         >>> from glide import json as redisJson
@@ -232,11 +248,15 @@ async def strappend(
         path (Optional[str]): The JSONPath to specify. Default is root `$`.
 
     Returns:
-        TJsonResponse[int]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path, indicating the length
-        of the resulting string after appending `value`, or None for JSON values matching the path that are not string.
-        For legacy path (`path` doesn't start with `$`), returns the length of the resulting string after appending `value` to the string at `path`.
-        Note that when sending legacy path syntax, if the JSON value at `path` is not a string or the path doesn't exist, an error is raised.
-        If `key` doesn't exist, an error is raised.
+        TJsonResponse[int]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
+                or None for JSON values matching the path that are not string.
+                If `key` doesn't exist, an error is raised.
+            For legacy path (`path` doesn't start with `$`):
+                Returns the length of the resulting string after appending `value` to the string at `path`.
+                If the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised.
+                If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
@@ -273,14 +293,17 @@ async def strlen(
     Args:
         client (TRedisClient): The Redis client to execute the command.
         key (str): The key of the JSON document.
-        path (Optional[str]): The JSONPath to specify. If not passed, a default value will be used.
+        path (Optional[str]): The JSONPath to specify.  Default is root `$`.
 
     Returns:
-        TJsonResponse[Optional[int]]: For JSONPath (`path` starts with `$`), returns a list of integer replies for every possible path,
-        indicating the length of the JSON string value, or None for JSON values matching the path that are not string.
-        If `key` doesn't exist, and the path that was provided is a JSONPath, an error is raised.
-        For legacy path (`path` doesn't start with `$`), returns the length of the JSON value at `path` or None if `key` doesn't exist.
-        Note that when sending legacy path syntax, if the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised, If `key` doesn't exist, None is returned.
+        TJsonResponse[Optional[int]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the length of the JSON string value,
+                or None for JSON values matching the path that are not string. If `key` doesn't exist, an error is raised.
+            For legacy path (`path` doesn't start with `$`):
+                Returns the length of the JSON value at `path` or None if `key` doesn't exist.
+                If the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised.
+                If `key` doesn't exist, None is returned.
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
@@ -322,11 +345,15 @@ async def toggle(
         path (str): The JSONPath to specify.
 
     Returns:
-        TJsonResponse[bool]: For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
-        or None for JSON values matching the path that are not boolean.
-        For legacy path (`path` doesn't start with `$`), returns the value of the toggled boolean in `path`.
-        Note that when sending legacy path syntax, if `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
-        If `key` doesn't exist, an error is raised.
+        TJsonResponse[bool]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of boolean replies for every possible path, with the toggled boolean value,
+                or None for JSON values matching the path that are not boolean.
+                If `key` doesn't exist, an error is raised.
+            For legacy path (`path` doesn't start with `$`):
+                Returns the value of the toggled boolean in `path`.
+                If the JSON value at `path` is not a boolean of if `path` doesn't exist, an error is raised.
+                If `key` doesn't exist, an error is raised.
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:

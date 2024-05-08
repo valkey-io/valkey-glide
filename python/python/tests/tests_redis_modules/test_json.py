@@ -223,11 +223,15 @@ class TestJson:
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, key, "nested")
 
+        with pytest.raises(RequestError):
+            assert await json.strlen(redis_client, key)
+
         assert await json.strlen(redis_client, key, "$.non_existing_path") == []
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, key, ".non_existing_path")
 
         assert await json.strlen(redis_client, "non_exiting_key", ".") is None
+
         with pytest.raises(RequestError):
             assert await json.strlen(redis_client, "non_exiting_key", "$")
 
@@ -252,10 +256,14 @@ class TestJson:
         assert await json.strappend(
             redis_client, key, OuterJson.dumps("bar"), "$.nested"
         ) == [None]
+
         with pytest.raises(RequestError):
             assert await json.strappend(
                 redis_client, key, OuterJson.dumps("bar"), ".nested"
             )
+
+        with pytest.raises(RequestError):
+            assert await json.strappend(redis_client, key, OuterJson.dumps("bar"))
 
         assert (
             await json.strappend(
