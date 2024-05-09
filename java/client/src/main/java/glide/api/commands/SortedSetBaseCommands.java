@@ -207,8 +207,8 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zcard(String key);
 
     /**
-     * <<<<<<< HEAD Removes and returns up to <code>count</code> members with the lowest scores from
-     * the sorted set stored at the specified <code>key</code>.
+     * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
+     * stored at the specified <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
      * @param key The key of the sorted set.
