@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
 import glide.api.RedisClient;
@@ -3511,31 +3510,32 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
-        assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
-        assertEquals(17L, client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
-        assertEquals(23, client.bitcount(key1, 5, -5, BitmapIndexType.BIT).get());
-        assertEquals(0, client.bitcount(missingKey, 5, 30, BitmapIndexType.BIT).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertEquals(17L, client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertEquals(23, client.bitcount(key1, 5, -5, BitmapIndexType.BIT).get());
+            assertEquals(0, client.bitcount(missingKey, 5, 30, BitmapIndexType.BIT).get());
 
-        // Exception thrown due to the key holding a value with the wrong type
-        executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
 
-        assumeTrue(REDIS_VERSION.isLowerThan("7.0.0"));
-        // Exception thrown because BIT and BYTE options were implemented after 7.0.0
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-
-        // Exception thrown because BIT and BYTE options were implemented after 7.0.0
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
     }
 }
