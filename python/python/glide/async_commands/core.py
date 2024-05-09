@@ -2924,29 +2924,38 @@ class CoreCommands(Protocol):
     async def zunionstore(
         self,
         destination: str,
-        keys: Union[List[str], List[Tuple[str, int]]],
+        keys: Union[List[str], List[Tuple[str, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> int:
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
-        see https://redis.io/commands/zunionstore/ for more details.
+        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+        
+        see https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
-                when combining the scores of elements.
+                when combining the scores of elements. See `AggregationType`.
 
         Returns:
             int: The number of elements in the resulting sorted set stored at `destination`.
 
         Examples:
-        >>> await client.zunionstore("new_sorted_set", "my_sorted_set", AggregationType.MAX)
-            3
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client. zunionstore("my_sorted_set", ["key1", "key2"])
+                2 # Indicates that the sorted set "my_sorted_set" contains two element.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 20, 'member2': 8.2}  
+            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
+                2 # Indicates that the sorted set "my_sorted_set" contains two element, and each score is the maximum score between the sets.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 10.5, 'member2': 8.2}  
         """
         args = _create_z_cmd_store_args(destination, keys, aggregation_type)
         return cast(

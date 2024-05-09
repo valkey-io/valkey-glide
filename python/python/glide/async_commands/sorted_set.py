@@ -25,15 +25,15 @@ class InfBound(Enum):
 
 class AggregationType(Enum):
     """
-    A condition to the "SINTERSTORE" and "ZUNIONSTORE" commands.
+    A condition to the `ZINTERSTORE` and `ZUNIONSTORE` commands.
     With the AGGREGATE option, it is possible to specify how the results of the union are aggregated.
     - SUM - The score of an element is summed across the inputs where it exists
     - MIN/MAX - The resulting set will contain the minimum or maximum score of an element across the inputs where it exists
     """
 
-    SUM = "sum"
-    MIN = "min"
-    MAX = "max"
+    SUM = "SUM"
+    MIN = "MIN"
+    MAX = "MAX"
 
 
 class ScoreBoundary:
@@ -174,7 +174,7 @@ def _create_zrange_args(
 
 
 def separate_keys(
-    keys: Union[List[str], List[Tuple[str, int]]]
+    keys: Union[List[str], List[Tuple[str, float]]]
 ) -> Tuple[List[str], List[str]]:
     if len(keys) == 0:
         return [], []
@@ -193,7 +193,7 @@ def separate_keys(
 
 def _create_z_cmd_store_args(
     destination: str,
-    keys: Union[List[str], List[Tuple[str, int]]],
+    keys: Union[List[str], List[Tuple[str, float]]],
     aggregation_type: Optional[AggregationType] = None,
 ) -> List[str]:
     args = [destination, str(len(keys))]
