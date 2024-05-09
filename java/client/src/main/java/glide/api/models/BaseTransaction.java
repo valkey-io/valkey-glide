@@ -34,6 +34,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -3116,6 +3117,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T setbit(@NonNull String key, long offset, long value) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset), Long.toString(value));
         protobufTransaction.addCommands(buildCommand(SetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @param key The key for the string to get the bit at offset of.
+     * @param offset The index of the bit to return.
+     * @return Command Response - The bit at offset of the string. Returns zero if the key is missing
+     *     as it is treated as an empty string. Returns zero if the positive offset exceeds the length
+     *     of the string as it is assumed to be padded zeroes.
+     */
+    public T getbit(@NonNull String key, long offset) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
+        protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
         return getThis();
     }
 

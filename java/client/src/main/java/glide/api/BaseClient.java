@@ -23,6 +23,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -1294,5 +1295,11 @@ public abstract class BaseClient
     public CompletableFuture<Long> setbit(@NonNull String key, long offset, long value) {
         String[] arguments = new String[] {key, Long.toString(offset), Long.toString(value)};
         return commandManager.submitNewCommand(SetBit, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> getbit(@NonNull String key, long offset) {
+        String[] arguments = new String[] {key, Long.toString(offset)};
+        return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
     }
 }

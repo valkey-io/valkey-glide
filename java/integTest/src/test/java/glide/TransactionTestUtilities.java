@@ -170,6 +170,30 @@ public class TransactionTestUtilities {
                 .setrange(stringKey3, 0, "GLIDE")
                 .getrange(stringKey3, 0, 5);
 
+        baseTransaction.lolwut(1);
+
+        baseTransaction.rpushx(listKey3, new String[] {"_"}).lpushx(listKey3, new String[] {"_"});
+        baseTransaction
+                .lpush(listKey3, new String[] {value1, value2, value3})
+                .linsert(listKey3, AFTER, value2, value2);
+
+        baseTransaction.blpop(new String[] {listKey3}, 0.01).brpop(new String[] {listKey3}, 0.01);
+
+        baseTransaction.pfadd(hllKey1, new String[] {"a", "b", "c"});
+        baseTransaction.pfcount(new String[] {hllKey1, hllKey2});
+        baseTransaction
+                .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
+                .pfcount(new String[] {hllKey3});
+
+        baseTransaction.getbit(key3, 1);
+
+        // keep it last - it deletes all the keys
+        baseTransaction.flushall().flushall(ASYNC);
+
+        return baseTransaction;
+    }
+
+    public static Object[] transactionTestResult() {
         return new Object[] {
             OK, // set(stringKey1, value1)
             value1, // get(stringKey1)
@@ -464,6 +488,9 @@ public class TransactionTestUtilities {
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
+            1L, // getbit(key3, 1)
+            OK, // flushall()
+            OK, // flushall(ASYNC)
         };
     }
 
