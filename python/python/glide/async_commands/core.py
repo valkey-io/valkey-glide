@@ -2894,9 +2894,9 @@ class CoreCommands(Protocol):
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
