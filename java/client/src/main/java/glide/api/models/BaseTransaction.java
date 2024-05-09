@@ -2844,8 +2844,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
      * @param key The key for the string to count the set bits of.
-     * @return Command Response - The number of set bits in the string. Returns zero if the key is missing as it is
-     *     treated as an empty string.
+     * @return Command Response - The number of set bits in the string. Returns zero if the key is
+     *     missing as it is treated as an empty string.
      */
     public T bitcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -2865,8 +2865,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key for the string to count the set bits of.
      * @param start The starting byte offset.
      * @param end The ending byte offset.
-     * @return Command Response - The number of set bits in the string byte interval specified by <code>start</code> and
-     *     <code>end</code>. Returns zero if the key is missing as it is treated as an empty string.
+     * @return Command Response - The number of set bits in the string byte interval specified by
+     *     <code>start</code> and <code>end</code>. Returns zero if the key is missing as it is
+     *     treated as an empty string.
      */
     public T bitcount(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
@@ -2890,7 +2891,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param end The ending offset.
      * @param options The index offset type. Could be either {@link BitmapIndexType#BIT} or {@link
      *     BitmapIndexType#BYTE}.
-     * @return Command Response - The number of set bits in the string interval specified by <code>start</code>, <code>
+     * @return Command Response - The number of set bits in the string interval specified by <code>
+     *     start</code>, <code>
      *     end</code>, and <code>options</code>. Returns zero if the key is missing as it is treated
      *     as an empty string.
      */
