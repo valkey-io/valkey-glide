@@ -76,6 +76,28 @@ public class ArrayTransformUtils {
     }
 
     /**
+     * Casts an <code>Object[][]</code> to <code>T[][]</code> by casting each nested array and every
+     * array element.
+     *
+     * @param outerObjectArr Array of arrays of objects to cast.
+     * @param clazz The class of the array elements to cast to.
+     * @return An array of arrays of type U, containing the elements from the input array.
+     * @param <T> The base type from which the elements are being cast.
+     * @param <U> The subtype of T to which the elements are cast.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T, U extends T> U[][] castArrayofArrays(T[] outerObjectArr, Class<U> clazz) {
+        if (outerObjectArr == null) {
+            return null;
+        }
+        T[] convertedArr = (T[]) new Object[outerObjectArr.length];
+        for (int i = 0; i < outerObjectArr.length; i++) {
+            convertedArr[i] = (T) castArray((T[]) outerObjectArr[i], clazz);
+        }
+        return (U[][]) castArray(convertedArr, Array.newInstance(clazz, 0).getClass());
+    }
+
+    /**
      * Maps a Map of Arrays with value type T[] to value of U[].
      *
      * @param mapOfArrays Map of Array values to cast.
