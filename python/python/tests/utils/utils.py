@@ -3,6 +3,7 @@ import string
 from typing import Any, Dict, List, Mapping, TypeVar, Union
 
 from glide.async_commands.core import InfoSection
+from glide.constants import TResult
 from glide.redis_client import TRedisClient
 from packaging import version
 
@@ -77,15 +78,15 @@ async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> 
 
 
 def compare_maps(
-    map: Union[Mapping[Any, Any], Dict[Any, Any]],
-    map2: Union[Mapping[Any, Any], Dict[Any, Any]],
+    map: TResult,
+    map2: TResult,
 ) -> bool:
     """
     Recursively compares two maps including their property order.
 
     Args:
-        map1 (Union[Mapping[Any, Any], Dict[Any, Any]]): The first map to compare.
-        map2 (Union[Mapping[Any, Any], Dict[Any, Any]]): The second map to compare.
+        map1 (TResult): The first map to compare.
+        map2 (TResult): The second map to compare.
 
         Returns:
             bool: True if the maps are equal, False otherwise.
@@ -107,10 +108,12 @@ def compare_maps(
         # Correct comparison using compare_maps function
         compare_maps(mapA, mapB)  # This will return False due to different property order
     """
-    for item, item2 in zip(map.items(), map2.items()):
-        if isinstance(item[1], (dict, Mapping)):
-            if item[0] != item2[0] or not compare_maps(item[1], item2[1]):
+    if isinstance(map, (dict, Mapping)) and isinstance(map2, (dict, Mapping)):
+        for item, item2 in zip(map.items(), map2.items()):
+            if isinstance(item[1], (dict, Mapping)):
+                if item[0] != item2[0] or not compare_maps(item[1], item2[1]):
+                    return False
+            elif item != item2:
                 return False
-        elif item != item2:
-            return False
-    return True
+        return True
+    return item == item2

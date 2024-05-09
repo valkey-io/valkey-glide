@@ -141,8 +141,8 @@ export function parseCommandLineArgs() {
  * ```
  */
 export function compareMaps(
-    map: Record<any, any>,
-    map2: Record<any, any>,
+    map: Record<string | number | symbol, unknown>,
+    map2: Record<string | number | symbol, unknown>,
 ): boolean {
     return JSON.stringify(map) == JSON.stringify(map2);
 }
