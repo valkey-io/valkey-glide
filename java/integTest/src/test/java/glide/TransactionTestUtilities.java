@@ -101,7 +101,6 @@ public class TransactionTestUtilities {
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                     .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY);
         }
-        // TODO add BZMPOP from #194 here
 
         var expectedResults =
                 new Object[] {
@@ -319,6 +318,7 @@ public class TransactionTestUtilities {
                 .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
                 .zdiff(new String[] {zSetKey2, zSetKey1})
                 .zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+                .zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
@@ -351,6 +351,7 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+            2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
             new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
             new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}));
@@ -432,16 +433,22 @@ public class TransactionTestUtilities {
     private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
         final String geoKey1 = "{geoKey}-1-" + UUID.randomUUID();
 
-        transaction.geoadd(
-                geoKey1,
-                Map.of(
-                        "Palermo",
-                        new GeospatialData(13.361389, 38.115556),
-                        "Catania",
-                        new GeospatialData(15.087269, 37.502669)));
+        transaction
+                .geoadd(
+                        geoKey1,
+                        Map.of(
+                                "Palermo",
+                                new GeospatialData(13.361389, 38.115556),
+                                "Catania",
+                                new GeospatialData(15.087269, 37.502669)))
+                .geopos(geoKey1, new String[] {"Palermo", "Catania"});
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
+            new Double[][] {
+                {13.36138933897018433, 38.11555639549629859},
+                {15.08726745843887329, 37.50266842333162032},
+            }, // geopos(new String[]{"Palermo", "Catania"})
         };
     }
 }
