@@ -149,6 +149,7 @@ pub enum RequestType {
     BZPopMin = 137,
     FlushAll = 138,
     ZRandMember = 139,
+    FunctionLoad = 150,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -301,6 +302,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
             ProtobufRequestType::ZRandMember => RequestType::ZRandMember,
+            ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
         }
     }
 }
@@ -449,6 +451,7 @@ impl RequestType {
             RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
+            RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
         }
     }
 }
