@@ -122,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
 import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
@@ -493,6 +494,9 @@ public class TransactionTests {
         transaction.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
 
+        transaction.zunionstore("destination", new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnionStore, buildArgs("destination", "2", "key1", "key2")));
+
         transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
 
@@ -507,6 +511,21 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZInterStore,
+                        buildArgs(
+                                "destination",
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
+
+        transaction.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZUnionStore,
                         buildArgs(
                                 "destination",
                                 "2",
