@@ -1056,7 +1056,8 @@ public interface SortedSetBaseCommands {
     CompletableFuture<String[]> zrandmemberWithCount(String key, long count);
 
     /**
-     * Retrieves random elements along with their scores from the sorted set stored at <code>key</code>.
+     * Retrieves random elements along with their scores from the sorted set stored at <code>key
+     * </code>.
      *
      * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
      * @param key The key of the sorted set.
