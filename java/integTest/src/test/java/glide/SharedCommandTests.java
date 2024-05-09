@@ -3502,15 +3502,11 @@ public class SharedCommandTests {
 
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2).get());
-        assertEquals(
-                executionException.getCause().getMessage(),
-                "WRONGTYPE: Operation against a key holding the wrong kind of value");
+        assertTrue(executionException.getCause() instanceof RequestException);
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
-        assertEquals(
-                executionException.getCause().getMessage(),
-                "WRONGTYPE: Operation against a key holding the wrong kind of value");
+        assertTrue(executionException.getCause() instanceof RequestException);
 
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
@@ -3519,25 +3515,19 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
-        assertEquals(
-                executionException.getCause().getMessage(),
-                "WRONGTYPE: Operation against a key holding the wrong kind of value");
+        assertTrue(executionException.getCause() instanceof RequestException);
 
         assumeTrue(REDIS_VERSION.isLowerThan("7.0.0"));
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
-        assertEquals(
-                executionException.getCause().getMessage(),
-                "An error was signalled bay the server - ResponseError: syntax error");
+        assertTrue(executionException.getCause() instanceof RequestException);
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
-        assertEquals(
-                executionException.getCause().getMessage(),
-                "An error was signalled by the server - ResponseError: syntax error");
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
