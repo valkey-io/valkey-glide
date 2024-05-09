@@ -176,19 +176,22 @@ def _create_zrange_args(
 def separate_keys(
     keys: Union[List[str], List[Tuple[str, float]]]
 ) -> Tuple[List[str], List[str]]:
+    '''
+    Returns seperate lists of keys and weights in case of weighted keys.
+    '''
     if len(keys) == 0:
         return [], []
 
-    str_list: List[str] = []
-    int_list: List[str] = []
+    key_list: List[str] = []
+    weight_list: List[str] = []
 
     if isinstance(keys[0], tuple):
-        str_list = [item[0] for item in keys]
-        int_list = [str(item[1]) for item in keys]
+        key_list = [item[0] for item in keys]
+        weight_list = [str(item[1]) for item in keys]
     elif isinstance(keys[0], str):
-        str_list = [str(item) for item in keys]
+        key_list = [str(item) for item in keys]
 
-    return str_list, int_list
+    return key_list, weight_list
 
 
 def _create_z_cmd_store_args(

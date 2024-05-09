@@ -2052,22 +2052,23 @@ class BaseTransaction:
     def zinterstore(
         self: TTransaction,
         destination: str,
-        keys: Union[List[str], List[Tuple[str, int]]],
+        keys: Union[List[str], List[Tuple[str, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> TTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
-        see https://redis.io/commands/zinterstore/ for more details.
+        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinterstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
-                when combining the scores of elements.
+                when combining the scores of elements. See `AggregationType`.
 
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
@@ -2078,22 +2079,23 @@ class BaseTransaction:
     def zunionstore(
         self: TTransaction,
         destination: str,
-        keys: Union[List[str], List[Tuple[str, int]]],
+        keys: Union[List[str], List[Tuple[str, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> TTransaction:
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
-        see https://redis.io/commands/zunionstore/ for more details.
+        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+
+        see https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, int]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, int]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
-                when combining the scores of elements.
+                when combining the scores of elements. See `AggregationType`.
 
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
