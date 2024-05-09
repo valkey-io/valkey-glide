@@ -43,7 +43,7 @@ public interface BitmapBaseCommands {
      * @example
      *     <pre>{@code
      * Long payload = client.bitcount("myKey1", 1, 3).get();
-     * assert payload == 2L; // The second to forth bytes of the string stored at "myKey1" contains 2 set bits.
+     * assert payload == 2L; // The second to fourth bytes of the string stored at "myKey1" contains 2 set bits.
      * }</pre>
      */
     CompletableFuture<Long> bitcount(String key, long start, long end);
