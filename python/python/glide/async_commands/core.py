@@ -2882,7 +2882,7 @@ class CoreCommands(Protocol):
     async def zinterstore(
         self,
         destination: str,
-        keys: Union[List[str], List[Tuple[str, int]]],
+        keys: Union[List[str], List[Tuple[str, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> int:
         """
