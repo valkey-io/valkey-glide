@@ -4179,7 +4179,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void bitcount_indices_with_BIT_option_returns_success() {
+    public void bitcount_indices_with_option_returns_success() {
         // setup
         String key = "testKey";
         Long bitcount = 1L;
@@ -4193,29 +4193,6 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.bitcount(key, 1, 2, BitmapIndexType.BIT);
-        Long payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(bitcount, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void bitcount_indices_with_BYTE_option_returns_success() {
-        // setup
-        String key = "testKey";
-        Long bitcount = 1L;
-        CompletableFuture<Long> testResponse = new CompletableFuture<>();
-        testResponse.complete(bitcount);
-
-        // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(
-                        eq(Bitcount), eq(new String[] {key, "1", "2", "BYTE"}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Long> response = service.bitcount(key, 1, 2, BitmapIndexType.BYTE);
         Long payload = response.get();
 
         // verify

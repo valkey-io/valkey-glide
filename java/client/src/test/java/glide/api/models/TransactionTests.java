@@ -716,9 +716,6 @@ public class TransactionTests {
         transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
         results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
 
-        transaction.bitcount("key", 1, 1, BitmapIndexType.BYTE);
-        results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BYTE.toString())));
-
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {

@@ -2892,13 +2892,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options The index offset type. Could be either {@link BitmapIndexType#BIT} or {@link
      *     BitmapIndexType#BYTE}.
      * @return Command Response - The number of set bits in the string interval specified by <code>
-     *     start</code>, <code>
-     *     end</code>, and <code>options</code>. Returns zero if the key is missing as it is treated
-     *     as an empty string.
+     *     start</code>, <code>end</code>, and <code>options</code>. Returns zero if the key is
+     *     missing as it is treated as an empty string.
      */
     public T bitcount(@NonNull String key, long start, long end, BitmapIndexType options) {
         ArgsArray commandArgs =
-                buildArgs(new String[] {key, Long.toString(start), Long.toString(end), options.toString()});
+                buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
         protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
         return getThis();
