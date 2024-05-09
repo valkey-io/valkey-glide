@@ -2898,14 +2898,22 @@ class CoreCommands(Protocol):
                 List[str] - for keys only.
                 List[Tuple[str, int]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
-                when combining the scores of elements.
+                when combining the scores of elements. See `AggregationType`.
 
         Returns:
             int: The number of elements in the resulting sorted set stored at `destination`.
 
         Examples:
-        >>> await client.zinterstore("new_sorted_set", "my_sorted_set", AggregationType.MAX)
-            3
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
+                1 # Indicates that the sorted set "my_sorted_set" contains one element.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 20}  # "member1"  is now stored in "my_sorted_set" with score of 20.
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
+                1 # Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 10.5}  # "member1"  is now stored in "my_sorted_set" with score of 10.5.
         """
         args = _create_z_cmd_store_args(destination, keys, aggregation_type)
         return cast(
