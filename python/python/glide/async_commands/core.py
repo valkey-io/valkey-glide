@@ -2888,8 +2888,9 @@ class CoreCommands(Protocol):
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same `hash slot`.
-        see https://redis.io/commands/zinterstore/ for more details.
+        See https://valkey.io/commands/zinterstore/ for more details.
+
+        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
 
         Args:
             destination (str): The key of the destination sorted set.
