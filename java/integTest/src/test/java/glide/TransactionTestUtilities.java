@@ -150,6 +150,7 @@ public class TransactionTestUtilities {
         baseTransaction.zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0));
         baseTransaction.zdiff(new String[] {zSetKey2, key8});
         baseTransaction.zdiffWithScores(new String[] {zSetKey2, key8});
+        baseTransaction.zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, key8}));
         baseTransaction.zunion(new KeyArray(new String[] {zSetKey2, key8}));
         baseTransaction.zunion(new KeyArray(new String[] {zSetKey2, key8}), Aggregate.MAX);
         baseTransaction.zunionWithScores(new KeyArray(new String[] {zSetKey2, key8}));
@@ -288,6 +289,7 @@ public class TransactionTestUtilities {
             2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
             new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, key8})
             Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, key8})
+            2L, // zunionstore(zSetKey2, new String[] {zSetKey2, key8})
             new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, key8}))
             new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, key8}), Aggregate.MAX);
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, key8}));

@@ -2397,6 +2397,74 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zunionstore(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        String key4 = "{testKey}:4-" + UUID.randomUUID();
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 2.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        assertEquals(3, client.zunionstore(key3, new KeyArray(new String[] {key1, key2})).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 4.5, "three", 3.0), client.zrangeWithScores(key3, query).get());
+
+        // Union results are aggregated by the max score of elements
+        assertEquals(
+                3, client.zunionstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.5, "three", 3.0), client.zrangeWithScores(key3, query).get());
+
+        // Union results are aggregated by the min score of elements
+        assertEquals(
+                3, client.zunionstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0), client.zrangeWithScores(key3, query).get());
+
+        // Union results are aggregated by the sum of the scores of elements
+        assertEquals(
+                3, client.zunionstore(key3, new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 4.5, "three", 3.0), client.zrangeWithScores(key3, query).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertEquals(
+                3,
+                client
+                        .zunionstore(key3, new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+        assertEquals(
+                Map.of("one", 2.0, "two", 9.0, "three", 6.0), client.zrangeWithScores(key3, query).get());
+
+        // Union results are aggregated by the maximum score, with scores for key1 multiplied by 1.0 and
+        // for key2 by 2.0.
+        assertEquals(
+                3,
+                client
+                        .zunionstore(
+                                key3,
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, 2.0))),
+                                Aggregate.MAX)
+                        .get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 5.0, "three", 6.0), client.zrangeWithScores(key3, query).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key4, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zunionstore(key3, new KeyArray(new String[] {key4, key2})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zunion(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();

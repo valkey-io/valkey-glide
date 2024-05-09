@@ -16,7 +16,7 @@ import org.apache.commons.lang3.tuple.Pair;
  * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
  * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
  */
-public class WeightAggregateOptions {
+public abstract class WeightAggregateOptions {
     public static final String WEIGHTS_REDIS_API = "WEIGHTS";
     public static final String AGGREGATE_REDIS_API = "AGGREGATE";
 
