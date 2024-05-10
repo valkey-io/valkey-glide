@@ -3488,6 +3488,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void geodist(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
         String member1 = "Palermo";
         String member2 = "Catania";
         String member3 = "NonExisting";
@@ -3513,5 +3514,11 @@ public class SharedCommandTests {
         // assert null result when member index is missing
         Double actualMissing = client.geodist(key1, member1, member3).get();
         assertNull(actualMissing);
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, "geodist").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

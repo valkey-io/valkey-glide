@@ -88,7 +88,7 @@ public interface GeospatialIndicesBaseCommands {
      * @param key The key of the sorted set.
      * @param member1 The name of the first member.
      * @param member2 The name of the second member.
-     * @param geoUnit The unit of distance measurement {@link GeoUnit}.
+     * @param geoUnit The unit of distance measurement - see {@link GeoUnit}.
      * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
      *     members do not exist, or if the key does not exist, returns <code>null</code>.
      * @example
