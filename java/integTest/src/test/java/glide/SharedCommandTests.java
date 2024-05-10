@@ -27,6 +27,7 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
+import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -3480,5 +3481,61 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitcount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String missingKey = "missing";
+        String value = "foobar";
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(1, client.sadd(key2, new String[] {value}).get());
+        assertEquals(26, client.bitcount(key1).get());
+        assertEquals(6, client.bitcount(key1, 1, 1).get());
+        assertEquals(10, client.bitcount(key1, 0, -5).get());
+        assertEquals(0, client.bitcount(missingKey, 5, 30).get());
+        assertEquals(0, client.bitcount(missingKey).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.bitcount(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the key holding a value with the wrong type
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertEquals(17L, client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertEquals(23, client.bitcount(key1, 5, -5, BitmapIndexType.BIT).get());
+            assertEquals(0, client.bitcount(missingKey, 5, 30, BitmapIndexType.BIT).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
     }
 }
