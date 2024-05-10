@@ -744,7 +744,7 @@ class BaseTransaction:
             Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
-        return self.append_command(RequestType.Blpop, keys + [str(timeout)])
+        return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
     def lrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
@@ -870,7 +870,7 @@ class BaseTransaction:
             Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
-        return self.append_command(RequestType.Brpop, keys + [str(timeout)])
+        return self.append_command(RequestType.BRPop, keys + [str(timeout)])
 
     def linsert(
         self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str
