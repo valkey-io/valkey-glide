@@ -440,7 +440,7 @@ mod tests {
     fn convert_lolwut() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
-            Some(ExpectedReturnType::LOLWUT)
+            Some(ExpectedReturnType::Lolwut)
         ));
 
         let redis_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
