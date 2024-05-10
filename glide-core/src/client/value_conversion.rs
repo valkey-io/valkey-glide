@@ -408,6 +408,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"HRANDFIELD" => cmd
             .position(b"WITHVALUES")
             .map(|_| ExpectedReturnType::ArrayOfKeyValuePairs),
+        b"ZRANDMEMBER" => cmd
+            .position(b"WITHSCORES")
+            .map(|_| ExpectedReturnType::ArrayOfKeyValuePairs),
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
@@ -514,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_hrandfield() {
+    fn convert_array_of_kv_pairs() {
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("HRANDFIELD")
@@ -527,6 +530,19 @@ mod tests {
 
         assert!(expected_type_for_cmd(redis::cmd("HRANDFIELD").arg("key").arg("1")).is_none());
         assert!(expected_type_for_cmd(redis::cmd("HRANDFIELD").arg("key")).is_none());
+
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("ZRANDMEMBER")
+                    .arg("key")
+                    .arg("1")
+                    .arg("withscores")
+            ),
+            Some(ExpectedReturnType::ArrayOfKeyValuePairs)
+        ));
+
+        assert!(expected_type_for_cmd(redis::cmd("ZRANDMEMBER").arg("key").arg("1")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("ZRANDMEMBER").arg("key")).is_none());
 
         let flat_array = Value::Array(vec![
             Value::BulkString(b"key1".to_vec()),

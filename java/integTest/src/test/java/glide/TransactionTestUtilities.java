@@ -330,6 +330,9 @@ public class TransactionTestUtilities {
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .bzpopmax(new String[] {zSetKey2}, .1)
+                .zrandmember(zSetKey2)
+                .zrandmemberWithCount(zSetKey2, 1)
+                .zrandmemberWithCountWithScores(zSetKey2, 1)
                 .bzpopmin(new String[] {zSetKey2}, .1);
         // zSetKey2 is now empty
 
@@ -363,6 +366,9 @@ public class TransactionTestUtilities {
             Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}), MAX)
             0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
             new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+            "one", // .zrandmember(zSetKey2)
+            new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
+            new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
             new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
         };
     }

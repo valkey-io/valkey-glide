@@ -180,6 +180,7 @@ enum RequestType {
     ZUnion = 136;
     BZPopMin = 137;
     FlushAll = 138;
+    ZRandMember = 139;
 }
 
 message Command {

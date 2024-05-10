@@ -91,6 +91,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
@@ -1035,6 +1036,30 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> zrandmember(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ZRandMember, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrandmemberWithCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
+            @NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                arguments,
+                response -> castArray(handleArrayResponse(response), Object[].class));
     }
 
     @Override
