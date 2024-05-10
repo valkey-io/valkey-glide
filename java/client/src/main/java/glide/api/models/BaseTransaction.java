@@ -9,10 +9,10 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Blpop;
-import static redis_request.RedisRequestOuterClass.RequestType.Brpop;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -30,27 +30,27 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
+import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.GetString;
+import static redis_request.RedisRequestOuterClass.RequestType.HDel;
+import static redis_request.RedisRequestOuterClass.RequestType.HExists;
+import static redis_request.RedisRequestOuterClass.RequestType.HGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HGetAll;
+import static redis_request.RedisRequestOuterClass.RequestType.HIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
+import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.HashDel;
-import static redis_request.RedisRequestOuterClass.RequestType.HashExists;
-import static redis_request.RedisRequestOuterClass.RequestType.HashGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HashGetAll;
-import static redis_request.RedisRequestOuterClass.RequestType.HashIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.HashIncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.HashMGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HashSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Hkeys;
-import static redis_request.RedisRequestOuterClass.RequestType.Hvals;
+import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -58,13 +58,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lindex;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdletime;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefcount;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
+import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
@@ -76,7 +76,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -89,8 +89,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
+import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.SetString;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -99,6 +99,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
+import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
+import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -107,7 +110,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRem;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
@@ -115,12 +121,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Zadd;
-import static redis_request.RedisRequestOuterClass.RequestType.Zcard;
-import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
-import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
 
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -147,7 +147,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -289,7 +289,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(GetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Get, commandArgs));
         return getThis();
     }
 
@@ -303,7 +303,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T set(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
-        protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Set, commandArgs));
         return getThis();
     }
 
@@ -324,7 +324,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
 
-        protobufTransaction.addCommands(buildCommand(SetString, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Set, commandArgs));
         return getThis();
     }
 
@@ -498,7 +498,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hget(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-        protobufTransaction.addCommands(buildCommand(HashGet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HGet, commandArgs));
         return getThis();
     }
 
@@ -515,7 +515,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key));
 
-        protobufTransaction.addCommands(buildCommand(HashSet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HSet, commandArgs));
         return getThis();
     }
 
@@ -551,7 +551,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hdel(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-        protobufTransaction.addCommands(buildCommand(HashDel, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HDel, commandArgs));
         return getThis();
     }
 
@@ -580,7 +580,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hvals(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Hvals, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HVals, commandArgs));
         return getThis();
     }
 
@@ -598,7 +598,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hmget(@NonNull String key, @NonNull String[] fields) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-        protobufTransaction.addCommands(buildCommand(HashMGet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HMGet, commandArgs));
         return getThis();
     }
 
@@ -614,7 +614,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hexists(@NonNull String key, @NonNull String field) {
         ArgsArray commandArgs = buildArgs(key, field);
-        protobufTransaction.addCommands(buildCommand(HashExists, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HExists, commandArgs));
         return getThis();
     }
 
@@ -629,7 +629,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hgetall(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(HashGetAll, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HGetAll, commandArgs));
         return getThis();
     }
 
@@ -650,7 +650,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
         ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
-        protobufTransaction.addCommands(buildCommand(HashIncrBy, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HIncrBy, commandArgs));
         return getThis();
     }
 
@@ -672,7 +672,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
         ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
-        protobufTransaction.addCommands(buildCommand(HashIncrByFloat, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HIncrByFloat, commandArgs));
         return getThis();
     }
 
@@ -685,7 +685,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     empty array</code> when the key does not exist.
      */
     public T hkeys(@NonNull String key) {
-        protobufTransaction.addCommands(buildCommand(Hkeys, buildArgs(key)));
+        protobufTransaction.addCommands(buildCommand(HKeys, buildArgs(key)));
         return getThis();
     }
 
@@ -781,7 +781,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lindex(@NonNull String key, long index) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(index));
 
-        protobufTransaction.addCommands(buildCommand(Lindex, commandArgs));
+        protobufTransaction.addCommands(buildCommand(LIndex, commandArgs));
         return getThis();
     }
 
@@ -1415,7 +1415,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
      * @return Command Response - The number of elements added to the sorted set. <br>
@@ -1424,7 +1424,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
-            @NonNull ZaddOptions options,
+            @NonNull ZAddOptions options,
             boolean changed) {
         String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
         String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
@@ -1434,7 +1434,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         ArgsArray commandArgs = buildArgs(arguments);
 
-        protobufTransaction.addCommands(buildCommand(Zadd, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZAdd, commandArgs));
         return getThis();
     }
 
@@ -1445,13 +1445,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return Command Response - The number of elements added to the sorted set.
      */
     public T zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
-            @NonNull ZaddOptions options) {
+            @NonNull ZAddOptions options) {
         return zadd(key, membersScoresMap, options, false);
     }
 
@@ -1469,7 +1469,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap, boolean changed) {
-        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), changed);
+        return zadd(key, membersScoresMap, ZAddOptions.builder().build(), changed);
     }
 
     /**
@@ -1482,7 +1482,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements added to the sorted set.
      */
     public T zadd(@NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
-        return zadd(key, membersScoresMap, ZaddOptions.builder().build(), false);
+        return zadd(key, membersScoresMap, ZAddOptions.builder().build(), false);
     }
 
     /**
@@ -1497,13 +1497,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return Command Response - The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
      *     returned.<br>
      */
     public T zaddIncr(
-            @NonNull String key, @NonNull String member, double increment, @NonNull ZaddOptions options) {
+            @NonNull String key, @NonNull String member, double increment, @NonNull ZAddOptions options) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -1511,7 +1511,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 options.toArgs(),
                                 new String[] {"INCR", Double.toString(increment), member}));
 
-        protobufTransaction.addCommands(buildCommand(Zadd, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZAdd, commandArgs));
         return getThis();
     }
 
@@ -1530,7 +1530,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The score of the member.
      */
     public T zaddIncr(@NonNull String key, @NonNull String member, double increment) {
-        return zaddIncr(key, member, increment, ZaddOptions.builder().build());
+        return zaddIncr(key, member, increment, ZAddOptions.builder().build());
     }
 
     /**
@@ -1547,7 +1547,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrem(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-        protobufTransaction.addCommands(buildCommand(Zrem, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZRem, commandArgs));
         return getThis();
     }
 
@@ -1562,7 +1562,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zcard(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Zcard, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZCard, commandArgs));
         return getThis();
     }
 
@@ -1771,7 +1771,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrank(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(key, member);
-        protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZRank, commandArgs));
         return getThis();
     }
 
@@ -1789,7 +1789,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrankWithScore(@NonNull String key, @NonNull String member) {
         ArgsArray commandArgs = buildArgs(key, member, WITH_SCORE_REDIS_API);
-        protobufTransaction.addCommands(buildCommand(Zrank, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZRank, commandArgs));
         return getThis();
     }
 
@@ -1920,7 +1920,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zcount(@NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         ArgsArray commandArgs = buildArgs(key, minScore.toArgs(), maxScore.toArgs());
-        protobufTransaction.addCommands(buildCommand(Zcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZCount, commandArgs));
         return getThis();
     }
 
@@ -2413,7 +2413,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut() {
-        protobufTransaction.addCommands(buildCommand(LOLWUT));
+        protobufTransaction.addCommands(buildCommand(Lolwut));
         return getThis();
     }
 
@@ -2435,7 +2435,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
         return getThis();
     }
 
@@ -2450,7 +2450,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lolwut(int version) {
         ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
-        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Lolwut, commandArgs));
         return getThis();
     }
 
@@ -2475,7 +2475,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
         return getThis();
     }
 
@@ -2504,7 +2504,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T renamenx(@NonNull String key, @NonNull String newKey) {
         ArgsArray commandArgs = buildArgs(key, newKey);
-        protobufTransaction.addCommands(buildCommand(RenameNx, commandArgs));
+        protobufTransaction.addCommands(buildCommand(RenameNX, commandArgs));
         return getThis();
     }
 
@@ -2552,7 +2552,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T brpop(@NonNull String[] keys, double timeout) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
-        protobufTransaction.addCommands(buildCommand(Brpop, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BRPop, commandArgs));
         return getThis();
     }
 
@@ -2608,7 +2608,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T blpop(@NonNull String[] keys, double timeout) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
-        protobufTransaction.addCommands(buildCommand(Blpop, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BLPop, commandArgs));
         return getThis();
     }
 
@@ -2635,7 +2635,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T zrange(@NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
         ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, false));
-        protobufTransaction.addCommands(buildCommand(Zrange, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZRange, commandArgs));
         return getThis();
     }
 
@@ -2683,7 +2683,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
         ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, true));
-        protobufTransaction.addCommands(buildCommand(Zrange, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ZRange, commandArgs));
         return getThis();
     }
 
@@ -2803,7 +2803,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T objectIdletime(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectIdletime, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ObjectIdleTime, commandArgs));
         return getThis();
     }
 
@@ -2818,7 +2818,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T objectRefcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectRefcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(ObjectRefCount, commandArgs));
         return getThis();
     }
 

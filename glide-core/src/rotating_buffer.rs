@@ -118,7 +118,7 @@ mod tests {
             buffer,
             callback_index,
             vec![key.to_string()],
-            RequestType::GetString,
+            RequestType::Get,
             args_pointer,
         );
     }
@@ -134,7 +134,7 @@ mod tests {
             buffer,
             callback_index,
             vec![key.to_string(), value],
-            RequestType::SetString,
+            RequestType::Set,
             args_pointer,
         );
     }
@@ -195,14 +195,14 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key".to_string()],
             args_pointer,
         );
         assert_request(
             &requests[1],
-            RequestType::SetString,
+            RequestType::Set,
             5,
             vec!["key".to_string(), "value".to_string()],
             args_pointer,
@@ -217,7 +217,7 @@ mod tests {
         let requests = rotating_buffer.get_requests().unwrap();
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key".to_string()],
             args_pointer,
@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::SetString,
+            RequestType::Set,
             5,
             vec!["key".to_string(), "value".to_string()],
             args_pointer,
@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key".to_string()],
             false,
@@ -261,7 +261,7 @@ mod tests {
         }
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key".to_string()],
             false,
@@ -284,7 +284,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key1".to_string()],
             args_pointer,
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             101,
             vec!["key2".to_string()],
             args_pointer,
@@ -322,13 +322,7 @@ mod tests {
         buffer.extend_from_slice(&request_bytes[NUM_OF_LENGTH_BYTES..]);
         let requests = rotating_buffer.get_requests().unwrap();
         assert_eq!(requests.len(), 1);
-        assert_request(
-            &requests[0],
-            RequestType::GetString,
-            100,
-            vec![key],
-            args_pointer,
-        );
+        assert_request(&requests[0], RequestType::Get, 100, vec![key], args_pointer);
     }
 
     #[rstest]
@@ -351,7 +345,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             100,
             vec!["key1".to_string()],
             args_pointer,
@@ -363,7 +357,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_request(
             &requests[0],
-            RequestType::GetString,
+            RequestType::Get,
             101,
             vec![key2],
             args_pointer,

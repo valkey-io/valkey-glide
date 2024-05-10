@@ -322,7 +322,7 @@ mod socket_listener {
             socket,
             callback_index,
             vec![key.to_string()],
-            RequestType::GetString.into(),
+            RequestType::Get.into(),
             args_pointer,
         )
     }
@@ -340,7 +340,7 @@ mod socket_listener {
             socket,
             callback_index,
             vec![key.to_string(), value],
-            RequestType::SetString.into(),
+            RequestType::Set.into(),
             args_pointer,
         )
     }
@@ -1154,7 +1154,7 @@ mod socket_listener {
             CommandComponents {
                 args: vec![key.clone(), "bar".to_string()],
                 args_pointer: true,
-                request_type: RequestType::SetString.into(),
+                request_type: RequestType::Set.into(),
             },
             CommandComponents {
                 args: vec!["GET".to_string(), key.clone()],
@@ -1169,7 +1169,7 @@ mod socket_listener {
             CommandComponents {
                 args: vec![key],
                 args_pointer: false,
-                request_type: RequestType::GetString.into(),
+                request_type: RequestType::Get.into(),
             },
         ];
         let mut buffer = Vec::with_capacity(200);
