@@ -179,6 +179,7 @@ enum RequestType {
     BZPopMin = 137;
     FlushAll = 138;
     ZRandMember = 139;
+    Bitcount = 140;
 }
 
 message Command {
