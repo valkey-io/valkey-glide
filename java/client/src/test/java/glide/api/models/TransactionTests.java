@@ -39,6 +39,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
@@ -147,6 +148,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -685,6 +687,11 @@ public class TransactionTests {
                                 "Place")));
         transaction.geopos("key", new String[] {"Place"});
         results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
+
+        transaction.geodist("key", "Place", "Place2");
+        results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
+        transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
+        results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2", "km")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -19,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.GetString;
@@ -129,6 +130,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZaddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -1186,5 +1188,22 @@ public abstract class BaseClient
                 GeoPos,
                 arguments,
                 response -> castArrayofArrays(handleArrayResponse(response), Double.class));
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
+            @NonNull String key,
+            @NonNull String member1,
+            @NonNull String member2,
+            @NonNull GeoUnit geoUnit) {
+        String[] arguments = new String[] {key, member1, member2, geoUnit.getRedisApi()};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
+            @NonNull String key, @NonNull String member1, @NonNull String member2) {
+        String[] arguments = new String[] {key, member1, member2};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 }
