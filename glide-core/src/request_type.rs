@@ -127,6 +127,7 @@ pub enum RequestType {
     GetRange = 116,
     SMove = 117,
     SMIsMember = 118,
+    ZUnionStore = 119,
     LastSave = 120,
     GeoAdd = 121,
     GeoHash = 122,
@@ -147,7 +148,8 @@ pub enum RequestType {
     ZUnion = 136,
     BZPopMin = 137,
     FlushAll = 138,
-    BZMPop = 139,
+    ZRandMember = 139,
+    BZMPop = 140,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -278,6 +280,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetRange => RequestType::GetRange,
             ProtobufRequestType::SMove => RequestType::SMove,
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
+            ProtobufRequestType::ZUnionStore => RequestType::ZUnionStore,
             ProtobufRequestType::LastSave => RequestType::LastSave,
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
@@ -298,6 +301,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZUnion => RequestType::ZUnion,
             ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
+            ProtobufRequestType::ZRandMember => RequestType::ZRandMember,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
         }
     }
@@ -425,6 +429,7 @@ impl RequestType {
             RequestType::GetRange => Some(cmd("GETRANGE")),
             RequestType::SMove => Some(cmd("SMOVE")),
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
+            RequestType::ZUnionStore => Some(cmd("ZUNIONSTORE")),
             RequestType::LastSave => Some(cmd("LASTSAVE")),
             RequestType::GeoAdd => Some(cmd("GEOADD")),
             RequestType::GeoHash => Some(cmd("GEOHASH")),
@@ -445,6 +450,7 @@ impl RequestType {
             RequestType::ZUnion => Some(cmd("ZUNION")),
             RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
+            RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
         }
     }

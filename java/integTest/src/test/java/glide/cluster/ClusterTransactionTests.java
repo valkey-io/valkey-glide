@@ -2,9 +2,6 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TransactionTestUtilities.transactionTest;
-import static glide.TransactionTestUtilities.transactionTestRedis7;
-import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -14,10 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestConfiguration;
+import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
 public class ClusterTransactionTests {
@@ -81,12 +84,26 @@ public class ClusterTransactionTests {
     }
 
     @SneakyThrows
-    @Test
-    public void test_cluster_transactions() {
-        ClusterTransaction transaction = (ClusterTransaction) transactionTest(new ClusterTransaction());
-        Object[] expectedResult = transactionTestResult();
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getCommonTransactionBuilders")
+    public void transactions_with_group_of_commands(String testName, TransactionBuilder builder) {
+        ClusterTransaction transaction = new ClusterTransaction();
+        Object[] expectedResult = builder.apply(transaction);
 
-        Object[] results = clusterClient.exec(transaction, RANDOM).get();
+        Object[] results = clusterClient.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getPrimaryNodeTransactionBuilders")
+    public void keyless_transactions_with_group_of_commands(
+            String testName, TransactionBuilder builder) {
+        ClusterTransaction transaction = new ClusterTransaction();
+        Object[] expectedResult = builder.apply(transaction);
+
+        SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
+        Object[] results = clusterClient.exec(transaction, route).get();
         assertArrayEquals(expectedResult, results);
     }
 
@@ -160,17 +177,5 @@ public class ClusterTransactionTests {
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
-    }
-
-    // Test commands supported by redis >= 7 only
-    @SneakyThrows
-    @Test
-    public void test_cluster_transactions_redis_7() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        ClusterTransaction transaction = new ClusterTransaction();
-        Object[] expectedResult = transactionTestRedis7(transaction);
-
-        Object[] results = clusterClient.exec(transaction, RANDOM).get();
-        assertArrayEquals(expectedResult, results);
     }
 }

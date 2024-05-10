@@ -849,6 +849,59 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zlexcount(String key, LexRange minLex, LexRange maxLex);
 
     /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 1.0), Pair.of("mySortedSet2", 2.0)));
+     * Long payload = client.zunionstore("newSortedSet", weightedKeys, Aggregate.MAX).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same <code>hash slot</code>.
+     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * Long payload = client.zunionstore("newSortedSet", keyArray).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of "mySortedSet1" and "mySortedSet2".
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
      * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
@@ -879,9 +932,7 @@ public interface SortedSetBaseCommands {
     /**
      * Computes the intersection of sorted sets given by the specified <code>KeysOrWeightedKeys</code>
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
-     * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
-     * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
-     * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same <code>hash slot</code>.
@@ -919,6 +970,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
+     * @since Redis 7.0 and above
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
@@ -954,6 +1006,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
+     * @since Redis 7.0 and above
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
@@ -1094,4 +1147,68 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns a random element from the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return A <code>String</code> representing a random element from the sorted set.<br>
+     *     If the sorted set does not exist or is empty, the response will be <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String payload1 = client.zrandmember("mySortedSet").get();
+     * assert payload1.equals("GLIDE");
+     *
+     * String payload2 = client.zrandmember("nonExistingSortedSet").get();
+     * assert payload2 == null;
+     * }</pre>
+     */
+    CompletableFuture<String> zrandmember(String key);
+
+    /**
+     * Retrieves random elements from the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return An <code>array</code> of elements from the sorted set.<br>
+     *     If the sorted set does not exist or is empty, the response will be an empty <code>array
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * String[] payload1 = client.zrandmember("mySortedSet", -3).get();
+     * assert payload1.equals(new String[] {"GLIDE", "GLIDE", "JAVA"});
+     *
+     * String[] payload2 = client.zrandmember("nonExistingSortedSet", 3).get();
+     * assert payload2.length == 0;
+     * }</pre>
+     */
+    CompletableFuture<String[]> zrandmemberWithCount(String key, long count);
+
+    /**
+     * Retrieves random elements along with their scores from the sorted set stored at <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows duplicates.<br>
+     * @return An <code>array</code> of <code>[element, score]</code> <code>arrays</code>, where
+     *     element is a <code>String</code> and score is a <code>Double</code>.<br>
+     *     If the sorted set does not exist or is empty, the response will be an empty <code>array
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[][] data = client.zrandmemberWithCountWithScores(key1, -3).get();
+     * assert data.length == 3;
+     * for (Object[] memberScorePair : data) {
+     *     System.out.printf("Member: '%s', score: %d", memberScorePair[0], memberScorePair[1]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count);
 }

@@ -57,4 +57,25 @@ public interface GeospatialIndicesBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> geoadd(String key, Map<String, GeospatialData> membersToGeospatialData);
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified <code>members</code> of the
+     * geospatial index represented by the sorted set at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geopos">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members The members for which to get the positions.
+     * @return A 2D <code>array</code> which represent positions (longitude and latitude)
+     *     corresponding to the given members. If a member does not exist, its position will be
+     *     </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
+     * // returned might not be exactly the same as the input values
+     * client.geoadd("mySortedSet", Map.of("Palermo", new GeospatialData(13.361389, 38.115556), "Catania", new GeospatialData(15.087269, 37.502669))).get();
+     * Double[][] result = client.geopos("mySortedSet", new String[]{"Palermo", "Catania", "NonExisting"}).get();
+     * System.out.println(Arrays.deepToString(result));
+     * }</pre>
+     */
+    CompletableFuture<Double[][]> geopos(String key, String[] members);
 }
