@@ -98,8 +98,20 @@ public class TransactionTests {
 
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
-    @MethodSource("glide.TransactionTestUtilities#getTransactionBuilders")
+    @MethodSource("glide.TransactionTestUtilities#getCommonTransactionBuilders")
     public void transactions_with_group_of_commands(String testName, TransactionBuilder builder) {
+        Transaction transaction = new Transaction();
+        Object[] expectedResult = builder.apply(transaction);
+
+        Object[] results = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getPrimaryNodeTransactionBuilders")
+    public void keyless_transactions_with_group_of_commands(
+            String testName, TransactionBuilder builder) {
         Transaction transaction = new Transaction();
         Object[] expectedResult = builder.apply(transaction);
 

@@ -16,6 +16,9 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -82,12 +85,25 @@ public class ClusterTransactionTests {
 
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
-    @MethodSource("glide.TransactionTestUtilities#getTransactionBuilders")
+    @MethodSource("glide.TransactionTestUtilities#getCommonTransactionBuilders")
     public void transactions_with_group_of_commands(String testName, TransactionBuilder builder) {
         ClusterTransaction transaction = new ClusterTransaction();
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = clusterClient.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getPrimaryNodeTransactionBuilders")
+    public void keyless_transactions_with_group_of_commands(
+            String testName, TransactionBuilder builder) {
+        ClusterTransaction transaction = new ClusterTransaction();
+        Object[] expectedResult = builder.apply(transaction);
+
+        SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
+        Object[] results = clusterClient.exec(transaction, route).get();
         assertArrayEquals(expectedResult, results);
     }
 

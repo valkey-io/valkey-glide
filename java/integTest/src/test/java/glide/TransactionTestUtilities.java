@@ -39,8 +39,8 @@ public class TransactionTestUtilities {
     @FunctionalInterface
     public interface TransactionBuilder extends Function<BaseTransaction<?>, Object[]> {}
 
-    /** Generate test samples for parametrized tests. */
-    public static Stream<Arguments> getTransactionBuilders() {
+    /** Generate test samples for parametrized tests. Could be routed to random node. */
+    public static Stream<Arguments> getCommonTransactionBuilders() {
         return Stream.of(
                 Arguments.of(
                         "Generic Commands", (TransactionBuilder) TransactionTestUtilities::genericCommands),
@@ -53,9 +53,6 @@ public class TransactionTestUtilities {
                         "Sorted Set Commands",
                         (TransactionBuilder) TransactionTestUtilities::sortedSetCommands),
                 Arguments.of(
-                        "Server Management Commands",
-                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands),
-                Arguments.of(
                         "HyperLogLog Commands",
                         (TransactionBuilder) TransactionTestUtilities::hyperLogLogCommands),
                 Arguments.of(
@@ -66,6 +63,14 @@ public class TransactionTestUtilities {
                 Arguments.of(
                         "Geospatial Commands",
                         (TransactionBuilder) TransactionTestUtilities::geospatialCommands));
+    }
+
+    /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
+    public static Stream<Arguments> getPrimaryNodeTransactionBuilders() {
+        return Stream.of(
+                Arguments.of(
+                        "Server Management Commands",
+                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands));
     }
 
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
