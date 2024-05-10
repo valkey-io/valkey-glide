@@ -51,7 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -2413,7 +2413,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut() {
-        protobufTransaction.addCommands(buildCommand(LOLWUT));
+        protobufTransaction.addCommands(buildCommand(Lolwut));
         return getThis();
     }
 
@@ -2435,7 +2435,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
         return getThis();
     }
 
@@ -2450,7 +2450,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lolwut(int version) {
         ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
-        protobufTransaction.addCommands(buildCommand(LOLWUT, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Lolwut, commandArgs));
         return getThis();
     }
 
@@ -2475,7 +2475,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        protobufTransaction.addCommands(buildCommand(LOLWUT, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
         return getThis();
     }
 

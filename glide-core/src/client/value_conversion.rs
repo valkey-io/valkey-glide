@@ -14,11 +14,11 @@ pub(crate) enum ExpectedReturnType {
     BulkString,
     Set,
     DoubleOrNull,
-    ZrankReturnType,
+    ZRankReturnType,
     JsonToggleReturnType,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
-    LOLWUT,
+    Lolwut,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
 }
@@ -101,7 +101,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Nil => Ok(value),
             _ => Ok(Value::Double(from_owned_redis_value::<f64>(value)?)),
         },
-        ExpectedReturnType::ZrankReturnType => match value {
+        ExpectedReturnType::ZRankReturnType => match value {
             Value::Nil => Ok(value),
             Value::Array(mut array) => {
                 if array.len() != 2 {
@@ -119,7 +119,7 @@ pub(crate) fn convert_to_expected_type(
             }
             _ => Err((
                 ErrorKind::TypeError,
-                "Response couldn't be converted to Array (ZrankResponseType)",
+                "Response couldn't be converted to Array (ZRankResponseType)",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -227,7 +227,7 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::LOLWUT => {
+        ExpectedReturnType::Lolwut => {
             match value {
                 // cluster (multi-node) response - go recursive
                 Value::Map(map) => {
@@ -240,7 +240,7 @@ pub(crate) fn convert_to_expected_type(
                             )?;
                             let converted_value = convert_to_expected_type(
                                 inner_value,
-                                Some(ExpectedReturnType::LOLWUT),
+                                Some(ExpectedReturnType::Lolwut),
                             )?;
                             Ok((converted_key, converted_value))
                         })
@@ -419,7 +419,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             .map(|_| ExpectedReturnType::MapOfStringToDouble),
         b"ZRANK" | b"ZREVRANK" => cmd
             .position(b"WITHSCORE")
-            .map(|_| ExpectedReturnType::ZrankReturnType),
+            .map(|_| ExpectedReturnType::ZRankReturnType),
         b"SPOP" => {
             if cmd.arg_idx(2).is_some() {
                 Some(ExpectedReturnType::Set)
@@ -427,7 +427,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
-        b"LOLWUT" => Some(ExpectedReturnType::LOLWUT),
+        b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
         _ => None,
     }
 }
@@ -448,7 +448,7 @@ mod tests {
 
         let converted_1 = convert_to_expected_type(
             Value::BulkString(redis_string.clone().into_bytes()),
-            Some(ExpectedReturnType::LOLWUT),
+            Some(ExpectedReturnType::Lolwut),
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -460,7 +460,7 @@ mod tests {
                 format: redis::VerbatimFormat::Text,
                 text: redis_string.clone(),
             },
-            Some(ExpectedReturnType::LOLWUT),
+            Some(ExpectedReturnType::Lolwut),
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -478,7 +478,7 @@ mod tests {
                     Value::BulkString(redis_string.clone().into_bytes()),
                 ),
             ]),
-            Some(ExpectedReturnType::LOLWUT),
+            Some(ExpectedReturnType::Lolwut),
         );
         assert_eq!(
             Value::Map(vec![
@@ -496,7 +496,7 @@ mod tests {
 
         let converted_4 = convert_to_expected_type(
             Value::SimpleString(redis_string.clone()),
-            Some(ExpectedReturnType::LOLWUT),
+            Some(ExpectedReturnType::Lolwut),
         );
         assert!(converted_4.is_err());
     }
@@ -751,7 +751,7 @@ mod tests {
                     .arg("member")
                     .arg("withscore")
             ),
-            Some(ExpectedReturnType::ZrankReturnType)
+            Some(ExpectedReturnType::ZRankReturnType)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("zrank").arg("key").arg("member")).is_none());
@@ -763,7 +763,7 @@ mod tests {
                     .arg("member")
                     .arg("withscore")
             ),
-            Some(ExpectedReturnType::ZrankReturnType)
+            Some(ExpectedReturnType::ZRankReturnType)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZREVRANK").arg("key").arg("member")).is_none());
@@ -899,7 +899,7 @@ mod tests {
     #[test]
     fn test_convert_to_zrank_return_type() {
         assert_eq!(
-            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::ZrankReturnType)),
+            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::ZRankReturnType)),
             Ok(Value::Nil)
         );
 
@@ -910,7 +910,7 @@ mod tests {
 
         let array_result = convert_to_expected_type(
             Value::Array(array),
-            Some(ExpectedReturnType::ZrankReturnType),
+            Some(ExpectedReturnType::ZRankReturnType),
         )
         .unwrap();
 
@@ -927,7 +927,7 @@ mod tests {
         let array_err = vec![Value::BulkString(b"key".to_vec())];
         assert!(convert_to_expected_type(
             Value::Array(array_err),
-            Some(ExpectedReturnType::ZrankReturnType)
+            Some(ExpectedReturnType::ZRankReturnType)
         )
         .is_err());
     }

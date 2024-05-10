@@ -16,7 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -330,20 +330,20 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(LOLWUT, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 new String[] {VERSION_REDIS_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
@@ -354,13 +354,13 @@ public class RedisClusterClient extends BaseClient
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> lolwut(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 new String[0],
                 route,
                 response ->
@@ -375,7 +375,7 @@ public class RedisClusterClient extends BaseClient
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 arguments,
                 route,
                 response ->
@@ -387,7 +387,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> lolwut(int version, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 new String[] {VERSION_REDIS_API, Integer.toString(version)},
                 route,
                 response ->
@@ -404,7 +404,7 @@ public class RedisClusterClient extends BaseClient
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 arguments,
                 route,
                 response ->

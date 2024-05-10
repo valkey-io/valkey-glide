@@ -61,7 +61,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -588,10 +588,10 @@ public class TransactionTests {
         results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
-        results.add(Pair.of(LOLWUT, buildArgs()));
-        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "5")));
-        results.add(Pair.of(LOLWUT, buildArgs("1", "2")));
-        results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "6", "42")));
+        results.add(Pair.of(Lolwut, buildArgs()));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(Lolwut, buildArgs("1", "2")));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
