@@ -14,7 +14,7 @@ import java.nio.file.StandardCopyOption;
  * Native Interface).
  *
  * @see <a
- *     href="http://adamheinrich.com/blog/2012/how-to-load-native-jni-library-from-jar">http://adamheinrich.com/blog/2012/how-to-load-native-jni-library-from-jar</a>
+ *     href="https://raw.githubusercontent.com/adamheinrich/native-utils/master/src/main/java/cz/adamh/utils/NativeUtils.java">https://raw.githubusercontent.com/adamheinrich/native-utils/master/src/main/java/cz/adamh/utils/NativeUtils.java</a>
  * @see <a
  *     href="https://github.com/adamheinrich/native-utils">https://github.com/adamheinrich/native-utils</a>
  */
@@ -28,7 +28,7 @@ public class NativeUtils {
 
     public static final String NATIVE_FOLDER_PATH_PREFIX = "nativeutils";
 
-    /** Temporary directory which will contain the DLLs. */
+    /** Temporary directory which will contain the dynamic library files. */
     private static File temporaryDir;
 
     /** Private constructor - this class will never be instanced */
@@ -63,7 +63,7 @@ public class NativeUtils {
      * @throws IOException If temporary file creation or read/write operation fails
      * @throws IllegalArgumentException If source file (param path) does not exist
      * @throws IllegalArgumentException If the path is not absolute or if the filename is shorter than
-     *     three characters (restriction of {@link File#createTempFile(java.lang.String,
+     *     <code>MIN_PREFIX_LENGTH</code> (restriction of {@link File#createTempFile(java.lang.String,
      *     java.lang.String)}).
      * @throws FileNotFoundException If the file could not be found inside the JAR.
      */
@@ -79,7 +79,7 @@ public class NativeUtils {
 
         // Check if the filename is okay
         if (filename == null || filename.length() < MIN_PREFIX_LENGTH) {
-            throw new IllegalArgumentException("The filename has to be at least 3 characters long.");
+            throw new IllegalArgumentException("The filename has to be at least " + MIN_PREFIX_LENGTH + " characters long.");
         }
 
         // Prepare temporary file

@@ -97,10 +97,21 @@ tasks.register('buildRustReleaseStrip', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
+tasks.register('buildRust', Exec) {
+    commandLine 'cargo', 'build'
+    workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always'
+}
+
 tasks.register('buildRustFfi', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+}
+
+tasks.register('buildWithRust') {
+    dependsOn 'buildRust'
+    finalizedBy 'build'
 }
 
 tasks.register('buildWithRustRelease') {
@@ -124,6 +135,11 @@ tasks.register('testFfi', Test) {
 }
 
 tasks.register('buildAll') {
+    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    finalizedBy 'build'
+}
+
+tasks.register('buildAllRelease') {
     dependsOn 'protobuf', 'buildRustRelease', 'testFfi'
     finalizedBy 'build'
 }
@@ -140,6 +156,8 @@ tasks.register('copyNativeLib', Copy) {
 jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
 compileTestJava.dependsOn('publishToMavenLocal')
+test.dependsOn('buildRust')
+testFfi.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -162,7 +180,7 @@ publishing {
             from components.java
             groupId = 'software.amazon.glide'
             artifactId = 'glide'
-            version = "0.0.1"
+            version = "255.255.255"
             pom {
                 name = 'glide-for-valkey'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'

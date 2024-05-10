@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'software.amazon.glide:glide:0.0.1'
+    implementation 'software.amazon.glide:glide:255.255.255'
 
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
