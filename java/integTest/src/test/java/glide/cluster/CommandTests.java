@@ -672,6 +672,7 @@ public class CommandTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void functionLoad(boolean withRoute) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         String libName = "mylib1C" + withRoute;
         String code =
                 "#!lua name="

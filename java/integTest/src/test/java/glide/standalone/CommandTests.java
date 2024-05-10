@@ -340,6 +340,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void functionLoad() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         String libName = "mylib1C";
         String code =
                 "#!lua name="
