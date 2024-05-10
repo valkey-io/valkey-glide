@@ -462,7 +462,7 @@ public class TransactionTestUtilities {
             new Double[][] {
                 {13.36138933897018433, 38.11555639549629859},
                 {15.08726745843887329, 37.50266842333162032},
-            }, // geopos(new String[]{"Palermo", "Catania"})
+            }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
             166274.1516, // geodist(geoKey1, "Palermo", "Catania")
             166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
         };
