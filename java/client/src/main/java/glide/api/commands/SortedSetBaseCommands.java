@@ -272,7 +272,7 @@ public interface SortedSetBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return An <code>array</code> containing the key where the member was popped out, the member
      *     itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      * @example
      *     <pre>{@code
@@ -341,7 +341,7 @@ public interface SortedSetBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return An <code>array</code> containing the key where the member was popped out, the member
      *     itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      * @example
      *     <pre>{@code
@@ -905,9 +905,8 @@ public interface SortedSetBaseCommands {
 
     // TODO add @link to ZMPOP when implemented
     /**
-     * Blocks the connection until it pops and returns a member-score pair from the sorted sets stored
-     * at the specified <code>keys</code>. The sorted sets are checked in the order they are provided.
-     * <br>
+     * Blocks the connection until it pops and returns a member-score pair from the first non-empty
+     * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * To pop more than one element use {@link #bzmpop(String[], ScoreModifier, double, long)}.<br>
      * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
      *
@@ -927,11 +926,11 @@ public interface SortedSetBaseCommands {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return A two-element <code>array</code> containing the key name of the set from which an
-     *     element was popped, and a member-score <code>Map</code>.<br>
-     *     If no member could be popped and the timeout expired, returns </code>null</code>.
+     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(0.1, new String[] { "zSet1", "zSet2" }, MAX).get();
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
      * Map<String, Double> data = (Map<String, Double>)result[1];
      * String element = data.keySet().toArray(String[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
@@ -941,9 +940,9 @@ public interface SortedSetBaseCommands {
 
     // TODO add @link to ZMPOP when implemented
     /**
-     * Blocks the connection until it pops and returns multiple member-score pairs from the sorted
-     * sets stored at the specified <code>keys</code>. The sorted sets are checked in the order they
-     * are provided.<br>
+     * Blocks the connection until it pops and returns multiple member-score pairs from the first
+     * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
+     * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
      *
      * @apiNote
@@ -961,13 +960,13 @@ public interface SortedSetBaseCommands {
      *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @param count The amount elements to pop.
+     * @param count The number of elements to pop.
      * @return A two-element <code>array</code> containing the key name of the set from which elements
-     *     were popped, and a member-score <code>Map</code>.<br>
-     *     If no members could be popped and the timeout expired, returns </code>null</code>.
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no members could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(0.1, new String[] { "zSet1", "zSet2" }, MAX).get();
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
      * Map<String, Double> data = (Map<String, Double>)result[1];
      * for (Map.Entry<String, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);

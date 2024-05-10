@@ -786,11 +786,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Trims an existing list so that it will contain only the specified range of elements specified.<br>
-     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code> being the
-     * first element of the list, </code>1<code> being the next element and so on.<br>
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code>
+     * being the first element of the list, <code>1</code> being the next element and so on.<br>
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
-     * with <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and so on.
+     * with <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate,
+     * and so on.
      *
      * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
      * @param key The key of the list.
@@ -1617,7 +1619,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - An <code>array</code> containing the key where the member was popped
      *     out, the member itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      */
     public T bzpopmin(@NonNull String[] keys, double timeout) {
@@ -1677,7 +1679,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - An <code>array</code> containing the key where the member was popped
      *     out, the member itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      */
     public T bzpopmax(@NonNull String[] keys, double timeout) {
@@ -2603,9 +2605,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     // TODO add @link to ZMPOP when implemented
     /**
-     * Blocks the connection until it pops and returns a member-score pair from the sorted sets stored
-     * at the specified <code>keys</code>. The sorted sets are checked in the order they are provided.
-     * <br>
+     * Blocks the connection until it pops and returns a member-score pair from the first non-empty
+     * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * To pop more than one element use {@link #bzmpop(String[], ScoreModifier, double, long)}.<br>
      * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
      *
@@ -2619,8 +2620,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A two-element <code>array</code> containing the key name of the set
-     *     from which an element was popped, and a member-score <code>Map</code>.<br>
-     *     If no member could be popped and the timeout expired, returns </code>null</code>.
+     *     from which an element was popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
     public T bzmpop(@NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout) {
         ArgsArray commandArgs =
@@ -2635,9 +2637,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     // TODO add @link to ZMPOP when implemented
     /**
-     * Blocks the connection until it pops and returns multiple member-score pairs from the sorted
-     * sets stored at the specified <code>keys</code>. The sorted sets are checked in the order they
-     * are provided.<br>
+     * Blocks the connection until it pops and returns multiple member-score pairs from the first
+     * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
+     * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.<br>
      *
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
@@ -2649,10 +2651,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @param count The amount elements to pop.
+     * @param count The number of elements to pop.
      * @return Command Response - A two-element <code>array</code> containing the key name of the set
-     *     from which elements were popped, and a member-score <code>Map</code>.<br>
-     *     If no members could be popped and the timeout expired, returns </code>null</code>.
+     *     from which elements were popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no members could be popped and the timeout expired, returns <code>null</code>.
      */
     public T bzmpop(
             @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout, long count) {
