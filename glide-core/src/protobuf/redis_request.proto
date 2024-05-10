@@ -159,6 +159,7 @@ enum RequestType {
     GetRange = 116;
     SMove = 117;
     SMIsMember = 118;
+    ZUnionStore = 119;
     LastSave = 120;
     GeoAdd = 121;
     GeoHash = 122;
