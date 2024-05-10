@@ -17,7 +17,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -44,7 +44,7 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
      * @return The number of elements added to the sorted set.<br>
@@ -61,7 +61,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zadd(
-            String key, Map<String, Double> membersScoresMap, ZaddOptions options, boolean changed);
+            String key, Map<String, Double> membersScoresMap, ZAddOptions options, boolean changed);
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -70,7 +70,7 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return The number of elements added to the sorted set.
      * @example
      *     <pre>{@code
@@ -84,7 +84,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zadd(
-            String key, Map<String, Double> membersScoresMap, ZaddOptions options);
+            String key, Map<String, Double> membersScoresMap, ZAddOptions options);
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -133,7 +133,7 @@ public interface SortedSetBaseCommands {
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
      *     returned.
@@ -149,7 +149,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zaddIncr(
-            String key, String member, double increment, ZaddOptions options);
+            String key, String member, double increment, ZAddOptions options);
 
     /**
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
