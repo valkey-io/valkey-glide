@@ -116,6 +116,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
@@ -594,6 +595,22 @@ public class TransactionTests {
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
+
+        transaction.zrandmember("key");
+        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zrandmemberWithCount("key", 5);
+        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").addArgs("5").build()));
+
+        transaction.zrandmemberWithCountWithScores("key", 5);
+        results.add(
+                Pair.of(
+                        ZRandMember,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("5")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
