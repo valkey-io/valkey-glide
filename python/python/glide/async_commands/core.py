@@ -501,8 +501,7 @@ class CoreCommands(Protocol):
         meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
         See https://redis.io/commands/rename/ for more details.
 
-        Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+        When in cluster mode, the command may route to multiple nodes when `key` and `new_key` map to different hash slots.
 
         Args:
             key (str) : The key to rename.
@@ -608,7 +607,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/mset/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slot.
+            When in cluster mode, the command may route to multiple nodes when keys in `parameters` map to different hash slots.
 
         Args:
             parameters (Mapping[str, str]): A map of key value pairs.

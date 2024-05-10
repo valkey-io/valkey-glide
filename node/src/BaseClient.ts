@@ -523,7 +523,7 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      * See https://redis.io/commands/mget/ for details.
      *
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
@@ -2195,7 +2195,7 @@ export class BaseClient {
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      * See https://redis.io/commands/rename/ for more details.
      *
-     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
