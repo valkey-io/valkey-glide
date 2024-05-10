@@ -1065,4 +1065,68 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns a random element from the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return A <code>String</code> representing a random element from the sorted set.<br>
+     *     If the sorted set does not exist or is empty, the response will be <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String payload1 = client.zrandmember("mySortedSet").get();
+     * assert payload1.equals("GLIDE");
+     *
+     * String payload2 = client.zrandmember("nonExistingSortedSet").get();
+     * assert payload2 == null;
+     * }</pre>
+     */
+    CompletableFuture<String> zrandmember(String key);
+
+    /**
+     * Retrieves random elements from the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return An <code>array</code> of elements from the sorted set.<br>
+     *     If the sorted set does not exist or is empty, the response will be an empty <code>array
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * String[] payload1 = client.zrandmember("mySortedSet", -3).get();
+     * assert payload1.equals(new String[] {"GLIDE", "GLIDE", "JAVA"});
+     *
+     * String[] payload2 = client.zrandmember("nonExistingSortedSet", 3).get();
+     * assert payload2.length == 0;
+     * }</pre>
+     */
+    CompletableFuture<String[]> zrandmemberWithCount(String key, long count);
+
+    /**
+     * Retrieves random elements along with their scores from the sorted set stored at <code>key
+     * </code>.
+     *
+     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows duplicates.<br>
+     * @return An <code>array</code> of <code>[element, score]</code> <code>arrays</code>, where
+     *     element is a <code>String</code> and score is a <code>Double</code>.<br>
+     *     If the sorted set does not exist or is empty, the response will be an empty <code>array
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[][] data = client.zrandmemberWithCountWithScores(key1, -3).get();
+     * assert data.length == 3;
+     * for (Object[] memberScorePair : data) {
+     *     System.out.printf("Member: '%s', score: %d", memberScorePair[0], memberScorePair[1]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count);
 }
