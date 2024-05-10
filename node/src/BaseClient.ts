@@ -544,7 +544,7 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      * See https://redis.io/commands/mset/ for details.
      *
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slot.
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
      *

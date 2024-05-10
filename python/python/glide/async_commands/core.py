@@ -629,7 +629,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/mget/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): A list of keys to retrieve values for.
@@ -1622,7 +1622,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/exists/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): The list of keys to check.
@@ -1646,7 +1646,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/unlink/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slot.
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): The list of keys to unlink.
@@ -2428,7 +2428,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrangestore for more details.
 
         Note:
-            When in Cluster mode, all keys must map to the same hash slot.
+            When in Cluster mode, all `keys` must map to the same hash slot.
 
         Args:
             destination (str): The key for the destination sorted set.
