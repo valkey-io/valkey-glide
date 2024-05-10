@@ -2195,7 +2195,7 @@ export class BaseClient {
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      * See https://redis.io/commands/rename/ for more details.
      *
-     * @remarks When in cluster mode, all `keys` must map to the same `hash slot`.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -2221,10 +2221,10 @@ export class BaseClient {
      * Notes:
      * 1. `BRPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
-     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
+     * 2. When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @remarks
-     * 1. When in cluster mode, all `keys` must map to the same `hash slot`.
+     * 1. When in cluster mode, all `keys` must map to the same hash slot.
      * 2. BRPOP is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -2254,7 +2254,7 @@ export class BaseClient {
      * Notes:
      * 1. `BLPOP` is a blocking command,
      * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
-     * 2. When in cluster mode, all `keys` must map to the same `hash slot`.
+     * 2. When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.

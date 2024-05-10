@@ -19,7 +19,7 @@ public interface GenericBaseCommands {
      * exist.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different <code>hash slot</code>s.
+     *     map to different hash slots.
      * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return The number of keys that were removed.
@@ -35,7 +35,7 @@ public interface GenericBaseCommands {
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different <code>hash slot</code>s.
+     *     map to different hash slots.
      * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
@@ -55,7 +55,7 @@ public interface GenericBaseCommands {
      * while <a href="https://redis.io/commands/del/">DEL</a> does.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different <code>hash slot</code>s.
+     *     map to different hash slots.
      * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.
@@ -456,7 +456,7 @@ public interface GenericBaseCommands {
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
-     *     same <code>hash slot</code>.
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
      * @param key The key to rename.
      * @param newKey The new key name.

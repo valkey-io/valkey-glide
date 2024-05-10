@@ -2017,7 +2017,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2052,7 +2052,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:

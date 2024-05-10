@@ -98,7 +98,7 @@ public interface SetBaseCommands {
      * operation is atomic.
      *
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
-     *     same <code>hash slot</code>.
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
      * @param source The key of the set to remove the element from.
      * @param destination The key of the set to add the element to.
@@ -155,7 +155,7 @@ public interface SetBaseCommands {
      * into a new set at <code>destination</code>.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys of the sets to diff.
@@ -211,7 +211,7 @@ public interface SetBaseCommands {
      * at <code>destination</code>.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys from which to retrieve the set members.
