@@ -283,8 +283,7 @@ public interface ListBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BLPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
@@ -314,8 +313,7 @@ public interface ListBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BRPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.

@@ -2580,7 +2580,18 @@ class TestMultiKeyCommandCrossSlot:
     async def test_multi_key_command_returns_cross_slot_error(
         self, redis_client: RedisClusterClient
     ):
-        # TODO brpop, bz*, zdiff, sdiff and others - all rest multi-key commands except ones tested below
+        for promise in [
+            redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
+            redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
+            redis_client.rename("abc", "zxy"),
+            redis_client.zdiffstore("abc", ["zxy", "lkn"]),
+            redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+        ]:
+            with pytest.raises(RequestError) as e:
+                await promise
+            assert "crossslot" in str(e).lower()
+
+        # TODO bz*, zdiff, sdiff and others - all rest multi-key commands except ones tested below
         pass
 
     @pytest.mark.parametrize("cluster_mode", [True])

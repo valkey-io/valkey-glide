@@ -2191,8 +2191,6 @@ export class BaseClient {
     /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      * See https://redis.io/commands/rename/ for more details.
      *
      * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
@@ -2218,14 +2216,9 @@ export class BaseClient {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/brpop/ for more details.
      *
-     * Notes:
-     * 1. `BRPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
-     * 2. When in cluster mode, all `keys` must map to the same hash slot.
-     *
      * @remarks
      * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. BRPOP is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
@@ -2251,11 +2244,9 @@ export class BaseClient {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://redis.io/commands/blpop/ for more details.
      *
-     * Notes:
-     * 1. `BLPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
-     * 2. When in cluster mode, all `keys` must map to the same hash slot.
-     *
+     * @remarks
+     * 1. When in cluster mode, all `keys` must map to the same hash slot.
+     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,

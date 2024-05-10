@@ -474,7 +474,7 @@ public interface GenericBaseCommands {
      * Updates the last access time of specified <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different <code>hash slots</code>.
+     *     map to different hash slots.
      * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
      * @param keys The keys to update last access time.
      * @return The number of keys that were updated.

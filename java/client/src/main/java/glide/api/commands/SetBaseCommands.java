@@ -136,8 +136,7 @@ public interface SetBaseCommands {
     /**
      * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *     </code>.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
      * @param keys The keys of the sets to diff.
      * @return A <code>Set</code> of elements representing the difference between the sets.<br>
@@ -171,8 +170,7 @@ public interface SetBaseCommands {
     /**
      * Gets the intersection of all the given sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *     </code>.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
      * @param keys The keys of the sets.
      * @return A <code>Set</code> of members which are present in all given sets.<br>
@@ -192,8 +190,8 @@ public interface SetBaseCommands {
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to the same <code>hash slot
-     *     </code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys from which to retrieve the set members.

@@ -252,8 +252,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
@@ -321,8 +320,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
@@ -490,8 +488,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
-     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -524,8 +522,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
-     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -662,8 +660,7 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *     </code>.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -681,8 +678,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *     </code>.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -857,7 +853,7 @@ public interface SortedSetBaseCommands {
      * is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -885,7 +881,7 @@ public interface SortedSetBaseCommands {
      * is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -909,8 +905,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
+     *     must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -937,8 +933,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
+     *     must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:

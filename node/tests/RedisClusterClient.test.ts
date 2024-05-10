@@ -296,6 +296,10 @@ describe("RedisClusterClient", () => {
             await checkCommandThrowsCrossSlotError(
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
             );
+            await checkCommandThrowsCrossSlotError(
+                client.blpop(["abc", "zxy", "lkn"], 0.1),
+            );
+            await checkCommandThrowsCrossSlotError(client.rename("abc", "zxy"));
             // TODO all rest multi-key commands except ones tested below
 
             client.close();
