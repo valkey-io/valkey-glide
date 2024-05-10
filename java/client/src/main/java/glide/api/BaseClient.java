@@ -13,6 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -108,6 +109,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import glide.api.commands.BitmapBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.commands.HashBaseCommands;
@@ -118,6 +120,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
+import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
@@ -162,6 +165,7 @@ import response.ResponseOuterClass.Response;
 @AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
+                BitmapBaseCommands,
                 GenericBaseCommands,
                 StringBaseCommands,
                 HashBaseCommands,
@@ -1235,5 +1239,26 @@ public abstract class BaseClient
                 GeoPos,
                 arguments,
                 response -> castArrayofArrays(handleArrayResponse(response), Double.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> bitcount(@NonNull String key) {
+        return commandManager.submitNewCommand(Bitcount, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitcount(@NonNull String key, long start, long end) {
+        return commandManager.submitNewCommand(
+                Bitcount,
+                new String[] {key, Long.toString(start), Long.toString(end)},
+                this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitcount(
+            @NonNull String key, long start, long end, @NonNull BitmapIndexType options) {
+        String[] arguments =
+                new String[] {key, Long.toString(start), Long.toString(end), options.toString()};
+        return commandManager.submitNewCommand(Bitcount, arguments, this::handleLongResponse);
     }
 }
