@@ -932,6 +932,40 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_blpop(self, redis_client: TRedisClient):
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        value1 = "value1"
+        value2 = "value2"
+        value_list = [value1, value2]
+
+        assert await redis_client.lpush(key1, value_list) == 2
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.blpop([key1, key2], 0.5) == [key1, value2]
+
+        assert await redis_client.blpop(["non_existent_key"], 0.5) is None
+
+        # key exists, but not a list
+        assert await redis_client.set("foo", "bar")
+        with pytest.raises(RequestError):
+            await redis_client.blpop(["foo"], 0.001)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.blpop(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_blpop_call():
+            await redis_client.blpop(["non_existent_key"], 0)
+
+        # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_blpop_call(), timeout=3)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lindex(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
@@ -987,6 +1021,40 @@ class TestCommands:
         # incorrect arguments
         with pytest.raises(RequestError):
             await redis_client.rpushx(key2, [])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_brpop(self, redis_client: TRedisClient):
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        value1 = "value1"
+        value2 = "value2"
+        value_list = [value1, value2]
+
+        assert await redis_client.lpush(key1, value_list) == 2
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.brpop([key1, key2], 0.5) == [key1, value1]
+
+        assert await redis_client.brpop(["non_existent_key"], 0.5) is None
+
+        # key exists, but not a list
+        assert await redis_client.set("foo", "bar")
+        with pytest.raises(RequestError):
+            await redis_client.brpop(["foo"], 0.001)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.brpop(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_brpop_call():
+            await redis_client.brpop(["non_existent_key"], 0)
+
+        # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_brpop_call(), timeout=3)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2311,6 +2379,52 @@ class TestCommands:
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zrank(key, "one")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zdiffstore(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        key4 = f"{{testKey}}:4-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2 = {"two": 2.0}
+        member_scores3 = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
+
+        assert await redis_client.zadd(key1, member_scores1) == 3
+        assert await redis_client.zadd(key2, member_scores2) == 1
+        assert await redis_client.zadd(key3, member_scores3) == 4
+
+        assert await redis_client.zdiffstore(key4, [key1, key2]) == 2
+        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
+            "one": 1.0,
+            "three": 3.0,
+        }
+
+        assert await redis_client.zdiffstore(key4, [key3, key2, key1]) == 1
+        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
+            "four": 4.0
+        }
+
+        assert await redis_client.zdiffstore(key4, [key1, key3]) == 0
+        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
+
+        assert await redis_client.zdiffstore(key4, [non_existing_key, key1]) == 0
+        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zdiffstore(key4, [string_key, key1])
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zdiffstore("abc", ["zxy", "lkn"])
+            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

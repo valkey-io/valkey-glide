@@ -157,6 +157,7 @@ enum RequestType {
     GetRange = 116;
     SMove = 117;
     SMIsMember = 118;
+    ZUnionStore = 119;
     LastSave = 120;
     GeoAdd = 121;
     GeoHash = 122;
@@ -169,12 +170,15 @@ enum RequestType {
     GeoPos = 128;
     BZPopMax = 129;
     ObjectFreq = 130;
-    RenameNx = 131;
+    RenameNX = 131;
     Touch = 132;
     ZRevRank = 133;
     ZInterStore = 134;
     HRandField = 135;
     ZUnion = 136;
+    BZPopMin = 137;
+    FlushAll = 138;
+    ZRandMember = 139;
 }
 
 message Command {

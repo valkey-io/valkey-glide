@@ -1828,7 +1828,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: arcstr:1.1.5
+Package: arcstr:1.2.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9505,7 +9505,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: getrandom:0.2.14
+Package: getrandom:0.2.15
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14042,7 +14042,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: num-bigint:0.4.4
+Package: num-bigint:0.4.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18647,7 +18647,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.81
+Package: proc-macro2:1.0.82
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21068,7 +21068,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustc-demangle:0.1.23
+Package: rustc-demangle:0.1.24
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22026,7 +22026,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.5.0
+Package: rustls-pki-types:1.7.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22273,7 +22273,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: ryu:1.0.17
+Package: ryu:1.0.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23219,7 +23219,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.200
+Package: serde:1.0.201
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23448,7 +23448,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.200
+Package: serde_derive:1.0.201
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24501,7 +24501,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.60
+Package: syn:2.0.61
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24954,7 +24954,7 @@ Software.
 
 ----
 
-Package: thiserror:1.0.59
+Package: thiserror:1.0.60
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25183,7 +25183,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror-impl:1.0.59
+Package: thiserror-impl:1.0.60
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35415,7 +35415,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.33
+Package: zerocopy:0.7.34
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35667,7 +35667,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.33
+Package: zerocopy-derive:0.7.34
 
 The following copyrights and licenses were found in the source code of this package:
 

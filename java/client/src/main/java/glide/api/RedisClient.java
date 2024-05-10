@@ -12,6 +12,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -23,6 +24,7 @@ import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
@@ -61,7 +63,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
-        return commandManager.submitNewCommand(transaction, this::handleArrayOrNullResponse);
+        return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -140,6 +142,17 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<Long> lastsave() {
         return commandManager.submitNewCommand(LastSave, new String[0], this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall() {
+        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
     }
 
     @Override

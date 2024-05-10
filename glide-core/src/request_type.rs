@@ -127,6 +127,7 @@ pub enum RequestType {
     GetRange = 116,
     SMove = 117,
     SMIsMember = 118,
+    ZUnionStore = 119,
     LastSave = 120,
     GeoAdd = 121,
     GeoHash = 122,
@@ -139,12 +140,15 @@ pub enum RequestType {
     GeoPos = 128,
     BZPopMax = 129,
     ObjectFreq = 130,
-    RenameNx = 131,
+    RenameNX = 131,
     Touch = 132,
     ZRevRank = 133,
     ZInterStore = 134,
     HRandField = 135,
     ZUnion = 136,
+    BZPopMin = 137,
+    FlushAll = 138,
+    ZRandMember = 139,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -275,6 +279,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetRange => RequestType::GetRange,
             ProtobufRequestType::SMove => RequestType::SMove,
             ProtobufRequestType::SMIsMember => RequestType::SMIsMember,
+            ProtobufRequestType::ZUnionStore => RequestType::ZUnionStore,
             ProtobufRequestType::LastSave => RequestType::LastSave,
             ProtobufRequestType::GeoAdd => RequestType::GeoAdd,
             ProtobufRequestType::GeoHash => RequestType::GeoHash,
@@ -287,12 +292,15 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LOLWUT => RequestType::LOLWUT,
             ProtobufRequestType::GeoPos => RequestType::GeoPos,
             ProtobufRequestType::BZPopMax => RequestType::BZPopMax,
-            ProtobufRequestType::RenameNx => RequestType::RenameNx,
+            ProtobufRequestType::RenameNX => RequestType::RenameNX,
             ProtobufRequestType::Touch => RequestType::Touch,
             ProtobufRequestType::ZRevRank => RequestType::ZRevRank,
             ProtobufRequestType::ZInterStore => RequestType::ZInterStore,
             ProtobufRequestType::HRandField => RequestType::HRandField,
             ProtobufRequestType::ZUnion => RequestType::ZUnion,
+            ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
+            ProtobufRequestType::FlushAll => RequestType::FlushAll,
+            ProtobufRequestType::ZRandMember => RequestType::ZRandMember,
         }
     }
 }
@@ -419,6 +427,7 @@ impl RequestType {
             RequestType::GetRange => Some(cmd("GETRANGE")),
             RequestType::SMove => Some(cmd("SMOVE")),
             RequestType::SMIsMember => Some(cmd("SMISMEMBER")),
+            RequestType::ZUnionStore => Some(cmd("ZUNIONSTORE")),
             RequestType::LastSave => Some(cmd("LASTSAVE")),
             RequestType::GeoAdd => Some(cmd("GEOADD")),
             RequestType::GeoHash => Some(cmd("GEOHASH")),
@@ -431,12 +440,15 @@ impl RequestType {
             RequestType::LOLWUT => Some(cmd("LOLWUT")),
             RequestType::GeoPos => Some(cmd("GEOPOS")),
             RequestType::BZPopMax => Some(cmd("BZPOPMAX")),
-            RequestType::RenameNx => Some(cmd("RENAMENX")),
+            RequestType::RenameNX => Some(cmd("RENAMENX")),
             RequestType::Touch => Some(cmd("TOUCH")),
             RequestType::ZRevRank => Some(cmd("ZREVRANK")),
             RequestType::ZInterStore => Some(cmd("ZINTERSTORE")),
             RequestType::HRandField => Some(cmd("HRANDFIELD")),
             RequestType::ZUnion => Some(cmd("ZUNION")),
+            RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
+            RequestType::FlushAll => Some(cmd("FLUSHALL")),
+            RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
         }
     }
 }

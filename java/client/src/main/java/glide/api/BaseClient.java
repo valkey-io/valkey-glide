@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
+import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -10,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -17,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
@@ -59,7 +62,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -91,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
@@ -101,6 +105,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.GeospatialIndicesBaseCommands;
@@ -383,7 +388,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Boolean> renamenx(@NonNull String key, @NonNull String newKey) {
         return commandManager.submitNewCommand(
-                RenameNx, new String[] {key, newKey}, this::handleBooleanResponse);
+                RenameNX, new String[] {key, newKey}, this::handleBooleanResponse);
     }
 
     @Override
@@ -821,6 +826,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> bzpopmin(@NonNull String[] keys, double timeout) {
+        String[] arguments = ArrayUtils.add(keys, Double.toString(timeout));
+        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zpopmax(@NonNull String key, long count) {
         return commandManager.submitNewCommand(
                 ZPopMax, new String[] {key, Long.toString(count)}, this::handleMapResponse);
@@ -955,7 +966,25 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zrangestore(
             @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
-        return this.zrangestore(destination, source, rangeQuery, false);
+        return zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(
+            @NonNull String destination,
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
+        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
     }
 
     @Override
@@ -1007,6 +1036,30 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> zrandmember(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ZRandMember, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrandmemberWithCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
+            @NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                arguments,
+                response -> castArray(handleArrayResponse(response), Object[].class));
     }
 
     @Override
@@ -1149,5 +1202,14 @@ public abstract class BaseClient
     public CompletableFuture<Long> geoadd(
             @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
         return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
+    }
+
+    @Override
+    public CompletableFuture<Double[][]> geopos(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = concatenateArrays(new String[] {key}, members);
+        return commandManager.submitNewCommand(
+                GeoPos,
+                arguments,
+                response -> castArrayofArrays(handleArrayResponse(response), Double.class));
     }
 }

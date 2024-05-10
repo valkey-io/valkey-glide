@@ -42,12 +42,14 @@ async def transaction_test(
     key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
     key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
     key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
     key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
+    key12 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # geo
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
+    value3 = get_random_string(5)
     args: List[TResult] = []
 
     transaction.dbsize()
@@ -174,6 +176,12 @@ async def transaction_test(
     args.append(0)
     transaction.lpushx(key9, ["_"])
     args.append(0)
+    transaction.lpush(key9, [value, value2, value3])
+    args.append(3)
+    transaction.blpop([key9], 1)
+    args.append([key9, value3])
+    transaction.brpop([key9], 1)
+    args.append([key9, value])
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
@@ -227,23 +235,25 @@ async def transaction_test(
     args.append(1)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
+    transaction.zdiffstore(key8, [key8, key8])
+    args.append(0)
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
 
     transaction.geoadd(
-        key9,
+        key12,
         {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         },
     )
     args.append(2)
-    transaction.geodist(key9, "Palermo", "Catania")
+    transaction.geodist(key12, "Palermo", "Catania")
     args.append(166274.1516)
-    transaction.geohash(key9, ["Palermo", "Catania", "Place"])
+    transaction.geohash(key12, ["Palermo", "Catania", "Place"])
     args.append(["sqc8b49rny0", "sqdtr74hyu0", None])
-    transaction.geopos(key9, ["Palermo", "Catania", "Place"])
+    transaction.geopos(key12, ["Palermo", "Catania", "Place"])
     # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
     # No worries, Python can handle it, therefore, this shouldn't fail
     args.append(

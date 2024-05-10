@@ -5,6 +5,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -46,7 +48,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
@@ -93,7 +97,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -126,6 +130,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
@@ -136,6 +141,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.Script;
 import glide.api.models.Transaction;
@@ -235,7 +241,7 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[]>submitNewCommand(eq(transaction), any()))
+        when(commandManager.<Object[]>submitNewTransaction(eq(transaction), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2323,6 +2329,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bzpopmin_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        double timeout = .5;
+        String[] arguments = new String[] {"key1", "key2", "0.5"};
+        Object[] value = new Object[] {"key1", "elem", 42.};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzpopmin(keys, timeout);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zpopmax_returns_success() {
         // setup
         String key = "testKey";
@@ -3005,6 +3036,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zunionstore_returns_success() {
+        // setup
+        String destination = "destinationKey";
+        String[] keys = new String[] {"key1", "key2"};
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = concatenateArrays(new String[] {destination}, keyArray.toArgs());
+        Long value = 5L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZUnionStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zunionstore(destination, keyArray);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zunionstore_with_options_returns_success() {
+        // setup
+        String destination = "destinationKey";
+        String[] keys = new String[] {"key1", "key2"};
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        String[] arguments =
+                concatenateArrays(new String[] {destination}, weightedKeys.toArgs(), aggregate.toArgs());
+        Long value = 5L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZUnionStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zunionstore(destination, weightedKeys, aggregate);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zunion_with_options_returns_success() {
         // setup
         List<Pair<String, Double>> keysWeights = new ArrayList<>();
@@ -3165,11 +3253,84 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrandmember_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        String value = "testValue";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.zrandmember(key);
         String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(returnId, payload);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrandmemberWithCount_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String[] arguments = new String[] {key, Long.toString(count)};
+        String[] value = new String[] {"member1", "member2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zrandmemberWithCount(key, count);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrandmemberWithCountWithScores_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2L;
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        Object[][] value = new Object[][] {{"member1", 2.0}, {"member2", 3.0}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response = service.zrandmemberWithCountWithScores(key, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     private static List<Arguments> getStreamAddOptions() {
@@ -3391,7 +3552,7 @@ public class RedisClientTest {
         testResponse.complete(true);
 
         // match on protobuf request
-        when(commandManager.<Boolean>submitNewCommand(eq(RenameNx), eq(arguments), any()))
+        when(commandManager.<Boolean>submitNewCommand(eq(RenameNX), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3438,6 +3599,47 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FlushAll), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushall_with_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushAll), eq(new String[] {SYNC.toString()}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushall(SYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -3895,6 +4097,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.geoadd(key, membersToGeoSpatialData, options);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geopos_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] members = {"Catania", "Palermo"};
+        String[] arguments = new String[] {key, "Catania", "Palermo"};
+        Double[][] value = {{15.087269, 40.0}, {13.361389, 38.115556}};
+
+        CompletableFuture<Double[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double[][]>submitNewCommand(eq(GeoPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double[][]> response = service.geopos(key, members);
+        Object[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

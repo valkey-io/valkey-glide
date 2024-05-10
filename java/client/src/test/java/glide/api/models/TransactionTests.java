@@ -7,6 +7,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
+import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -35,7 +37,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
@@ -82,7 +86,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNx;
+import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -115,6 +119,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
+import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
@@ -125,6 +130,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
+import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
@@ -409,6 +415,9 @@ public class TransactionTests {
         transaction.zpopmin("key", 2);
         results.add(Pair.of(ZPopMin, buildArgs("key", "2")));
 
+        transaction.bzpopmin(new String[] {"key1", "key2"}, .5);
+        results.add(Pair.of(BZPopMin, buildArgs("key1", "key2", "0.5")));
+
         transaction.zpopmax("key");
         results.add(Pair.of(ZPopMax, buildArgs("key")));
 
@@ -487,6 +496,9 @@ public class TransactionTests {
         transaction.zinterstore("destination", new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInterStore, buildArgs("destination", "2", "key1", "key2")));
 
+        transaction.zunionstore("destination", new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZUnionStore, buildArgs("destination", "2", "key1", "key2")));
+
         transaction.zunion(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
 
@@ -501,6 +513,21 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZInterStore,
+                        buildArgs(
+                                "destination",
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
+
+        transaction.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZUnionStore,
                         buildArgs(
                                 "destination",
                                 "2",
@@ -556,6 +583,10 @@ public class TransactionTests {
         transaction.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
 
+        transaction.flushall().flushall(ASYNC);
+        results.add(Pair.of(FlushAll, buildArgs()));
+        results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
+
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(LOLWUT, buildArgs()));
         results.add(Pair.of(LOLWUT, buildArgs(VERSION_REDIS_API, "5")));
@@ -565,11 +596,27 @@ public class TransactionTests {
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
 
+        transaction.zrandmember("key");
+        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").build()));
+
+        transaction.zrandmemberWithCount("key", 5);
+        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").addArgs("5").build()));
+
+        transaction.zrandmemberWithCountWithScores("key", 5);
+        results.add(
+                Pair.of(
+                        ZRandMember,
+                        ArgsArray.newBuilder()
+                                .addArgs("key")
+                                .addArgs("5")
+                                .addArgs(WITH_SCORES_REDIS_API)
+                                .build()));
+
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
 
         transaction.renamenx("key", "newKey");
-        results.add(Pair.of(RenameNx, buildArgs("key", "newKey")));
+        results.add(Pair.of(RenameNX, buildArgs("key", "newKey")));
 
         transaction.linsert("key", AFTER, "pivot", "elem");
         results.add(Pair.of(LInsert, buildArgs("key", "AFTER", "pivot", "elem")));
@@ -653,6 +700,8 @@ public class TransactionTests {
                                 "10.0",
                                 "20.0",
                                 "Place")));
+        transaction.geopos("key", new String[] {"Place"});
+        results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
