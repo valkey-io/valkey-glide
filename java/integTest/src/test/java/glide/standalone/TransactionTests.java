@@ -2,8 +2,6 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TransactionTestUtilities.transactionTest;
-import static glide.TransactionTestUtilities.transactionTestResult;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestConfiguration;
+import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
@@ -23,11 +22,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
-import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
 public class TransactionTests {
@@ -97,21 +97,38 @@ public class TransactionTests {
     }
 
     @SneakyThrows
-    @Test
-    public void test_standalone_transactions() {
-        Transaction transaction = (Transaction) transactionTest(new Transaction());
-        Object[] expectedResult = transactionTestResult();
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getCommonTransactionBuilders")
+    public void transactions_with_group_of_commands(String testName, TransactionBuilder builder) {
+        Transaction transaction = new Transaction();
+        Object[] expectedResult = builder.apply(transaction);
 
+        Object[] results = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("glide.TransactionTestUtilities#getPrimaryNodeTransactionBuilders")
+    public void keyless_transactions_with_group_of_commands(
+            String testName, TransactionBuilder builder) {
+        Transaction transaction = new Transaction();
+        Object[] expectedResult = builder.apply(transaction);
+
+        Object[] results = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_standalone_transaction() {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
 
-        transaction.select(1);
-        transaction.set(key, value);
-        transaction.get(key);
-        transaction.select(0);
-        transaction.get(key);
+        Transaction transaction =
+                new Transaction().select(1).set(key, value).get(key).select(0).get(key);
 
-        expectedResult = ArrayUtils.addAll(expectedResult, OK, OK, value, OK, null);
+        Object[] expectedResult = new Object[] {OK, OK, value, OK, null};
 
         Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);

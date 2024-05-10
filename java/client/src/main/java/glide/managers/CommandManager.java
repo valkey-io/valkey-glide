@@ -82,7 +82,7 @@ public class CommandManager {
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
-    public <T> CompletableFuture<T> submitNewCommand(
+    public <T> CompletableFuture<T> submitNewTransaction(
             Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(transaction);
@@ -109,14 +109,14 @@ public class CommandManager {
     }
 
     /**
-     * Build a Transaction and send.
+     * Build a Cluster Transaction and send.
      *
      * @param transaction Redis Transaction request with multiple commands
      * @param route Transaction routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
-    public <T> CompletableFuture<T> submitNewCommand(
+    public <T> CompletableFuture<T> submitNewTransaction(
             ClusterTransaction transaction,
             Optional<Route> route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {

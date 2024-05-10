@@ -288,7 +288,7 @@ public class CommandManagerTest {
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
         // exercise
-        service.submitNewCommand(trans, r -> null);
+        service.submitNewTransaction(trans, r -> null);
 
         // verify
         verify(channelHandler).write(captor.capture(), anyBoolean());
@@ -328,7 +328,7 @@ public class CommandManagerTest {
         ArgumentCaptor<RedisRequest.Builder> captor =
                 ArgumentCaptor.forClass(RedisRequest.Builder.class);
 
-        service.submitNewCommand(trans, Optional.of(routeType), r -> null);
+        service.submitNewTransaction(trans, Optional.of(routeType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 
