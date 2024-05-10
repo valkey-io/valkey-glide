@@ -427,9 +427,7 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return cast(
-            Optional[str], await self._execute_command(RequestType.SetString, args)
-        )
+        return cast(Optional[str], await self._execute_command(RequestType.Set, args))
 
     async def get(self, key: str) -> Optional[str]:
         """
@@ -446,9 +444,7 @@ class CoreCommands(Protocol):
             >>> await client.get("key")
                 'value'
         """
-        return cast(
-            Optional[str], await self._execute_command(RequestType.GetString, [key])
-        )
+        return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
 
     async def append(self, key: str, value: str) -> int:
         """
@@ -701,7 +697,7 @@ class CoreCommands(Protocol):
             field_value_list.extend(pair)
         return cast(
             int,
-            await self._execute_command(RequestType.HashSet, field_value_list),
+            await self._execute_command(RequestType.HSet, field_value_list),
         )
 
     async def hget(self, key: str, field: str) -> Optional[str]:
@@ -726,7 +722,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[str],
-            await self._execute_command(RequestType.HashGet, [key, field]),
+            await self._execute_command(RequestType.HGet, [key, field]),
         )
 
     async def hsetnx(
@@ -782,9 +778,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(
-                RequestType.HashIncrBy, [key, field, str(amount)]
-            ),
+            await self._execute_command(RequestType.HIncrBy, [key, field, str(amount)]),
         )
 
     async def hincrbyfloat(self, key: str, field: str, amount: float) -> float:
@@ -811,7 +805,7 @@ class CoreCommands(Protocol):
         return cast(
             float,
             await self._execute_command(
-                RequestType.HashIncrByFloat, [key, field, str(amount)]
+                RequestType.HIncrByFloat, [key, field, str(amount)]
             ),
         )
 
@@ -835,7 +829,7 @@ class CoreCommands(Protocol):
                 False
         """
         return cast(
-            bool, await self._execute_command(RequestType.HashExists, [key, field])
+            bool, await self._execute_command(RequestType.HExists, [key, field])
         )
 
     async def hgetall(self, key: str) -> Dict[str, str]:
@@ -856,7 +850,7 @@ class CoreCommands(Protocol):
                 {"field1": "value1", "field2": "value2"}
         """
         return cast(
-            Dict[str, str], await self._execute_command(RequestType.HashGetAll, [key])
+            Dict[str, str], await self._execute_command(RequestType.HGetAll, [key])
         )
 
     async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
@@ -879,7 +873,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             List[Optional[str]],
-            await self._execute_command(RequestType.HashMGet, [key] + fields),
+            await self._execute_command(RequestType.HMGet, [key] + fields),
         )
 
     async def hdel(self, key: str, fields: List[str]) -> int:
@@ -899,9 +893,7 @@ class CoreCommands(Protocol):
             >>> await client.hdel("my_hash", ["field1", "field2"])
                 2  # Indicates that two fields were successfully removed from the hash.
         """
-        return cast(
-            int, await self._execute_command(RequestType.HashDel, [key] + fields)
-        )
+        return cast(int, await self._execute_command(RequestType.HDel, [key] + fields))
 
     async def hlen(self, key: str) -> int:
         """
@@ -940,7 +932,7 @@ class CoreCommands(Protocol):
            >>> await client.hvals("my_hash")
                ["value1", "value2", "value3"]  # Returns all the values stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.Hvals, [key]))
+        return cast(List[str], await self._execute_command(RequestType.HVals, [key]))
 
     async def hkeys(self, key: str) -> List[str]:
         """
@@ -958,7 +950,7 @@ class CoreCommands(Protocol):
             >>> await client.hkeys("my_hash")
                 ["field1", "field2", "field3"]  # Returns all the field names stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.Hkeys, [key]))
+        return cast(List[str], await self._execute_command(RequestType.HKeys, [key]))
 
     async def hrandfield(self, key: str) -> Optional[str]:
         """
@@ -1157,7 +1149,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[List[str]],
-            await self._execute_command(RequestType.Blpop, keys + [str(timeout)]),
+            await self._execute_command(RequestType.BLPop, keys + [str(timeout)]),
         )
 
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
@@ -1224,7 +1216,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[str],
-            await self._execute_command(RequestType.Lindex, [key, str(index)]),
+            await self._execute_command(RequestType.LIndex, [key, str(index)]),
         )
 
     async def rpush(self, key: str, elements: List[str]) -> int:
@@ -1348,7 +1340,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[List[str]],
-            await self._execute_command(RequestType.Brpop, keys + [str(timeout)]),
+            await self._execute_command(RequestType.BRPop, keys + [str(timeout)]),
         )
 
     async def linsert(
@@ -1477,7 +1469,7 @@ class CoreCommands(Protocol):
             >>> await client.spop("non_exiting_key")
                 None
         """
-        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+        return cast(Optional[str], await self._execute_command(RequestType.SPop, [key]))
 
     async def spop_count(self, key: str, count: int) -> Set[str]:
         """
@@ -1501,7 +1493,7 @@ class CoreCommands(Protocol):
                 Set()
         """
         return cast(
-            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+            Set[str], await self._execute_command(RequestType.SPop, [key, str(count)])
         )
 
     async def sismember(
@@ -2131,7 +2123,7 @@ class CoreCommands(Protocol):
 
         return cast(
             int,
-            await self._execute_command(RequestType.Zadd, args),
+            await self._execute_command(RequestType.ZAdd, args),
         )
 
     async def zadd_incr(
@@ -2189,7 +2181,7 @@ class CoreCommands(Protocol):
         args += [str(increment), member]
         return cast(
             Optional[float],
-            await self._execute_command(RequestType.Zadd, args),
+            await self._execute_command(RequestType.ZAdd, args),
         )
 
     async def zcard(self, key: str) -> int:
@@ -2211,7 +2203,7 @@ class CoreCommands(Protocol):
             >>> await client.zcard("non_existing_key")
                 0
         """
-        return cast(int, await self._execute_command(RequestType.Zcard, [key]))
+        return cast(int, await self._execute_command(RequestType.ZCard, [key]))
 
     async def zcount(
         self,
@@ -2257,7 +2249,7 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(
-                RequestType.Zcount, [key, score_min, score_max]
+                RequestType.ZCount, [key, score_min, score_max]
             ),
         )
 
@@ -2360,7 +2352,7 @@ class CoreCommands(Protocol):
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
-        return cast(List[str], await self._execute_command(RequestType.Zrange, args))
+        return cast(List[str], await self._execute_command(RequestType.ZRange, args))
 
     async def zrange_withscores(
         self,
@@ -2394,7 +2386,7 @@ class CoreCommands(Protocol):
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
         return cast(
-            Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
+            Mapping[str, float], await self._execute_command(RequestType.ZRange, args)
         )
 
     async def zrangestore(
@@ -2464,7 +2456,7 @@ class CoreCommands(Protocol):
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
         """
         return cast(
-            Optional[int], await self._execute_command(RequestType.Zrank, [key, member])
+            Optional[int], await self._execute_command(RequestType.ZRank, [key, member])
         )
 
     async def zrank_withscore(
@@ -2495,7 +2487,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[List[Union[int, float]]],
-            await self._execute_command(RequestType.Zrank, [key, member, "WITHSCORE"]),
+            await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
         )
 
     async def zrem(
@@ -2525,7 +2517,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(RequestType.Zrem, [key] + members),
+            await self._execute_command(RequestType.ZRem, [key] + members),
         )
 
     async def zremrangebyscore(

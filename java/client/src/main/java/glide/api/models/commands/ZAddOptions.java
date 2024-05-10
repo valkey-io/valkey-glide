@@ -9,14 +9,14 @@ import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Optional arguments to {@link SortedSetBaseCommands#zadd(String, Map, ZaddOptions, boolean)},
- * {@link SortedSetBaseCommands#zadd(String, Map, ZaddOptions)} and {@link
- * SortedSetBaseCommands#zaddIncr(String, String, double, ZaddOptions)}
+ * Optional arguments to {@link SortedSetBaseCommands#zadd(String, Map, ZAddOptions, boolean)},
+ * {@link SortedSetBaseCommands#zadd(String, Map, ZAddOptions)} and {@link
+ * SortedSetBaseCommands#zaddIncr(String, String, double, ZAddOptions)}
  *
  * @see <a href="https://redis.io/commands/zadd/">redis.io</a>
  */
 @Builder
-public final class ZaddOptions {
+public final class ZAddOptions {
     /**
      * Defines conditions for updating or adding elements with {@link SortedSetBaseCommands#zadd}
      * command.
