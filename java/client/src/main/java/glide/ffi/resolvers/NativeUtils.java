@@ -79,7 +79,8 @@ public class NativeUtils {
 
         // Check if the filename is okay
         if (filename == null || filename.length() < MIN_PREFIX_LENGTH) {
-            throw new IllegalArgumentException("The filename has to be at least " + MIN_PREFIX_LENGTH + " characters long.");
+            throw new IllegalArgumentException(
+                    "The filename has to be at least " + MIN_PREFIX_LENGTH + " characters long.");
         }
 
         // Prepare temporary file
