@@ -186,7 +186,7 @@ pub(crate) fn convert_to_expected_type(
         // command returns nil or an array of 2 elements, where the second element is a map represented by a 2D array
         // we convert that second element to a map as we do in `MapOfStringToDouble`
         /*
-        127.0.0.1:6379> zmpop 1 z1 min count 10
+        > zmpop 1 z1 min count 10
         1) "z1"
         2) 1) 1) "2"
               2) (double) 2
