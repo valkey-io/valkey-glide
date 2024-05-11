@@ -7,7 +7,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
-import static glide.api.models.commands.ScoreModifier.MAX;
+import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
@@ -160,7 +160,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
-import glide.api.models.commands.ScoreModifier;
+import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
@@ -2120,7 +2120,7 @@ public class RedisClientTest {
         // setup
         double timeout = .5;
         String[] keys = new String[] {"key1", "key2"};
-        ScoreModifier modifier = MAX;
+        ScoreFilter modifier = MAX;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX"};
         Object[] value = new Object[] {"key1", "elem"};
 
@@ -2146,7 +2146,7 @@ public class RedisClientTest {
         // setup
         double timeout = .5;
         String[] keys = new String[] {"key1", "key2"};
-        ScoreModifier modifier = MAX;
+        ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX", "COUNT", "42"};
         Object[] value = new Object[] {"key1", "elem"};

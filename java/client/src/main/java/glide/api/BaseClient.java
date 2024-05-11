@@ -128,7 +128,7 @@ import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
-import glide.api.models.commands.ScoreModifier;
+import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
@@ -1172,7 +1172,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object[]> bzmpop(
-            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout) {
+            @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
@@ -1183,7 +1183,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object[]> bzmpop(
-            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout, long count) {
+            @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},

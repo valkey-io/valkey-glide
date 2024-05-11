@@ -143,7 +143,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
-import glide.api.models.commands.ScoreModifier;
+import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -2718,7 +2718,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
-     * To pop more than one element use {@link #bzmpop(String[], ScoreModifier, double, long)}.<br>
+     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
      * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
      *
      * @since Redis 7.0 and above
@@ -2727,8 +2727,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
-     * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
-     *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A two-element <code>array</code> containing the key name of the set
@@ -2736,7 +2736,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T bzmpop(@NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout) {
+    public T bzmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -2760,8 +2760,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
      * @param keys The keys of the sorted sets.
-     * @param modifier The element pop criteria - either {@link ScoreModifier#MIN} or {@link
-     *     ScoreModifier#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @param count The number of elements to pop.
@@ -2771,7 +2771,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
      */
     public T bzmpop(
-            @NonNull String[] keys, @NonNull ScoreModifier modifier, double timeout, long count) {
+            @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(

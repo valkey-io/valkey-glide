@@ -5,11 +5,11 @@ import glide.api.commands.SortedSetBaseCommands;
 
 // TODO add @link to ZMPOP when implemented
 /**
- * Mandatory option for {@link SortedSetBaseCommands#bzmpop(String[], ScoreModifier, double)} and
- * for {@link SortedSetBaseCommands#bzmpop(String[], ScoreModifier, double, long)}. Defines which
- * elements to pop from the sorted set.
+ * Mandatory option for {@link SortedSetBaseCommands#bzmpop(String[], ScoreFilter, double)} and for
+ * {@link SortedSetBaseCommands#bzmpop(String[], ScoreFilter, double, long)}. Defines which elements
+ * to pop from the sorted set.
  */
-public enum ScoreModifier {
+public enum ScoreFilter {
     /** Pop elements with the lowest scores. */
     MIN,
     /** Pop elements with the highest scores. */
