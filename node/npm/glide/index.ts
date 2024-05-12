@@ -4,6 +4,7 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { GLIBC, MUSL, familySync } from "detect-libc";
 import { arch, platform } from "process";
 
 let globalObject = global as unknown;
@@ -14,10 +15,30 @@ function loadNativeBinding() {
         case "linux":
             switch (arch) {
                 case "x64":
-                    nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/glide-for-redis-linux-musl-x64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                            break;
+                    }
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/glide-for-redis-linux-musl-arm64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                            break;
+                    }
                     break;
                 default:
                     throw new Error(
@@ -85,6 +106,13 @@ function initialize() {
         ConnectionError,
         ClusterTransaction,
         Transaction,
+        createLeakedArray,
+        createLeakedAttribute,
+        createLeakedBigint,
+        createLeakedDouble,
+        createLeakedMap,
+        createLeakedString,
+        parseInfoResponse,
     } = nativeBinding;
 
     module.exports = {
@@ -120,6 +148,13 @@ function initialize() {
         ConnectionError,
         ClusterTransaction,
         Transaction,
+        createLeakedArray,
+        createLeakedAttribute,
+        createLeakedBigint,
+        createLeakedDouble,
+        createLeakedMap,
+        createLeakedString,
+        parseInfoResponse,
     };
 
     globalObject = Object.assign(global, nativeBinding);
