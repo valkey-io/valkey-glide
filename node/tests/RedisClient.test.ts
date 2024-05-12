@@ -51,7 +51,20 @@ describe("RedisClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushallOnPort(cluster.ports()[0]);
+        // some tests don't initialize a client
+        if (client == undefined) {
+            return;
+        }
+
+        try {
+            await client.customCommand(["FLUSHALL"]);
+        } catch (e) {
+            expect((e as ClosingError).message).toMatch(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        client.close();
     });
 
     afterAll(async () => {

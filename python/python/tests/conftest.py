@@ -210,6 +210,7 @@ async def redis_client(
     "Get async socket client for tests"
     client = await create_client(request, cluster_mode, protocol=protocol)
     yield client
+    await test_teardown(request, cluster_mode, protocol)
     await client.close()
 
 
@@ -253,3 +254,16 @@ async def create_client(
             request_timeout=timeout,
         )
         return await RedisClient.create(config)
+
+
+async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+    """
+    Perform teardown tasks such as flushing all data from the cluster.
+
+    We create a new client here because some tests load lots of data to the cluster,
+    which might cause the client to time out during flushing. Therefore, we create
+    a client with a custom timeout to ensure the operation completes successfully.
+    """
+    client = await create_client(request, cluster_mode, protocol=protocol, timeout=2000)
+    await client.custom_command(["FLUSHALL"])
+    await client.close()
