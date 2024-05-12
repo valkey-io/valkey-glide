@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import math
-import random
-import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, TypeVar, Union, cast
+from typing import Dict, Union, cast
 
 import pytest
-from glide import ClosingError, RequestError, Script, TimeoutError
+from glide import ClosingError, RequestError, Script
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -49,75 +47,15 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
-from packaging import version
 from tests.conftest import create_client
-
-T = TypeVar("T")
-
-
-def is_single_response(response: T, single_res: T) -> bool:
-    """
-    Recursively checks if a given response matches the type structure of single_res.
-
-    Args:
-        response (T): The response to check.
-        single_res (T): An object with the expected type structure as an example for the single node response.
-
-    Returns:
-        bool: True if response matches the structure of single_res, False otherwise.
-
-     Example:
-        >>> is_single_response(["value"], LIST_STR)
-        True
-        >>> is_single_response([["value"]], LIST_STR)
-        False
-    """
-    if isinstance(single_res, list) and isinstance(response, list):
-        return is_single_response(response[0], single_res[0])
-    elif isinstance(response, type(single_res)):
-        return True
-    return False
-
-
-def get_first_result(res: str | List[str] | List[List[str]] | Dict[str, str]) -> str:
-    while isinstance(res, list):
-        res = (
-            res[1]
-            if not isinstance(res[0], list) and res[0].startswith("127.0.0.1")
-            else res[0]
-        )
-
-    if isinstance(res, dict):
-        res = list(res.values())[0]
-
-    return res
-
-
-def parse_info_response(res: str | Dict[str, str]) -> Dict[str, str]:
-    res = get_first_result(res)
-    info_lines = [
-        line for line in res.splitlines() if line and not line.startswith("#")
-    ]
-    info_dict = {}
-    for line in info_lines:
-        splitted_line = line.split(":")
-        key = splitted_line[0]
-        value = splitted_line[1]
-        info_dict[key] = value
-    return info_dict
-
-
-def get_random_string(length):
-    result_str = "".join(random.choice(string.ascii_letters) for i in range(length))
-    return result_str
-
-
-async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> bool:
-    # TODO: change it to pytest fixture after we'll implement a sync client
-    info_str = await client.info([InfoSection.SERVER])
-    redis_version = parse_info_response(info_str).get("redis_version")
-    assert redis_version is not None
-    return version.parse(redis_version) < version.parse(min_version)
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    compare_maps,
+    get_first_result,
+    get_random_string,
+    is_single_response,
+    parse_info_response,
+)
 
 
 @pytest.mark.asyncio
@@ -634,7 +572,9 @@ class TestCommands:
         assert await redis_client.hget(key, field2) == "value2"
         assert await redis_client.hget(key, "non_existing_field") is None
 
-        assert await redis_client.hgetall(key) == {field: "value", field2: "value2"}
+        hgetall_map = await redis_client.hgetall(key)
+        expected_map = {field: "value", field2: "value2"}
+        assert compare_maps(hgetall_map, expected_map) is True
         assert await redis_client.hgetall("non_existing_field") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1882,7 +1822,10 @@ class TestCommands:
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zpopmin(key) == {"a": 1.0}
 
-        assert await redis_client.zpopmin(key, 3) == {"b": 2.0, "c": 3.0}
+        zpopmin_map = await redis_client.zpopmin(key, 3)
+        expected_map = {"b": 2.0, "c": 3.0}
+        assert compare_maps(zpopmin_map, expected_map) is True
+
         assert await redis_client.zpopmin(key) == {}
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
@@ -1897,7 +1840,11 @@ class TestCommands:
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores) == 3
         assert await redis_client.zpopmax(key) == {"c": 3.0}
-        assert await redis_client.zpopmax(key, 3) == {"b": 2.0, "a": 1.0}
+
+        zpopmax_map = await redis_client.zpopmax(key, 3)
+        expected_map = {"b": 2.0, "a": 1.0}
+        assert compare_maps(zpopmax_map, expected_map) is True
+
         assert await redis_client.zpopmax(key) == {}
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
@@ -1917,9 +1864,11 @@ class TestCommands:
             "two",
         ]
 
-        assert (
-            await redis_client.zrange_withscores(key, RangeByIndex(start=0, stop=-1))
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+        zrange_map = await redis_client.zrange_withscores(
+            key, RangeByIndex(start=0, stop=-1)
+        )
+        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
             key, RangeByIndex(start=0, stop=1), reverse=True
@@ -1948,12 +1897,12 @@ class TestCommands:
             ),
         ) == ["one", "two"]
 
-        assert (
-            await redis_client.zrange_withscores(
-                key,
-                RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
-            )
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+        zrange_map = await redis_client.zrange_withscores(
+            key,
+            RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+        )
+        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
             key,

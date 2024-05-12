@@ -1,6 +1,6 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Dict, List, Literal, Optional, Set, TypeVar, Union
+from typing import Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.redis_request_pb2 import RedisRequest
@@ -18,6 +18,7 @@ TResult = Union[
     int,
     None,
     Dict[str, T],
+    Mapping[str, "TResult"],
     float,
     Set[T],
     List[T],

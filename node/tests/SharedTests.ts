@@ -15,7 +15,12 @@ import {
     Script,
     parseInfoResponse,
 } from "../";
-import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
+import {
+    Client,
+    GetAndSetRandomValue,
+    compareMaps,
+    getFirstResult,
+} from "./TestUtilities";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -664,10 +669,13 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hgetall(key)).toEqual({
-                    [field1]: value,
-                    [field2]: value,
-                });
+
+                expect(
+                    compareMaps(await client.hgetall(key), {
+                        [field1]: value,
+                        [field2]: value,
+                    }),
+                ).toBe(true);
                 expect(await client.hgetall("nonExistingKey")).toEqual({});
             }, protocol);
         },
@@ -1602,9 +1610,18 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
                     ["one", "two"],
                 );
+                const result = await client.zrangeWithScores(key, {
+                    start: 0,
+                    stop: -1,
+                });
+
                 expect(
-                    await client.zrangeWithScores(key, { start: 0, stop: -1 }),
-                ).toEqual({ one: 1.0, two: 2.0, three: 3.0 });
+                    compareMaps(result, {
+                        one: 1.0,
+                        two: 2.0,
+                        three: 3.0,
+                    }),
+                ).toBe(true);
                 expect(
                     await client.zrange(key, { start: 0, stop: 1 }, true),
                 ).toEqual(["three", "two"]);
@@ -1634,15 +1651,19 @@ export function runBaseTests<Context>(config: {
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
+                const result = await client.zrangeWithScores(key, {
+                    start: "negativeInfinity",
+                    stop: "positiveInfinity",
+                    type: "byScore",
+                });
 
                 expect(
-                    await client.zrangeWithScores(key, {
-                        start: "negativeInfinity",
-                        stop: "positiveInfinity",
-                        type: "byScore",
+                    compareMaps(result, {
+                        one: 1.0,
+                        two: 2.0,
+                        three: 3.0,
                     }),
-                ).toEqual({ one: 1.0, two: 2.0, three: 3.0 });
-
+                ).toBe(true);
                 expect(
                     await client.zrange(
                         key,
@@ -1913,10 +1934,13 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmin(key)).toEqual({ a: 1.0 });
-                expect(await client.zpopmin(key, 3)).toEqual({
-                    b: 2.0,
-                    c: 3.0,
-                });
+
+                expect(
+                    compareMaps(await client.zpopmin(key, 3), {
+                        b: 2.0,
+                        c: 3.0,
+                    }),
+                ).toBe(true);
                 expect(await client.zpopmin(key)).toEqual({});
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmin(key)).rejects.toThrow();
@@ -1934,10 +1958,13 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmax(key)).toEqual({ c: 3.0 });
-                expect(await client.zpopmax(key, 3)).toEqual({
-                    b: 2.0,
-                    a: 1.0,
-                });
+
+                expect(
+                    compareMaps(await client.zpopmax(key, 3), {
+                        b: 2.0,
+                        a: 1.0,
+                    }),
+                ).toBe(true);
                 expect(await client.zpopmax(key)).toEqual({});
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmax(key)).rejects.toThrow();
