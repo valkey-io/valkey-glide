@@ -138,6 +138,14 @@ jobs:
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
             
+            - name: Setup node
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
+              working-directory: ./node
+              run: |
+                npm config set registry https://registry.npmjs.org/
+                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                npm config set scope ${{ vars.NPM_SCOPE }}
+            
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
               with:
