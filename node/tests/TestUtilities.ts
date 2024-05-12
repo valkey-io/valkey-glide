@@ -117,6 +117,36 @@ export function parseCommandLineArgs() {
     return parseArgs(process.argv.slice(2));
 }
 
+/**
+ * Compare two maps by converting them to JSON strings and checking for equality, including property order.
+ *
+ * @param map - The first map to compare.
+ * @param map2 - The second map to compare.
+ * @returns True if the maps are equal.
+ * @remarks This function is used to compare maps, including their property order.
+ * Direct comparison with `expect(map).toEqual(map2)` might ignore the order of properties,
+ * whereas this function considers property order in the comparison by converting the maps to JSON strings.
+ * This ensures a stricter comparison that takes property order into account.
+ *
+ * @example
+ * ```typescript
+ * const mapA = { name: 'John', age: 30 };
+ * const mapB = { age: 30, name: 'John' };
+ *
+ * // Direct comparison will pass because it ignores property order
+ * expect(mapA).toEqual(mapB); // This will pass
+ *
+ * // Correct comparison using compareMaps function
+ * compareMaps(mapA, mapB); // This will return false due to different property order
+ * ```
+ */
+export function compareMaps(
+    map: Record<string, unknown>,
+    map2: Record<string, unknown>,
+): boolean {
+    return JSON.stringify(map) == JSON.stringify(map2);
+}
+
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
 ): Promise<ReturnType[]> {
