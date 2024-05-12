@@ -264,7 +264,9 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_select_standalone_database_id(self, request, cluster_mode):
-        redis_client = await create_client(request, cluster_mode=False, database_id=4)
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, database_id=4
+        )
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert "db=4" in client_info
 
