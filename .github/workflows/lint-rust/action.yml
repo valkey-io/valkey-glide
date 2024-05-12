@@ -14,13 +14,10 @@ runs:
           with:
               submodules: recursive
 
-        - uses: dtolnay/rust-toolchain@stable
-        - uses: Swatinem/rust-cache@v2
+        - name: Install Rust toolchain and protoc
+          uses: ./.github/workflows/install-rust-and-protoc
 
-        - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v3
-          with:
-            version: "25.1"
+        - uses: Swatinem/rust-cache@v2
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
