@@ -11,8 +11,10 @@ import {
     it,
 } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
+
 import {
     BaseClientConfiguration,
+    ClosingError,
     ClusterTransaction,
     InfoOptions,
     ProtocolVersion,
@@ -21,8 +23,9 @@ import {
 import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,
-    flushallOnPort,
     getFirstResult,
+    parseCommandLineArgs,
+    parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
 
@@ -35,8 +38,15 @@ const TIMEOUT = 10000;
 describe("RedisClusterClient", () => {
     let testsFailed = 0;
     let cluster: RedisCluster;
+    let client: RedisClusterClient;
     beforeAll(async () => {
-        cluster = await RedisCluster.createCluster(true, 3, 0);
+        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        // Connect to cluster or create a new one based on the parsed addresses
+        cluster = clusterAddresses
+            ? RedisCluster.initFromExistingCluster(
+                  parseEndpoints(clusterAddresses),
+              )
+            : await RedisCluster.createCluster(true, 3, 0);
     }, 20000);
 
     afterEach(async () => {
@@ -50,12 +60,12 @@ describe("RedisClusterClient", () => {
     });
 
     const getOptions = (
-        ports: number[],
+        addresses: [string, number][],
         protocol: ProtocolVersion,
     ): BaseClientConfiguration => {
         return {
-            addresses: ports.map((port) => ({
-                host: "localhost",
+            addresses: addresses.map(([host, port]) => ({
+                host,
                 port,
             })),
             protocol,
@@ -64,11 +74,11 @@ describe("RedisClusterClient", () => {
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
-            const options = getOptions(cluster.ports(), protocol);
+            const options = getOptions(cluster.getAddresses(), protocol);
             options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;
-            const client = await RedisClusterClient.createClient(options);
+            client = await RedisClusterClient.createClient(options);
             return {
                 context: {
                     client,
@@ -80,8 +90,6 @@ describe("RedisClusterClient", () => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }
-
-            context.client.close();
         },
         timeout: TIMEOUT,
     });
@@ -89,8 +97,8 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `info with server and replication_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
@@ -113,7 +121,6 @@ describe("RedisClusterClient", () => {
                     expect.not.stringContaining("# Errorstats"),
                 );
             });
-            client.close();
         },
         TIMEOUT,
     );
@@ -121,8 +128,8 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `info with server and randomNode route_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const result = await client.info(
                 [InfoOptions.Server],
@@ -131,7 +138,6 @@ describe("RedisClusterClient", () => {
             expect(typeof result).toEqual("string");
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
-            client.close();
         },
         TIMEOUT,
     );
@@ -149,8 +155,8 @@ describe("RedisClusterClient", () => {
                 );
             };
 
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const result = cleanResult(
                 (await client.customCommand(
@@ -187,8 +193,6 @@ describe("RedisClusterClient", () => {
             );
 
             expect(result).toEqual(thirdResult);
-
-            client.close();
         },
         TIMEOUT,
     );
@@ -196,8 +200,8 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `fail routing by address if no port is provided_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             expect(() =>
                 client.info(undefined, {
@@ -205,7 +209,6 @@ describe("RedisClusterClient", () => {
                     host: "foo",
                 }),
             ).toThrowError();
-            client.close();
         },
         TIMEOUT,
     );
@@ -213,15 +216,14 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set transactions test_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             transaction.configSet({ timeout: "1000" });
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
             expect(result).toEqual(["OK", { timeout: "1000" }]);
-            client.close();
         },
         TIMEOUT,
     );
@@ -229,14 +231,13 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             const expectedRes = await transactionTest(transaction);
             const result = await client.exec(transaction);
             expect(result).toEqual(expectedRes);
-            client.close();
         },
         TIMEOUT,
     );
@@ -245,10 +246,10 @@ describe("RedisClusterClient", () => {
         `can return null on WATCH transaction failures_%p`,
         async (protocol) => {
             const client1 = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+                getOptions(cluster.getAddresses(), protocol),
             );
             const client2 = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+                getOptions(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             transaction.get("key");
@@ -270,8 +271,8 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `echo with all nodes routing_%p`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
-                getOptions(cluster.ports(), protocol),
+            client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
             const echoDict = await client.echo(message, "allNodes");
@@ -280,7 +281,6 @@ describe("RedisClusterClient", () => {
             expect(Object.values(echoDict)).toEqual(
                 expect.arrayContaining([message]),
             );
-            client.close();
         },
         TIMEOUT,
     );
