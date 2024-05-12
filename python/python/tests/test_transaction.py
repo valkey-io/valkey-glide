@@ -26,7 +26,7 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
-from tests.test_async_client import check_if_server_version_lt, get_random_string
+from tests.utils.utils import check_if_server_version_lt, get_random_string
 
 
 async def transaction_test(
