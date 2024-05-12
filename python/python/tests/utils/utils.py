@@ -1,3 +1,4 @@
+import json
 import random
 import string
 from typing import Any, Dict, List, Mapping, TypeVar, Union
@@ -78,25 +79,24 @@ async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> 
 
 
 def compare_maps(
-    map: TResult,
-    map2: TResult,
+    map: Union[Mapping[str, TResult], Dict[str, TResult]],
+    map2: Union[Mapping[str, TResult], Dict[str, TResult]],
 ) -> bool:
     """
-    Recursively compares two maps including their property order.
+    Compare two maps by converting them to JSON strings and checking for equality, including property order.
 
     Args:
-        map1 (TResult): The first map to compare.
-        map2 (TResult): The second map to compare.
+        map (Union[Mapping[str, TResult], Dict[str, TResult]]): The first map to compare.
+        map2 (Union[Mapping[str, TResult], Dict[str, TResult]]): The second map to compare.
 
         Returns:
             bool: True if the maps are equal, False otherwise.
 
     Notes:
-        This function recursively compares two maps, including their property order.
-        It asserts that each key-value pair in `map1` is equal to the corresponding key-value pair in `map2`,
+        This function compares two maps, including their property order.
+        It checks that each key-value pair in `map1` is equal to the corresponding key-value pair in `map2`,
         and ensures that the order of properties is also the same.
-        If a value associated with a key in either map is another dictionary or a mapping object,
-        the function recursively compares the nested maps.
+        Direct comparison with `assert map == map2` might ignore the order of properties.
 
     Example:
         mapA = {'name': 'John', 'age': 30}
@@ -108,12 +108,4 @@ def compare_maps(
         # Correct comparison using compare_maps function
         compare_maps(mapA, mapB)  # This will return False due to different property order
     """
-    if isinstance(map, (dict, Mapping)) and isinstance(map2, (dict, Mapping)):
-        for item, item2 in zip(map.items(), map2.items()):
-            if isinstance(item[1], (dict, Mapping)):
-                if item[0] != item2[0] or not compare_maps(item[1], item2[1]):
-                    return False
-            elif item != item2:
-                return False
-        return True
-    return item == item2
+    return json.dumps(map) == json.dumps(map2)
