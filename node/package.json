@@ -43,6 +43,7 @@
         "@babel/preset-env": "^7.20.2",
         "@jest/globals": "^29.5.0",
         "@types/jest": "^29.4.0",
+        "@types/minimist": "^1.2.5",
         "@types/redis-server": "^1.2.0",
         "@types/uuid": "^9.0.1",
         "@typescript-eslint/eslint-plugin": "^5.54.1",
