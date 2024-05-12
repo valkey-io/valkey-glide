@@ -2259,7 +2259,6 @@ export function runBaseTests<Context>(config: {
                 expect(Number(result?.at(0))).toBeGreaterThan(now);
                 // Test its not more than 1 second
                 expect(Number(result?.at(1))).toBeLessThan(1000000);
-                client.close();
             }, protocol);
         },
     );
@@ -2336,7 +2335,6 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual("value");
                 // If key doesn't exist it should throw, it also test that key has successfully been renamed
                 await expect(client.rename(key, newKey)).rejects.toThrow();
-                client.close();
             }, protocol);
         },
         config.timeout,
