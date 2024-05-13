@@ -4,6 +4,7 @@
 
 import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
+import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
 import { ClusterTransaction, Logger, ReturnType, Transaction } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
@@ -40,6 +41,55 @@ export function flushallOnPort(port: number): Promise<void> {
     );
 }
 
+/**
+ * Parses a string of endpoints into an array of host-port pairs.
+ * Each endpoint in the string should be in the format 'host:port', separated by commas.
+ *
+ * @param endpointsStr - The string containing endpoints in the format 'host:port', separated by commas.
+ * @returns An array of host-port pairs parsed from the endpoints string.
+ * @throws If the endpoints string or its format is invalid.
+ * @example
+ * ```typescript
+ * const endpointsStr = 'localhost:8080,example.com:3000,192.168.1.100:5000';
+ * const endpoints = parseEndpoints(endpointsStr);
+ * console.log(endpoints);
+ * // Output: [['localhost', 8080], ['example.com', 3000], ['192.168.1.100', 5000]]
+ * ```
+ */
+export const parseEndpoints = (endpointsStr: string): [string, number][] => {
+    try {
+        console.log(endpointsStr);
+        const endpoints: string[][] = endpointsStr
+            .split(",")
+            .map((endpoint) => endpoint.split(":"));
+        endpoints.forEach((endpoint) => {
+            // Check if each endpoint has exactly two elements (host and port)
+            if (endpoint.length !== 2) {
+                throw new Error(
+                    "Each endpoint should be in the format 'host:port'.\nEndpoints should be separated by commas.",
+                );
+            }
+
+            // Extract host and port
+            const [host, portStr] = endpoint;
+
+            // Check if both host and port are specified and if port is a valid integer
+            if (!host || !portStr || !/^\d+$/.test(portStr)) {
+                throw new Error(
+                    "Both host and port should be specified and port should be a valid integer.",
+                );
+            }
+        });
+
+        // Convert port strings to numbers and return the result
+        return endpoints.map(([host, portStr]) => [host, Number(portStr)]);
+    } catch (error) {
+        throw new Error(
+            "Invalid endpoints format: " + (error as Error).message,
+        );
+    }
+};
+
 /// This function takes the first result of the response if it got more than one response (like cluster responses).
 export function getFirstResult(
     res: string | number | Record<string, string> | Record<string, number>,
@@ -59,6 +109,52 @@ export async function checkCommandThrowsCrossSlotError(
     } catch (e) {
         expect((e as Error).message.toLowerCase()).toMatch("crossslot");
     }
+}
+
+/**
+ * Parses the command-line arguments passed to the Node.js process.
+ *
+ * @returns Parsed command-line arguments.
+ *
+ * @example
+ * ```typescript
+ * // Command: node script.js --name="John Doe" --age=30
+ * const args = parseCommandLineArgs();
+ * // args = { name: 'John Doe', age: 30 }
+ * ```
+ */
+export function parseCommandLineArgs() {
+    return parseArgs(process.argv.slice(2));
+}
+
+/**
+ * Compare two maps by converting them to JSON strings and checking for equality, including property order.
+ *
+ * @param map - The first map to compare.
+ * @param map2 - The second map to compare.
+ * @returns True if the maps are equal.
+ * @remarks This function is used to compare maps, including their property order.
+ * Direct comparison with `expect(map).toEqual(map2)` might ignore the order of properties,
+ * whereas this function considers property order in the comparison by converting the maps to JSON strings.
+ * This ensures a stricter comparison that takes property order into account.
+ *
+ * @example
+ * ```typescript
+ * const mapA = { name: 'John', age: 30 };
+ * const mapB = { age: 30, name: 'John' };
+ *
+ * // Direct comparison will pass because it ignores property order
+ * expect(mapA).toEqual(mapB); // This will pass
+ *
+ * // Correct comparison using compareMaps function
+ * compareMaps(mapA, mapB); // This will return false due to different property order
+ * ```
+ */
+export function compareMaps(
+    map: Record<string, unknown>,
+    map2: Record<string, unknown>,
+): boolean {
+    return JSON.stringify(map) == JSON.stringify(map2);
 }
 
 export async function transactionTest(
@@ -238,17 +334,17 @@ export async function transactionTest(
 }
 
 export class RedisCluster {
-    private usedPorts: number[];
-    private clusterFolder: string;
+    private addresses: [string, number][];
+    private clusterFolder: string | undefined;
 
-    private constructor(ports: number[], clusterFolder: string) {
-        this.usedPorts = ports;
+    private constructor(addresses: [string, number][], clusterFolder?: string) {
+        this.addresses = addresses;
         this.clusterFolder = clusterFolder;
     }
 
     private static parseOutput(input: string): {
         clusterFolder: string;
-        ports: number[];
+        addresses: [string, number][];
     } {
         const lines = input.split(/\r\n|\r|\n/);
         const clusterFolder = lines
@@ -258,8 +354,11 @@ export class RedisCluster {
             .find((line) => line.startsWith("CLUSTER_NODES"))
             ?.split("=")[1]
             .split(",")
-            .map((address) => address.split(":")[1])
-            .map((port) => Number(port));
+            .map((address) => address.split(":"))
+            .map((address) => [address[0], Number(address[1])]) as [
+            string,
+            number,
+        ][];
 
         if (clusterFolder === undefined || ports === undefined) {
             throw new Error(`Insufficient data in input: ${input}`);
@@ -267,7 +366,7 @@ export class RedisCluster {
 
         return {
             clusterFolder,
-            ports,
+            addresses: ports,
         };
     }
 
@@ -302,30 +401,43 @@ export class RedisCluster {
                     console.error(stderr);
                     reject(error);
                 } else {
-                    const { clusterFolder, ports } = this.parseOutput(stdout);
+                    const { clusterFolder, addresses: ports } =
+                        this.parseOutput(stdout);
                     resolve(new RedisCluster(ports, clusterFolder));
                 }
             });
         });
     }
 
+    public static initFromExistingCluster(
+        addresses: [string, number][],
+    ): RedisCluster {
+        return new RedisCluster(addresses, "");
+    }
+
     public ports(): number[] {
-        return [...this.usedPorts];
+        return this.addresses.map((address) => address[1]);
+    }
+
+    public getAddresses(): [string, number][] {
+        return this.addresses;
     }
 
     public async close() {
-        await new Promise<void>((resolve, reject) =>
-            exec(
-                `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
-                (error, _, stderr) => {
-                    if (error) {
-                        console.error(stderr);
-                        reject(error);
-                    } else {
-                        resolve();
-                    }
-                },
-            ),
-        );
+        if (this.clusterFolder) {
+            await new Promise<void>((resolve, reject) => {
+                exec(
+                    `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
+                    (error, _, stderr) => {
+                        if (error) {
+                            console.error(stderr);
+                            reject(error);
+                        } else {
+                            resolve();
+                        }
+                    },
+                );
+            });
+        }
     }
 }
