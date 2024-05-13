@@ -243,4 +243,60 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getrange(String key, int start, int end);
+
+    /**
+     * Sets the given <code>key</code> with the given value.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The <code>key</code> to store.
+     * @param value The value to store with the given <code>key</code>.
+     * @return Response from Redis containing <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    /**
+     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
+     * value exists.
+     *
+     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
+     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.get("key").get();
+     * assert value.equals("value");
+     *
+     * String value = client.get("non_existing_key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+
+    /**
+     * Appends a value to a key.
+     * If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The <code>key</code> to which the value will be appended.
+     * @param value The value to append
+     * @return Response from Redis. The length of the string after appending the value.
+     *
+     * @example
+     *    <pre>{@code
+     * String value = client.append("key", "value").get();
+     * assert value.equals(5);
+     *
+     * String value = client.append("key", " world").get();
+     * assert value.equals(11);
+     *
+     * String value = client.get("key").get();
+     * assert value.equals("Hello world");
+     * }</pre>
+     */
+
+    CompletableFuture<Long> append(String key, String value);
+
+
 }

@@ -1073,4 +1073,5 @@ public class RedisClusterClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, response.get());
     }
+
 }
