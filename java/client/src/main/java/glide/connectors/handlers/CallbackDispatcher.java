@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import glide.api.logging.Logger;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
@@ -107,11 +108,8 @@ public class CallbackDispatcher {
             }
             future.completeAsync(() -> response);
         } else {
-            // TODO: log an error thru logger.
             // probably a response was received after shutdown or `registerRequest` call was missing
-            System.err.printf(
-                    "Received a response for not registered callback id %d, request error = %s%n",
-                    callbackId, response.getRequestError());
+            Logger.log(Logger.Level.ERROR, "callback dispatcher", "Received a response for not registered callback id " + callbackId + ", request error = " + response.getRequestError() + "%n");
             distributeClosingException("Client is in an erroneous state and should close");
         }
     }

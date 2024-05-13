@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import glide.api.logging.Logger;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import lombok.NonNull;
@@ -29,8 +30,7 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
     /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        // TODO: log thru logger
-        System.out.printf("=== exceptionCaught %s %s %n", ctx, cause);
+        Logger.log(Logger.Level.ERROR, "read handler", "=== exceptionCaught " + ctx + " " + cause + " %n");
 
         callbackDispatcher.distributeClosingException(
                 "An unhandled error while reading from UDS channel: " + cause);
