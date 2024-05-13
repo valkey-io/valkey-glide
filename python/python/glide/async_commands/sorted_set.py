@@ -25,15 +25,21 @@ class InfBound(Enum):
 
 class AggregationType(Enum):
     """
-    A condition to the `ZINTERSTORE` and `ZUNIONSTORE` commands.
-    With the AGGREGATE option, it is possible to specify how the results of the union are aggregated.
-    - SUM - The score of an element is summed across the inputs where it exists
-    - MIN/MAX - The resulting set will contain the minimum or maximum score of an element across the inputs where it exists
+    Enumeration representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
     """
 
     SUM = "SUM"
+    """
+    Represents aggregation by summing the scores of elements across inputs where they exist.
+    """
     MIN = "MIN"
+    """
+    Represents aggregation by selecting the minimum score of an element across inputs where it exists.
+    """
     MAX = "MAX"
+    """
+    Represents aggregation by selecting the maximum score of an element across inputs where it exists.
+    """
 
 
 class ScoreBoundary:
