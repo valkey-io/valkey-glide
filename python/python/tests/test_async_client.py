@@ -1651,7 +1651,8 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0, "d": 4.0}
+        zrange_res = await redis_client.zrange_withscores(key1, range)
+        assert compare_maps(zrange_res, {"a": 1.0, "d": 4.0}) is True
 
         assert (
             await redis_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
@@ -2058,10 +2059,10 @@ class TestCommands:
             await redis_client.zrangestore(destination, source, RangeByIndex(0, -1))
             == 3
         )
-        assert await redis_client.zrange_withscores(
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
-
+        )
+        assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0, "three": 3.0}) is True
         # range from rank 0 to 1, from highest to lowest score
         assert (
             await redis_client.zrangestore(
@@ -2069,9 +2070,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"three": 3.0, "two": 2.0}
+        )
+        assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
         # incorrect range, as start > stop
         assert (
@@ -2123,9 +2126,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"one": 1.0, "two": 2.0}
+        )
+        assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
         # range from 1 (inclusive) to positive infinity
         assert (
@@ -2134,9 +2139,10 @@ class TestCommands:
             )
             == 3
         )
-        assert await redis_client.zrange_withscores(
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+        )
+        assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0, "three": 3.0}) is True
 
         # range from negative to positive infinity, limited to ranks 1 to 2
         assert (
@@ -2147,9 +2153,10 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"two": 2.0, "three": 3.0}
+        )
+        assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
         # range from positive to negative infinity reversed, limited to ranks 1 to 2
         assert (
@@ -2161,9 +2168,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"two": 2.0, "one": 1.0}
+        )
+        assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
         # incorrect range as start > stop
         assert (
@@ -2228,9 +2237,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"a": 1.0, "b": 2.0}
+        )
+        assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
         # range from "a" (inclusive) to positive infinity
         assert (
@@ -2239,9 +2250,11 @@ class TestCommands:
             )
             == 3
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"a": 1.0, "b": 2.0, "c": 3.0}
+        )
+        assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0, "c": 3.0}) is True
 
         # range from negative to positive infinity, limited to ranks 1 to 2
         assert (
@@ -2252,9 +2265,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"b": 2.0, "c": 3.0}
+        )
+        assert compare_maps(zrange_res, {"b": 2.0, "c": 3.0}) is True
 
         # range from positive to negative infinity reversed, limited to ranks 1 to 2
         assert (
@@ -2266,9 +2281,11 @@ class TestCommands:
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(
+
+        zrange_res = await redis_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
-        ) == {"b": 2.0, "a": 1.0}
+        )
+        assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
         # incorrect range as start > stop
         assert (
@@ -2351,10 +2368,9 @@ class TestCommands:
         assert await redis_client.zadd(key3, member_scores3) == 4
 
         assert await redis_client.zdiffstore(key4, [key1, key2]) == 2
-        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
-            "one": 1.0,
-            "three": 3.0,
-        }
+
+        zrange_res = await redis_client.zrange_withscores(key4, RangeByIndex(0, -1))
+        assert compare_maps(zrange_res, {"one": 1.0, "three": 3.0}) is True
 
         assert await redis_client.zdiffstore(key4, [key3, key2, key1]) == 1
         assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
