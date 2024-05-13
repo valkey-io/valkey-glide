@@ -1683,16 +1683,6 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.bzpopmin(new String[] {key3}, .5).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1765,16 +1755,6 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.bzpopmax(new String[] {key3}, .5).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -2609,16 +2589,6 @@ public class SharedCommandTests {
         }
         assertEquals(10, client.zadd(key2, entries).get());
         assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows

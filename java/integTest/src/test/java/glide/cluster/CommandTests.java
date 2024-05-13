@@ -16,6 +16,7 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -667,7 +668,10 @@ public class CommandTests {
                 Arguments.of("brpop", clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("blpop", clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("pfmerge", clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})));
+                Arguments.of("pfmerge", clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("bzpopmax", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("bzpopmin", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("bzmpop", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)));
     }
 
     @SneakyThrows
