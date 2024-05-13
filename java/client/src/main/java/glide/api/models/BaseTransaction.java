@@ -2998,7 +2998,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param member2 The name of the second member.
      * @return Command Response - The distance between <code>member1</code> and <code>member2</code>.
      *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
-     *     The default unit is <code>METERS</code>.
+     *     The default unit is {@see GeoUnit#METERS}.
      */
     public T geodist(@NonNull String key, @NonNull String member1, @NonNull String member2) {
         ArgsArray commandArgs = buildArgs(key, member1, member2);

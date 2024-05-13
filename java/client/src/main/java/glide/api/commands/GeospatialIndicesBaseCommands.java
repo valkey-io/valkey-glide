@@ -109,7 +109,7 @@ public interface GeospatialIndicesBaseCommands {
      * @param member2 The name of the second member.
      * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
      *     members do not exist, or if the key does not exist, returns <code>null</code>. The default
-     *     unit is <code>METERS</code>.
+     *     unit is {@see GeoUnit#METERS}.
      * @example
      *     <pre>{@code
      * Double result = client.geodist("mySortedSet", "Palermo", "Catania").get();
