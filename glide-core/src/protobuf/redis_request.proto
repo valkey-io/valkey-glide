@@ -180,6 +180,7 @@ enum RequestType {
     FlushAll = 138;
     ZRandMember = 139;
     Bitcount = 140;
+    BZMPop = 141;
 }
 
 message Command {

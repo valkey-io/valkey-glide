@@ -5,6 +5,8 @@ import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
+import static glide.api.models.commands.ScoreFilter.MAX;
+import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
@@ -302,6 +304,7 @@ public class TransactionTestUtilities {
     private static Object[] sortedSetCommands(BaseTransaction<?> transaction) {
         String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
         String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
+        String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
 
         transaction
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
@@ -339,41 +342,60 @@ public class TransactionTestUtilities {
                 .bzpopmin(new String[] {zSetKey2}, .1);
         // zSetKey2 is now empty
 
-        return new Object[] {
-            3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
-            0L, // zrank(zSetKey1, "one")
-            2L, // zrevrank(zSetKey1, "one")
-            4.0, // zaddIncr(zSetKey1, "one", 3)
-            1L, // zrem(zSetKey1, new String[] {"one"})
-            2L, // zcard(zSetKey1)
-            new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
-            new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
-            Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
-            2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
-            2.0, // zscore(zSetKey1, "two")
-            2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
-            2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
-            Map.of("two", 2.0), // zpopmin(zSetKey1)
-            Map.of("three", 3.0), // zpopmax(zSetKey1)
-            0L, // zremrangebyrank(zSetKey1, 5, 10)
-            0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
-            0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-            0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
-            2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-            new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
-            Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-            2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
-            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
-            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}));
-            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}), MAX)
-            0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
-            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
-            "one", // .zrandmember(zSetKey2)
-            new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
-            new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
-            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                    .bzmpop(new String[] {zSetKey3}, MAX, .1)
+                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                    0L, // zrank(zSetKey1, "one")
+                    2L, // zrevrank(zSetKey1, "one")
+                    4.0, // zaddIncr(zSetKey1, "one", 3)
+                    1L, // zrem(zSetKey1, new String[] {"one"})
+                    2L, // zcard(zSetKey1)
+                    new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
+                    new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
+                    Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
+                    2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
+                    2.0, // zscore(zSetKey1, "two")
+                    2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+                    2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
+                    Map.of("two", 2.0), // zpopmin(zSetKey1)
+                    Map.of("three", 3.0), // zpopmax(zSetKey1)
+                    0L, // zremrangebyrank(zSetKey1, 5, 10)
+                    0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+                    0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
+                    0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
+                    2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+                    new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
+                    Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+                    2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
+                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
+                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
+                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
+                    0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
+                    new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+                    "one", // .zrandmember(zSetKey2)
+                    new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
+                    new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
+                    new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        4L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                        new Object[] {zSetKey3, Map.of("d", 4.)}, // bzmpop(zSetKey3, MAX, .1)
+                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                    });
+        }
+        return expectedResults;
     }
 
     private static Object[] serverManagementCommands(BaseTransaction<?> transaction) {
