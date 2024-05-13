@@ -12,18 +12,18 @@ public class LoggerTests {
     @Test
     public void init_logger() {
         Logger.init(DEFAULT_TEST_LOG_LEVEL);
-        assertEquals(Logger.getLoggerLevel(), DEFAULT_TEST_LOG_LEVEL);
+        assertEquals(DEFAULT_TEST_LOG_LEVEL, Logger.getLoggerLevel());
         // The logger is already configured, so calling init again shouldn't modify the log level
         Logger.init(Logger.Level.ERROR);
-        assertEquals(Logger.getLoggerLevel(), DEFAULT_TEST_LOG_LEVEL);
+        assertEquals(DEFAULT_TEST_LOG_LEVEL, Logger.getLoggerLevel());
     }
 
     @Test
     public void set_logger_config() {
         Logger.setLoggerConfig(Logger.Level.INFO);
-        assertEquals(Logger.getLoggerLevel(), Logger.Level.INFO);
+        assertEquals(Logger.Level.INFO, Logger.getLoggerLevel());
         // Revert to the default test log level
         Logger.setLoggerConfig(DEFAULT_TEST_LOG_LEVEL);
-        assertEquals(Logger.getLoggerLevel(), DEFAULT_TEST_LOG_LEVEL);
+        assertEquals(DEFAULT_TEST_LOG_LEVEL, Logger.getLoggerLevel());
     }
 }

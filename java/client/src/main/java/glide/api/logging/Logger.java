@@ -19,7 +19,6 @@ public final class Logger {
         System.loadLibrary("glide_rs");
     }
 
-    // Enum ordinal is used, so order of variants must be kept the same
     @Getter
     public enum Level {
         DEFAULT(-1),
@@ -31,8 +30,19 @@ public final class Logger {
 
         private final int level;
 
-        private Level(int level) {
+        Level(int level) {
             this.level = level;
+        }
+
+        public static Level fromInt(int i) {
+            switch (i) {
+                case 0: return ERROR;
+                case 1: return WARN;
+                case 2: return INFO;
+                case 3: return DEBUG;
+                case 4: return TRACE;
+                default: return DEFAULT;
+            }
         }
     }
 
@@ -40,7 +50,7 @@ public final class Logger {
     private static Level loggerLevel;
 
     private static void initLogger(@NonNull Level level, String fileName) {
-        loggerLevel = Level.values()[initInternal(level.getLevel(), fileName)];
+        loggerLevel = Level.fromInt(initInternal(level.getLevel(), fileName));
     }
 
     private static void initLogger(String fileName) {
