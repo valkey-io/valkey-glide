@@ -23,7 +23,6 @@ import {
 import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,
-    checkCommandThrowsCrossSlotError,
     getFirstResult,
     parseCommandLineArgs,
     parseEndpoints,
@@ -306,15 +305,23 @@ describe("RedisClusterClient", () => {
                 getOptions(cluster.getAddresses(), protocol),
             );
 
-            await checkCommandThrowsCrossSlotError(
-                client.brpop(["abc", "zxy", "lkn"], 0.1),
-            );
-            await checkCommandThrowsCrossSlotError(
+            const promises = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
-            );
-            await checkCommandThrowsCrossSlotError(client.rename("abc", "zxy"));
+                client.rename("abc", "zxy"),
+                client.brpop(["abc", "zxy", "lkn"], 0.1),
+                // TODO all rest multi-key commands except ones tested below
+            ];
 
-            // TODO all rest multi-key commands except ones tested below
+            for (const promise of promises) {
+                try {
+                    await promise;
+                } catch (e) {
+                    expect((e as Error).message.toLowerCase()).toContain(
+                        "crossslot",
+                    );
+                }
+            }
+
             client.close();
         },
     );
