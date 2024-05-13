@@ -58,7 +58,6 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
                           TARGET: aarch64-unknown-linux-gnu,
-                          CONTAINER: "2_28",
                       }
                     - {
                           OS: macos,
@@ -81,7 +80,7 @@ jobs:
                           TARGET: aarch64-unknown-linux-musl,
                           RUNNER: [self-hosted, Linux, ARM64],
                           IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged',
+                          CONTAINER_OPTIONS: '--user root --privileged --rm',
                       }
                     - {
                           OS: ubuntu,
