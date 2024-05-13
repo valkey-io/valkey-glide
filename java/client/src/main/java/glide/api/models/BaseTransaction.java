@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -11,6 +12,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
@@ -30,6 +32,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -141,6 +144,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -151,6 +155,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
@@ -788,11 +793,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Trims an existing list so that it will contain only the specified range of elements specified.<br>
-     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code> being the
-     * first element of the list, </code>1<code> being the next element and so on.<br>
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code>
+     * being the first element of the list, <code>1</code> being the next element and so on.<br>
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
-     * with <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and so on.
+     * with <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate,
+     * and so on.
      *
      * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
      * @param key The key of the list.
@@ -1674,7 +1681,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - An <code>array</code> containing the key where the member was popped
      *     out, the member itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      */
     public T bzpopmin(@NonNull String[] keys, double timeout) {
@@ -1734,7 +1741,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - An <code>array</code> containing the key where the member was popped
      *     out, the member itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      */
     public T bzpopmax(@NonNull String[] keys, double timeout) {
@@ -2708,7 +2715,75 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     command returns an empty <code>Map</code>.
      */
     public T zrangeWithScores(@NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
-        return getThis().zrangeWithScores(key, rangeQuery, false);
+        return zrangeWithScores(key, rangeQuery, false);
+    }
+
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns a member-score pair from the first non-empty
+     * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
+     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which an element was popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T bzmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString()}));
+        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+        return getThis();
+    }
+
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns multiple member-score pairs from the first
+     * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
+     * provided.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.<br>
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @param count The number of elements to pop.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which elements were popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no members could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T bzmpop(
+            @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
+        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+        return getThis();
     }
 
     /**
@@ -2963,6 +3038,46 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T geopos(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
         protobufTransaction.addCommands(buildCommand(GeoPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @param geoUnit The unit of distance measurement - see {@link GeoUnit}.
+     * @return Command Response - The distance between <code>member1</code> and <code>member2</code>.
+     *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
+     */
+    public T geodist(
+            @NonNull String key,
+            @NonNull String member1,
+            @NonNull String member2,
+            @NonNull GeoUnit geoUnit) {
+        ArgsArray commandArgs = buildArgs(key, member1, member2, geoUnit.getRedisApi());
+        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @return Command Response - The distance between <code>member1</code> and <code>member2</code>.
+     *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
+     *     The default unit is {@see GeoUnit#METERS}.
+     */
+    public T geodist(@NonNull String key, @NonNull String member1, @NonNull String member2) {
+        ArgsArray commandArgs = buildArgs(key, member1, member2);
+        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
         return getThis();
     }
 

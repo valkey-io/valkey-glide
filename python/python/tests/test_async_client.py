@@ -2334,6 +2334,70 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zdiff(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2 = {"two": 2.0}
+        member_scores3 = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
+
+        assert await redis_client.zadd(key1, member_scores1) == 3
+        assert await redis_client.zadd(key2, member_scores2) == 1
+        assert await redis_client.zadd(key3, member_scores3) == 4
+
+        assert await redis_client.zdiff([key1, key2]) == ["one", "three"]
+        assert await redis_client.zdiff([key1, key3]) == []
+        assert await redis_client.zdiff([non_existing_key, key3]) == []
+
+        zdiff_map = await redis_client.zdiff_withscores([key1, key2])
+        expected_map = {
+            "one": 1.0,
+            "three": 3.0,
+        }
+        assert compare_maps(zdiff_map, expected_map) is True
+        assert (
+            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
+        )
+        assert (
+            compare_maps(
+                await redis_client.zdiff_withscores([non_existing_key, key3]), {}
+            )
+            is True
+        )
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff([])
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff_withscores([])
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zdiff([string_key, key2])
+
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zdiff_withscores([string_key, key2])
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zdiff(["abc", "zxy", "lkn"])
+            assert "CrossSlot" in str(e)
+
+            with pytest.raises(RequestError) as e:
+                await redis_client.zdiff_withscores(["abc", "zxy", "lkn"])
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zdiffstore(self, redis_client: TRedisClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"

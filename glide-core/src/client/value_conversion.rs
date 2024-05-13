@@ -21,6 +21,7 @@ pub(crate) enum ExpectedReturnType {
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
+    ZMPopReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -178,6 +179,38 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of doubles",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        // command returns nil or an array of 2 elements, where the second element is a map represented by a 2D array
+        // we convert that second element to a map as we do in `MapOfStringToDouble`
+        /*
+        > zmpop 1 z1 min count 10
+        1) "z1"
+        2) 1) 1) "2"
+              2) (double) 2
+           2) 1) "3"
+              2) (double) 3
+         */
+        ExpectedReturnType::ZMPopReturnType => match value {
+            Value::Nil => Ok(value),
+            Value::Array(array) if array.len() == 2 && matches!(array[1], Value::Array(_)) => {
+                let Value::Array(nested_array) = array[1].clone() else {
+                    unreachable!("Pattern match above ensures that it is Array")
+                };
+                // convert the nested array to a map
+                let map = convert_array_to_map(
+                    nested_array,
+                    Some(ExpectedReturnType::BulkString),
+                    Some(ExpectedReturnType::Double),
+                )?;
+
+                Ok(Value::Array(vec![array[0].clone(), map]))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to ZMPOP return type",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -403,6 +436,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
+        b"BZMPOP" | b"ZMPOP" => Some(ExpectedReturnType::ZMPopReturnType),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"HRANDFIELD" => cmd
@@ -591,6 +625,45 @@ mod tests {
             Some(ExpectedReturnType::ArrayOfKeyValuePairs)
         )
         .is_err());
+    }
+
+    #[test]
+    fn convert_zmpop_response() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("BZMPOP").arg(1).arg(1).arg("key").arg("min")),
+            Some(ExpectedReturnType::ZMPopReturnType)
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("ZMPOP").arg(1).arg(1).arg("key").arg("min")),
+            Some(ExpectedReturnType::ZMPopReturnType)
+        ));
+
+        let redis_response = Value::Array(vec![
+            Value::SimpleString("key".into()),
+            Value::Array(vec![
+                Value::Array(vec![Value::SimpleString("elem1".into()), Value::Double(1.)]),
+                Value::Array(vec![Value::SimpleString("elem2".into()), Value::Double(2.)]),
+            ]),
+        ]);
+        let converted_response =
+            convert_to_expected_type(redis_response, Some(ExpectedReturnType::ZMPopReturnType))
+                .unwrap();
+        let expected_response = Value::Array(vec![
+            Value::SimpleString("key".into()),
+            Value::Map(vec![
+                (Value::BulkString("elem1".into()), Value::Double(1.)),
+                (Value::BulkString("elem2".into()), Value::Double(2.)),
+            ]),
+        ]);
+        assert_eq!(expected_response, converted_response);
+
+        let redis_response = Value::Nil;
+        let converted_response = convert_to_expected_type(
+            redis_response.clone(),
+            Some(ExpectedReturnType::ZMPopReturnType),
+        )
+        .unwrap();
+        assert_eq!(redis_response, converted_response);
     }
 
     #[test]

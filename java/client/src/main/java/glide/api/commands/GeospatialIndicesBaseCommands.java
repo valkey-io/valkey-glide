@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -78,4 +79,42 @@ public interface GeospatialIndicesBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double[][]> geopos(String key, String[] members);
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @param geoUnit The unit of distance measurement - see {@link GeoUnit}.
+     * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
+     *     members do not exist, or if the key does not exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Double result = client.geodist("mySortedSet", "Palermo", "Catania", GeoUnit.KILOMETERS).get();
+     * System.out.println(result);
+     * }</pre>
+     */
+    CompletableFuture<Double> geodist(String key, String member1, String member2, GeoUnit geoUnit);
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
+     *     members do not exist, or if the key does not exist, returns <code>null</code>. The default
+     *     unit is {@see GeoUnit#METERS}.
+     * @example
+     *     <pre>{@code
+     * Double result = client.geodist("mySortedSet", "Palermo", "Catania").get();
+     * System.out.println(result);
+     * }</pre>
+     */
+    CompletableFuture<Double> geodist(String key, String member1, String member2);
 }
